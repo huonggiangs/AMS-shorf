@@ -313,3 +313,15 @@ export const revenueSchema = z
 export type Revenue = z.infer<typeof revenueSchema>;
 
 export const okSchema = z.object({}).passthrough();
+
+/** GET /portal/v1/wallet: own wallet + receiving account for QR top-up */
+export const portalWalletSchema = z
+  .object({
+    balance_vnd: money,
+    reserved_vnd: money,
+    spent_vnd: money,
+    available_vnd: money.optional(),
+    payment: z.object({ bank: z.string(), account_number: z.string(), account_holder: z.string(), prefix: z.string().default('AMS') }).nullish(),
+  })
+  .passthrough();
+export type PortalWallet = z.infer<typeof portalWalletSchema>;

@@ -1,15 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "types": [
-      "@cloudflare/workers-types"
-    ],
-    "lib": [
-      "ES2023"
-    ]
-  },
-  "include": [
-    "src/cloudflare/**/*",
-    "src/types.ts"
-  ]
+  "compilerOptions": { "types": ["@cloudflare/workers-types"], "lib": ["ES2023"] },
+  "include": ["src/cloudflare/**/*"]
 }

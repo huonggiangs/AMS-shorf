@@ -30,8 +30,8 @@ export async function generateEd25519KeyPair(): Promise<Ed25519KeyPair> {
       publicKey: Parameters<typeof crypto.subtle.exportKey>[1];
       privateKey: Parameters<typeof crypto.subtle.exportKey>[1];
     };
-    const pub = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
-    const priv = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey));
+    const pub = new Uint8Array((await crypto.subtle.exportKey('raw', kp.publicKey)) as ArrayBuffer);
+    const priv = new Uint8Array((await crypto.subtle.exportKey('pkcs8', kp.privateKey)) as ArrayBuffer);
     return { publicKey: toBase64Url(pub), privateKey: toBase64Url(priv) };
   });
 }

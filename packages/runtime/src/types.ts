@@ -7,6 +7,8 @@ export interface Db {
   /** Mo rong so voi PLAN: chay danh sach cau lenh nguyen tu (D1 dung batch gia tri, Postgres/SQLite dung giao dich). */
   batch(stmts: { sql: string; params?: unknown[] }[]): Promise<{ changes: number }[]>;
   dialect: 'postgres' | 'sqlite';
+  /** false tren D1: tx() chay cau lenh ngay, KHONG hoan tac khi loi; dung batch() cho thao tac tien can nguyen tu. Mac dinh (undefined) = true. */
+  readonly interactiveTx?: boolean;
 }
 
 export interface Kv {

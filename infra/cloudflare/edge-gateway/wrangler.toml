@@ -1,6 +1,6 @@
 # Worker "edge-gateway": heartbeat, events, manifest (đường nóng). Mã nguồn: services/edge-gateway (src/worker.ts).
 # Worker này CŨNG là consumer của hàng đợi ams-ingest (xuất `queue()` handler) và chủ của Durable Object PresenceShard.
-# Xem ghi chú về dấu __XXX__ và bí mật trong infra/cloudflare/api/wrangler.toml.
+# Xem ghi chú về các chỗ giữ dấu __TÊN__ và bí mật trong infra/cloudflare/api/wrangler.toml.
 name = "ams-edge-gateway"
 main = "../../../services/edge-gateway/src/worker.ts"
 compatibility_date = "2025-09-01"

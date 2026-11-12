@@ -3,7 +3,6 @@
 
 Chay:  python3 docs/cost-model/cost.py            # bang chinh 100k/1M/10M/50M
        python3 docs/cost-model/cost.py --sens      # + nhay cam
-       python3 docs/cost-model/cost.py --md        # in dang Markdown
 Don gia Cloudflare: nguon + ngay truy cap o docs/COST-MODEL.md muc 2 (truy cap 2026-11-12).
 Moi tham so danh dau EST la uoc tinh cua tac gia, khong co nguon, phai do that o giai doan 1.
 USD la don vi chinh. Khong gom VAT. Khong gom thue/chiet khau Enterprise.
@@ -139,7 +138,7 @@ def tot(d): return sum(d.values())
 def fmt(x): return f"{x:,.0f}"
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--sens", action="store_true"); ap.add_argument("--md", action="store_true")
+    ap = argparse.ArgumentParser(); ap.add_argument("--sens", action="store_true")
     a = ap.parse_args()
     base = P()
     print("== Khoi luong dinh (khop muc 3 dac ta) ==")

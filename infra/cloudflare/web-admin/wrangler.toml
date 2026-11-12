@@ -2,7 +2,7 @@
 # Build tĩnh: pnpm --filter @ams/web-admin build  (VITE_API_BASE=/api)  ->  apps/web-admin/dist
 # worker.js chỉ làm 2 việc: chuyển /api/* sang Worker `api` qua service binding (cùng origin, cookie đơn giản)
 # và trả tệp tĩnh (SPA). Tương đương nginx + Caddy ở bản Docker.
-# Dấu __XXX__ do scripts/deploy-cloudflare.mjs thay khi deploy.
+# Các chỗ giữ dấu dạng __TÊN__ do scripts/deploy-cloudflare.mjs thay khi deploy.
 name = "ams-web-admin"
 main = "worker.js"
 compatibility_date = "2025-09-01"

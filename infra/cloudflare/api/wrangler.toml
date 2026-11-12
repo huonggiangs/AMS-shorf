@@ -1,5 +1,5 @@
 # Worker "api" (Hono): admin API, portal, auth, webhook SePay. Mã nguồn: services/api (điểm vào src/worker.ts).
-# - Các dấu __XXX__ được scripts/deploy-cloudflare.mjs thay bằng ID thật (từ Terraform/bootstrap) và ghi ra
+# - Các chỗ giữ dấu dạng __TÊN__ được scripts/deploy-cloudflare.mjs thay bằng ID thật (từ Terraform/bootstrap) và ghi ra
 #   wrangler.generated.toml cùng thư mục. KHÔNG chạy `wrangler deploy` trực tiếp với tệp này.
 # - Bí mật (SESSION_SECRET, FIELD_ENC_KEY, SEPAY_WEBHOOK_SECRET, R2_*...) đặt bằng `wrangler secret put`, không ghi ở đây.
 # - Tên miền: route theo zone; bản ghi DNS (proxied) do Terraform tạo (infra/cloudflare/terraform) hoặc tạo tay theo docs/DEPLOY-CLOUDFLARE.md.

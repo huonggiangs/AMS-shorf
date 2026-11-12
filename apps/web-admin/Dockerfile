@@ -24,7 +24,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,uid=1000,gid=1000 \
     pnpm fetch
 COPY --chown=node:node . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,uid=1000,gid=1000 \
-    pnpm install --offline --frozen-lockfile --filter "@ams/web-admin..."
+    pnpm install --offline --frozen-lockfile --filter "@ams/web-admin..." --filter ams
 RUN pnpm --filter "@ams/web-admin..." build \
  && test -f apps/web-admin/dist/index.html
 

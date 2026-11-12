@@ -23,7 +23,7 @@ variable "environment" {
 }
 
 variable "location_hint" {
-  description = "Vùng đặt D1/R2: apac (châu Á-TBD, gần Việt Nam), wnam, enam, weur, eeur, oc."
+  description = "Vùng đặt D1/R2: apac (châu Á-Thái Bình Dương, gần Việt Nam), wnam, enam, weur, eeur, oc."
   type        = string
   default     = "apac"
 }
