@@ -106,3 +106,19 @@ describe('server table params', () => {
     expect(p).toMatchObject({ page: 3, page_size: 8, q: 'abc', sort: 'name:desc', filter: 'status:active' });
   });
 });
+
+import { emptyOverlay, overlayError, overlayPayload } from '../components/OverlayForm';
+describe('overlay form helpers', () => {
+  it('payload rỗng khi không nhập gì', () => {
+    expect(overlayPayload(emptyOverlay())).toBeUndefined();
+  });
+  it('dựng đúng lược đồ hotline + qr', () => {
+    const d = { ...emptyOverlay(), headline: ' Giảm 20% ', hotline_number: '1900 1234', qr_url: 'https://v.example/x', qr_title: 'Quét' };
+    expect(overlayPayload(d)).toEqual({ headline: 'Giảm 20%', hotline: { number: '1900 1234' }, qr: { url: 'https://v.example/x', title: 'Quét' } });
+  });
+  it('từ chối QR http và hotline có chữ', () => {
+    expect(overlayError({ ...emptyOverlay(), qr_url: 'http://x.example' })).toMatch(/https/);
+    expect(overlayError({ ...emptyOverlay(), hotline_number: 'abc' })).toMatch(/Hotline/);
+    expect(overlayError({ ...emptyOverlay(), qr_url: 'https://ok.example', hotline_number: '+84 90 123 4567' })).toBeNull();
+  });
+});

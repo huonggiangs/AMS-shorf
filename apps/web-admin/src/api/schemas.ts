@@ -177,6 +177,9 @@ export const mediaSchema = z
     source_url: z.string().nullish(),
     thumb_url: z.string().nullish(),
     reject_reason: z.string().nullish(),
+    format: z.string().nullish(), // fullscreen | menu_banner | l_banner | pause_ad | qr_corner | reward
+    sha256: z.string().nullish(),
+    overlay: z.unknown().optional(),
   })
   .passthrough();
 export type Media = z.infer<typeof mediaSchema>;
@@ -325,3 +328,25 @@ export const portalWalletSchema = z
   })
   .passthrough();
 export type PortalWallet = z.infer<typeof portalWalletSchema>;
+
+/* ---------- finance admin (a2): hàng đợi thủ công, hoàn tiền, nhật ký kích hoạt ---------- */
+export const manualQueueSchema = z.object({
+  items: z.array(
+    z
+      .object({ id: idStr, event_id: z.string().nullish(), reason: z.string(), customer_id: z.string().nullish(), topup_id: z.string().nullish(), received_at: z.string().nullish(), amount_vnd: money, content: z.string().nullish() })
+      .passthrough(),
+  ),
+});
+export type ManualItem = z.infer<typeof manualQueueSchema>['items'][number];
+export const refundRequestsSchema = z.object({
+  items: z.array(
+    z
+      .object({ id: idStr, customer_id: z.string(), customer_name: z.string().nullish(), amount_vnd: money, reason: z.string().nullish(), status: z.string(), decision_note: z.string().nullish(), created_at: z.string().nullish(), decided_at: z.string().nullish() })
+      .passthrough(),
+  ),
+});
+export type RefundRequest = z.infer<typeof refundRequestsSchema>['items'][number];
+export const activationLogSchema = z.object({
+  items: z.array(z.object({ id: idStr, customer_id: z.string().nullish(), trigger_topup_id: z.string().nullish(), actions: z.array(z.unknown()).default([]), created_at: z.string().nullish() }).passthrough()),
+});
+export type ActivationEntry = z.infer<typeof activationLogSchema>['items'][number];

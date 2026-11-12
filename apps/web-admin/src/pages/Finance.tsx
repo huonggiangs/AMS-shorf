@@ -15,15 +15,16 @@ import { fmtDateTime, mil, vnd } from '../lib/format';
 import { BANKS, MIN_TOPUP_VND } from '../lib/sepay';
 import { Icon } from '../components/Icon';
 import { Dialog } from '../components/Dialog';
+import FinanceOps from './FinanceOps';
 
 export default function Finance() {
   const { isExternal } = useAuth();
-  const [tab, setTab] = useState<'ov' | 'wallet'>('ov');
+  const [tab, setTab] = useState<'ov' | 'wallet' | 'ops'>('ov');
   if (isExternal) return <WalletView />;
   return (
     <>
-      <Tabs value={tab} onChange={setTab} items={[{ id: 'ov', label: 'Tổng quan' }, { id: 'wallet', label: 'Ví quảng cáo' }]} />
-      {tab === 'ov' ? <FinanceOverview /> : <WalletView />}
+      <Tabs value={tab} onChange={setTab} items={[{ id: 'ov', label: 'Tổng quan' }, { id: 'wallet', label: 'Ví quảng cáo' }, { id: 'ops', label: 'Vận hành' }]} />
+      {tab === 'ov' ? <FinanceOverview /> : tab === 'wallet' ? <WalletView /> : <FinanceOps />}
     </>
   );
 }

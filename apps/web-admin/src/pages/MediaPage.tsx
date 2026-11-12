@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, errMsg } from '../api/client';
-import { listOf, mediaSchema, uploadUrlSchema, type Media } from '../api/schemas';
+import { customerSchema, listOf, mediaSchema, uploadUrlSchema, type Media } from '../api/schemas';
 import { useAct, useBase } from '../api/hooks';
 import { useAuth } from '../auth/AuthProvider';
 import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, PageHead, StatusTag, Tabs } from '../components/ui';
 import { Dialog } from '../components/Dialog';
 import { PromptDialog } from '../components/Prompt';
+import { OverlayForm, emptyOverlay, overlayError, overlayPayload, AD_FORMAT_OPTIONS } from '../components/OverlayForm';
 import { useT } from '../i18n';
 import { checkMediaUrl, type LinkSource } from '../lib/creative';
 
@@ -54,7 +55,8 @@ export default function MediaPage() {
 
 function MediaCard({ m, canApprove, onApprove, onReject }: { m: Media; canApprove: boolean; onApprove: () => void; onReject: () => void }) {
   const t = useT();
-  const meta = [m.mime?.split('/')[1]?.toUpperCase(), m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_sec ? `${m.duration_sec} giây` : null].filter(Boolean).join(' · ');
+  const fmtLabel = m.format && m.format !== 'fullscreen' ? AD_FORMAT_OPTIONS.find((o) => o.id === m.format)?.label : null;
+  const meta = [m.mime?.split('/')[1]?.toUpperCase(), fmtLabel, m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_sec ? `${m.duration_sec} giây` : null].filter(Boolean).join(' · ');
   return (
     <div className="card">
       <div className="scr" style={{ borderRadius: '20px 20px 0 0' }}>
@@ -100,10 +102,16 @@ export function UploadDialog({ open, onClose }: { open: boolean; onClose: () => 
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [customerId, setCustomerId] = useState('');
+  const [ov, setOv] = useState(emptyOverlay());
+  const custs = useQuery({ queryKey: ['/admin/v1/customers', 'pick'], enabled: open && !base.isExternal, queryFn: () => api.get('/admin/v1/customers', { query: { page_size: 200 }, schema: listOf(customerSchema) }) });
   const linkCheck = mode !== 'file' && url ? checkMediaUrl(mode, url) : null;
 
   const submit = async () => {
     setErr('');
+    if (!base.isExternal && !customerId) return setErr('Chọn khách hàng sở hữu nội dung này.');
+    const oe = overlayError(ov);
+    if (oe) return setErr(oe);
     setBusy(true);
     try {
       if (mode === 'file') {
@@ -111,17 +119,17 @@ export function UploadDialog({ open, onClose }: { open: boolean; onClose: () => 
         if (file.size > MAX_BYTES) throw new Error('Tệp lớn hơn 500 MB.');
         if (!/^(video\/(mp4|quicktime|webm)|image\/(png|jpeg))$/.test(file.type)) throw new Error('Chỉ nhận MP4, MOV, WebM, PNG hoặc JPG.');
         const dims = await readDims(file);
-        const u = await api.post(`${base.media}/upload-url`, { body: { name: file.name, content_type: file.type, size_bytes: file.size, ...dims }, schema: uploadUrlSchema });
+        const u = await api.post(`${base.media}/upload-url`, { body: { name: file.name, content_type: file.type, size_bytes: file.size, ...dims, ...(customerId ? { customer_id: customerId } : {}), format: ov.format, ...(overlayPayload(ov) ? { overlay: overlayPayload(ov) } : {}) }, schema: uploadUrlSchema });
         const put = await fetch(u.url, { method: u.method ?? 'PUT', headers: { 'Content-Type': file.type, ...(u.headers ?? {}) }, body: file });
         if (!put.ok) throw new Error(`Tải lên kho lưu trữ thất bại (${put.status}).`);
         await api.post(`${base.media}/${u.id}/confirm`, { body: { ...dims } });
       } else {
         const c = checkMediaUrl(mode, url);
         if (!c.ok) throw new Error(c.message);
-        await api.post(`${base.media}/import`, { body: { source: mode, url: url.trim() } });
+        await api.post(`${base.media}/import`, { body: { source: mode, url: url.trim(), ...(customerId ? { customer_id: customerId } : {}) } });
       }
       await act(async () => undefined, 'Đã gửi tệp, đang quét và chuyển mã trước khi vào hàng chờ duyệt.', [base.media, '/admin/v1/media', '/portal/v1/media']);
-      setFile(null); setUrl('');
+      setFile(null); setUrl(''); setOv(emptyOverlay());
       onClose();
     } catch (e) {
       setErr(errMsg(e));
@@ -133,6 +141,14 @@ export function UploadDialog({ open, onClose }: { open: boolean; onClose: () => 
     <Dialog open={open} onClose={onClose} width="min(520px,96vw)" label="Tải nội dung">
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>{t('Tải nội dung mới')}</h2>
+        {!base.isExternal ? (
+          <Field label="Khách hàng sở hữu nội dung" hint="Nội dung do nhân viên tải lên được gắn vào ví và hợp đồng của khách hàng này.">
+            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required aria-label="Khách hàng sở hữu nội dung">
+              <option value="">— Chọn khách hàng —</option>
+              {(custs.data?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.short_name || c.legal_name}{c.code ? ` (${c.code})` : ''}</option>)}
+            </select>
+          </Field>
+        ) : null}
         <Tabs value={mode} onChange={(v) => { setMode(v); setErr(''); }} items={[{ id: 'file', label: 'Từ máy' }, { id: 'youtube', label: 'YouTube' }, { id: 'drive', label: 'Google Drive' }, { id: 'dropbox', label: 'Dropbox' }, { id: 'url', label: 'Liên kết trực tiếp' }]} />
         {mode === 'file' ? (
           <Field label="Tệp (MP4, MOV, WebM, PNG, JPG · tối đa 500 MB)" hint="Tệp được lấy đường dẫn tải lên có thời hạn, quét mã độc, kiểm tra độ phân giải rồi mới vào hàng chờ duyệt.">
@@ -143,6 +159,7 @@ export function UploadDialog({ open, onClose }: { open: boolean; onClose: () => 
             <input type="url" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} required />
           </Field>
         )}
+        {mode === 'file' ? <OverlayForm value={ov} onChange={setOv} /> : null}
         {linkCheck ? <p role="status" style={{ margin: '6px 0 0', fontSize: 13, color: linkCheck.ok ? 'var(--mut)' : 'var(--bad)' }}>{linkCheck.message}</p> : null}
         {err ? <p role="alert" style={{ color: 'var(--bad)', margin: '8px 0 0' }}>{err}</p> : null}
         <div className="da" style={{ marginTop: 14 }}>

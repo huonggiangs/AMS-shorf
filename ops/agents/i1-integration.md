@@ -1,6 +1,6 @@
 # i1-integration - ghép nối các gói + chạy trên dịch vụ thật
 
-STATUS: IN-PROGRESS (e2e smoke 30/30 PASS; typecheck sạch; test từng gói xanh; Dockerfile/compose đã rà; còn: web-admin UI, mục Windows)
+STATUS: DONE (chờ báo cáo cuối) - e2e 30/30, typecheck sạch, test xanh; chưa kiểm: Docker thật, MinIO, Caddy, Cloudflare
 UPDATED: 2026-11-12
 
 ## Đã xong
@@ -25,3 +25,39 @@ UPDATED: 2026-11-12
 - Tệp > 128 MB: sha256 để null, gateway băm trong bộ nhớ.
 - Cache: manifest ~15 s, thiết bị ~30 s (mặc định) trễ sau khi đổi dữ liệu nếu epoch không bump được.
 - esbuild trong kiểm tra cục bộ là 0.21.5 (Dockerfile ghim 0.25.0).
+
+## Cách chạy local trên Windows + Docker Desktop
+Yêu cầu: Windows 10/11, Docker Desktop (WSL2 backend, đang chạy - biểu tượng cá voi xanh), Node.js 22 LTS (chỉ để chạy `scripts/setup.mjs`), PowerShell. Không cần cài `make`. Chưa chạy thật trên Windows trong phiên này (agent không có Docker): các lệnh dưới đây suy ra từ `scripts/ams.ps1` và compose đã kiểm cú pháp.
+
+Mở PowerShell tại thư mục gốc repo (ví dụ `E:\Project\ANIO design\AMS Short`):
+```powershell
+# 0) Nếu PowerShell chặn script: dùng  powershell -ExecutionPolicy Bypass -File .\scripts\ams.ps1 <lệnh>
+.\scripts\ams.ps1 doctor            # kiểm Docker, Node, cổng 80/443/5432/6379/8787... có đang bị chiếm không
+.\scripts\ams.ps1 setup             # tạo .env từ .env.example, tự sinh SESSION_SECRET, FIELD_ENC_KEY, mật khẩu, TOTP seed
+.\scripts\ams.ps1 config            # kiểm .env + `docker compose config` hợp lệ
+.\scripts\ams.ps1 up                # build image + chạy profile core (proxy, web-admin, api, gateway, ingest-consumer, postgres, redis, minio, mailpit); in thông tin đăng nhập
+.\scripts\ams.ps1 ps                # xem trạng thái (tất cả healthy; migrate-seed và minio-init "Exited (0)" là bình thường)
+.\scripts\ams.ps1 logs -Service api # xem log một dịch vụ
+.\scripts\ams.ps1 trust-ca          # (tùy chọn) xuất CA của Caddy để bỏ cảnh báo chứng chỉ
+.\scripts\ams.ps1 down              # dừng (giữ dữ liệu);  .\scripts\ams.ps1 reset -Yes  xóa sạch dữ liệu local
+node scripts/setup.mjs totp         # in mã TOTP 6 số hiện tại của Super admin mẫu (khi chưa có app xác thực)
+.\scripts\ams.ps1 test              # typecheck + test toàn bộ (cần pnpm; không cần Docker)
+```
+Địa chỉ: web quản trị https://admin.ams.localhost, cổng khách hàng https://portal.ams.localhost, API https://api.ams.localhost, gateway https://gw.ams.localhost, Mailpit http://localhost:8025 (thư kích hoạt/mời), MinIO console http://localhost:9001. Đăng nhập: email `SEED_ADMIN_EMAIL`, mật khẩu `SEED_ADMIN_PASSWORD` trong `.env`, mã 6 số lấy bằng `node scripts/setup.mjs totp`.
+
+Thử luồng thiết bị: `pnpm --filter @ams/sim run loadtest -- --devices 50 --gateway http://localhost:8788` (hoặc `.\scripts\ams.ps1 loadtest -N 50`). `GATEWAY_DEV_ENDPOINTS=1` đã bật sẵn ở local để bộ giả lập tự ghép đôi.
+Thử nạp tiền không cần SePay thật: `SEPAY_MODE=mock` (mặc định) -> nút "Mô phỏng giao dịch" / `POST /dev/sepay/simulate`.
+
+Lỗi thường gặp
+- `running scripts is disabled`: dùng `powershell -ExecutionPolicy Bypass -File .\scripts\ams.ps1 ...` hoặc `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+- `error during connect ... dockerDesktopLinuxEngine`: Docker Desktop chưa chạy / chưa bật WSL2. Mở Docker Desktop, đợi "Engine running".
+- `Bind for 127.0.0.1:80 (hoặc 443/5432/6379) failed: port is already allocated`: IIS/World Wide Web Publishing, Skype, PostgreSQL/Redis cài sẵn đang chiếm cổng. Đổi `PROXY_HTTP_PORT`, `PROXY_HTTPS_PORT`, `POSTGRES_PORT`, `REDIS_PORT` trong `.env` (URL sẽ kèm cổng, ví dụ https://admin.ams.localhost:8443) rồi `up` lại. Tìm tiến trình: `netstat -ano | findstr :443`.
+- `services.edge-gateway.depends_on.redpanda ... required`: Docker Compose cũ (< 2.20). Cập nhật Docker Desktop.
+- Trình duyệt cảnh báo chứng chỉ: bình thường (CA nội bộ của Caddy). Chọn Tiếp tục, hoặc `trust-ca` rồi cài chứng chỉ vào Trusted Root.
+- `*.ams.localhost` không phân giải: Chrome/Edge/Firefox tự trỏ `*.localhost` về 127.0.0.1; công cụ khác (curl cũ) cần thêm vào `C:\Windows\System32\drivers\etc\hosts`.
+- Build lỗi `no space left` / hết RAM: tăng RAM trong `%UserProfile%\.wslconfig` (`[wsl2] memory=8GB`) rồi `wsl --shutdown`; `docker system prune`.
+- `api` unhealthy lúc đầu: đợi `migrate-seed` xong (xem `logs -Service migrate-seed`); thiếu biến -> chạy lại `setup`/`config`.
+- Đã `up` nhưng impression không tính tiền: kiểm `ingest-consumer` đang chạy (`ps`); không có nó hàng đợi không được tiêu thụ.
+- TV/Android box thật không tải được media: `S3_PUBLIC_ENDPOINT` phải là IP LAN của PC (ví dụ http://192.168.1.10:9000), không phải localhost; mở cổng 9000/8788 trong Windows Firewall cho mạng riêng và đặt TV cùng mạng. Gateway cho TV: `http://<IP-PC>:8788` (cổng gateway mở ở 127.0.0.1 theo mặc định; đổi mapping cổng trong compose nếu cần cho LAN).
+- SePay thật gọi webhook: cần URL công khai: `.\scripts\ams.ps1 tunnel` rồi dán URL in ra vào my.sepay.vn, đặt `SEPAY_MODE=sandbox`.
+- `.env` bị lỗi sau khi sửa bằng Notepad (BOM/CRLF): lưu UTF-8 không BOM; chạy `config` để kiểm.
