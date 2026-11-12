@@ -1,0 +1,28 @@
+{
+  "name": "@ams/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Smoke e2e tren Postgres 16 that + Redis that (khong Docker)",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "smoke": "tsx smoke.ts"
+  },
+  "dependencies": {
+    "@ams/api": "workspace:*",
+    "@ams/db": "workspace:*",
+    "@ams/edge-gateway": "workspace:*",
+    "@ams/ingest-consumer": "workspace:*",
+    "@ams/payments": "workspace:*",
+    "@ams/runtime": "workspace:*",
+    "@ams/shared": "workspace:*",
+    "@ams/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "embedded-postgres": "16.15.0-beta.19",
+    "tsx": "4.20.6",
+    "@types/node": "22.18.0",
+    "@types/pg": "8.15.5",
+    "pg": "8.16.3"
+  }
+}

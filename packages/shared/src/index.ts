@@ -7,3 +7,4 @@ export * from './aes.js';
 export * from './ed25519.js';
 export * from './vnd.js';
 export * from './types.js';
+export * from './overlay.js';

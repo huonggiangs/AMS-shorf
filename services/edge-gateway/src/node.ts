@@ -2,6 +2,7 @@
 import { serve } from '@hono/node-server';
 import { createDockerRuntime, createTestRuntime, type Runtime } from '@ams/runtime';
 import { createIngestConsumer } from '@ams/ingest-consumer';
+import { spendFnFor } from '@ams/ingest-consumer/spend';
 import { createGateway } from './gateway.js';
 import { seedAdFixture } from './testing.js';
 
@@ -12,7 +13,7 @@ export async function startNode(env: Record<string, string | undefined> = proces
   if (test && env['GATEWAY_DEMO_FIXTURE'] !== '0') await seedAdFixture(rt, { campaigns: 3, creativesPerCampaign: 2 });
   const gw = createGateway(rt);
   // Che do mot tien trinh: consumer chay cung (test, hoac INGEST_INLINE=1). Docker compose chay consumer rieng.
-  if (test || env['INGEST_INLINE'] === '1') createIngestConsumer(rt).subscribe();
+  if (test || env['INGEST_INLINE'] === '1') createIngestConsumer(rt, { spend: spendFnFor(rt) }).subscribe();
   const timer = setInterval(() => void gw.flush().catch((e) => console.error('[gateway] flush loi', e)), Number(env['TELEMETRY_FLUSH_MS'] ?? 10_000));
   timer.unref();
   const port = Number(env['PORT'] ?? 8788);

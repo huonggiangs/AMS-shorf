@@ -7,8 +7,8 @@ import { runActivation, undoActivation } from './activation.js';
 import { BANKS, DEFAULT_MIN_TOPUP_VND, SAMPLE_ACCOUNT, devSimulateAllowed, loadSecrets, loadSepayConfig, qrUrl, saveSepayConfig, sepayMode, transferContent } from './config.js';
 import { applyBalance, creditTopup, getWallet } from './ledger.js';
 import { FinanceError, type FinanceCore, type FinancePort } from './port.js';
-import { audit, iso, n, notify, startOfVnDayIso } from './util.js';
-import { runDailyFinanceJobs } from './jobs.js';
+import { audit, bumpManifest, iso, n, notify, startOfVnDayIso } from './util.js';
+import { endDueCampaigns, runDailyFinanceJobs, startDueCampaigns } from './jobs.js';
 import { authenticateWebhook, createSepayFetcher, processIncoming, reconcileSepay, sepayPayload, storeRejected } from './webhook.js';
 import { releaseCampaign, reserveCampaign, spendCampaign } from './ledger.js';
 
@@ -29,14 +29,26 @@ export function createFinancePort(): FinancePort {
       if (!c) throw new FinanceError('campaign_not_found', 'Không tìm thấy chiến dịch', 404);
       const budget = n(c.approved_budget_vnd);
       const r = await reserveCampaign(rt, rt.db, campaignId, budget);
+      await bumpManifest(rt);
       // 'paused' (activate_on_approve=0): da giu tien nhung khong tu chay; bao 'scheduled' cho kieu cua a1, DB giu state='paused'
       const st = r.state === 'paused' ? 'scheduled' : r.state;
       return { campaign_state: st, reserved_vnd: st === 'awaiting_funds' ? 0 : budget, shortfall_vnd: r.shortfall };
     },
-    releaseForCampaign: async (rt, { campaignId }) => ({ released_vnd: (await releaseCampaign(rt, rt.db, campaignId)).released }),
-    spendForCampaign: (rt, { campaignId, amountVnd, ref }) => spendCampaign(rt, rt.db, campaignId, amountVnd, ref),
+    releaseForCampaign: async (rt, { campaignId }) => {
+      const r = { released_vnd: (await releaseCampaign(rt, rt.db, campaignId)).released };
+      await bumpManifest(rt);
+      return r;
+    },
+    spendForCampaign: async (rt, { campaignId, amountVnd, ref }) => {
+      const r = await spendCampaign(rt, rt.db, campaignId, amountVnd, ref);
+      if (r.exhausted) await bumpManifest(rt);
+      return r;
+    },
     async scheduled(rt, cron) {
       if (cron.startsWith('*/')) {
+        // chien dich den ngay bat dau/het han: kiem tra moi 10 phut (khong doi toi cron ngay)
+        await startDueCampaigns(rt);
+        await endDueCampaigns(rt);
         // doi soat bu SePay moi 10 phut (chi khi co token API va khong phai mock)
         if (rt.config.env['SEPAY_API_TOKEN'] && (rt.config.env['SEPAY_MODE'] ?? 'production') !== 'mock') await reconcileSepay(rt, createSepayFetcher(rt.config.env));
       } else {

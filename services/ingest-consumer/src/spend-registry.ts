@@ -1,8 +1,10 @@
+import { createSpendFn } from '@ams/payments';
+import type { Runtime } from '@ams/runtime';
 import type { SpendFn } from './consumer.js';
 
 /**
- * Cho phep ben tai chinh (a2/mountFinance) gan SpendFn cho consumer o noi khong tu tay tao consumer
- * (Docker: node.ts; Cloudflare: worker.ts cua edge-gateway). Khong import @ams/payments tai day.
+ * SpendFn: mac dinh la chi tieu that cua @ams/payments (idempotent theo idempotencyKey, cong don phan du micro-VND, khong vuot phan giu).
+ * `setSpendFn` van cho phep thay the (kiem thu / ben tai chinh khac).
  */
 let fn: SpendFn | undefined;
 export function setSpendFn(f: SpendFn | undefined): void {
@@ -10,4 +12,8 @@ export function setSpendFn(f: SpendFn | undefined): void {
 }
 export function getSpendFn(): SpendFn | undefined {
   return fn;
+}
+/** SpendFn se dung cho `rt`: ham da gan neu co, nguoc lai chi tieu that cua payments. */
+export function spendFnFor(rt: Runtime): SpendFn {
+  return fn ?? createSpendFn(rt);
 }

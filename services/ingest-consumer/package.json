@@ -23,6 +23,7 @@
     "@ams/config": "workspace:*",
     "@ams/db": "workspace:*",
     "@ams/runtime": "workspace:*",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "@ams/payments": "workspace:*"
   }
 }

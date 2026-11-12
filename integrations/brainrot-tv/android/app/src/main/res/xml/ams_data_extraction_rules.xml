@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ (backup and device-to-device transfer): same exclusions as ams_backup_rules.xml. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="brainrot_ams.xml" />
+        <exclude domain="file" path="ams/" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="brainrot_ams.xml" />
+        <exclude domain="file" path="ams/" />
+    </device-transfer>
+</data-extraction-rules>

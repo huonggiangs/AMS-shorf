@@ -1,4 +1,14 @@
 import type { Db, Runtime } from '@ams/runtime';
+import { MANIFEST_EPOCH_KEY } from '@ams/shared';
+
+/** Bao gateway xay lai manifest (trang thai chien dich vua doi). Goi SAU khi giao dich da commit; loi kv khong lam hong nghiep vu. */
+export async function bumpManifest(rt: Runtime): Promise<void> {
+  try {
+    await rt.kv.incr(MANIFEST_EPOCH_KEY);
+  } catch {
+    /* gateway tu lam moi sau MANIFEST_BUILD_TTL_S */
+  }
+}
 
 /** bigint/numeric/chuoi tu DB -> number (tien dong, nguyen; an toan toi 2^53) */
 export function n(x: unknown): number {

@@ -1,0 +1,213 @@
+--- a/android/app/src/main/java/vn/brainrot/parental/tv/TvOverlayController.java
++++ b/android/app/src/main/java/vn/brainrot/parental/tv/TvOverlayController.java
+@@ -23,6 +23,8 @@
+     private static boolean policyActive;
+     private static boolean messageActive;
+     private static Runnable dismissMessage;
++    /** AMS: left ad column of the lock view. Null whenever no lock view is attached. */
++    private static FrameLayout lockAdSlot;
+ 
+     private TvOverlayController() { }
+ 
+@@ -130,10 +132,27 @@
+             unlockLp.topMargin = dp(context, 30);
+             content.addView(unlock, unlockLp);
+ 
+-            root.addView(content, new FrameLayout.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT));
++            // AMS ad column: hidden (GONE) until AmsCoordinator hands over a creative. With the column visible the
++            // lock panel keeps the right 31% of the width (assets/formats/ADS.png); hidden, it fills the screen as before.
++            LinearLayout row = new LinearLayout(context);
++            row.setOrientation(LinearLayout.HORIZONTAL);
++            FrameLayout adSlot = new FrameLayout(context);
++            adSlot.setVisibility(View.GONE);
++            row.addView(adSlot, new LinearLayout.LayoutParams(0, WindowManager.LayoutParams.MATCH_PARENT, 69f));
++            row.addView(content, new LinearLayout.LayoutParams(0, WindowManager.LayoutParams.MATCH_PARENT, 31f));
++            root.addView(row, new FrameLayout.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT));
++            lockAdSlot = adSlot;
+             current = root;
+             boolean shown = add(context, current, true, false);
+-            if (!shown) locked = false;
++            if (!shown) {
++                locked = false;
++                lockAdSlot = null;
++            } else {
++                android.util.DisplayMetrics dm = context.getResources().getDisplayMetrics();
++                AmsCoordinator.onLockAttached(
++                    (int) (Math.max(dm.widthPixels, dm.heightPixels) * AmsOverlayRenderer.LOCK_AD_FRACTION),
++                    Math.min(dm.widthPixels, dm.heightPixels));
++            }
+             return shown;
+     }
+ 
+@@ -262,6 +281,7 @@
+         if (!current.isAttachedToWindow()) {
+             current = null;
+             messageActive = false;
++            releaseLockAd();
+             return true;
+         }
+         if (manager == null) return false;
+@@ -275,9 +295,32 @@
+         }
+         current = null;
+         messageActive = false;
++        releaseLockAd();
+         return true;
+     }
+ 
++    /** AMS: main thread. Puts the creative view into the lock's ad column; null clears it and returns the width to the lock panel. */
++    static boolean setLockAdView(View ad) {
++        if (Looper.myLooper() != Looper.getMainLooper()) return false;
++        FrameLayout slot = lockAdSlot;
++        if (slot == null || current == null || !current.isAttachedToWindow()) return false;
++        slot.removeAllViews();
++        if (ad == null) {
++            slot.setVisibility(View.GONE);
++            return true;
++        }
++        slot.addView(ad, new FrameLayout.LayoutParams(
++            WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT));
++        slot.setVisibility(View.VISIBLE);
++        return true;
++    }
++
++    private static void releaseLockAd() {
++        if (lockAdSlot == null) return;
++        lockAdSlot = null;
++        AmsCoordinator.onLockDetached();
++    }
++
+     private static int dp(Context context, float value) {
+         return Math.round(value * context.getResources().getDisplayMetrics().density);
+     }
+--- a/android/app/src/main/java/vn/brainrot/parental/tv/TvBridgeService.java
++++ b/android/app/src/main/java/vn/brainrot/parental/tv/TvBridgeService.java
+@@ -337,12 +337,15 @@
+         ensurePairCode();
+         startForeground(NOTIFICATION_ID, buildNotification());
+         if (serverThread == null || !serverThread.isAlive()) startServer();
++        // AMS ads: must never break the parental receiver. Idle until a parent enables ads from the phone (command "ads-config").
++        try { AmsCoordinator.start(this); } catch (Throwable ams) { android.util.Log.w("TvBridge", "AMS ads unavailable", ams); }
+         return START_STICKY;
+     }
+ 
+     @Override
+     public void onDestroy() {
+         running = false;
++        AmsCoordinator.stop();
+         try { if (serverSocket != null) serverSocket.close(); } catch (Exception ignored) { }
+         if (tts != null) {
+             restoreMusicAfterSpeech();
+@@ -508,6 +511,7 @@
+         Object playback = activePlayback();
+         result.put("playback", playback);
+         result.put("playbackDiagnostics", playbackDiagnostics);
++        result.put("ams", AmsCoordinator.describe(this));
+         result.put("usage", usageAccess ? usageStats() : new JSONObject().put("available", false).put("sessions", new JSONArray()));
+         try { result.put("blockedEvents", new JSONArray(prefs.getString("blocked_events_json", "[]"))); }
+         catch (Exception ignored) { result.put("blockedEvents", new JSONArray()); }
+@@ -966,6 +970,12 @@
+                 .put("effects", new JSONObject().put("grantStored", stored).put("limitEnforced", false))
+                 .put("reason", "Thời lượng đã lưu nhưng TV chưa có bộ thực thi giới hạn hằng ngày.");
+         }
++        if ("ads-config".equals(command)) {
++            JSONObject effects = AmsCoordinator.configure(this, payload);
++            boolean saved = effects.optBoolean("saved", false);
++            return result.put("accepted", saved).put("effects", effects)
++                .put("reason", saved ? "" : "Không lưu được cấu hình quảng cáo.");
++        }
+         if ("shutdown-timer".equals(command)) {
+             return result.put("error", "TV này chưa cung cấp API ngủ/tắt nguồn được kiểm soát bởi ứng dụng.")
+                 .put("effects", new JSONObject().put("timerStarted", false).put("powerOffApiAvailable", false));
+--- a/android/app/src/main/java/vn/brainrot/parental/tv/TvReceiverActivity.java
++++ b/android/app/src/main/java/vn/brainrot/parental/tv/TvReceiverActivity.java
+@@ -54,6 +54,7 @@
+     private TextView pairStateText;
+     private TextView expiryLabel;
+     private TextView ipText;
++    private TextView amsPairText;
+     private TextView mediaStatus;
+     private TextView usageStatus;
+     private TextView overlayStatus;
+@@ -93,11 +94,13 @@
+     @Override protected void onResume() {
+         super.onResume();
+         ensureReceiverStarted();
++        AmsCoordinator.setPairingVisible(true);
+         handler.removeCallbacks(refresh);
+         handler.post(refresh);
+     }
+ 
+     @Override protected void onPause() {
++        AmsCoordinator.setPairingVisible(false);
+         handler.removeCallbacks(refresh);
+         super.onPause();
+     }
+@@ -281,6 +284,11 @@
+         headingRow.addView(statusBadge, wrapWrap());
+         column.addView(headingRow, matchWrap());
+ 
++        amsPairText = text("", 13, MUTED, false);
++        LinearLayout.LayoutParams amsPairLp = matchWrap();
++        amsPairLp.topMargin = dp(10);
++        column.addView(amsPairText, amsPairLp);
++
+         LinearLayout permissionHeading = new LinearLayout(this);
+         permissionHeading.setGravity(Gravity.CENTER_VERTICAL);
+         TextView permissionTitle = text("QUYỀN CẦN THIẾT CHO DỮ LIỆU VÀ QUY TẮC TV", 13, INK, true);
+@@ -441,6 +449,7 @@
+         }
+ 
+         if (pairingQrLogo != null && !paired) pairingQrLogo.setVisibility(View.VISIBLE);
++        updateAmsPairing();
+         if (mediaStatus != null) setPermissionStatus(mediaStatus, TvBridgeService.isMediaListenerEnabled(this));
+         if (usageStatus != null) setPermissionStatus(usageStatus, TvBridgeService.hasUsageAccess(this));
+         if (overlayStatus != null) setPermissionStatus(overlayStatus, TvBridgeService.canShowOverlay(this));
+@@ -535,6 +544,25 @@
+         } catch (Exception ignored) { }
+     }
+ 
++    /** AMS account link (6-digit code, 5 minutes). Visible only after a parent enabled ads from the phone and while the TV is not linked. */
++    private void updateAmsPairing() {
++        if (amsPairText == null) return;
++        android.content.SharedPreferences ams = getSharedPreferences("brainrot_ams", MODE_PRIVATE);
++        if (!ams.getBoolean("ads_enabled", false) || ams.getInt("trust_level", 0) >= 1) {
++            amsPairText.setVisibility(View.GONE);
++            return;
++        }
++        amsPairText.setVisibility(View.VISIBLE);
++        AmsCoordinator.PairSnapshot snap = AmsCoordinator.pairingSnapshot();
++        if (snap.code.isEmpty()) {
++            amsPairText.setText("Liên kết tài khoản AMS: đang lấy mã…");
++            return;
++        }
++        long left = Math.max(0L, (snap.expiresAtElapsedMs - android.os.SystemClock.elapsedRealtime()) / 1000L);
++        amsPairText.setText("Liên kết tài khoản AMS · mã " + snap.code + " · còn "
++            + (left / 60) + ":" + String.format(java.util.Locale.US, "%02d", left % 60));
++    }
++
+     private void ensureReceiverStarted() {
+         if (startRequested || TvBridgeService.isRunning()) {
+             refreshStatus();
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -24,6 +24,8 @@
+ 
+     <application
+         android:allowBackup="true"
++        android:dataExtractionRules="@xml/ams_data_extraction_rules"
++        android:fullBackupContent="@xml/ams_backup_rules"
+         android:icon="@mipmap/ic_launcher"
+         android:label="@string/app_name"
+         android:roundIcon="@mipmap/ic_launcher_round"
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -44,6 +44,8 @@
+     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+     implementation project(':capacitor-cordova-android-plugins')
+     implementation 'org.bouncycastle:bcpkix-jdk18on:1.79'
++    // AMS: Ed25519 (Ed25519Signer) comes from bcprov; today it arrives transitively through bcpkix, declare it so it cannot disappear.
++    implementation 'org.bouncycastle:bcprov-jdk18on:1.79'
+     implementation 'com.google.protobuf:protobuf-java:3.25.5'
+     implementation 'com.google.zxing:core:3.3.3'
+     implementation 'com.google.mlkit:text-recognition:16.0.1'

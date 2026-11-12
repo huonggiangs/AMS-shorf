@@ -14,7 +14,7 @@ import type {
 } from '@cloudflare/workers-types';
 import { createCloudflareRuntime, type CloudflareRuntime } from '@ams/runtime/cloudflare';
 import { createIngestConsumer } from '@ams/ingest-consumer';
-import { getSpendFn } from '@ams/ingest-consumer/spend';
+import { spendFnFor } from '@ams/ingest-consumer/spend';
 import { shardOf } from '@ams/shared';
 import type { NonceStore } from './auth.js';
 import { createGateway, type Gateway } from './gateway.js';
@@ -107,9 +107,8 @@ function boot(env: Env): Booted {
   // anh xa ten binding cua wrangler (DB_CORE/INGEST_QUEUE/MEDIA) sang ten ma createCloudflareRuntime mong doi
   const rt = createCloudflareRuntime({ ...env, DB: env.DB_CORE, QUEUE: env.INGEST_QUEUE, BUCKET: env.MEDIA } as never);
   const gw = createGateway(rt, { presence: new DoPresence(env), nonces: new DoNonces(env) });
-  // consumer chay trong chinh Worker nay (handler queue). SpendFn do payments gan qua setSpendFn; chua gan => khong tru tien.
-  const spend = getSpendFn();
-  createIngestConsumer(rt, { ...(spend ? { spend } : {}) }).subscribe();
+  // consumer chay trong chinh Worker nay (handler queue); chi tieu that cua payments (idempotent).
+  createIngestConsumer(rt, { spend: spendFnFor(rt) }).subscribe();
   booted = { rt, gw, lastFlush: Date.now() };
   return booted;
 }

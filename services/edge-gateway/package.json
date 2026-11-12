@@ -11,7 +11,8 @@
     "./protocol": "./src/protocol.ts",
     "./node": "./src/node.ts",
     "./worker": "./src/worker.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./pairing": "./src/pairing.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.workers.json",
@@ -27,7 +28,8 @@
     "hono": "4.9.9",
     "@hono/node-server": "1.19.5",
     "zod": "3.25.76",
-    "@ams/ingest-consumer": "workspace:*"
+    "@ams/ingest-consumer": "workspace:*",
+    "@ams/payments": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20260101.0"

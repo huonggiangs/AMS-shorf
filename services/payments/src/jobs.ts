@@ -1,6 +1,6 @@
 import type { Runtime } from '@ams/runtime';
 import { releaseCampaign } from './ledger.js';
-import { audit, iso, n, notify } from './util.js';
+import { audit, bumpManifest, iso, n, notify } from './util.js';
 
 export interface LedgerMismatch {
   customer_id: string;
@@ -55,6 +55,7 @@ export async function startDueCampaigns(rt: Runtime): Promise<number> {
     "UPDATE campaigns SET state = 'active', updated_at = ? WHERE state = 'scheduled' AND funding_state = 'reserved' AND start_at IS NOT NULL AND start_at <= ?",
     [iso(rt), iso(rt)],
   );
+  if (r.changes > 0) await bumpManifest(rt);
   return r.changes;
 }
 
@@ -66,6 +67,7 @@ export async function endDueCampaigns(rt: Runtime): Promise<number> {
     await rt.db.run("UPDATE campaigns SET state = 'ended', updated_at = ? WHERE id = ?", [iso(rt), c.id]);
     await releaseCampaign(rt, rt.db, c.id);
   }
+  if (due.length) await bumpManifest(rt);
   return due.length;
 }
 

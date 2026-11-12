@@ -6,6 +6,7 @@ import { dbTarget } from '../lib/creative.js';
 import { conflict, notFound, unprocessable } from '../lib/errors.js';
 import { eq, getRt, jsonParse, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
+import { bumpManifest } from '../lib/manifest.js';
 import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv } from '../types.js';
 
@@ -91,6 +92,7 @@ export function scheduleRoutes(): Hono<AppEnv> {
       );
       await auditCtx(c, db, { action: 'schedule.create', objectType: 'schedule_slot', objectId: id, diff: { campaign_id: b.campaign_id, start_min: b.start_min, end_min: b.end_min } });
     });
+    await bumpManifest(rt);
     return c.json(present(await loadSlot(c, id)), 201);
   });
 
@@ -105,6 +107,7 @@ export function scheduleRoutes(): Hono<AppEnv> {
       await db.run('UPDATE schedule_slots SET start_min = ?, end_min = ?, priority = ?, reward_points = ?, daypart = ? WHERE id = ?', [start, end, b.priority ?? s.priority, b.reward_points ?? s.reward_points, 'custom', s.id]);
       await auditCtx(c, db, { action: 'schedule.update', objectType: 'schedule_slot', objectId: s.id, diff: diffObjects({ start_min: num(s.start_min), end_min: num(s.end_min), priority: s.priority, reward_points: s.reward_points }, { start_min: start, end_min: end, priority: b.priority, reward_points: b.reward_points }) });
     });
+    await bumpManifest(rt);
     return c.json(present(await loadSlot(c, s.id)));
   });
 
@@ -115,6 +118,7 @@ export function scheduleRoutes(): Hono<AppEnv> {
       await db.run('DELETE FROM schedule_slots WHERE id = ?', [s.id]);
       await auditCtx(c, db, { action: 'schedule.delete', objectType: 'schedule_slot', objectId: s.id, diff: { campaign_id: s.campaign_id } });
     });
+    await bumpManifest(rt);
     return c.json({ ok: true });
   });
 

@@ -1,0 +1,20 @@
+{
+  "name": "@ams/brainrot-tv",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Schema creative.overlay va ma tham chieu app TV Brain-rot (khong thuoc pnpm workspace; cai bang pnpm install --ignore-workspace)",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "check:java": "bash android/check/run.sh"
+  },
+  "dependencies": {
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

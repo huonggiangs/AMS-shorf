@@ -11,11 +11,13 @@ import {
   ALLOWED_MIME, DURATION_RANGE, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
 } from '../lib/creative.js';
 import { todayVn } from '../lib/dates.js';
+import { bumpManifest } from '../lib/manifest.js';
 import { requirePerm } from '../auth/middleware.js';
+import { AD_FORMATS, isAdFormat, parseOverlay, sha256Hex, type CreativeOverlay } from '@ams/shared';
 import type { AppEnv, AuthUser } from '../types.js';
 
 const M_SELECT = `m.id, m.campaign_id, m.customer_id, m.name, m.target_type, m.px_w, m.px_h, m.kind, m.source, m.source_url, m.storage_key, m.mime, m.size_bytes, m.duration_s,
-  m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, cu.short_name AS owner_name, cu.payment_code AS customer_code`;
+  m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code`;
 const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id';
 
 interface MediaRow {
@@ -40,9 +42,35 @@ interface MediaRow {
   review_note: string | null;
   state: string;
   created_at: string;
+  sha256: string | null;
+  format: string | null;
+  overlay: string | null;
   owner_name: string;
   customer_code: string;
 }
+
+function overlayOf(raw: string | null | undefined): CreativeOverlay | null {
+  if (!raw) return null;
+  try {
+    const r = parseOverlay(JSON.parse(raw));
+    return r.ok ? r.value : null;
+  } catch {
+    return null;
+  }
+}
+
+const overlayInput = z.any().optional().nullable();
+/** Kiem tra dinh dang + overlay (422 neu sai); tra ve JSON chuan hoa de luu. */
+function checkFormatOverlay(format: string | undefined, overlay: unknown): { format: string | undefined; overlay: string | null | undefined } {
+  if (format !== undefined && !isAdFormat(format)) throw unprocessable(`Định dạng phải là một trong: ${AD_FORMATS.join(', ')}.`, 'bad_format');
+  if (overlay === undefined) return { format, overlay: undefined };
+  const r = parseOverlay(overlay);
+  if (!r.ok) throw unprocessable(`Lớp phủ không hợp lệ: ${r.errors.map((e) => `${e.path || 'overlay'} ${e.message}`).join('; ')}`, 'bad_overlay', r.errors);
+  return { format, overlay: r.value ? JSON.stringify(r.value) : null };
+}
+
+/** Tep <= 128 MB: bam SHA-256 luc xac nhan (manifest chi phat tep da xac minh). Lon hon: de null, gateway/transcoder bam sau. */
+const SHA_MAX_BYTES = 128 * MB;
 
 const statusOf = (m: Pick<MediaRow, 'state' | 'review_state'>): string => (m.state === 'uploading' ? 'processing' : m.review_state === 'returned' ? 'rejected' : m.review_state);
 
@@ -66,6 +94,9 @@ export const present = (m: MediaRow): Record<string, unknown> => ({
   campaign_id: m.campaign_id,
   target_type: apiTarget(m.target_type),
   scan_state: m.scan_state,
+  format: isAdFormat(m.format) ? m.format : 'fullscreen',
+  overlay: overlayOf(m.overlay),
+  sha256: m.sha256,
   created_at: m.created_at,
 });
 
@@ -146,6 +177,8 @@ const uploadBody = z.object({
   duration_sec: z.coerce.number().min(0).max(36000).optional(),
   target_type: z.enum(['tv', 'elevator', 'led']).optional(),
   customer_id: z.string().max(64).optional().nullable(),
+  format: z.string().max(20).optional(),
+  overlay: overlayInput,
 });
 
 const importBody = z.object({
@@ -202,6 +235,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       throw unprocessable(`Thời lượng phải từ ${dur[0]} đến ${dur[1]} giây cho loại màn này, tệp dài ${Math.round(b.duration_sec)} giây.`, 'duration_out_of_range');
     }
     await checkQuotas(rt, customerId, b.size_bytes, quota);
+    const fo = checkFormatOverlay(b.format, b.overlay);
 
     const id = rt.id();
     const key = `media/${customerId}/${id}/${safeName(b.name)}`;
@@ -209,9 +243,9 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const signed = await rt.objects.putSigned(key, mime, 900);
     await rt.db.tx(async (db) => {
       await db.run(
-        `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, uploaded_by, uploader_kind, scan_state, review_state, state, created_at)
-         VALUES (?,NULL,?,?,?,?,?,?,?,'upload',NULL,?,?,?,?,?,?,'pending','pending','uploading',?)`,
-        [id, customerId, b.name, target, b.width ?? null, b.height ?? null, b.width && b.height ? (b.width >= b.height ? 'landscape' : 'portrait') : null, isVideoMime(mime) ? 'video' : 'image', key, mime, b.size_bytes, b.duration_sec === undefined ? null : Math.round(b.duration_sec), u.id, u.kind, nowIso],
+        `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, uploaded_by, uploader_kind, scan_state, review_state, state, format, overlay, created_at)
+         VALUES (?,NULL,?,?,?,?,?,?,?,'upload',NULL,?,?,?,?,?,?,'pending','pending','uploading',?,?,?)`,
+        [id, customerId, b.name, target, b.width ?? null, b.height ?? null, b.width && b.height ? (b.width >= b.height ? 'landscape' : 'portrait') : null, isVideoMime(mime) ? 'video' : 'image', key, mime, b.size_bytes, b.duration_sec === undefined ? null : Math.round(b.duration_sec), u.id, u.kind, fo.format ?? 'fullscreen', fo.overlay ?? null, nowIso],
       );
       await auditCtx(c, db, { action: 'media.upload_url', objectType: 'creative', objectId: id, customerId, diff: { name: b.name, size_bytes: b.size_bytes, mime } });
     });
@@ -266,13 +300,19 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       await reject('duration_out_of_range', `Thời lượng phải từ ${dur[0]} đến ${dur[1]} giây cho loại màn này.`);
     }
 
+    let sha: string | null = null;
+    if (head.size <= SHA_MAX_BYTES) {
+      const bytes = await rt.objects.get(m.storage_key);
+      if (!bytes) throw conflict('Chưa đọc được tệp trên kho lưu trữ để xác minh. Thử xác nhận lại.', 'upload_missing');
+      sha = await sha256Hex(bytes);
+    }
     await rt.db.tx(async (db) => {
       const res = await db.run(
-        `UPDATE creatives SET px_w = ?, px_h = ?, orientation = ?, target_type = ?, size_bytes = ?, duration_s = ?, state = 'pending_review' WHERE id = ? AND state = 'uploading'`,
-        [w, h, w >= h ? 'landscape' : 'portrait', target, head.size, durationSec === undefined ? null : Math.round(durationSec), m.id],
+        `UPDATE creatives SET px_w = ?, px_h = ?, orientation = ?, target_type = ?, size_bytes = ?, duration_s = ?, sha256 = ?, state = 'pending_review' WHERE id = ? AND state = 'uploading'`,
+        [w, h, w >= h ? 'landscape' : 'portrait', target, head.size, durationSec === undefined ? null : Math.round(durationSec), sha, m.id],
       );
       if (res.changes === 0) throw conflict('Tệp vừa được xác nhận ở nơi khác.', 'invalid_state');
-      await auditCtx(c, db, { action: 'media.confirm', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { px: `${w}x${h}`, size_bytes: head.size, target_type: target } });
+      await auditCtx(c, db, { action: 'media.confirm', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { px: `${w}x${h}`, size_bytes: head.size, target_type: target, sha256: sha } });
     });
     return c.json(present(await loadMedia(c, m.id)));
   });
@@ -302,6 +342,27 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     return c.json(present(await loadMedia(c, id)), 201);
   });
 
+  // Doi dinh dang/lop phu. Khach sua tep da duyet => quay lai cho duyet (QR/hotline la noi dung nhay cam); noi bo giu nguyen trang thai.
+  r.put('/:id/overlay', requirePerm('media', 'write'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const m = await loadMedia(c, c.req.param('id'));
+    const b = await parseBody(c, z.object({ format: z.string().max(20).optional(), overlay: overlayInput }));
+    if (b.format === undefined && b.overlay === undefined) throw unprocessable('Nhập định dạng hoặc lớp phủ cần đổi.', 'nothing_to_update');
+    if (m.state === 'invalid') throw conflict('Tệp không hợp lệ.', 'invalid_state');
+    const fo = checkFormatOverlay(b.format, b.overlay);
+    const resetReview = u.kind !== 'internal' && m.review_state === 'approved';
+    await rt.db.tx(async (db) => {
+      await db.run(
+        `UPDATE creatives SET format = COALESCE(?, format), overlay = CASE WHEN ? = 1 THEN ? ELSE overlay END${resetReview ? ", review_state = 'pending', state = 'pending_review'" : ''} WHERE id = ?`,
+        [fo.format ?? null, fo.overlay === undefined ? 0 : 1, fo.overlay ?? null, m.id],
+      );
+      await auditCtx(c, db, { action: 'media.overlay', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { format: fo.format ?? null, overlay: fo.overlay === undefined ? 'unchanged' : fo.overlay, review_reset: resetReview } });
+    });
+    if (m.campaign_id) await bumpManifest(rt);
+    return c.json(present(await loadMedia(c, m.id)));
+  });
+
   if (external) return r;
 
   r.post('/:id/approve', requirePerm('media', 'approve'), async (c) => {
@@ -314,6 +375,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       if (res.changes === 0) throw conflict('Tệp vừa đổi trạng thái.', 'invalid_state');
       await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'approved' } } });
     });
+    await bumpManifest(rt);
     await emailOwner(rt, m.customer_id, `Tệp "${m.name ?? ''}" đã được duyệt`, `<p>Tệp <b>${esc(m.name)}</b> đã được duyệt và có thể dùng cho chiến dịch.</p>`);
     return c.json(present(await loadMedia(c, m.id)));
   });
@@ -327,6 +389,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       await db.run("UPDATE creatives SET review_state = 'rejected', review_note = ?, state = 'rejected' WHERE id = ?", [b.reason, m.id]);
       await auditCtx(c, db, { action: 'media.reject', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'rejected' }, reason: b.reason } });
     });
+    await bumpManifest(rt);
     await emailOwner(rt, m.customer_id, `Tệp "${m.name ?? ''}" cần chỉnh sửa`, `<p>Tệp <b>${esc(m.name)}</b> được trả lại.</p><p>Lý do: ${esc(b.reason)}</p>`);
     return c.json(present(await loadMedia(c, m.id)));
   });
@@ -342,6 +405,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       await db.run('DELETE FROM creatives WHERE id = ?', [m.id]);
       await auditCtx(c, db, { action: 'media.delete', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { name: m.name } });
     });
+    await bumpManifest(rt);
     return c.json({ ok: true });
   });
 

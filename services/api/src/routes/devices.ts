@@ -2,7 +2,9 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { REGIONS } from '@ams/shared';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
-import { notFound } from '../lib/errors.js';
+import { conflict, notFound, tooMany, unprocessable } from '../lib/errors.js';
+import { redeemPairingCode } from '@ams/edge-gateway/pairing';
+import { dropDeviceCache } from '../lib/manifest.js';
 import { getRt, num, parseBody, placeholders, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { requirePerm } from '../auth/middleware.js';
@@ -111,7 +113,30 @@ export function deviceRoutes(): Hono<AppEnv> {
       updated = (await db.run(sql, ids)).changes;
       await auditCtx(c, db, { action: `device.bulk_${b.action}`, objectType: 'device', objectId: ids.length === 1 ? ids[0]! : null, diff: { requested: ids.length, updated, ids: ids.slice(0, 50) } });
     });
+    // gateway cache thiet bi o kv `dev:<id>` (5 phut): xoa de khoa/mo/xac minh co hieu luc ngay
+    await dropDeviceCache(rt, ids);
     return c.json({ updated, requested: ids.length });
+  });
+
+  // Nhap ma 6 so hien tren TV thay cho nguoi dung (van hanh/cua hang): tao end_user, goi redeemPairingCode cua gateway (nguyen tu, dung 1 lan).
+  r.post('/pair', requirePerm('devices', 'write'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const b = await parseBody(c, z.object({ code: z.string().trim().regex(/^\d{6}$/, 'Mã ghép đôi gồm 6 chữ số'), owner_name: z.string().trim().max(100).optional() }));
+    const bucket = Math.floor(rt.clock.now().getTime() / 600_000);
+    if ((await rt.kv.incr(`rl:pair:${u.id}:${bucket}`, 600)) > 30) throw tooMany('Nhập mã quá nhiều lần, thử lại sau ít phút.', 300);
+    const nowIso = rt.clock.now().toISOString();
+    const userId = rt.id();
+    await rt.db.run('INSERT INTO end_users (id, phone_hash, email_enc, display_name, created_at) VALUES (?, NULL, NULL, ?, ?)', [userId, b.owner_name || `Ghép bởi ${u.name}`, nowIso]);
+    const res = await redeemPairingCode(rt, b.code, userId); // cung xoa kv `dev:<id>`
+    if (!res.ok) {
+      await rt.db.run('DELETE FROM end_users WHERE id = ?', [userId]);
+      if (res.reason === 'not_found') throw notFound('Mã ghép đôi không đúng.', 'pair_code_not_found');
+      if (res.reason === 'expired') throw unprocessable('Mã đã hết hạn (5 phút). Hãy lấy mã mới trên màn hình TV.', 'pair_code_expired');
+      throw conflict('Mã này đã được dùng.', 'pair_code_used');
+    }
+    await auditCtx(c, rt.db, { action: 'device.pair', objectType: 'device', objectId: res.deviceId, diff: { end_user_id: userId } });
+    return c.json({ device_id: res.deviceId, paired: true });
   });
 
   r.get('/:id', requirePerm('devices', 'view'), async (c) => {

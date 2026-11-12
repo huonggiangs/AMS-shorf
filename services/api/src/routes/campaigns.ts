@@ -9,6 +9,7 @@ import type { Ctx, ListSpec, SqlFrag } from '../lib/http.js';
 import { campaignScope, mediaScope } from '../lib/scope.js';
 import { apiTarget, dbTarget, fitsTarget, parsePx, type TargetType } from '../lib/creative.js';
 import { dayEnd, dayStart, isDate, todayVn } from '../lib/dates.js';
+import { bumpManifest, ensureDefaultSlot } from '../lib/manifest.js';
 import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv, AuthUser } from '../types.js';
 import type { Db, Runtime } from '@ams/runtime';
@@ -184,8 +185,8 @@ async function attachMedia(c: Ctx, db: Db, campaignId: string, customerId: strin
     await db.run('UPDATE creatives SET campaign_id = ?, target_type = ? WHERE id = ? AND campaign_id IS NULL', [campaignId, target, m.id]);
   } else {
     await db.run(
-      `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, codec, uploaded_by, uploader_kind, scan_state, review_state, review_note, state, created_at)
-       SELECT ?, ?, customer_id, name, ?, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, codec, uploaded_by, uploader_kind, scan_state, review_state, review_note, state, ?
+      `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, codec, uploaded_by, uploader_kind, scan_state, review_state, review_note, state, sha256, format, overlay, created_at)
+       SELECT ?, ?, customer_id, name, ?, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, codec, uploaded_by, uploader_kind, scan_state, review_state, review_note, state, sha256, format, overlay, ?
          FROM creatives WHERE id = ?`,
       [rt.id(), campaignId, target, nowIso, m.id],
     );
@@ -303,6 +304,7 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
       await auditCtx(c, db, { action: 'campaign.pause', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { state: { from: row.state, to: 'paused' } } });
     });
+    await bumpManifest(rt);
     return c.json((await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0]);
   });
 
@@ -330,6 +332,7 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
       await auditCtx(c, db, { action: 'campaign.resume', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { state: { from: 'paused', to: next } } });
     });
+    await bumpManifest(rt);
     return c.json((await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0]);
   });
 
@@ -356,6 +359,8 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       );
       if (res.changes === 0) throw conflict('Chiến dịch vừa được người khác xử lý.', 'invalid_state');
       const ap = await db.run("UPDATE creatives SET review_state = 'approved', state = CASE WHEN state = 'uploading' THEN state ELSE 'ready' END, review_note = NULL WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
+      // manifest chi phat chien dich co lich: tao lich ca ngay mac dinh neu admin chua xep lich rieng
+      await ensureDefaultSlot(rt, db, row.id, jsonParse<string[]>(row.target_types, ['tv'])[0] ?? 'tv');
       await auditCtx(c, db, {
         action: 'campaign.approve', objectType: 'campaign', objectId: row.id, customerId: row.customer_id,
         diff: { approved_budget_vnd: num(row.budget_cap_vnd), creatives_approved: ap.changes },
@@ -376,6 +381,7 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       console.error('[campaign.approve] reserveForCampaign loi:', (e as Error).name);
       warning = 'Đã duyệt nhưng chưa giữ được tiền từ ví (lỗi tạm thời); hệ thống sẽ tự thử lại khi ví đủ.';
     }
+    await bumpManifest(rt);
     const message = warning ?? (status === 'awaiting_funds' ? `Đã duyệt nhưng ví thiếu ${shortfall.toLocaleString('vi-VN')} ₫. Quảng cáo tự chạy sau khi nạp đủ.` : `Đã duyệt, đã giữ ${reserved.toLocaleString('vi-VN')} ₫ từ ví.`);
     await emailCampaignOwner(rt, row, `Chiến dịch "${row.name}" đã được duyệt`, `<p>Chiến dịch <b>${esc(row.name)}</b> đã được duyệt (${esc(status)}).</p>`);
     return c.json({ status, reserved_vnd: reserved, shortfall_vnd: shortfall, message, ...(warning ? { warning } : {}) });
@@ -398,6 +404,7 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
       await auditCtx(c, db, { action: 'campaign.reject', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { state: { from: row.state, to: 'rejected' }, reason: b.reason, revoked: wasApproved } });
     });
+    await bumpManifest(rt);
     void u;
     await emailCampaignOwner(rt, row, `Chiến dịch "${row.name}" cần chỉnh sửa`, `<p>Chiến dịch <b>${esc(row.name)}</b> được trả lại.</p><p>Lý do: ${esc(b.reason)}</p>`);
     return c.json((await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0]);
@@ -413,6 +420,7 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
       await auditCtx(c, db, { action: 'campaign.end', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { released_vnd: rel.released_vnd } });
     });
+    await bumpManifest(rt);
     return c.json({ ...(await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0], released_vnd: rel.released_vnd });
   });
 
@@ -429,6 +437,7 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
       await auditCtx(c, db, { action: 'campaign.delete', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { name: row.name, state: row.state } });
     });
+    await bumpManifest(rt);
     return c.json({ ok: true });
   });
 

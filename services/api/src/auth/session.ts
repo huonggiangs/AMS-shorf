@@ -67,7 +67,8 @@ interface SessionRow {
   totp_secret_enc: string | null;
   mfa_required: number;
   last_login_at: string | null;
-  profile: string | null;
+  acct_phone: string | null;
+  acct_expires_at: string | null;
   customer_state: string | null;
 }
 
@@ -75,8 +76,6 @@ export interface AdminProfile {
   phone?: string | null;
   expires_at?: string | null;
 }
-/** phone/expires_at luu o settings `admin_profile:<id>` (bang admins chua co cot; xem ops/agents/a1-api-core.requests.md). */
-export const profileKey = (adminId: string) => `admin_profile:${adminId}`;
 
 export async function loadPerms(rt: Runtime, adminId: string): Promise<PermRow[]> {
   return rt.db.query<PermRow>('SELECT module, action, allowed FROM admin_permissions WHERE admin_id = ?', [adminId]);
@@ -88,10 +87,9 @@ export async function loadSession(rt: Runtime, token: string): Promise<AuthUser>
   const rows = await rt.db.query<SessionRow>(
     `SELECT s.id AS sid, s.csrf_token, s.mfa_verified, s.expires_at, s.last_seen_at, s.revoked_at,
             a.id, a.tenant_id, a.email, a.name, a.role, a.account_kind, a.customer_id, a.status, a.totp_secret_enc, a.mfa_required, a.last_login_at,
-            p.value AS profile, cu.state AS customer_state
+            a.phone AS acct_phone, a.expires_at AS acct_expires_at, cu.state AS customer_state
        FROM sessions s
        JOIN admins a ON a.id = s.admin_id
-       LEFT JOIN settings p ON p.key = 'admin_profile:' || a.id
        LEFT JOIN customers cu ON cu.id = a.customer_id
       WHERE s.token_hash = ?`,
     [hash],
@@ -102,8 +100,7 @@ export async function loadSession(rt: Runtime, token: string): Promise<AuthUser>
   if (!r || r.revoked_at || r.expires_at <= nowIso) throw unauthorized('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', 'session_expired');
   if (nowMs - new Date(r.last_seen_at).getTime() > SESSION_IDLE_SEC * 1000) throw unauthorized('Phiên đăng nhập đã hết hạn do không hoạt động.', 'session_expired');
   if (r.status !== 'active') throw unauthorized('Tài khoản đã bị khóa hoặc chưa kích hoạt.', 'account_disabled');
-  const profile = jsonParse<AdminProfile>(r.profile, {});
-  if (profile.expires_at && profile.expires_at <= nowIso) throw unauthorized('Tài khoản đã hết hạn sử dụng.', 'account_expired');
+  if (r.acct_expires_at && r.acct_expires_at <= nowIso) throw unauthorized('Tài khoản đã hết hạn sử dụng.', 'account_expired');
   if (r.account_kind !== 'internal' && r.customer_state === 'terminated') throw forbidden('Hợp đồng của khách hàng đã chấm dứt, tài khoản không còn truy cập.', 'customer_terminated');
   const needMfa = r.account_kind !== 'internal' || r.mfa_required === 1 || !!r.totp_secret_enc;
   if (needMfa && r.mfa_verified !== 1) throw unauthorized('Phiên chưa xác thực hai bước.', 'mfa_required');

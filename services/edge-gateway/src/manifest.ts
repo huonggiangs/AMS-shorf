@@ -1,6 +1,6 @@
 import type { Runtime } from '@ams/runtime';
-import { sha256Hex } from '@ams/shared';
-import { AD_FORMATS, MANIFEST_TZ, PROTOCOL_VERSION, type AdFormat, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestSlot } from './protocol.js';
+import { MANIFEST_EPOCH_KEY, isAdFormat, parseOverlay, sha256Hex } from '@ams/shared';
+import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestSlot } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 
 export interface GroupKey {
@@ -38,6 +38,8 @@ interface CreativeRow {
   size_bytes: number | null;
   duration_s: number | null;
   sha256?: string | null;
+  format?: string | null;
+  overlay?: string | null;
 }
 interface SlotRow {
   campaign_id: string;
@@ -56,12 +58,16 @@ export interface ManifestOpts {
   mediaBaseUrl: string;
   ttlS: number; // TTL cache de xuat cho thiet bi/CDN
   buildTtlS: number; // sau bao lau dung lai moi xay lai tu DB
+  /** bo nho dem moi instance (giay) truoc khi hoi lai kv/epoch; mac dinh 15. Thap hon = API doi chien dich co hieu luc nhanh hon. */
+  memTtlS?: number;
 }
 
 interface GroupRecord {
   etag: string;
   json: string;
   builtAt: number;
+  /** gia tri kv `manifest:epoch` luc xay; API tang epoch khi doi chien dich/creative => moi ban cu bi bo */
+  epoch?: string;
   prev: Record<string, string>; // creative_id -> campaign_id cua ban truoc (de nhan impression sat luc doi lich)
 }
 
@@ -75,11 +81,12 @@ export interface ManifestView {
 }
 
 const memTtlMs = 15_000;
+/** kv do API tang (`bumpManifestEpoch`) de bat moi instance gateway xay lai manifest (toi da memTtlMs sau). */
+export const EPOCH_KEY = MANIFEST_EPOCH_KEY;
 
 export class ManifestService {
   private mem = new Map<string, { at: number; rec: GroupRecord }>();
   private inflight = new Map<string, Promise<GroupRecord>>();
-  private shaColumn: boolean | undefined;
   constructor(
     private rt: Runtime,
     private opts: ManifestOpts,
@@ -91,13 +98,14 @@ export class ManifestService {
     const now = this.rt.clock.now().getTime();
     const m = this.mem.get(key);
     let rec: GroupRecord | undefined;
-    if (m && now - m.at < memTtlMs) rec = m.rec;
+    if (m && now - m.at < (this.opts.memTtlS ?? memTtlMs / 1000) * 1000) rec = m.rec;
     if (!rec) {
+      const epoch = (await this.rt.kv.get(EPOCH_KEY)) ?? '0';
       const raw = await this.rt.kv.get(`manifest:${key}`);
       if (raw) {
         try {
           const r = JSON.parse(raw) as GroupRecord;
-          if (now - r.builtAt < this.opts.buildTtlS * 1000) rec = r;
+          if (now - r.builtAt < this.opts.buildTtlS * 1000 && (r.epoch ?? '0') === epoch) rec = r;
         } catch {
           /* xay lai */
         }
@@ -111,7 +119,8 @@ export class ManifestService {
       }
       rec = await p;
     }
-    this.mem.set(key, { at: now, rec });
+    // CHI ghi bo nho khi vua nap tu kv/DB: ghi ca khi trung bo nho thi cua so truot mai mai (manifest cua nhom dong khach khong bao gio lam moi)
+    if (!m || m.rec !== rec) this.mem.set(key, { at: now, rec });
     return this.view(rec);
   }
 
@@ -188,13 +197,14 @@ export class ManifestService {
         prev = null;
       }
     }
+    const epoch = (await this.rt.kv.get(EPOCH_KEY)) ?? '0'; // doc TRUOC khi xay: doi giua chung thi ban nay bi coi la cu o lan sau
     const man = await this.build(g);
     const now = this.rt.clock.now().getTime();
     let prevMap: Record<string, string> = {};
     if (prev) {
       prevMap = prev.etag === man.etag ? prev.prev : Object.fromEntries((JSON.parse(prev.json) as Manifest).creatives.map((c) => [c.id, c.campaign_id]));
     }
-    const rec: GroupRecord = { etag: man.etag, json: JSON.stringify(man), builtAt: now, prev: prevMap };
+    const rec: GroupRecord = { etag: man.etag, json: JSON.stringify(man), builtAt: now, epoch, prev: prevMap };
     await this.rt.kv.set(`manifest:${key}`, JSON.stringify(rec), 24 * 3600);
     // giu ban theo etag 1 gio de phuc vu delta
     await this.rt.kv.set(`manifest:${key}:${man.etag}`, rec.json, 3600);
@@ -238,7 +248,8 @@ export class ManifestService {
       if (!r.storage_key) continue;
       const sha = await this.sha256Of(r);
       if (!sha) continue; // khong xac minh duoc tep => khong dua vao manifest
-      const fmt = (AD_FORMATS as readonly string[]).includes(r.kind ?? '') ? (r.kind as AdFormat) : 'fullscreen';
+      const fmt = isAdFormat(r.format) ? r.format : isAdFormat(r.kind) ? r.kind : 'fullscreen';
+      const ov = parseOverlayJson(r.overlay);
       creatives.push({
         id: r.id,
         campaign_id: r.campaign_id,
@@ -248,6 +259,7 @@ export class ManifestService {
         px_w: r.px_w === null ? null : Number(r.px_w),
         px_h: r.px_h === null ? null : Number(r.px_h),
         format: fmt,
+        ...(ov ? { overlay: ov } : {}),
         media_type: r.kind === 'image' || /\.(png|jpe?g)$/i.test(r.storage_key) ? 'image' : 'video',
         size_bytes: r.size_bytes === null ? null : Number(r.size_bytes),
       });
@@ -277,20 +289,13 @@ export class ManifestService {
   }
 
   private async queryCreatives(type: string): Promise<CreativeRow[]> {
-    const base = `cr.id, cr.campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s`;
-    const where = `FROM creatives cr JOIN campaigns c ON c.id = cr.campaign_id
+    return this.rt.db.query<CreativeRow>(
+      `SELECT cr.id, cr.campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay
+         FROM creatives cr JOIN campaigns c ON c.id = cr.campaign_id
         WHERE c.state = 'active' AND cr.target_type = ? AND cr.review_state = 'approved' AND cr.state = 'ready'
-          AND cr.scan_state NOT IN ('infected','failed')`;
-    if (this.shaColumn !== false) {
-      try {
-        const rows = await this.rt.db.query<CreativeRow>(`SELECT ${base}, cr.sha256 ${where}`, [type]);
-        this.shaColumn = true;
-        return rows;
-      } catch {
-        this.shaColumn = false; // chua co cot creatives.sha256 (xem requests): dung kv/doi tuong
-      }
-    }
-    return this.rt.db.query<CreativeRow>(`SELECT ${base} ${where}`, [type]);
+          AND cr.scan_state NOT IN ('infected','failed')`,
+      [type],
+    );
   }
 
   private async sha256Of(r: CreativeRow): Promise<string | null> {
@@ -303,5 +308,16 @@ export class ManifestService {
     const h = await sha256Hex(obj);
     await this.rt.kv.set(k, h);
     return h;
+  }
+}
+
+/** overlay luu TEXT JSON; kiem lai khi phat (du lieu cu/hong thi bo qua, khong lam hong manifest). */
+function parseOverlayJson(raw: string | null | undefined): import('@ams/shared').CreativeOverlay | null {
+  if (!raw) return null;
+  try {
+    const r = parseOverlay(JSON.parse(raw));
+    return r.ok ? r.value : null;
+  } catch {
+    return null;
   }
 }

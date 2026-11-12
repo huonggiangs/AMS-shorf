@@ -11,16 +11,16 @@ import { eq, getRt, jsonParse, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { appUrl, inviteMail, trySend } from '../lib/mail.js';
 import { isDate } from '../lib/dates.js';
-import { revokeAllSessions, profileKey, loadPerms } from '../auth/session.js';
+import { revokeAllSessions, loadPerms } from '../auth/session.js';
 import type { AdminProfile } from '../auth/session.js';
 import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv, AuthUser } from '../types.js';
 
 type Perms = Partial<Record<Module, Action[]>>;
 
-const U_SELECT = `a.id, a.name, a.email, a.role, a.account_kind, a.customer_id, a.status, a.last_login_at, a.created_at, cu.short_name AS customer_name, p.value AS profile,
+const U_SELECT = `a.id, a.name, a.email, a.role, a.account_kind, a.customer_id, a.status, a.last_login_at, a.created_at, cu.short_name AS customer_name, a.phone AS phone, a.expires_at AS expires_at,
   (SELECT COUNT(*) FROM admin_permissions ap WHERE ap.admin_id = a.id) AS perm_count`;
-const U_FROM = "FROM admins a LEFT JOIN customers cu ON cu.id = a.customer_id LEFT JOIN settings p ON p.key = 'admin_profile:' || a.id";
+const U_FROM = "FROM admins a LEFT JOIN customers cu ON cu.id = a.customer_id";
 
 interface UserRow {
   id: string;
@@ -33,23 +33,23 @@ interface UserRow {
   last_login_at: string | null;
   created_at: string;
   customer_name: string | null;
-  profile: string | null;
+  phone: string | null;
+  expires_at: string | null;
   perm_count: number;
 }
 
 const present = (u: UserRow) => {
-  const p = jsonParse<AdminProfile>(u.profile, {});
   return {
     id: u.id,
     name: u.name,
     email: u.email,
-    phone: p.phone ?? null,
+    phone: u.phone ?? null,
     role: u.role,
     account_kind: u.account_kind,
     customer_id: u.customer_id,
     customer_name: u.customer_name,
     status: u.status,
-    expires_at: p.expires_at ?? null,
+    expires_at: u.expires_at ?? null,
     last_login_at: u.last_login_at,
     perm_count: num(u.perm_count),
     created_at: u.created_at,
@@ -122,13 +122,9 @@ async function loadUser(c: Ctx, id: string): Promise<UserRow> {
   return r;
 }
 
-async function saveProfile(db: Db, rt: Runtime, id: string, patch: AdminProfile, by: string): Promise<void> {
-  const cur = jsonParse<AdminProfile>((await db.query<{ value: string }>('SELECT value FROM settings WHERE key = ?', [profileKey(id)]))[0]?.value, {});
-  const next = { ...cur, ...patch };
-  const val = JSON.stringify(next);
-  const nowIso = rt.clock.now().toISOString();
-  const up = await db.run('UPDATE settings SET value = ?, updated_by = ?, updated_at = ? WHERE key = ?', [val, by, nowIso, profileKey(id)]);
-  if (up.changes === 0) await db.run('INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?,?,?,?)', [profileKey(id), val, by, nowIso]);
+async function saveProfile(db: Db, _rt: Runtime, id: string, patch: AdminProfile, _by: string): Promise<void> {
+  if (patch.phone !== undefined) await db.run('UPDATE admins SET phone = ? WHERE id = ?', [patch.phone, id]);
+  if (patch.expires_at !== undefined) await db.run('UPDATE admins SET expires_at = ? WHERE id = ?', [patch.expires_at, id]);
 }
 
 export function userRoutes(): Hono<AppEnv> {

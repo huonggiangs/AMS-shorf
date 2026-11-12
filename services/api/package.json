@@ -10,7 +10,8 @@
     ".": "./src/index.ts",
     "./app": "./src/app.ts",
     "./ports": "./src/ports.ts",
-    "./worker": "./src/worker.ts"
+    "./worker": "./src/worker.ts",
+    "./node": "./src/node.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -27,6 +28,8 @@
     "@ams/runtime": "workspace:*",
     "hono": "4.9.9",
     "@hono/node-server": "1.19.5",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "@ams/edge-gateway": "workspace:*",
+    "@ams/payments": "workspace:*"
   }
 }

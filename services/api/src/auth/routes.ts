@@ -11,7 +11,7 @@ import type { Ctx } from '../lib/http.js';
 import { writeAudit } from '../lib/audit.js';
 import { authenticate } from './middleware.js';
 import {
-  MFA_COOKIE, MFA_TTL_SEC, SESSION_COOKIE, clearSessionCookies, createSession, isHttps, loadSession, profileKey, revokeSession, setSessionCookies, type AdminProfile,
+  MFA_COOKIE, MFA_TTL_SEC, SESSION_COOKIE, clearSessionCookies, createSession, isHttps, loadSession, revokeSession, setSessionCookies,
 } from './session.js';
 import type { AppEnv } from '../types.js';
 
@@ -33,7 +33,7 @@ interface LoginRow {
   mfa_required: number;
   failed_logins: number;
   locked_until: string | null;
-  profile: string | null;
+  acct_expires_at: string | null;
   customer_state: string | null;
 }
 
@@ -119,8 +119,8 @@ export function authRoutes(): Hono<AppEnv> {
     const row = (
       await rt.db.query<LoginRow>(
         `SELECT a.id, a.tenant_id, a.email, a.name, a.role, a.account_kind, a.customer_id, a.status, a.password_hash, a.totp_secret_enc, a.mfa_required, a.failed_logins, a.locked_until,
-                p.value AS profile, cu.state AS customer_state
-           FROM admins a LEFT JOIN settings p ON p.key = 'admin_profile:' || a.id LEFT JOIN customers cu ON cu.id = a.customer_id WHERE a.email = ?`,
+                a.expires_at AS acct_expires_at, cu.state AS customer_state
+           FROM admins a LEFT JOIN customers cu ON cu.id = a.customer_id WHERE a.email = ?`,
         [body.email],
       )
     )[0];
@@ -144,8 +144,7 @@ export function authRoutes(): Hono<AppEnv> {
       throw invalid();
     }
     if (row.status !== 'active') throw forbidden('Tài khoản đã bị khóa hoặc ngừng hoạt động. Liên hệ quản trị viên.', 'account_disabled');
-    const profile = jsonParse<AdminProfile>(row.profile, {});
-    if (profile.expires_at && profile.expires_at <= nowIso) throw unauthorized('Tài khoản đã hết hạn sử dụng.', 'account_expired');
+    if (row.acct_expires_at && row.acct_expires_at <= nowIso) throw unauthorized('Tài khoản đã hết hạn sử dụng.', 'account_expired');
     if (row.account_kind !== 'internal' && row.customer_state === 'terminated') throw forbidden('Hợp đồng của khách hàng đã chấm dứt, tài khoản không còn truy cập.', 'customer_terminated');
 
     await rt.kv.del(`rl:login:em:${await sha256Hex(body.email)}`);

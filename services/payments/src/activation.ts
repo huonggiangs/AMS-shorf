@@ -2,7 +2,7 @@ import type { Db, Runtime } from '@ams/runtime';
 import { sha256Hex, toBase64Url, randomBytes } from '@ams/shared';
 import { loadSepayConfig } from './config.js';
 import { runAwaitingFunds } from './ledger.js';
-import { audit, iso, n, notify, withTx } from './util.js';
+import { audit, bumpManifest, iso, n, notify, withTx } from './util.js';
 
 export type ActivationAction =
   | { type: 'customer_activated'; prev_state: string; prev_since: string | null }
@@ -29,6 +29,12 @@ async function minForCustomer(db: Db, rt: Runtime, customerId: string): Promise<
  * Moi hanh dong ghi activation_log (hoan tac duoc bang undoActivation).
  */
 export async function runActivation(rt: Runtime, dbIn: Db, customerId: string, topupId: string | null): Promise<{ log_id: string | null; actions: ActivationAction[] }> {
+  const r = await runActivationTx(rt, dbIn, customerId, topupId);
+  if (r.actions.length) await bumpManifest(rt); // chien dich vua duoc giu tien co the da len `active`
+  return r;
+}
+
+async function runActivationTx(rt: Runtime, dbIn: Db, customerId: string, topupId: string | null): Promise<{ log_id: string | null; actions: ActivationAction[] }> {
   return withTx(dbIn, async (db) => {
     const actions: ActivationAction[] = [];
     const cust = (await db.query<{ state: string; since: string | null; email: string | null; short_name: string; legal_name: string; payment_code: string }>(
@@ -123,6 +129,12 @@ const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (c) => ({ '&': '
  * khach/hop dong tro lai trang thai cu, tai khoan cong bi khoa, chien dich chua chi duoc nha giu va quay lai awaiting_funds.
  */
 export async function undoActivation(rt: Runtime, dbIn: Db, logId: string, actor: string | null): Promise<{ undone: string[]; skipped: string[] }> {
+  const r = await undoActivationTx(rt, dbIn, logId, actor);
+  await bumpManifest(rt);
+  return r;
+}
+
+async function undoActivationTx(rt: Runtime, dbIn: Db, logId: string, actor: string | null): Promise<{ undone: string[]; skipped: string[] }> {
   return withTx(dbIn, async (db) => {
     const log = (await db.query<{ customer_id: string; actions: string }>('SELECT customer_id, actions FROM activation_log WHERE id = ?', [logId]))[0];
     if (!log) throw Object.assign(new Error('not_found'), { code: 'not_found' });

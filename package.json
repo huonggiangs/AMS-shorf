@@ -4,17 +4,20 @@
   "version": "0.1.0",
   "type": "module",
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
-    "dev": "pnpm -r --parallel dev"
+    "dev": "pnpm -r --parallel dev",
+    "e2e:smoke": "pnpm --filter @ams/e2e smoke"
   },
   "devDependencies": {
-    "typescript": "5.9.3",
-    "vitest": "3.2.4",
+    "@types/node": "22.18.0",
     "tsx": "4.20.6",
-    "@types/node": "22.18.0"
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
   }
 }

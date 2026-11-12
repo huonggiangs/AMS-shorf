@@ -1,0 +1,39 @@
+{
+  "v": 1,
+  "sponsor_tag": "TÀI TRỢ • QUẢNG CÁO 4K",
+  "brand_label": "VINFAST AUTO",
+  "headline": "VinFast VF 9 - Đỉnh Cao Trải Nghiệm Doanh Nhân",
+  "scte_id": "VF9-800V-VN",
+  "badges": [
+    "DOLBY VISION & ATMOS"
+  ],
+  "hotline": {
+    "label": "HOTLINE TƯ VẤN 24/7",
+    "number": "1900 23 23 89",
+    "sub": "Miễn cước CSKH"
+  },
+  "qr": {
+    "url": "https://q.ams.example/vf9",
+    "label": "ƯU ĐÃI ĐẶC QUYỀN",
+    "title": "VOUCHER 500K",
+    "hint": "Quét bằng Camera điện thoại"
+  },
+  "background": {
+    "url": "https://media.anio.vn/ads/vf9-night-1920x1080.jpg",
+    "sha256": "89cdc60a4b421ffc727544ab4730d94d6e5eb0645ae7828ada2a4c272f8ee893",
+    "px_w": 1920,
+    "px_h": 1080
+  },
+  "safe_area": {
+    "top": 5,
+    "right": 5,
+    "bottom": 5,
+    "left": 5
+  },
+  "duration_s": 15,
+  "kid_safe": true,
+  "contexts": [
+    "lock",
+    "fullscreen"
+  ]
+}

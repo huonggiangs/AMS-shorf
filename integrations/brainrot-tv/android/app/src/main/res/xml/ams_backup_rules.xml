@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 6-11 Auto Backup: keep the AMS identity out of cloud backups so a restored/cloned TV cannot reuse a device_id.
+     The Ed25519 seed itself lives in getNoBackupFilesDir() and is excluded by the platform. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="brainrot_ams.xml" />
+    <exclude domain="file" path="ams/" />
+</full-backup-content>

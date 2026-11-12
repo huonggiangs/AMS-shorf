@@ -38,8 +38,8 @@ export const ERROR_CODES = {
 } as const;
 export type ErrorCode = keyof typeof ERROR_CODES;
 
-export const AD_FORMATS = ['fullscreen', 'menu_banner', 'l_banner', 'pause_ad', 'qr_corner', 'reward'] as const;
-export type AdFormat = (typeof AD_FORMATS)[number];
+export { AD_FORMATS, type AdFormat, type CreativeOverlay } from '@ams/shared';
+import type { AdFormat, CreativeOverlay } from '@ams/shared';
 
 export const DEVICE_KINDS = ['tv', 'elevator', 'led_p5', 'phone', 'virtual'] as const;
 
@@ -102,6 +102,8 @@ export interface ManifestCreative {
   px_w: number | null;
   px_h: number | null;
   format: AdFormat;
+  /** lop phu (tieu de, hotline, QR, nhan tai tro...) neu creative co; thiet bi cu bo qua truong la */
+  overlay?: CreativeOverlay;
   media_type: 'video' | 'image';
   size_bytes: number | null;
 }

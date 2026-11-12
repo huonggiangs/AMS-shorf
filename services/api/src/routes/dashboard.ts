@@ -23,11 +23,11 @@ export function dashboardRoutes(): Hono<AppEnv> {
       [sinceOnline],
     ))[0];
     const tot = (await rt.db.query<{ imps: number; rev: number; reward: number }>(
-      'SELECT SUM(impressions) AS imps, SUM(revenue_micro_vnd) AS rev, SUM(reward_vnd) AS reward FROM impression_hourly WHERE hour >= ?',
+      'SELECT SUM(valid) AS imps, SUM(revenue_micro_vnd) AS rev, SUM(reward_vnd) AS reward FROM impression_hourly WHERE hour >= ?',
       [since],
     ))[0];
     const days = await rt.db.query<{ d: string; imps: number; rev: number }>(
-      'SELECT substr(hour, 1, 10) AS d, SUM(impressions) AS imps, SUM(revenue_micro_vnd) AS rev FROM impression_hourly WHERE hour >= ? GROUP BY substr(hour, 1, 10) ORDER BY d',
+      'SELECT substr(hour, 1, 10) AS d, SUM(valid) AS imps, SUM(revenue_micro_vnd) AS rev FROM impression_hourly WHERE hour >= ? GROUP BY substr(hour, 1, 10) ORDER BY d',
       [since],
     );
     const split = await rt.db.query<{ name: string | null; rev: number }>(
@@ -69,7 +69,7 @@ export function dashboardRoutes(): Hono<AppEnv> {
 
 async function topCampaigns(c: import('../lib/http.js').Ctx): Promise<Record<string, unknown>[]> {
   const rt = getRt(c);
-  const rows = await rt.db.query<{ campaign_id: string }>('SELECT campaign_id FROM impression_hourly GROUP BY campaign_id ORDER BY SUM(impressions) DESC LIMIT 5');
+  const rows = await rt.db.query<{ campaign_id: string }>('SELECT campaign_id FROM impression_hourly GROUP BY campaign_id ORDER BY SUM(valid) DESC LIMIT 5');
   if (!rows.length) return [];
   const spec = campaignSpec(c.get('user'), rt.clock.now().toISOString());
   const ids = rows.map((x) => x.campaign_id);

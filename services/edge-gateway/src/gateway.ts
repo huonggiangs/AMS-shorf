@@ -52,13 +52,13 @@ interface HbRow {
 export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   const env = rt.config.env;
   const rng = opts.rng ?? defaultRng;
-  const devices = new DeviceDirectory(rt);
+  const devices = new DeviceDirectory(rt, envInt(env, 'DEVICE_MEM_TTL_S', 30) * 1000);
   const nonces = opts.nonces ?? new KvNonceStore(rt.kv);
   const presence = opts.presence ?? new KvPresence(rt.kv);
   const deps: AuthDeps = { rt, devices, nonces };
   const mediaBase = env['MEDIA_PUBLIC_URL'] ?? (env['S3_PUBLIC_ENDPOINT'] && env['S3_BUCKET'] ? `${env['S3_PUBLIC_ENDPOINT']}/${env['S3_BUCKET']}` : 'https://media.ams.invalid');
   const manifestTtl = envInt(env, 'MANIFEST_TTL_S', 900);
-  const manifests = new ManifestService(rt, { mediaBaseUrl: mediaBase, ttlS: manifestTtl, buildTtlS: envInt(env, 'MANIFEST_BUILD_TTL_S', 60) });
+  const manifests = new ManifestService(rt, { mediaBaseUrl: mediaBase, ttlS: manifestTtl, buildTtlS: envInt(env, 'MANIFEST_BUILD_TTL_S', 60), memTtlS: envInt(env, 'MANIFEST_MEM_TTL_S', 15) });
   const rps = new RpsLoad(rt, envInt(env, 'GW_CAPACITY_RPS', 5000));
   const loadFn: LoadFn = opts.load ?? rps.factor;
   const ctl = new CtlCache(rt);
