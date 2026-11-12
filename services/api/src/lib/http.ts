@@ -119,7 +119,7 @@ export function parseFilters(c: Ctx, spec: ListSpec): Map<string, string> {
 }
 
 /** Chay danh sach phan trang phia may chu. Moi gia tri di qua tham so; ten cot chi lay tu bang trang. */
-export async function runList<T extends Record<string, unknown>>(c: Ctx, spec: ListSpec, extra: SqlFrag[] = []): Promise<ListResult<T>> {
+export async function runList<T extends object>(c: Ctx, spec: ListSpec, extra: SqlFrag[] = []): Promise<ListResult<T>> {
   const rt = getRt(c);
   const page = intParam(c.req.query('page'), 1, 1, 1_000_000);
   const pageSize = intParam(c.req.query('page_size'), 20, 1, MAX_PAGE_SIZE);

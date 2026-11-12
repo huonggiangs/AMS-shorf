@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Runtime } from '@ams/runtime';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { esc, trySend } from '../lib/mail.js';
-import { conflict, notFound, unprocessable } from '../lib/errors.js';
+import { HttpError, conflict, notFound, unprocessable } from '../lib/errors.js';
 import { eq, getRt, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { mediaScope } from '../lib/scope.js';
@@ -130,7 +130,7 @@ async function resolveOwner(c: Ctx, bodyCustomerId: string | null | undefined): 
 async function checkQuotas(rt: Runtime, customerId: string, addBytes: number, q: Quota): Promise<void> {
   const dayStartUtc = new Date(`${todayVn(rt)}T00:00:00+07:00`).toISOString();
   const today = num((await rt.db.query<{ n: number }>('SELECT COUNT(*) AS n FROM creatives WHERE customer_id = ? AND created_at >= ?', [customerId, dayStartUtc]))[0]?.n);
-  if (today >= q.max_files_per_day) throw new (await import('../lib/errors.js')).HttpError(429, 'quota_files_per_day', `Đã đạt giới hạn ${q.max_files_per_day} tệp/ngày. Thử lại vào ngày mai.`, { limit: q.max_files_per_day });
+  if (today >= q.max_files_per_day) throw new HttpError(429, 'quota_files_per_day', `Đã đạt giới hạn ${q.max_files_per_day} tệp/ngày. Thử lại vào ngày mai.`, { limit: q.max_files_per_day });
   const total = num((await rt.db.query<{ s: number | null }>('SELECT COALESCE(SUM(size_bytes), 0) AS s FROM creatives WHERE customer_id = ?', [customerId]))[0]?.s);
   if (total + addBytes > q.max_total_gb * GB) throw unprocessable(`Vượt tổng dung lượng cho phép ${q.max_total_gb} GB. Hãy xóa bớt tệp cũ.`, 'quota_total_size', { limit_gb: q.max_total_gb });
 }

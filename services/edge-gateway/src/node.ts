@@ -7,7 +7,7 @@ import { seedAdFixture } from './testing.js';
 
 export async function startNode(env: Record<string, string | undefined> = process.env): Promise<{ close(): Promise<void>; port: number }> {
   const test = env['RUNTIME'] === 'test';
-  const rt: Runtime = test ? await createTestRuntime({ dialect: 'sqlite', env: { GATEWAY_DEV_ENDPOINTS: '1', ...env } }) : await createDockerRuntime(env);
+  const rt: Runtime = test ? await createTestRuntime({ dialect: 'sqlite', env: { GATEWAY_DEV_ENDPOINTS: '1', REGISTER_LIMIT_PER_HOUR: '1000000', EVENTS_LIMIT_PER_MIN: '1000000', HB_MIN_GAP_S: '0', ...env } }) : await createDockerRuntime(env);
   // RUNTIME=test: nap 3 chien dich mau de thu luong manifest/events (KHONG bao gio chay o docker/cloudflare)
   if (test && env['GATEWAY_DEMO_FIXTURE'] !== '0') await seedAdFixture(rt, { campaigns: 3, creativesPerCampaign: 2 });
   const gw = createGateway(rt);
