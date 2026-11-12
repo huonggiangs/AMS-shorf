@@ -30,7 +30,9 @@ const BODY_FNS = new Set(['parseBody', 'jsonBody']);
 function identifiersOf(src: string): Set<string> {
   const f = ts.createSourceFile('x.ts', `(${src})`, ts.ScriptTarget.ES2022, true);
   const out = new Set<string>();
+  const local = new Set<string>();
   const w = (n: ts.Node): void => {
+    if ((ts.isParameter(n) || ts.isVariableDeclaration(n) || ts.isBindingElement(n)) && ts.isIdentifier(n.name)) local.add(n.name.text);
     if (ts.isIdentifier(n)) {
       const p = n.parent;
       const isProp = (ts.isPropertyAccessExpression(p) && p.name === n) || (ts.isPropertyAssignment(p) && p.name === n) || (ts.isShorthandPropertyAssignment(p) && false);
@@ -39,6 +41,7 @@ function identifiersOf(src: string): Set<string> {
     ts.forEachChild(n, w);
   };
   w(f);
+  for (const l of local) out.delete(l);
   return out;
 }
 

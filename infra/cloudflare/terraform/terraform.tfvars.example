@@ -4,3 +4,6 @@ account_id  = "ĐIỀN_ACCOUNT_ID"
 zone_id     = "ĐIỀN_ZONE_ID"
 zone_name   = "anio.vn"
 environment = "staging" # hoặc production (dùng `terraform workspace new production`)
+
+# Chỉ đặt true ở workspace production: ruleset rate limit là duy nhất theo zone và phủ cả ams-stg/gw-ams-stg.
+manage_zone_rate_limit = false

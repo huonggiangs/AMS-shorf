@@ -1,0 +1,1 @@
+import{j as t,P as e,f as o}from"./index-rwahHK-R.js";function n(){return t.jsxs(t.Fragment,{children:[t.jsx(e,{title:"Lịch sử xem quảng cáo",sub:"Đối soát lượt phát theo thiết bị, chiến dịch và trạng thái."}),t.jsx(o,{what:"Nhật ký lượt xem (proof-of-play)"})]})}export{n as default};

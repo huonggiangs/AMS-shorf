@@ -87,6 +87,7 @@ interface Prepared {
   path: string;
   headers: Record<string, string>;
   body: string | undefined;
+  nEv?: number;
 }
 const label: Record<Kind, string> = { hb: 'heartbeat', mf: 'manifest_304', mfFull: 'manifest_full', ev: 'events' };
 
@@ -118,15 +119,18 @@ function prepareRamp(): Prepared[] {
     let method: 'GET' | 'POST' = 'POST';
     let path = '/v1/heartbeat';
     let body: string | undefined;
+    let nEv: number | undefined;
     if (kind === 'hb') body = hbBody();
     else if (kind === 'ev') {
       path = '/v1/events';
-      body = evBody(1 + poisson(0.33)); // ~1,33 impression/lo (8/gio gui moi 10 phut)
+      const k = 1 + poisson(0.33); // ~1,33 impression/lo (8/gio gui moi 10 phut)
+      body = evBody(k);
+      nEv = k;
     } else {
       method = 'GET';
       path = kind === 'mf' ? `/v1/manifest?etag=${cfg.etags[d.region]}` : '/v1/manifest';
     }
-    out.push({ at: t, kind, method, path, headers: signed(key, d.id, method, path, body, ts0 + Math.floor(t / 1000)), body });
+    out.push({ at: t, kind, method, path, headers: signed(key, d.id, method, path, body, ts0 + Math.floor(t / 1000)), body, ...(nEv ? { nEv } : {}) });
   }
   return out;
 }
@@ -140,6 +144,9 @@ async function runRamp(): Promise<void> {
   const t0 = performance.now();
   let inflight = 0;
   let maxInflight = 0;
+  let evAcc = 0;
+  let evValid = 0;
+  let evSent = 0;
   let idx = 0;
   await new Promise<void>((resolveAll) => {
     let done = 0;
@@ -153,6 +160,12 @@ async function runRamp(): Promise<void> {
         maxInflight = Math.max(maxInflight, inflight);
         void send(p.method, p.path, p.headers, p.body).then((r) => {
           inflight--;
+          if (p.kind === 'ev' && r.status === 202) {
+            const j = JSON.parse(r.text) as { accepted: number; valid: number };
+            evAcc += j.accepted;
+            evValid += j.valid;
+            evSent += p.nEv ?? 0;
+          }
           rec.add(label[p.kind], performance.now() - sched, r.status); // do tu thoi diem DU KIEN gui (tranh coordinated omission)
           if (++done === total) resolveAll();
         });
@@ -162,13 +175,14 @@ async function runRamp(): Promise<void> {
     tick();
   });
   const wall = (performance.now() - t0) / 1000;
-  finish({ wall, cpu: process.cpuUsage(cpu0), maxInflight, offered: prep.length });
+  finish({ wall, cpu: process.cpuUsage(cpu0), maxInflight, offered: prep.length, ev: { sent: evSent, accepted: evAcc, valid: evValid } });
 }
 
 // --------------------------------------------------------------------------- fleet
 async function runFleet(): Promise<void> {
   const n = Math.min(cfg.devices!, devs.length);
   const S = cfg.scale!;
+  send0();
   const stats = { hb: 0, intervals: [] as number[], bases: new Set<number>(), mfFull: 0, mf304: 0, evSent: 0, evValid: 0, evAccepted: 0, hb503: 0, hb429: 0, etagChanges: 0 };
   await go();
   loopDelay.enable();

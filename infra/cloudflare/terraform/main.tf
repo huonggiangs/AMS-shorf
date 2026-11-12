@@ -9,6 +9,7 @@ locals {
   gw_label  = var.environment == "production" ? "gw-ams" : "gw-ams-stg"
   app_host  = "${local.app_label}.${var.zone_name}"
   gw_host   = "${local.gw_label}.${var.zone_name}"
+
   # Ruleset rate limit là DUY NHẤT theo zone (mỗi zone chỉ có một "entrypoint" cho phase http_ratelimit), nên một
   # ruleset phủ cả staging lẫn production và chỉ workspace production quản lý nó (manage_zone_rate_limit = true).
   app_hosts_all = ["ams.${var.zone_name}", "ams-stg.${var.zone_name}"]
