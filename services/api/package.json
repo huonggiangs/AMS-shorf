@@ -1,0 +1,27 @@
+{
+  "name": "@ams/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Admin API, portal, auth, RBAC",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@ams/shared": "workspace:*",
+    "@ams/config": "workspace:*",
+    "@ams/db": "workspace:*",
+    "@ams/runtime": "workspace:*",
+    "hono": "4.9.9",
+    "@hono/node-server": "1.19.5",
+    "zod": "3.25.76"
+  }
+}
