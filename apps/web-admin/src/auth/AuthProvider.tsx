@@ -50,16 +50,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   // Session expired / switched elsewhere: drop caches, return to login with a notice.
-  useEffect(
-    () =>
-      onUnauthorized(() => {
-        setMe(null);
-        setStatus('anon');
-        setExpired(true);
-        qc.clear();
-      }),
-    [qc],
-  );
+  useEffect(() => {
+    const off = onUnauthorized(() => {
+      setMe(null);
+      setStatus('anon');
+      setExpired(true);
+      qc.clear();
+    });
+    return () => {
+      off();
+    };
+  }, [qc]);
 
   const login = useCallback(async (email: string, password: string) => {
     const r = await api.post('/auth/login', { body: { email, password }, schema: loginSchema, quiet401: true });

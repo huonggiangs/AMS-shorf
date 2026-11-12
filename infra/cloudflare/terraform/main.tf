@@ -4,9 +4,11 @@
 
 locals {
   env = var.environment
-  # Tên máy chủ công khai (khớp routes trong infra/cloudflare/*/wrangler.toml)
-  suffix = var.environment == "production" ? "" : "-staging"
-  hosts  = ["admin${local.suffix}", "portal${local.suffix}", "api${local.suffix}", "gw${local.suffix}"]
+  # Tên máy chủ (khớp infra/cloudflare/*/wrangler.toml). Cấp MỘT: Universal SSL miễn phí chỉ phủ *.anio.vn.
+  app_label = var.environment == "production" ? "ams" : "ams-stg"
+  gw_label  = var.environment == "production" ? "gw-ams" : "gw-ams-stg"
+  app_host  = "${local.app_label}.${var.zone_name}"
+  gw_host   = "${local.gw_label}.${var.zone_name}"
 }
 
 # ---------------------------------------------------------------- D1 theo miền (đặc tả 4.1)
@@ -76,24 +78,24 @@ resource "cloudflare_r2_bucket" "audit" {
 }
 
 # ---------------------------------------------------------------- DNS
-# Bản ghi giữ chỗ (proxied) để Cloudflare nhận lưu lượng và chuyển cho Worker theo `routes` trong wrangler.toml.
+# Mặc định KHÔNG tạo: custom domain trong wrangler.toml tự tạo bản ghi proxied cho ams.anio.vn và gw-ams.anio.vn.
 resource "cloudflare_dns_record" "hosts" {
-  for_each = toset(local.hosts)
+  for_each = var.create_placeholder_dns ? toset([local.app_host, local.gw_host]) : toset([])
   zone_id  = var.zone_id
-  name     = "${each.key}.${var.domain}"
+  name     = each.key
   type     = "AAAA"
   content  = "100::"
   proxied  = true
   ttl      = 1
-  comment  = "AMS ${local.env} (Terraform) - Worker route"
+  comment  = "AMS ${local.env} (Terraform)"
 }
 
 # ---------------------------------------------------------------- WAF: giới hạn tốc độ cơ bản
-# Thiết bị gọi /v1/heartbeat rất nhiều nên KHÔNG giới hạn theo IP ở đây (kiểm soát trong gateway bằng chữ ký + KV).
+# Thiết bị gọi /v1/heartbeat rất nhiều nên KHÔNG giới hạn theo IP cho heartbeat (kiểm soát trong gateway bằng chữ ký + KV).
 resource "cloudflare_ruleset" "rate_limit" {
   zone_id     = var.zone_id
   name        = "ams-${local.env}-rate-limit"
-  description = "Giới hạn đăng nhập/MFA (và đăng ký thiết bị) theo IP"
+  description = "Giới hạn /api/auth/*, /api/webhooks/* (và register/pair thiết bị) theo IP"
   kind        = "zone"
   phase       = "http_ratelimit"
 
@@ -101,9 +103,9 @@ resource "cloudflare_ruleset" "rate_limit" {
     [
       {
         action      = "block"
-        description = "AMS ${local.env}: đăng nhập và MFA"
+        description = "AMS ${local.env}: /api/auth/* (đăng nhập, MFA, nhận lời mời)"
         enabled     = true
-        expression  = "(http.host in {\"api${local.suffix}.${var.domain}\" \"admin${local.suffix}.${var.domain}\" \"portal${local.suffix}.${var.domain}\"} and (ends_with(http.request.uri.path, \"/auth/login\") or ends_with(http.request.uri.path, \"/auth/mfa/verify\") or ends_with(http.request.uri.path, \"/auth/invite/accept\")))"
+        expression  = "(http.host eq \"${local.app_host}\" and starts_with(http.request.uri.path, \"/api/auth/\"))"
         ratelimit = {
           characteristics     = ["ip.src"]
           period              = var.rate_limit_period
@@ -112,12 +114,26 @@ resource "cloudflare_ruleset" "rate_limit" {
         }
       }
     ],
+    var.enable_webhook_rate_limit ? [
+      {
+        action      = "block"
+        description = "AMS ${local.env}: /api/webhooks/* (SePay)"
+        enabled     = true
+        expression  = "(http.host eq \"${local.app_host}\" and starts_with(http.request.uri.path, \"/api/webhooks/\"))"
+        ratelimit = {
+          characteristics     = ["ip.src"]
+          period              = var.rate_limit_period
+          requests_per_period = var.webhook_rate_limit
+          mitigation_timeout  = var.rate_limit_period
+        }
+      }
+    ] : [],
     var.enable_gateway_rate_limit ? [
       {
         action      = "block"
         description = "AMS ${local.env}: register/pair thiết bị"
         enabled     = true
-        expression  = "(http.host eq \"gw${local.suffix}.${var.domain}\" and (http.request.uri.path eq \"/v1/register\" or http.request.uri.path eq \"/v1/pair\"))"
+        expression  = "(http.host eq \"${local.gw_host}\" and (http.request.uri.path eq \"/v1/register\" or http.request.uri.path eq \"/v1/pair\"))"
         ratelimit = {
           characteristics     = ["ip.src"]
           period              = var.rate_limit_period

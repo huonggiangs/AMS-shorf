@@ -1,0 +1,58 @@
+name: Deploy Cloudflare
+# Thủ công (Actions > Run workflow) hoặc khi đẩy tag:
+#   v1.2.3-rc.1  -> staging      v1.2.3 -> production
+# Secrets cần đặt trong GitHub (Settings > Secrets and variables > Actions, hoặc theo Environment):
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+#   CF_IDS_STAGING, CF_IDS_PRODUCTION: nội dung JSON ID tài nguyên (đầu ra `terraform output -json` hoặc ids.<env>.json)
+# Environment "production" nên bật "Required reviewers" để có bước duyệt tay.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Môi trường
+        type: choice
+        options: [staging, production]
+        default: staging
+      dry_run:
+        description: Chạy thử (không deploy thật)
+        type: boolean
+        default: true
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-cloudflare-${{ github.event.inputs.environment || 'tag' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (contains(github.ref_name, '-') && 'staging' || 'production') }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (contains(github.ref_name, '-') && 'staging' || 'production') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+      - name: Ghi ID tài nguyên Cloudflare
+        env:
+          IDS_STAGING: ${{ secrets.CF_IDS_STAGING }}
+          IDS_PRODUCTION: ${{ secrets.CF_IDS_PRODUCTION }}
+        run: |
+          if [ "$TARGET" = "production" ]; then printf '%s' "$IDS_PRODUCTION" > infra/cloudflare/ids.production.json
+          else printf '%s' "$IDS_STAGING" > infra/cloudflare/ids.staging.json; fi
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
+        run: node scripts/deploy-cloudflare.mjs --env "$TARGET" --yes $DRY

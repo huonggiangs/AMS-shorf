@@ -7,10 +7,12 @@
 //   node scripts/deploy-cloudflare.mjs --env production --rollback   quay lui bản Worker trước đó (không đụng dữ liệu D1)
 // Tùy chọn: --only api,gateway,web   --skip-migrate   --skip-build   --skip-backup   --yes (bỏ hỏi xác nhận, dùng trong CI)
 //
-// Biến bắt buộc: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, AMS_DOMAIN (lấy từ môi trường hoặc tệp .env).
+// Tên miền cố định: production ams.anio.vn (+ /api/*) và gw-ams.anio.vn; staging ams-stg.anio.vn và gw-ams-stg.anio.vn
+// (khai báo trong infra/cloudflare/*/wrangler.toml). Zone anio.vn phải nằm trong tài khoản Cloudflare.
+// Biến bắt buộc: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID (lấy từ môi trường hoặc tệp .env).
 // Không in token ra màn hình. Không có bí mật nào được ghi vào tệp wrangler.generated.toml (chỉ ID tài nguyên).
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, copyFileSync, unlinkSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import readline from 'node:readline/promises';
@@ -45,7 +47,7 @@ function loadDotEnv() {
   const f = join(ROOT, '.env');
   if (!existsSync(f)) return;
   for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
-    const m = /^\s*(CLOUDFLARE_[A-Z_]+|AMS_DOMAIN)\s*=(.*)$/.exec(line);
+    const m = /^\s*(CLOUDFLARE_[A-Z_]+)\s*=(.*)$/.exec(line);
     if (m && !process.env[m[1]] && m[2].trim()) process.env[m[1]] = m[2].trim().replace(/^(['"])(.*)\1$/, '$2');
   }
 }
@@ -75,17 +77,37 @@ export function readIds(env) {
   return ids;
 }
 
-export function renderConfig(template, { domain, ids, financeMigrations = false, auditMigrations = false }) {
-  let t = template.replaceAll('__AMS_DOMAIN__', domain);
+// Thư mục migration D1 đã lọc theo phương ngữ (xem stageD1Migrations), đường dẫn tương đối từ infra/cloudflare/<worker>/
+const D1_DIRS = { core: '../.generated/d1-migrations', finance: '../.generated/d1-migrations-finance', audit: '../.generated/d1-migrations-audit' };
+
+export function renderConfig(template, { ids, financeMigrations = false, auditMigrations = false }) {
+  let t = template.replaceAll('"../../../packages/db/migrations"', `"${D1_DIRS.core}"`);
   for (const [ph, key] of Object.entries(ID_KEYS)) t = t.replaceAll(ph, ids?.[key] ?? ph);
   // migrations_dir riêng cho finance/audit nếu repo có thư mục con tương ứng
-  const addDir = (db, sub) => { t = t.replace(new RegExp(`(binding = "${db}"[^\\[]*?database_id = "[^"]+"\\n)`, 'g'), `$1migrations_dir = "../../../packages/db/migrations/${sub}"\n`); };
+  const addDir = (db, sub) => { t = t.replace(new RegExp(`(binding = "${db}"[^\\[]*?database_id = "[^"]+"\\n)`, 'g'), `$1migrations_dir = "${D1_DIRS[sub]}"\n`); };
   if (financeMigrations) addDir('DB_FINANCE', 'finance');
   if (auditMigrations) addDir('DB_AUDIT', 'audit');
   return t;
 }
 
-function prepareConfigs(a, domain) {
+// packages/db/migrations chứa tệp theo phương ngữ: NNNN_x.sql (chung), NNNN_x.postgres.sql, NNNN_x.sqlite.sql.
+// D1 là SQLite: giữ tệp chung + .sqlite (bỏ hậu tố .sqlite), loại .postgres.
+export function d1Name(file) {
+  if (/\.postgres\.sql$/.test(file)) return null;
+  return file.replace(/\.sqlite\.sql$/, '.sql');
+}
+function stageD1Migrations(srcDir, dstDir) {
+  mkdirSync(dstDir, { recursive: true });
+  for (const f of readdirSync(dstDir)) if (f.endsWith('.sql')) unlinkSync(join(dstDir, f)); // chỉ xóa bản sao đã sinh
+  let n = 0;
+  for (const f of readdirSync(srcDir).filter((x) => x.endsWith('.sql')).sort()) {
+    const name = d1Name(f);
+    if (name) { copyFileSync(join(srcDir, f), join(dstDir, name)); n++; }
+  }
+  return n;
+}
+
+function prepareConfigs(a) {
   const ids = readIds(a.env);
   const missing = Object.values(ID_KEYS).filter((k) => !ids || !ids[k]);
   if (missing.length && !a.bootstrap) {
@@ -95,11 +117,18 @@ function prepareConfigs(a, domain) {
   }
   const mdir = join(ROOT, 'packages/db/migrations');
   const fin = existsSync(join(mdir, 'finance')), aud = existsSync(join(mdir, 'audit'));
+  const gen = join(CF, '.generated');
+  if (!existsSync(mdir)) die('Không thấy packages/db/migrations.');
+  const nCore = stageD1Migrations(mdir, join(gen, 'd1-migrations'));
+  if (!nCore) die('packages/db/migrations không có tệp .sql dùng được cho D1.');
+  if (fin) stageD1Migrations(join(mdir, 'finance'), join(gen, 'd1-migrations-finance'));
+  if (aud) stageD1Migrations(join(mdir, 'audit'), join(gen, 'd1-migrations-audit'));
+  log(`Migration D1: ${nCore} tệp (đã loại tệp .postgres, đổi .sqlite -> .sql) tại infra/cloudflare/.generated/`);
   const out = {};
   for (const w of a.only.map((n) => WORKERS[n] ?? die(`--only không hợp lệ: ${n} (gateway|api|web)`))) {
     const tpl = join(CF, w, 'wrangler.toml');
     if (!existsSync(tpl)) die(`Thiếu ${tpl}`);
-    const text = renderConfig(readFileSync(tpl, 'utf8'), { domain, ids, financeMigrations: fin, auditMigrations: aud });
+    const text = renderConfig(readFileSync(tpl, 'utf8'), { ids, financeMigrations: fin, auditMigrations: aud });
     const left = [...new Set(text.match(/__[A-Z0-9_]+__/g) ?? [])];
     if (left.length && !a.bootstrap) die(`${w}: còn dấu chưa thay: ${left.join(', ')}`);
     const dst = join(CF, w, 'wrangler.generated.toml');
@@ -162,8 +191,6 @@ function backupD1(a, cfg) {
 
 function migrate(a, cfg, hasFinance, hasAudit) {
   step('Migration D1 (nguồn: packages/db/migrations)');
-  const mdir = join(ROOT, 'packages/db/migrations');
-  if (!existsSync(mdir) || !readdirSync(mdir).some((f) => f.endsWith('.sql'))) die('packages/db/migrations không có tệp .sql.');
   const dbs = [['core', 'ams-core']];
   if (hasFinance) dbs.push(['finance', 'ams-finance']);
   if (hasAudit) dbs.push(['audit', 'ams-audit']);
@@ -184,10 +211,11 @@ function checkSecrets(a, cfgs) {
   }
 }
 
-async function smoke(a, domain) {
+async function smoke(a) {
   step('Smoke test /health');
-  const sfx = a.env === 'production' ? '' : '-staging';
-  const targets = [`https://api${sfx}.${domain}/health`, `https://gw${sfx}.${domain}/health`, `https://admin${sfx}.${domain}/healthz`];
+  const app = a.env === 'production' ? 'ams.anio.vn' : 'ams-stg.anio.vn';
+  const gw = a.env === 'production' ? 'gw-ams.anio.vn' : 'gw-ams-stg.anio.vn';
+  const targets = [`https://${app}/`, `https://${app}/api/health`, `https://${gw}/health`];
   let bad = 0;
   for (const u of targets) {
     let res = 'không kết nối';
@@ -195,7 +223,7 @@ async function smoke(a, domain) {
     log(`${res === 200 ? 'OK ' : 'LỖI'} ${u} -> ${res}`);
     if (res !== 200) bad++;
   }
-  if (bad) log('\nCó điểm lỗi: DNS/route có thể cần vài phút, hoặc Worker chưa có endpoint /health. Nếu kéo dài: chạy --rollback.');
+  if (bad) log('\nCó điểm lỗi: chứng chỉ/DNS của tên miền mới có thể cần vài phút, hoặc Worker chưa có /health. Nếu kéo dài: chạy --rollback.');
 }
 
 function rollback(a, cfgs) {
@@ -215,17 +243,15 @@ async function main() {
   if (a.help) { console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 14).map((l) => l.replace(/^\/\/ ?/, '')).join('\n')); return; }
   if (!['staging', 'production'].includes(a.env)) die('Cần --env staging hoặc --env production.');
   loadDotEnv();
-  const missing = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'AMS_DOMAIN'].filter((k) => !process.env[k]);
+  const missing = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'].filter((k) => !process.env[k]);
   if (missing.length) {
     if (a.dryRun) log(`(dry-run) thiếu biến ${missing.join(', ')}: bỏ qua phần cần kết nối Cloudflare.`);
     else die(`Thiếu biến môi trường: ${missing.join(', ')}.\n  Điền vào .env (xem .env.example mục 12) hoặc đặt trong CI secrets. Hướng dẫn tạo token: docs/DEPLOY-CLOUDFLARE.md.`);
   }
-  const domain = process.env.AMS_DOMAIN || 'example.invalid';
-  if (/^https?:|\/|\s/.test(domain)) die('AMS_DOMAIN chỉ gồm tên miền, ví dụ example.vn');
   await confirmProd(a);
 
   if (a.bootstrap) { if (a.dryRun) log('(dry-run) bỏ qua bootstrap'); else bootstrap(a); }
-  const { cfgs, hasFinance, hasAudit } = prepareConfigs(a, domain);
+  const { cfgs, hasFinance, hasAudit } = prepareConfigs(a);
   log(`Cấu hình dựng xong cho: ${Object.keys(cfgs).join(', ')}`);
 
   if (a.rollback) { rollback(a, cfgs); return; }
@@ -244,7 +270,7 @@ async function main() {
   }
   checkSecrets(a, cfgs);
   for (const n of a.only) { step(`Deploy ${WORKERS[n]} (${a.env})`); wr(['deploy', '-c', cfgs[WORKERS[n]], '--env', a.env]); }
-  await smoke(a, domain);
+  await smoke(a);
   log(`\nXong. Việc tiếp theo: danh sách kiểm tra sau deploy trong docs/DEPLOY-CLOUDFLARE.md (SePay sandbox, đăng nhập, tạo chiến dịch thử).`);
 }
 

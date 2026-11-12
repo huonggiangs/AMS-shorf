@@ -1,0 +1,72 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4   # phiên bản lấy từ "packageManager" trong package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+      - name: Kiểm tra script hạ tầng (cú pháp)
+        run: |
+          node --check scripts/setup.mjs
+          node --check scripts/deploy-cloudflare.mjs
+
+  compose-config:
+    name: docker compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sinh .env từ .env.example (khóa ngẫu nhiên)
+        run: node scripts/setup.mjs env
+      - name: Kiểm tra .env
+        run: node scripts/setup.mjs check-env
+      - name: Compose config (mọi profile)
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml --profile '*' config -q
+      - name: Compose config không cần .env (cổng chất lượng PLAN §7)
+        run: docker compose -f infra/docker/docker-compose.yml config -q
+
+  images:
+    name: Build image ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    needs: [check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: api, dockerfile: services/api/Dockerfile }
+          - { name: migrate-seed, dockerfile: services/api/Dockerfile, target: migrate }
+          - { name: edge-gateway, dockerfile: services/edge-gateway/Dockerfile }
+          - { name: ingest-consumer, dockerfile: services/ingest-consumer/Dockerfile }
+          - { name: payments, dockerfile: services/payments/Dockerfile }
+          - { name: web-admin, dockerfile: apps/web-admin/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          push: false
+          tags: ams/${{ matrix.name }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

@@ -26,7 +26,8 @@ export function Shell() {
 
   const cur = PAGE_DEFS.find((p) => loc.pathname.startsWith(p.path))?.id ?? 'overview';
   const grp = groupOf(cur);
-  const groups = GROUPS.map((g) => ({ g, pages: g.pages.filter((p) => pages.includes(p) || (p === 'profile' && false)) })).filter((x) => x.pages.length);
+  // profile is reachable via the avatar for everyone; it only counts as a menu entry next to other pages
+  const groups = GROUPS.map((g) => ({ g, pages: g.pages.filter((p) => pages.includes(p) && p !== 'profile') })).filter((x) => x.pages.length);
   const pendingBadge = items.find((n) => n.id === 'approvals')?.count ?? 0;
   const name = me?.user.name || me?.user.email || '';
 
@@ -40,7 +41,7 @@ export function Shell() {
     return () => document.removeEventListener('keydown', h);
   }, []);
 
-  const tabs = grp.pages.filter((p) => pages.includes(p));
+  const tabs = grp.pages.filter((p) => pages.includes(p) && !(p === 'profile' && grp.pages.every((x) => x === 'profile' || !pages.includes(x))));
   return (
     <div className={`tvn ${ui.dark ? 'dark' : ''} ${ui.col ? 'col' : ''}`}>
       <a href="#page" className="sr-skip" style={{ position: 'absolute', left: -9999 }}>{t('Bỏ qua tới nội dung')}</a>

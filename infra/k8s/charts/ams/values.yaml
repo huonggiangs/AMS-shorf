@@ -1,0 +1,19 @@
+# Khung giá trị - CHƯA DÙNG (giai đoạn 2). Không đặt bí mật ở đây.
+global:
+  imageRegistry: ""
+  imageTag: "local"
+  runtime: k8s
+api:
+  replicas: 2
+  port: 8787
+edgeGateway:
+  replicas: 3
+  port: 8788
+ingestConsumer:
+  replicas: 2
+payments:
+  replicas: 1
+ingress:
+  enabled: false
+  host: ""
+existingSecret: ""   # tên Secret K8s chứa SESSION_SECRET, FIELD_ENC_KEY, SEPAY_WEBHOOK_SECRET...

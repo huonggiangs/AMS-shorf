@@ -27,3 +27,9 @@ export async function decryptField(keyB64: string, token: string, aad?: string):
   const pt = await crypto.subtle.decrypt(params, key, bs(fromBase64(parts[2]!)));
   return fromUtf8(new Uint8Array(pt));
 }
+
+/** Chi muc mu (blind index) cho truong ma hoa can UNIQUE/tim kiem (vd MST): HMAC-SHA256(key, label|value) hex. */
+export async function blindIndex(keyB64: string, label: string, value: string): Promise<string> {
+  const { hmacSha256Hex } = await import('./hmac.js');
+  return hmacSha256Hex(fromBase64(keyB64), `${label}|${value.trim().toLowerCase()}`);
+}

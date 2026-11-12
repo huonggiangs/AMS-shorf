@@ -60,3 +60,13 @@ export function uuidv7(now: number = Date.now()): string {
 export function isUuid(s: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 }
+
+/** shard = hash(id) % 4096 (FNV-1a 32 bit) - dung cho devices.shard (muc 5.1). */
+export function shardOf(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h % 4096;
+}

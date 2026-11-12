@@ -2,5 +2,5 @@
 # token đặt bằng biến môi trường CLOUDFLARE_API_TOKEN.
 account_id  = "ĐIỀN_ACCOUNT_ID"
 zone_id     = "ĐIỀN_ZONE_ID"
-domain      = "example.vn"
+zone_name   = "anio.vn"
 environment = "staging" # hoặc production (dùng `terraform workspace new production`)

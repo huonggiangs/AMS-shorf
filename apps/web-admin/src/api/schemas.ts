@@ -64,7 +64,7 @@ export const meSchema = z
       .passthrough(),
     permissions: permsSchema.default({}),
     customer_scope: z
-      .object({ customer_id: z.string(), name: z.string().nullish(), campaign_grants: z.array(z.string()).optional() })
+      .object({ customer_id: z.string(), code: z.string().nullish(), name: z.string().nullish(), campaign_grants: z.array(z.string()).optional() })
       .nullish(),
     dev_mode: z.boolean().optional(),
     csrf_token: z.string().optional(),

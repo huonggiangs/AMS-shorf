@@ -16,5 +16,10 @@ output "kv_id" {
 }
 
 output "hostnames" {
-  value = [for h in local.hosts : "${h}.${var.domain}"]
+  value = {
+    app     = local.app_host
+    api     = "${local.app_host}/api"
+    gateway = local.gw_host
+    sepay   = "https://${local.app_host}/api/webhooks/payments/sepay"
+  }
 }

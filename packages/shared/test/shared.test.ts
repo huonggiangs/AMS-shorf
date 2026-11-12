@@ -152,3 +152,18 @@ describe('vndToWordsVi', () => {
     expect(formatVnd(0)).toBe('0 ₫');
   });
 });
+
+import { blindIndex, shardOf } from '../src/index.js';
+describe('shard va blind index', () => {
+  it('shardOf trong [0,4096) va on dinh', () => {
+    expect(shardOf('abc')).toBe(shardOf('abc'));
+    for (const id of ['a', 'b', '01JABCDEF']) expect(shardOf(id)).toBeLessThan(4096);
+  });
+  it('blindIndex on dinh, phan biet nhan, khong phan biet hoa thuong/khoang trang', async () => {
+    const key = generateFieldKey();
+    const a = await blindIndex(key, 'tax', '0300588569');
+    expect(a).toBe(await blindIndex(key, 'tax', ' 0300588569 '));
+    expect(a).not.toBe(await blindIndex(key, 'other', '0300588569'));
+    expect(a).not.toBe(await blindIndex(generateFieldKey(), 'tax', '0300588569'));
+  });
+});

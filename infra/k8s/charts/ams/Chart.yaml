@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ams
+description: AMS (khung rỗng - giai đoạn 2, chưa triển khai)
+type: application
+version: 0.0.0
+appVersion: "0.0.0"
