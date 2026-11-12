@@ -9,6 +9,12 @@ locals {
   gw_label  = var.environment == "production" ? "gw-ams" : "gw-ams-stg"
   app_host  = "${local.app_label}.${var.zone_name}"
   gw_host   = "${local.gw_label}.${var.zone_name}"
+  # Ruleset rate limit là DUY NHẤT theo zone (mỗi zone chỉ có một "entrypoint" cho phase http_ratelimit), nên một
+  # ruleset phủ cả staging lẫn production và chỉ workspace production quản lý nó (manage_zone_rate_limit = true).
+  app_hosts_all = ["ams.${var.zone_name}", "ams-stg.${var.zone_name}"]
+  gw_hosts_all  = ["gw-ams.${var.zone_name}", "gw-ams-stg.${var.zone_name}"]
+  app_host_set  = join(" ", [for h in local.app_hosts_all : "\"${h}\""])
+  gw_host_set   = join(" ", [for h in local.gw_hosts_all : "\"${h}\""])
 }
 
 # ---------------------------------------------------------------- D1 theo miền (đặc tả 4.1)
@@ -93,8 +99,9 @@ resource "cloudflare_dns_record" "hosts" {
 # ---------------------------------------------------------------- WAF: giới hạn tốc độ cơ bản
 # Thiết bị gọi /v1/heartbeat rất nhiều nên KHÔNG giới hạn theo IP cho heartbeat (kiểm soát trong gateway bằng chữ ký + KV).
 resource "cloudflare_ruleset" "rate_limit" {
+  count       = var.manage_zone_rate_limit ? 1 : 0
   zone_id     = var.zone_id
-  name        = "ams-${local.env}-rate-limit"
+  name        = "ams-rate-limit"
   description = "Giới hạn /api/auth/*, /api/webhooks/* (và register/pair thiết bị) theo IP"
   kind        = "zone"
   phase       = "http_ratelimit"
@@ -103,9 +110,9 @@ resource "cloudflare_ruleset" "rate_limit" {
     [
       {
         action      = "block"
-        description = "AMS ${local.env}: /api/auth/* (đăng nhập, MFA, nhận lời mời)"
+        description = "AMS: /api/auth/* (đăng nhập, MFA, nhận lời mời)"
         enabled     = true
-        expression  = "(http.host eq \"${local.app_host}\" and starts_with(http.request.uri.path, \"/api/auth/\"))"
+        expression  = "(http.host in {${local.app_host_set}} and starts_with(http.request.uri.path, \"/api/auth/\"))"
         ratelimit = {
           characteristics     = ["ip.src"]
           period              = var.rate_limit_period
@@ -117,9 +124,9 @@ resource "cloudflare_ruleset" "rate_limit" {
     var.enable_webhook_rate_limit ? [
       {
         action      = "block"
-        description = "AMS ${local.env}: /api/webhooks/* (SePay)"
+        description = "AMS: /api/webhooks/* (SePay)"
         enabled     = true
-        expression  = "(http.host eq \"${local.app_host}\" and starts_with(http.request.uri.path, \"/api/webhooks/\"))"
+        expression  = "(http.host in {${local.app_host_set}} and starts_with(http.request.uri.path, \"/api/webhooks/\"))"
         ratelimit = {
           characteristics     = ["ip.src"]
           period              = var.rate_limit_period
@@ -131,9 +138,9 @@ resource "cloudflare_ruleset" "rate_limit" {
     var.enable_gateway_rate_limit ? [
       {
         action      = "block"
-        description = "AMS ${local.env}: register/pair thiết bị"
+        description = "AMS: register/pair thiết bị"
         enabled     = true
-        expression  = "(http.host eq \"${local.gw_host}\" and (http.request.uri.path eq \"/v1/register\" or http.request.uri.path eq \"/v1/pair\"))"
+        expression  = "(http.host in {${local.gw_host_set}} and (http.request.uri.path eq \"/v1/register\" or http.request.uri.path eq \"/v1/pair\"))"
         ratelimit = {
           characteristics     = ["ip.src"]
           period              = var.rate_limit_period

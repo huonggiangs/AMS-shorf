@@ -1,0 +1,23 @@
+{
+  "name": "@ams/media-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Xu ly creative tai len: kiem magic bytes, quet ClamAV, ffprobe, chuyen ma ve ho so TV-safe",
+  "main": "./src/worker.ts",
+  "types": "./src/worker.ts",
+  "exports": {
+    ".": "./src/worker.ts",
+    "./node": "./src/node.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@ams/shared": "workspace:*",
+    "@ams/runtime": "workspace:*"
+  }
+}

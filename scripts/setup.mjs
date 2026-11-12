@@ -8,6 +8,10 @@
 //   node scripts/setup.mjs totp              in mã TOTP hiện tại + URI otpauth của Super admin mẫu
 //   node scripts/setup.mjs tunnel-url        tìm URL quick tunnel trong log và in URL webhook SePay
 //   node scripts/setup.mjs check-env         kiểm .env (còn CHANGE_ME / mặc định yếu thì thoát mã 1)
+//   node scripts/setup.mjs seed-mode [bootstrap|demo]
+//                                            in chế độ seed sẽ chạy: mặc định local -> demo, staging/production -> bootstrap.
+//                                            Yêu cầu `demo` ở staging/production mà thiếu AMS_ALLOW_DEMO_SEED=1 thì thoát mã 3.
+//                                            `bootstrap` = chỉ Super admin + cấu hình tối thiểu (xem docs/SEED-AND-BOOTSTRAP.md)
 import { randomBytes, createHmac } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -174,8 +178,36 @@ function checkPorts(env) {
   })));
 }
 
+// Phân loại môi trường: khớp packages/db/src/seed-guard.ts (resolveAmsEnv).
+export function amsEnvOf(env) {
+  const raw = String(env.AMS_ENV || '').trim().toLowerCase();
+  const map = { local: 'local', dev: 'local', development: 'local', test: 'test', staging: 'staging', stg: 'staging', production: 'production', prod: 'production' };
+  if (raw) return map[raw] || null; // null = không hợp lệ
+  const rt = String(env.RUNTIME || '').toLowerCase();
+  return rt === 'cloudflare' || rt === 'k8s' ? 'production' : 'local';
+}
+const isLocalAms = (e) => e === 'local' || e === 'test';
+const WEAK = /^(test|mock|change[-_ ]?me|secret|example|dummy|placeholder|password|sepay)|CHANGE_ME/i;
+
+/** Quyết định chế độ seed. Trả { mode } hoặc { error }. */
+export function resolveSeedMode(env, requested) {
+  const e = amsEnvOf(env);
+  if (!e) return { error: `AMS_ENV="${env.AMS_ENV}" không hợp lệ (local|test|staging|production)` };
+  const want = requested || env.SEED_MODE || (isLocalAms(e) ? 'demo' : 'bootstrap');
+  if (want !== 'demo' && want !== 'bootstrap') return { error: `chế độ seed "${want}" không hợp lệ (bootstrap|demo)` };
+  if (want === 'demo' && !isLocalAms(e) && env.AMS_ALLOW_DEMO_SEED !== '1')
+    return { error: `Từ chối seed demo ở AMS_ENV=${e}. Dùng "bootstrap", hoặc đặt AMS_ALLOW_DEMO_SEED=1 nếu thật sự cần.`, refused: true };
+  return { mode: want, env: e };
+}
+
 export function envProblems(env) {
   const p = [];
+  const ams = amsEnvOf(env);
+  if (!ams) p.push(`AMS_ENV="${env.AMS_ENV}" không hợp lệ (local|test|staging|production)`);
+  if (ams === 'production' && (env.SEPAY_MODE || 'mock') === 'mock') p.push('AMS_ENV=production không được dùng SEPAY_MODE=mock');
+  if (env.SEPAY_MODE === 'production' && (!env.SEPAY_WEBHOOK_SECRET || env.SEPAY_WEBHOOK_SECRET.length < 32 || WEAK.test(env.SEPAY_WEBHOOK_SECRET))) p.push('SEPAY_MODE=production cần SEPAY_WEBHOOK_SECRET thật (>= 32 ký tự, không phải giá trị mẫu/mock/CHANGE_ME)');
+  if (env.SEPAY_MODE === 'production' && env.SEPAY_API_KEY && WEAK.test(env.SEPAY_API_KEY)) p.push('SEPAY_MODE=production nhưng SEPAY_API_KEY là giá trị mẫu');
+  if (ams && !isLocalAms(ams) && env.AMS_ALLOW_DEMO_SEED === '1') p.push(`AMS_ALLOW_DEMO_SEED=1 ở AMS_ENV=${ams}: seed demo được phép; chắc chắn đây không phải CSDL thật`);
   const need = ['SESSION_SECRET', 'FIELD_ENC_KEY', 'SEPAY_WEBHOOK_SECRET', 'POSTGRES_PASSWORD', 'REDIS_PASSWORD', 'MINIO_ROOT_PASSWORD', 'SEED_ADMIN_PASSWORD'];
   for (const k of need) if (!env[k] || env[k] === PLACEHOLDER || /^change-me/i.test(env[k])) p.push(`${k} chưa được sinh (chạy: make setup)`);
   if (env.FIELD_ENC_KEY && env.FIELD_ENC_KEY !== PLACEHOLDER) {
@@ -206,6 +238,7 @@ export function totp(secretB32, t = Date.now()) {
 }
 function cmdTotp() {
   const env = readEnv();
+  if (!isLocalAms(amsEnvOf(env) || 'production')) { bad('Lệnh totp chỉ dùng ở môi trường local.'); process.exit(1); }
   const s = env.SEED_ADMIN_TOTP_SECRET;
   if (!s || s === PLACEHOLDER) { bad('Chưa có SEED_ADMIN_TOTP_SECRET trong .env (chạy make setup)'); process.exit(1); }
   const uri = `otpauth://totp/AMS:${encodeURIComponent(env.SEED_ADMIN_EMAIL || 'admin@ams.localhost')}?secret=${s}&issuer=AMS&digits=6&period=30`;
@@ -214,8 +247,17 @@ function cmdTotp() {
   console.log('Lưu ý: seed của a1 phải nạp SEED_ADMIN_TOTP_SECRET thì mã này mới dùng được (xem ops/agents/f2-infra.requests.md).');
 }
 
+function cmdSeedMode(requested) {
+  const over = {};
+  for (const k of ['AMS_ENV', 'AMS_ALLOW_DEMO_SEED', 'SEED_MODE', 'RUNTIME']) if (process.env[k] !== undefined) over[k] = process.env[k]; // biến tiến trình thắng .env
+  const r = resolveSeedMode({ ...readEnv(), ...over }, requested);
+  if (r.error) { bad(r.error); process.exit(r.refused ? 3 : 1); }
+  console.log(r.mode);
+}
+
 function cmdCreds() {
   const e = readEnv();
+  if (!isLocalAms(amsEnvOf(e) || 'production')) { warn('AMS_ENV không phải local: không in mật khẩu. Dùng mật khẩu đã cấp cho Super admin (bootstrap) và đổi ngay khi đăng nhập lần đầu.'); return; }
   console.log('');
   console.log(c.b('=== AMS đã sẵn sàng ==='));
   console.log(`Web quản trị : ${e.APP_PUBLIC_URL || 'https://admin.ams.localhost'}   (trình duyệt cảnh báo chứng chỉ tự ký lần đầu: chọn "Tiếp tục")`);
@@ -292,6 +334,7 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
     case 'env': cmdEnv({ force: flags.has('--force') }); break;
     case 'check-env': cmdCheckEnv(); break;
     case 'doctor': await cmdDoctor(); break;
+    case 'seed-mode': cmdSeedMode(rest[0]); break;
     case 'creds': cmdCreds(); break;
     case 'totp': cmdTotp(); break;
     case 'tunnel-url': cmdTunnelUrl(); break;

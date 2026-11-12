@@ -1,0 +1,26 @@
+{
+  "name": "@ams/e2e-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Playwright e2e UI tren stack that: Postgres 16 + Redis that + API + gateway + web-admin build tinh",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "ui": "tsx run.ts"
+  },
+  "dependencies": {
+    "@ams/api": "workspace:*",
+    "@ams/edge-gateway": "workspace:*",
+    "@ams/ingest-consumer": "workspace:*",
+    "@ams/runtime": "workspace:*",
+    "@ams/shared": "workspace:*",
+    "@ams/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "embedded-postgres": "16.15.0-beta.19",
+    "tsx": "4.20.6",
+    "@types/node": "22.18.0",
+    "@types/pg": "8.15.5",
+    "pg": "8.16.3"
+  }
+}

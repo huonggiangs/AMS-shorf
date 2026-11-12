@@ -47,10 +47,16 @@ variable "webhook_rate_limit" {
   default     = 60
 }
 
-variable "enable_webhook_rate_limit" {
-  description = "Luật giới hạn /api/webhooks/*. LƯU Ý: gói Free chỉ cho 1 luật rate-limit/zone: đặt false nếu apply báo vượt hạn mức."
+variable "manage_zone_rate_limit" {
+  description = "Tạo ruleset rate limit của zone (phủ cả staging và production). Chỉ đặt true ở workspace production: zone chỉ có MỘT ruleset http_ratelimit, hai workspace cùng tạo sẽ đè nhau."
   type        = bool
-  default     = true
+  default     = false
+}
+
+variable "enable_webhook_rate_limit" {
+  description = "Luật giới hạn /api/webhooks/*. Gói Free chỉ cho 1 luật rate-limit/zone nên mặc định tắt (chỉ giữ luật đăng nhập); bật khi zone ở gói Pro trở lên."
+  type        = bool
+  default     = false
 }
 
 variable "enable_gateway_rate_limit" {

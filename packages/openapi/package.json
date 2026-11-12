@@ -1,0 +1,28 @@
+{
+  "name": "@ams/openapi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenAPI 3.1: admin/customer API + device gateway API, sinh tu route + zod that",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "generate": "tsx scripts/generate.ts",
+    "check": "tsx scripts/check-drift.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "3.25.76",
+    "zod-to-json-schema": "3.25.2",
+    "yaml": "2.8.1"
+  },
+  "devDependencies": {
+    "@ams/api": "workspace:*",
+    "@ams/edge-gateway": "workspace:*",
+    "@ams/payments": "workspace:*",
+    "@ams/runtime": "workspace:*",
+    "@ams/shared": "workspace:*",
+    "@ams/config": "workspace:*",
+    "typescript": "5.9.3"
+  }
+}
