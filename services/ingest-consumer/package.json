@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Consumer hang doi su kien",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./src/consumer.ts",
+  "types": "./src/consumer.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/consumer.ts",
+    "./contract": "./src/contract.ts",
+    "./node": "./src/node.ts",
+    "./spend": "./src/spend-registry.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

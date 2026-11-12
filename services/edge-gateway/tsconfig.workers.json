@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": ["@cloudflare/workers-types"], "lib": ["ES2023"] },
+  "include": ["src/worker.ts", "src/gateway.ts", "src/auth.ts", "src/presence.ts", "src/protocol.ts", "src/util.ts", "src/devices.ts", "src/events.ts", "src/load.ts", "src/manifest.ts", "src/pairing.ts"]
+}

@@ -7,19 +7,24 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./loadtest": "./src/loadtest.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --passWithNoTests",
     "build": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsx watch src/index.ts"
+    "loadtest": "tsx src/loadtest.ts",
+    "dev": "tsx watch src/loadtest.ts"
   },
   "dependencies": {
     "@ams/shared": "workspace:*",
     "@ams/config": "workspace:*",
     "@ams/db": "workspace:*",
     "@ams/runtime": "workspace:*",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "@ams/edge-gateway": "workspace:*",
+    "@ams/ingest-consumer": "workspace:*",
+    "tsx": "4.20.6"
   }
 }
