@@ -1,5 +1,10 @@
-STATUS: running (route + app da viet, dang typecheck)
-UPDATED: 2026-11-12 07:40 UTC
+STATUS: done
+UPDATED: 2026-11-12 07:20 UTC
 
-Dang lam: services/api (Hono) createApp(rt), auth + RBAC + audit, routes /admin/v1 va /portal/v1.
-Chua xong: moi thu (vua bat dau). Se cap nhat giua va cuoi.
+# a1-api-core
+
+Hoàn thành: services/api (Hono) gồm createApp(rt, opts), node.ts, worker.ts, finance-mount.ts, ports.ts; auth (scrypt, TOTP, session cookie, CSRF, invite, rate limit/khóa tạm), RBAC (requirePerm), audit mọi thao tác ghi, routes /admin/v1 và /portal/v1.
+
+Kiểm chứng: `pnpm --filter @ams/api typecheck` sạch; `pnpm --filter @ams/api test` = 4 file, 74 test đạt (pglite + node:sqlite + ghép a2 thật).
+
+Chưa làm / giới hạn: xem báo cáo cuối và ops/agents/a1-api-core.requests.md.

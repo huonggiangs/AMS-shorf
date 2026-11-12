@@ -237,7 +237,7 @@ describe('doi tac (partner): chi chien dich duoc giao', () => {
     // chua co grant -> khong thay gi
     expect(((await (await get('/portal/v1/campaigns')).json()) as any).total).toBe(0);
     const nowIso = env.rt.clock.now().toISOString();
-    await env.rt.db.run("INSERT INTO campaigns (id, tenant_id, customer_id, name, state, created_at, updated_at) SELECT ?, tenant_id, customer_id, 'Chua giao', 'draft', ?, ? FROM campaigns WHERE customer_id = ? LIMIT 1", [env.rt.id(), nowIso, nowIso, cust]);
+    await env.rt.db.run("INSERT INTO campaigns (id, customer_id, name, state, created_at, updated_at) SELECT ?, customer_id, 'Chua giao', 'draft', ?, ? FROM campaigns WHERE customer_id = ? LIMIT 1", [env.rt.id(), nowIso, nowIso, cust]);
     const mine = await env.rt.db.query<{ id: string }>('SELECT id FROM campaigns WHERE customer_id = ? ORDER BY id', [cust]);
     const other = await env.rt.db.query<{ id: string }>('SELECT id FROM campaigns WHERE customer_id <> ? LIMIT 1', [cust]);
     expect(mine.length).toBeGreaterThan(1);
