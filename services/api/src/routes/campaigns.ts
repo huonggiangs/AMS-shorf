@@ -24,7 +24,7 @@ export const STATE_TO_API: Record<string, string> = { pending_review: 'pending' 
 export const STATE_FROM_API: Record<string, string> = { pending: 'pending_review' };
 export const apiState = (s: string) => STATE_TO_API[s] ?? s;
 
-interface CampRow {
+export interface CampRow {
   id: string;
   name: string;
   customer_id: string;
