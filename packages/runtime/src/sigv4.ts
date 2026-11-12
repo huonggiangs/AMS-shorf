@@ -14,6 +14,8 @@ export interface PresignInput {
   headers?: Record<string, string>;
   now?: Date;
   pathStyle?: boolean; // mac dinh true: endpoint/bucket/key
+  /** tham so truy van bo sung duoc ky (vd x-id) */
+  extraQuery?: Record<string, string>;
 }
 
 function enc(s: string): string {
@@ -42,6 +44,7 @@ export async function presignS3(i: PresignInput): Promise<string> {
     ['X-Amz-Expires', String(i.expiresSec)],
     ['X-Amz-SignedHeaders', signedHeaders],
   ];
+  for (const [k, v] of Object.entries(i.extraQuery ?? {})) q.push([k, v]);
   q.sort((a, b) => (a[0] < b[0] ? -1 : 1));
   const query = q.map(([k, v]) => `${enc(k)}=${enc(v)}`).join('&');
   const canonical = [i.method, path, query, names.map((n) => `${n}:${hdrs[n]}\n`).join(''), signedHeaders, 'UNSIGNED-PAYLOAD'].join('\n');

@@ -16,12 +16,12 @@ describe('SigV4 (Workers) khop @aws-sdk', () => {
     const now = new Date('2026-11-12T03:00:00Z');
     const key = 'media/kh 01/video (1).mp4';
     const sdkGet = await getSignedUrl(c, new GetObjectCommand({ Bucket: 'b', Key: key }), { expiresIn: 600, signingDate: now });
-    const mineGet = await presignS3({ method: 'GET', endpoint: cfg.endpoint, bucket: 'b', key, region: 'auto', accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'secret/key+x', expiresSec: 600, now });
+    const mineGet = await presignS3({ method: 'GET', endpoint: cfg.endpoint, bucket: 'b', key, region: 'auto', accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'secret/key+x', expiresSec: 600, now, extraQuery: { 'x-amz-checksum-mode': 'ENABLED', 'x-id': 'GetObject' } });
     const sig = (u: string) => new URL(u).searchParams.get('X-Amz-Signature');
     expect(new URL(mineGet).pathname).toBe(new URL(sdkGet).pathname);
     expect(sig(mineGet)).toBe(sig(sdkGet));
-    const sdkPut = await getSignedUrl(c, new PutObjectCommand({ Bucket: 'b', Key: key, ContentType: 'video/mp4' }), { expiresIn: 600, signingDate: now });
-    const minePut = await presignS3({ method: 'PUT', endpoint: cfg.endpoint, bucket: 'b', key, region: 'auto', accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'secret/key+x', expiresSec: 600, headers: { 'content-type': 'video/mp4' }, now });
+    const sdkPut = await getSignedUrl(c, new PutObjectCommand({ Bucket: 'b', Key: key, ContentType: 'video/mp4' }), { expiresIn: 600, signingDate: now, signableHeaders: new Set(['content-type']) });
+    const minePut = await presignS3({ method: 'PUT', endpoint: cfg.endpoint, bucket: 'b', key, region: 'auto', accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'secret/key+x', expiresSec: 600, headers: { 'content-type': 'video/mp4' }, now, extraQuery: { 'x-id': 'PutObject', 'x-amz-checksum-crc32': 'AAAAAA==', 'x-amz-sdk-checksum-algorithm': 'CRC32' } });
     expect(new URL(sdkPut).searchParams.get('X-Amz-SignedHeaders')).toBe(new URL(minePut).searchParams.get('X-Amz-SignedHeaders'));
     expect(sig(minePut)).toBe(sig(sdkPut));
   });
