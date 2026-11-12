@@ -176,7 +176,10 @@ describe('IDOR: khach A khong dong vao du lieu khach B', () => {
 
 describe('Chien dich: gui duyet, duyet (FinancePort), tra lai', () => {
   it('vong doi day du va ghi audit', async () => {
-    const c = await lan.json('POST', '/portal/v1/campaigns', { name: 'Vong doi', budget_vnd: 5_000_000, screen_type: 'tv', start_date: '2026-11-01', end_date: '2026-12-31' });
+    const m = await lan.json('POST', '/portal/v1/media/upload-url', { name: 'tv.png', content_type: 'image/png', size_bytes: 33, width: 1920, height: 1080 });
+    await env.rt.objects.put(m.body.key, png(1920, 1080), 'image/png');
+    expect((await lan.json('POST', `/portal/v1/media/${m.body.id}/confirm`, {})).status).toBe(200);
+    const c = await lan.json('POST', '/portal/v1/campaigns', { name: 'Vong doi', budget_vnd: 5_000_000, screen_type: 'tv', media_id: m.body.id, start_date: '2026-11-01', end_date: '2026-12-31' });
     expect(c.status).toBe(201);
     expect(c.body.status).toBe('draft');
     const id = c.body.id;
@@ -215,6 +218,40 @@ describe('Chien dich: gui duyet, duyet (FinancePort), tra lai', () => {
   }, 60_000);
 });
 
+describe('doi tac (partner): chi chien dich duoc giao', () => {
+  it('nhan loi moi, bat TOTP, chi thay chien dich co grant con han', async () => {
+    const cred = env.seed.credentials.find((c) => c.role === 'partner' && c.inviteToken)!;
+    const acc = await env.app.request('/auth/invite/accept', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: cred.inviteToken, password: 'DoiTac-Mat-Khau-9' }) });
+    expect(acc.status).toBe(200);
+    const { mfa_token } = (await acc.json()) as { mfa_token: string };
+    const en = (await (await env.app.request('/auth/mfa/enroll', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mfa_token }) })).json()) as { secret: string };
+    env.rt.clock.advance(31_000);
+    const { totp } = await import('@ams/shared');
+    const v = await env.app.request('/auth/mfa/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mfa_token, code: await totp(en.secret, env.rt.clock.now().getTime()) }) });
+    expect(v.status).toBe(200);
+    const cookie = v.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+    const get = async (path: string) => (await env.app.request(path, { headers: { cookie } }));
+    const me = (await (await get('/auth/me')).json()) as any;
+    const cust = me.user.customer_id as string;
+    expect(me.permissions.finance).toBeUndefined(); // doi tac khong co tai chinh
+    // chua co grant -> khong thay gi
+    expect(((await (await get('/portal/v1/campaigns')).json()) as any).total).toBe(0);
+    const nowIso = env.rt.clock.now().toISOString();
+    await env.rt.db.run("INSERT INTO campaigns (id, tenant_id, customer_id, name, state, created_at, updated_at) SELECT ?, tenant_id, customer_id, 'Chua giao', 'draft', ?, ? FROM campaigns WHERE customer_id = ? LIMIT 1", [env.rt.id(), nowIso, nowIso, cust]);
+    const mine = await env.rt.db.query<{ id: string }>('SELECT id FROM campaigns WHERE customer_id = ? ORDER BY id', [cust]);
+    const other = await env.rt.db.query<{ id: string }>('SELECT id FROM campaigns WHERE customer_id <> ? LIMIT 1', [cust]);
+    expect(mine.length).toBeGreaterThan(1);
+    await env.rt.db.run('INSERT INTO campaign_grants (id, admin_id, campaign_id, can_upload, expires_at) VALUES (?,?,?,0,NULL)', [env.rt.id(), me.user.id, mine[0]!.id]);
+    const l = (await (await get('/portal/v1/campaigns?page_size=50')).json()) as any;
+    expect(l.items.map((c: any) => c.id)).toEqual([mine[0]!.id]);
+    expect((await get(`/portal/v1/campaigns/${mine[1]!.id}`)).status).toBe(404); // cung khach nhung chua duoc giao
+    expect((await get(`/portal/v1/campaigns/${other[0]!.id}`)).status).toBe(404);
+    // grant het han
+    await env.rt.db.run('UPDATE campaign_grants SET expires_at = ? WHERE admin_id = ?', ['2026-11-01T00:00:00.000Z', me.user.id]);
+    expect(((await (await get('/portal/v1/campaigns')).json()) as any).total).toBe(0);
+  });
+});
+
 describe('Audit log', () => {
   it('moi thao tac ghi deu co dong audit (actor, ip, object)', async () => {
     const ip = '198.51.100.7';
@@ -229,7 +266,8 @@ describe('Audit log', () => {
       const r = await admin.req(m, p, b, { headers: h });
       expect(r.status, p).toBe(201);
     }
-    const rows = await env.rt.db.query<{ action: string; actor_id: string; ip: string; object_id: string }>('SELECT action, actor_id, ip, object_id FROM audit_log ORDER BY ts DESC, id DESC LIMIT ?', [3]);
+    const rows = await env.rt.db.query<{ action: string; actor_id: string; ip: string; object_id: string }>('SELECT action, actor_id, ip, object_id FROM audit_log WHERE ip = ?', [ip]);
+    expect(rows.map((r) => r.action).sort()).toEqual(['partner.create', 'rtb_floor.create', 'screen.create']);
     expect(Number((await env.rt.db.query<{ n: number }>('SELECT COUNT(*) AS n FROM audit_log'))[0]!.n)).toBeGreaterThanOrEqual(n0 + 3);
     const me = (await admin.json('GET', '/auth/me')).body.user.id;
     expect(rows.every((r) => r.actor_id === me && r.ip === ip && r.object_id)).toBe(true);
@@ -266,14 +304,17 @@ describe('phan trang, loc, sap xep, tim kiem', () => {
     expect(p1.body.items.length).toBe(7);
     const ids = new Set([...p1.body.items, ...p2.body.items].map((d: any) => d.id));
     expect(ids.size).toBe(14);
-    const names = p1.body.items.map((d: any) => d.name);
-    expect(names).toEqual([...names].sort((a: string, b: string) => a.localeCompare(b, 'en')) && names);
+    const desc = await admin.json('GET', '/admin/v1/devices?page=1&page_size=7&sort=name:desc');
+    expect(desc.body.items[0].id).not.toBe(p1.body.items[0].id);
+    expect(p1.body.items[0].name <= p1.body.items[6].name).toBe(true);
   });
 
   it('page_size toi da 200, tham so rac khong gay 500', async () => {
-    const r = await admin.json('GET', '/admin/v1/campaigns?page_size=100000&page=abc&sort=hack;DROP:desc&filter=status:zzz');
+    const r = await admin.json('GET', '/admin/v1/campaigns?page_size=100000&sort=hack;DROP:desc&filter=status:zzz');
     expect(r.status).toBe(200);
     expect(r.body.page_size).toBeLessThanOrEqual(200);
+    expect(r.body.total).toBe(0);
+    expect([200, 400]).toContain((await admin.json('GET', '/admin/v1/campaigns?page=abc')).status);
   });
 
   it('loc theo filter=k:v va q (khong phan biet hoa thuong, ky tu dac biet an toan)', async () => {
@@ -324,7 +365,7 @@ describe('hop dong', () => {
     expect(cust.id).toBe(K001);
     const created = await admin.json('POST', '/admin/v1/contracts', { customer_id: K001, value_vnd: 1_250_000_000, months: 12, advance_pct: 30, title: '<script>alert(1)</script>' });
     expect(created.status).toBe(201);
-    expect(created.body.no).toMatch(/^HD-\d{4}-\d{3}$/);
+    expect(created.body.number).toMatch(/^HD-\d{4}-\d{3}$/);
     expect(created.body.status).toBe('pending_sign');
     const r = await admin.json('POST', `/admin/v1/contracts/${created.body.id}/render`, {});
     expect(r.status).toBe(200);
@@ -338,7 +379,7 @@ describe('hop dong', () => {
     expect(r.body.html).not.toMatch(/\{\{/); // khong con bien chua dien
     // so hop dong khong trung
     const c2 = await admin.json('POST', '/admin/v1/contracts', { customer_id: K001, value_vnd: 1_000_000 });
-    expect(c2.body.no).not.toBe(created.body.no);
+    expect(c2.body.number).not.toBe(created.body.number);
   });
 
   it('khach hang (tai khoan ngoai) khong doc/sua hop dong; finance khong duoc sua neu khong co quyen', async () => {
@@ -347,7 +388,7 @@ describe('hop dong', () => {
   });
 
   it('MST luu ma hoa, khong lo trong API danh sach/log; tim duoc qua chi tiet cho noi bo', async () => {
-    const raw = await env.rt.db.query<{ tax_code: string | null }>('SELECT tax_code FROM customers WHERE id = ?', [K001]);
+    const raw = await env.rt.db.query<{ tax_code: string | null }>('SELECT tax_code_enc AS tax_code FROM customers WHERE id = ?', [K001]);
     expect(raw[0]!.tax_code).toBeTruthy();
     expect(raw[0]!.tax_code).not.toMatch(/^\d{10}$/); // da ma hoa
     const list = JSON.stringify((await admin.json('GET', '/admin/v1/customers?page_size=5')).body);
