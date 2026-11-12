@@ -74,11 +74,11 @@ describe('tu choi du lieu sai', () => {
   const bad: [string, Record<string, unknown>][] = [
     ['v khac 1', { v: 2 }],
     ['headline rong', { headline: '' }],
-    ['headline qua 90 ky tu', { headline: 'x'.repeat(91) }],
+    ['headline qua 140 ky tu', { headline: 'x'.repeat(141) }],
     ['ky tu dieu khien', { headline: 'a\u0000b' }],
     ['qr http (khong phai https)', { qr: { url: 'http://q.ams.example/vf9', title: 'VOUCHER 500K' } }],
     ['qr url co khoang trang', { qr: { url: 'https://q.ams.example/a b', title: 'T' } }],
-    ['qr url > 120 ky tu', { qr: { url: 'https://q.ams.example/' + 'a'.repeat(110), title: 'T' } }],
+    ['qr url > 512 ky tu', { qr: { url: 'https://q.ams.example/' + 'a'.repeat(500), title: 'T' } }],
     ['hotline co chu', { hotline: { label: 'HOTLINE', number: '1900-ABCD' } }],
     ['duration_s < 5', { duration_s: 4 }],
     ['duration_s > 60', { duration_s: 61 }],
@@ -86,7 +86,7 @@ describe('tu choi du lieu sai', () => {
     ['context la', { contexts: ['tv'] }],
     ['contexts rong', { contexts: [] }],
     ['scte_id chu thuong/khoang trang', { scte_id: 'vf9 800v' }],
-    ['qua 3 badge', { badges: ['a', 'b', 'c', 'd'] }],
+    ['qua 6 badge', { badges: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }],
     ['sha256 sai', { background: { ...vf9.background!, sha256: 'zz' } }],
     ['nen khong 16:9', { background: { ...vf9.background!, px_h: 1000 } }],
     ['nen nho hon HD', { background: { ...vf9.background!, px_w: 960, px_h: 540 } }],
@@ -115,5 +115,28 @@ describe('6 dinh dang cua dac ta', () => {
     expect(Object.keys(FORMAT_SUPPORT).sort()).toEqual(['fullscreen', 'l_banner', 'menu_banner', 'pause_ad', 'qr_corner', 'reward']);
     const supported = Object.entries(FORMAT_SUPPORT).filter(([, v]) => v.contexts.length > 0).map(([k]) => k).sort();
     expect(supported).toEqual(['fullscreen', 'pause_ad', 'qr_corner']);
+  });
+});
+
+// Hop dong voi may chu: packages/shared/src/overlay.ts (parseOverlay) la nguon su that cua cot creatives.overlay (JSON TEXT).
+// Gateway chi phat 7 truong (sponsor_tag, brand_label, headline, hotline, qr, scte_id, badges), khong co "v", khong co kid_safe/contexts.
+describe('tuong thich voi parseOverlay cua may chu', () => {
+  const serverShape = {
+    sponsor_tag: 'TÀI TRỢ • QUẢNG CÁO 4K',
+    brand_label: 'VINFAST AUTO',
+    headline: 'VinFast VF 9 - Đỉnh Cao Trải Nghiệm Doanh Nhân',
+    hotline: { number: '1900 23 23 89' },
+    qr: { url: 'https://q.ams.example/vf9' },
+    scte_id: 'vf9_800v.vn',
+    badges: ['a', 'b', 'c', 'd', 'e', 'f'],
+  };
+  const bg = { url: 'https://media.anio.vn/a.jpg', sha256: 'a'.repeat(64), px_w: 1920, px_h: 1080 };
+  it('chap nhan overlay toi thieu cua may chu (+ nen lay tu creative)', () => {
+    const r = overlaySchema.safeParse({ ...serverShape, background: bg });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.kid_safe).toBe(false); // may chu chua cap kid_safe => khong bao gio len man khoa
+      expect(r.data.contexts).toEqual(['fullscreen']);
+    }
   });
 });

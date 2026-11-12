@@ -6,7 +6,8 @@
   "description": "Smoke e2e tren Postgres 16 that + Redis that (khong Docker)",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "smoke": "tsx smoke.ts"
+    "smoke": "tsx smoke.ts",
+    "bundle-check": "tsx bundle-check.ts"
   },
   "dependencies": {
     "@ams/api": "workspace:*",

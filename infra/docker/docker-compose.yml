@@ -5,11 +5,10 @@
 #   docker compose --env-file .env -f infra/docker/docker-compose.yml --profile core --profile events up -d
 #
 # Profiles:
-#   core    : proxy, web-admin, api, edge-gateway, postgres, redis, minio, mailpit (+ migrate-seed, minio-init chạy một lần)
-#   events  : redpanda, clickhouse, ingest-consumer  (kiểm thử luồng heartbeat/impression)
+#   core    : proxy, web-admin, api, edge-gateway, ingest-consumer, postgres, redis, minio, mailpit (+ migrate-seed, minio-init chạy một lần)
+#   events  : redpanda, clickhouse  (tùy chọn; đặt CLICKHOUSE_URL=http://clickhouse:8123 để ghi sự kiện vào ClickHouse)
 #   obs     : otel-collector, grafana
 #   tunnel  : cloudflared quick tunnel -> api (để SePay gọi webhook về PC)
-#   payments: worker nền services/payments (bật khi dịch vụ này có tiến trình riêng)
 #
 # Kiểm cú pháp không cần daemon:
 #   docker compose --env-file .env.example -f infra/docker/docker-compose.yml --profile '*' config -q
@@ -49,17 +48,26 @@ x-app-env: &app-env
   S3_FORCE_PATH_STYLE: "true"
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
-  SMTP_FROM: ${SMTP_FROM:-AMS <no-reply@ams.localhost>}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASSWORD:-}
+  # Code doc MAIL_FROM (khong phai SMTP_FROM). Giu SMTP_FROM trong .env cu: dung lam du phong.
+  MAIL_FROM: ${MAIL_FROM:-${SMTP_FROM:-AMS <no-reply@ams.localhost>}}
   SESSION_SECRET: ${SESSION_SECRET:-change-me-session}
   FIELD_ENC_KEY: ${FIELD_ENC_KEY:-change-me-field-enc-key}
   SEPAY_MODE: ${SEPAY_MODE:-mock}
   SEPAY_WEBHOOK_SECRET: ${SEPAY_WEBHOOK_SECRET:-change-me-sepay}
-  QUEUE_DRIVER: ${QUEUE_DRIVER:-redis}
-  KAFKA_BROKERS: ${KAFKA_BROKERS:-redpanda:9092}
+  SEPAY_API_KEY: ${SEPAY_API_KEY:-}
+  SEPAY_API_TOKEN: ${SEPAY_API_TOKEN:-}
+  SEPAY_WEBHOOK_URL: ${SEPAY_WEBHOOK_URL:-}
+  # Hang doi la Redis (RedisQueue) o moi che do; ingest-consumer doc cung hang doi do. Redpanda KHONG duoc code dung.
+  # Moi tien trinh dang sau Caddy (Caddy GHI DE X-Forwarded-For/X-Real-IP, xem Caddyfile) nen tin header IP.
+  # Dat TRUST_PROXY=0 neu ban mo thang cong 8787/8788 ra mang khong tin cay.
+  TRUST_PROXY: ${TRUST_PROXY:-1}
   CLICKHOUSE_URL: ${CLICKHOUSE_URL:-}
   CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
   CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
   APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://admin.ams.localhost}
+  PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-${APP_PUBLIC_URL:-https://admin.ams.localhost}}
   PORTAL_PUBLIC_URL: ${PORTAL_PUBLIC_URL:-https://portal.ams.localhost}
   API_PUBLIC_URL: ${API_PUBLIC_URL:-https://api.ams.localhost}
 
@@ -158,6 +166,8 @@ services:
       <<: *app-env
       PORT: "8788"
       SERVICE_NAME: edge-gateway
+      # /v1/dev/pair-confirm cho bo gia lap (tools/sim) o local; KHONG bat tren production.
+      GATEWAY_DEV_ENDPOINTS: ${GATEWAY_DEV_ENDPOINTS:-1}
     ports:
       - "127.0.0.1:${GATEWAY_PORT:-8788}:8788"
     depends_on:
@@ -173,39 +183,31 @@ services:
       retries: 6
       start_period: 20s
 
+  # Doc hang doi Redis cua gateway -> ghi ev_*/impression_hourly + tru tien (spend, idempotent). Thieu service nay thi
+  # luot hien thi KHONG duoc tinh tien. (Co the thay bang INGEST_INLINE=1 tren edge-gateway neu muon mot tien trinh.)
   ingest-consumer:
     <<: *node-service
     build:
       context: ../..
       dockerfile: services/ingest-consumer/Dockerfile
     image: ams/ingest-consumer:local
-    profiles: [events]
+    profiles: [core]
     environment:
       <<: *app-env
-      # profile events: luôn dùng Redpanda + ClickHouse cho consumer
-      QUEUE_DRIVER: redpanda
-      CLICKHOUSE_URL: http://clickhouse:8123
       SERVICE_NAME: ingest-consumer
-    depends_on:
-      postgres: { condition: service_healthy }
-      migrate-seed: { condition: service_completed_successfully }
-      redpanda: { condition: service_healthy }
-      clickhouse: { condition: service_healthy }
-
-  payments:
-    <<: *node-service
-    build:
-      context: ../..
-      dockerfile: services/payments/Dockerfile
-    image: ams/payments:local
-    profiles: [payments]
-    environment:
-      <<: *app-env
-      SERVICE_NAME: payments
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       migrate-seed: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8789/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+
+  # Tai chinh (SePay, vi, hoan tien, kich hoat) KHONG co tien trinh rieng: services/payments duoc mount vao API
+  # (services/api/src/finance-mount.ts). Vi vay khong co service `payments` o day.
 
   # Chạy một lần: migration + seed (đặc tả 14/1a). Đặt SEED=0 trong .env để bỏ seed.
   migrate-seed:
@@ -311,7 +313,8 @@ services:
         mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
         mc mb --ignore-existing "local/$$S3_BUCKET"
         mc mb --ignore-existing "local/$$S3_REPORTS_BUCKET"
-        mc anonymous set none "local/$$S3_BUCKET"
+        # bucket media doc cong khai (TV tai thang theo URL khong ky trong manifest); bucket bao cao van rieng tu
+        mc anonymous set download "local/$$S3_BUCKET"
         mc anonymous set none "local/$$S3_REPORTS_BUCKET"
         echo "minio-init: bucket sẵn sàng"
 

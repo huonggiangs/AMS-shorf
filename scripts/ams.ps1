@@ -41,9 +41,9 @@ switch ($Command) {
   'up-events' {
     Invoke-Node @('check-env')
     # Biến môi trường của tiến trình có ưu tiên hơn .env trong docker compose
-    $env:QUEUE_DRIVER = 'redpanda'; $env:CLICKHOUSE_URL = 'http://clickhouse:8123'
+    $env:CLICKHOUSE_URL = 'http://clickhouse:8123'
     try { Invoke-DC @('--profile', 'core', '--profile', 'events', 'up', '-d', '--build') }
-    finally { Remove-Item Env:QUEUE_DRIVER, Env:CLICKHOUSE_URL -ErrorAction SilentlyContinue }
+    finally { Remove-Item Env:CLICKHOUSE_URL -ErrorAction SilentlyContinue }
   }
   'up-obs'    { Invoke-Node @('check-env'); Invoke-DC @('--profile', 'core', '--profile', 'obs', 'up', '-d') }
   'seed'      { Invoke-Node @('check-env'); Invoke-DC @('--profile', 'core', 'run', '--rm', '-e', 'SEED=1', 'migrate-seed'); Invoke-Node @('creds') }

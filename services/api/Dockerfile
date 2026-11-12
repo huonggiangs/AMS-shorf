@@ -49,7 +49,7 @@ CMD ["sh", "-c", "pnpm --filter @ams/api migrate && if [ \"${SEED:-1}\" = \"1\" 
 
 # ---- runtime (tầng cuối = mặc định khi `docker build` không có --target)
 FROM ${NODE_IMAGE} AS runtime
-ENV NODE_ENV=production PORT=8787
+ENV NODE_ENV=production PORT=8787 AMS_API_START=1
 RUN apk add --no-cache tini
 WORKDIR /app
 COPY --from=build --chown=node:node /out/app/ ./

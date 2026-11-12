@@ -114,9 +114,9 @@ final class AmsOverlayRenderer {
         LinearLayout top = new LinearLayout(ctx);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        top.addView(chip(ctx, u, s.sponsorTag, ACCENT, 0x401E9BFF, 0, true, true), wrap(0, 0, (int) (10 * u), 0));
+        if (!s.sponsorTag.isEmpty()) top.addView(chip(ctx, u, s.sponsorTag, ACCENT, 0x401E9BFF, 0, true, true), wrap(0, 0, (int) (10 * u), 0));
         for (String badge : s.badges) top.addView(chip(ctx, u, badge, INK, 0x33FFFFFF, 0, false, false), wrap(0, 0, (int) (10 * u), 0));
-        top.addView(chip(ctx, u, s.brandLabel, BRAND_INK, BRAND_BG, 0, false, true), wrap(0, 0, 0, 0));
+        if (!s.brandLabel.isEmpty()) top.addView(chip(ctx, u, s.brandLabel, BRAND_INK, BRAND_BG, 0, false, true), wrap(0, 0, 0, 0));
         column.addView(top, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         if (!s.scteId.isEmpty()) {
@@ -133,7 +133,7 @@ final class AmsOverlayRenderer {
         headline.setLineSpacing(4 * u, 1f);
         headline.setPadding((int) (18 * u), (int) (14 * u), (int) (18 * u), (int) (14 * u));
         headline.setBackground(rounded(CARD_BG, 10 * u, CARD_LINE, Math.max(1, (int) u)));
-        column.addView(headline, wrap(0, (int) (10 * u), 0, 0));
+        if (!s.headline.isEmpty()) column.addView(headline, wrap(0, (int) (10 * u), 0, 0));
 
         // --- spacer ---
         column.addView(new View(ctx), new LinearLayout.LayoutParams(0, 0, 1f));
@@ -154,11 +154,11 @@ final class AmsOverlayRenderer {
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding((int) (20 * u), (int) (16 * u), (int) (20 * u), (int) (16 * u));
         card.setBackground(rounded(CARD_BG, 12 * u, CARD_LINE, Math.max(1, (int) u)));
-        card.addView(chip(ctx, u, s.sponsorTag, ACCENT, 0x401E9BFF, 0, true, true), wrap(0, 0, 0, (int) (8 * u)));
+        if (!s.sponsorTag.isEmpty()) card.addView(chip(ctx, u, s.sponsorTag, ACCENT, 0x401E9BFF, 0, true, true), wrap(0, 0, 0, (int) (8 * u)));
         TextView headline = text(ctx, s.headline, 26 * u, INK, true);
         headline.setMaxLines(2);
         headline.setEllipsize(TextUtils.TruncateAt.END);
-        card.addView(headline, wrap(0, 0, 0, (int) (10 * u)));
+        if (!s.headline.isEmpty()) card.addView(headline, wrap(0, 0, 0, (int) (10 * u)));
         if (!s.qrUrl.isEmpty()) card.addView(qrBlock(ctx, u, s, 120), wrap(0, 0, 0, 0));
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams((int) (widthPx * 0.30f), ViewGroup.LayoutParams.WRAP_CONTENT,
             Gravity.BOTTOM | Gravity.RIGHT);
@@ -178,7 +178,7 @@ final class AmsOverlayRenderer {
         card.addView(glyph, new LinearLayout.LayoutParams((int) (80 * u), (int) (80 * u)));
         LinearLayout copy = new LinearLayout(ctx);
         copy.setOrientation(LinearLayout.VERTICAL);
-        copy.addView(text(ctx, s.hotlineLabel.toUpperCase(java.util.Locale.ROOT), 15 * u, MUTED, true), wrap(0, 0, 0, 0));
+        if (!s.hotlineLabel.isEmpty()) copy.addView(text(ctx, s.hotlineLabel.toUpperCase(java.util.Locale.ROOT), 15 * u, MUTED, true), wrap(0, 0, 0, 0));
         TextView number = text(ctx, s.hotlineNumber, 40 * u, ACCENT, true);
         number.setSingleLine(true);
         copy.addView(number, wrap(0, (int) (2 * u), 0, 0));
@@ -206,7 +206,7 @@ final class AmsOverlayRenderer {
         if (!s.qrLabel.isEmpty()) copy.addView(text(ctx, s.qrLabel.toUpperCase(java.util.Locale.ROOT), 16 * u, AMBER, true), wrap(0, 0, 0, 0));
         TextView title = text(ctx, s.qrTitle, 30 * u, INK, true);
         title.setSingleLine(true);
-        copy.addView(title, wrap(0, (int) (2 * u), 0, 0));
+        if (!s.qrTitle.isEmpty()) copy.addView(title, wrap(0, (int) (2 * u), 0, 0));
         if (!s.qrHint.isEmpty()) copy.addView(text(ctx, s.qrHint, 16 * u, MUTED, false), wrap(0, (int) (4 * u), 0, 0));
         block.addView(copy, wrap((int) (14 * u), 0, 0, 0));
         return block;

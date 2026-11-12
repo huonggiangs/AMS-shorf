@@ -34,7 +34,7 @@ export function backgroundSizeProblem(w: number, h: number): string | null {
 
 const noControl = (s: string): boolean => !/[\u0000-\u001f\u007f]/.test(s);
 const text = (min: number, max: number) => z.string().trim().min(min).max(max).refine(noControl, 'khong duoc chua ky tu dieu khien');
-const httpsUrl = z.string().max(120).regex(/^https:\/\/[A-Za-z0-9.-]+(:[0-9]{2,5})?(\/[^\s]*)?$/, 'phai la URL https, khong khoang trang');
+const httpsUrl = z.string().max(512).regex(/^https:\/\/[A-Za-z0-9.-]+(:[0-9]{2,5})?(\/[^\s]*)?$/, 'phai la URL https, khong khoang trang');
 const pct = z.number().int().min(0).max(15);
 
 export const overlayBackground = z
@@ -51,19 +51,19 @@ export const overlayBackground = z
 
 export const overlaySchema = z
   .object({
-    v: z.literal(OVERLAY_VERSION),
+    v: z.literal(OVERLAY_VERSION).optional(),
     /** the "TAI TRO • QUANG CAO 4K" o goc tren trai */
-    sponsor_tag: text(1, 40),
+    sponsor_tag: text(1, 60).optional(),
     /** nhan thuong hieu o goc tren phai cua hang chip ("VINFAST AUTO") */
-    brand_label: text(1, 24),
+    brand_label: text(1, 60).optional(),
     /** tieu de lon (toi da 2 dong tren man 16:9) */
-    headline: text(1, 90),
+    headline: text(1, 140).optional(),
     /** ma tham chieu hien thi "SCTE-35 ID #<scte_id>". Chi la nhan, KHONG phai chen SCTE-35 that. */
-    scte_id: z.string().regex(/^[A-Z0-9][A-Z0-9-]{2,38}$/).optional(),
-    badges: z.array(text(1, 30)).max(3).default([]),
-    hotline: z.object({ label: text(1, 40), number: z.string().regex(/^[0-9 .+()-]{6,20}$/), sub: text(1, 40).optional() }).optional(),
+    scte_id: z.string().regex(/^[A-Za-z0-9_.:-]{1,64}$/).optional(),
+    badges: z.array(text(1, 30)).max(6).default([]),
+    hotline: z.object({ label: text(1, 60).optional(), number: z.string().regex(/^[0-9+().\s-]{3,24}$/), sub: text(1, 100).optional() }).optional(),
     /** url nen la link ngan qua may chu chuyen huong cua AMS (<= ~60 ky tu) de ma QR du thua tren the 150 px */
-    qr: z.object({ url: httpsUrl, label: text(1, 40).optional(), title: text(1, 30), hint: text(1, 40).optional() }).optional(),
+    qr: z.object({ url: httpsUrl, label: text(1, 60).optional(), title: text(1, 80).optional(), hint: text(1, 40).optional() }).optional(),
     /** may chu dien tu tep media cua creative (nguon duy nhat); form khong cho nhap tay */
     background: overlayBackground.optional(),
     safe_area: z

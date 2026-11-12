@@ -2,6 +2,8 @@
 # Web gọi API qua /api/... (cùng origin, cookie ams_session đi cùng, không cần CORS).
 # /api/xyz  ->  ${API_UPSTREAM}/xyz   (ví dụ /api/admin/v1/devices -> api:8787/admin/v1/devices)
 map $http_x_forwarded_proto $fwd_proto { default $http_x_forwarded_proto; '' $scheme; }
+# IP khach that do Caddy dat (Caddy ghi de X-Forwarded-For/X-Real-IP). Goi truc tiep cong 8080 (khong qua Caddy) thi dung $remote_addr.
+map $http_x_real_ip $client_ip { default $http_x_real_ip; '' $remote_addr; }
 
 server {
     listen 8080;
@@ -30,8 +32,8 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Forwarded-Proto $fwd_proto;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $client_ip;
+        proxy_set_header X-Forwarded-For $client_ip;
         proxy_read_timeout 60s;
     }
 

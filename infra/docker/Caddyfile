@@ -8,6 +8,14 @@
 	skip_install_trust
 }
 
+# GHI DE (khong noi them) header IP khach: API/gateway tin X-Forwarded-For / X-Real-IP (TRUST_PROXY=1) cho rate-limit
+# va audit; neu de client tu gui thi co the gia IP. Cloudflare header cung bi go.
+(client_ip) {
+	header_up X-Forwarded-For {remote_host}
+	header_up X-Real-IP {remote_host}
+	header_up -CF-Connecting-IP
+}
+
 (security_headers) {
 	header {
 		X-Content-Type-Options nosniff
@@ -22,7 +30,9 @@ admin.ams.localhost {
 	tls internal
 	import security_headers
 	encode zstd gzip
-	reverse_proxy web-admin:8080
+	reverse_proxy web-admin:8080 {
+		import client_ip
+	}
 }
 
 # Cổng khách hàng/đối tác: cùng ứng dụng web, phân biệt theo tên miền.
@@ -30,7 +40,9 @@ portal.ams.localhost {
 	tls internal
 	import security_headers
 	encode zstd gzip
-	reverse_proxy web-admin:8080
+	reverse_proxy web-admin:8080 {
+		import client_ip
+	}
 }
 
 # API trực tiếp (admin API, portal API, webhook SePay, /dev/sepay/simulate)
@@ -39,6 +51,7 @@ api.ams.localhost {
 	import security_headers
 	encode zstd gzip
 	reverse_proxy api:8787 {
+		import client_ip
 		health_uri /health
 		health_interval 15s
 	}
@@ -49,6 +62,7 @@ gw.ams.localhost {
 	tls internal
 	import security_headers
 	reverse_proxy edge-gateway:8788 {
+		import client_ip
 		health_uri /health
 		health_interval 15s
 	}

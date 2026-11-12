@@ -4,7 +4,7 @@ SHELL := /bin/sh
 COMPOSE_FILE := infra/docker/docker-compose.yml
 DC := docker compose --env-file .env -f $(COMPOSE_FILE)
 # Biến cho profile events: gateway/api ghi qua Redpanda và ClickHouse
-EVENTS_ENV := QUEUE_DRIVER=redpanda CLICKHOUSE_URL=http://clickhouse:8123
+EVENTS_ENV := CLICKHOUSE_URL=http://clickhouse:8123
 N ?= 1000
 S ?=
 

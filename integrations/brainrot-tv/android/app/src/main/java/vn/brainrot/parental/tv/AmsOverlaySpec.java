@@ -27,8 +27,8 @@ final class AmsOverlaySpec {
 
     private static final Pattern SHA256 = Pattern.compile("^[0-9a-f]{64}$");
     private static final Pattern HTTPS_URL = Pattern.compile("^https://[A-Za-z0-9.-]+(:[0-9]{2,5})?(/[^\\s]*)?$");
-    private static final Pattern PHONE = Pattern.compile("^[0-9 .+()-]{6,20}$");
-    private static final Pattern SCTE = Pattern.compile("^[A-Z0-9][A-Z0-9-]{2,38}$");
+    private static final Pattern PHONE = Pattern.compile("^[0-9+().\\-\\s]{3,24}$");
+    private static final Pattern SCTE = Pattern.compile("^[A-Za-z0-9_.:\\-]{1,64}$");
 
     final String sponsorTag;
     final String brandLabel;
@@ -55,26 +55,26 @@ final class AmsOverlaySpec {
     final Set<String> contexts;
 
     private AmsOverlaySpec(JSONObject o, JSONObject creative) {
-        if (o.optInt("v", -1) != VERSION) throw new IllegalArgumentException("overlay.v phai bang 1");
-        sponsorTag = text(o, "sponsor_tag", 1, 40, true);
-        brandLabel = text(o, "brand_label", 1, 24, true);
-        headline = text(o, "headline", 1, 90, true);
+        if (o.has("v") && o.optInt("v", -1) != VERSION) throw new IllegalArgumentException("overlay.v neu co phai bang 1");
+        sponsorTag = text(o, "sponsor_tag", 1, 60, false);
+        brandLabel = text(o, "brand_label", 1, 60, false);
+        headline = text(o, "headline", 1, 140, false);
         scteId = scte(o.optString("scte_id", ""));
 
         List<String> b = new ArrayList<>();
         JSONArray badgeArr = o.optJSONArray("badges");
         if (badgeArr != null) {
-            if (badgeArr.length() > 3) throw new IllegalArgumentException("badges toi da 3");
+            if (badgeArr.length() > 6) throw new IllegalArgumentException("badges toi da 6");
             for (int i = 0; i < badgeArr.length(); i++) b.add(clean(badgeArr.optString(i, ""), 1, 30, "badges[" + i + "]"));
         }
         badges = Collections.unmodifiableList(b);
 
         JSONObject hotline = o.optJSONObject("hotline");
         if (hotline != null) {
-            hotlineLabel = text(hotline, "label", 1, 40, true);
-            hotlineNumber = clean(hotline.optString("number", ""), 6, 20, "hotline.number");
+            hotlineLabel = text(hotline, "label", 1, 60, false);
+            hotlineNumber = clean(hotline.optString("number", ""), 3, 24, "hotline.number");
             if (!PHONE.matcher(hotlineNumber).matches()) throw new IllegalArgumentException("hotline.number sai dinh dang");
-            hotlineSub = text(hotline, "sub", 1, 40, false);
+            hotlineSub = text(hotline, "sub", 1, 100, false);
         } else {
             hotlineLabel = ""; hotlineNumber = ""; hotlineSub = "";
         }
@@ -82,9 +82,9 @@ final class AmsOverlaySpec {
         JSONObject qr = o.optJSONObject("qr");
         if (qr != null) {
             qrUrl = qr.optString("url", "");
-            if (qrUrl.length() > 120 || !HTTPS_URL.matcher(qrUrl).matches()) throw new IllegalArgumentException("qr.url phai la https, <=120 ky tu");
-            qrLabel = text(qr, "label", 1, 40, false);
-            qrTitle = text(qr, "title", 1, 30, true);
+            if (qrUrl.length() > 512 || !HTTPS_URL.matcher(qrUrl).matches()) throw new IllegalArgumentException("qr.url phai la https, <=512 ky tu");
+            qrLabel = text(qr, "label", 1, 60, false);
+            qrTitle = text(qr, "title", 1, 80, false);
             qrHint = text(qr, "hint", 1, 40, false);
         } else {
             qrUrl = ""; qrLabel = ""; qrTitle = ""; qrHint = "";

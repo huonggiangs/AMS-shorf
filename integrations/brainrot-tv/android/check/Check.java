@@ -126,7 +126,7 @@ public final class Check {
         ok("VinFast VF 9 - Đỉnh Cao Trải Nghiệm Doanh Nhân".equals(s.headline) && "1900 23 23 89".equals(s.hotlineNumber), "VF9 example parses with the exact ADS.png texts");
         ok(s.kidSafe && s.allows("lock") && s.durationS == 15 && s.badges.size() == 1, "kid_safe/contexts/duration/badges");
         String[][] bad = {
-            {"v", "2"}, {"headline", ""}, {"qr", "{\"url\":\"http://x.vn/a\",\"title\":\"T\"}"},
+            {"v", "2"}, {"badges", "[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\"]"}, {"qr", "{\"url\":\"http://x.vn/a\",\"title\":\"T\"}"},
             {"duration_s", "3"}, {"safe_area", "{\"top\":30}"}, {"contexts", "[\"tv\"]"}, {"scte_id", "\"bad id!\""},
             {"background", "{\"url\":\"https://m.anio.vn/a.jpg\",\"sha256\":\"zz\",\"px_w\":1920,\"px_h\":1080}"},
             {"background", "{\"url\":\"https://m.anio.vn/a.jpg\",\"sha256\":\"" + "a".repeat(64) + "\",\"px_w\":1920,\"px_h\":1000}"},
