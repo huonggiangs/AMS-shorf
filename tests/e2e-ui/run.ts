@@ -110,6 +110,7 @@ async function main(): Promise<void> {
       await p.getByRole('button', { name: 'Xác nhận' }).click();
       await p.locator('#lg-code').waitFor({ state: 'detached', timeout: 10_000 });
     }
+    const walletTab = (p: Page) => p.locator('.tabs button', { hasText: 'Ví quảng cáo' }).first().click();
     const nav = (p: Page) => p.locator('nav, aside').first();
     const rowOf = (p: Page, text: string | RegExp) => p.locator('tbody tr', { hasText: text }).first();
 
@@ -155,7 +156,7 @@ async function main(): Promise<void> {
     const lim = { email: `ops-ui-${randomBytes(3).toString('hex')}@example.com`, pw: 'Ops-UI-Passw0rd!2026', secret: '' };
     let custA = { id: '', code: '', name: 'Cong ty UI A' };
     let mediaId = '';
-    const prep = await flow('SETUP (API): khach A + hop dong + media da duyet + tai khoan khach (TOTP) + tai khoan device_ops', async () => {
+    const prep = await flow('SETUP (API): khach A + hop dong + media da duyet', async () => {
       const r1 = await api.ok<{ mfa_required: boolean; mfa_token?: string }>(200, 'POST', '/auth/login', { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
       const r2 = await api.ok<{ csrf_token: string }>(200, 'POST', '/auth/mfa/verify', { mfa_token: r1.mfa_token, code: await totp(ADMIN_TOTP, Date.now() - 30_000) });
       api.csrf = r2.csrf_token;
@@ -170,6 +171,44 @@ async function main(): Promise<void> {
       await api.ok(200, 'POST', `/admin/v1/media/${up.id}/confirm`, { width: 1920, height: 1080, duration_sec: 15 });
       await api.ok(200, 'POST', `/admin/v1/media/${up.id}/approve`);
       mediaId = up.id;
+      return `khach ${a.code}, media ${up.id.slice(-6)}`;
+    });
+
+    // F2. admin nap tien qua /dev/sepay/simulate (UI: Thanh toan -> Nap tien -> Mo phong da nhan tien)
+    const f2 = await flow('F2 nap vi: admin UI "Mo phong da nhan tien" (/dev/sepay/simulate) -> vi 20.000.000', async () => {
+      must(f1 && prep, 'phu thuoc F1/SETUP');
+      await admin.goto('/finance');
+      await walletTab(admin);
+      await admin.getByRole('heading', { name: /Ví quảng cáo/ }).waitFor();
+      await admin.getByRole('button', { name: 'Nạp tiền' }).first().click();
+      const dlg = admin.getByRole('dialog', { name: 'Nạp tiền vào ví quảng cáo' });
+      await dlg.waitFor();
+      await dlg.locator('#tp-c').selectOption({ label: new RegExp(custA.code) as unknown as string }).catch(async () => {
+        const opt = await dlg.locator('#tp-c option', { hasText: custA.code }).first().getAttribute('value');
+        await dlg.locator('#tp-c').selectOption(opt!);
+      });
+      await dlg.locator('#tp-a').fill('20000000');
+      const content = await dlg.getByTestId('topup-content').innerText();
+      must(content.includes(custA.code), `noi dung CK khong co ma khach: ${content}`);
+      await shot(admin, '10-topup-dialog');
+      await dlg.getByRole('button', { name: 'Mô phỏng đã nhận tiền' }).click();
+      await admin.getByText('Đã mô phỏng giao dịch đến.').waitFor({ timeout: 10_000 });
+      // vi trong DB + tren trang
+      for (let i = 0; i < 40; i++) {
+        const w = (await stack.q('SELECT balance_vnd FROM ad_wallets WHERE customer_id = $1', [custA.id]))[0];
+        if (w && Number(w.balance_vnd) === 20_000_000) break;
+        if (i === 39) throw new Error(`so du vi ${w?.balance_vnd}`);
+        await sleep(150);
+      }
+      await admin.reload();
+      await rowOf(admin, /UI A|Cong ty UI A/).waitFor({ timeout: 10_000 });
+      await shot(admin, '11-wallet-credited');
+      return 'balance 20.000.000';
+    }, () => admin);
+
+    // thu moi khach chi duoc gui khi khach duoc kich hoat (nap tien dau tien) -> chuan bi tai khoan sau F2
+    const prep2 = await flow('SETUP 2 (API): thu moi -> tai khoan khach (TOTP) + tai khoan device_ops (TOTP)', async () => {
+      must(f2, 'phu thuoc F2');
       // tai khoan khach: nhan thu moi (SMTP gia) -> accept -> bat TOTP (UI chua co trang /invite, xem requests.md)
       const mm = await (async () => {
         for (let i = 0; i < 80; i++) {
@@ -206,39 +245,8 @@ async function main(): Promise<void> {
       const en2 = await o.ok<{ secret: string; mfa_token: string }>(200, 'POST', '/auth/mfa/enroll', { mfa_token: acc2.mfa_token });
       await o.ok(200, 'POST', '/auth/mfa/verify', { mfa_token: en2.mfa_token, code: await totp(en2.secret, Date.now() - 30_000) });
       lim.secret = en2.secret;
-      return `khach ${a.code}, media ${up.id.slice(-6)}`;
+      return 'khach + device_ops da kich hoat';
     });
-
-    // F2. admin nap tien qua /dev/sepay/simulate (UI: Thanh toan -> Nap tien -> Mo phong da nhan tien)
-    const f2 = await flow('F2 nap vi: admin UI "Mo phong da nhan tien" (/dev/sepay/simulate) -> vi 20.000.000', async () => {
-      must(f1 && prep, 'phu thuoc F1/SETUP');
-      await admin.goto('/finance');
-      await admin.getByRole('heading', { name: /Ví quảng cáo/ }).waitFor();
-      await admin.getByRole('button', { name: 'Nạp tiền' }).first().click();
-      const dlg = admin.getByRole('dialog', { name: 'Nạp tiền vào ví quảng cáo' });
-      await dlg.waitFor();
-      await dlg.locator('#tp-c').selectOption({ label: new RegExp(custA.code) as unknown as string }).catch(async () => {
-        const opt = await dlg.locator('#tp-c option', { hasText: custA.code }).first().getAttribute('value');
-        await dlg.locator('#tp-c').selectOption(opt!);
-      });
-      await dlg.locator('#tp-a').fill('20000000');
-      const content = await dlg.getByTestId('topup-content').innerText();
-      must(content.includes(custA.code), `noi dung CK khong co ma khach: ${content}`);
-      await shot(admin, '10-topup-dialog');
-      await dlg.getByRole('button', { name: 'Mô phỏng đã nhận tiền' }).click();
-      await admin.getByText('Đã mô phỏng giao dịch đến.').waitFor({ timeout: 10_000 });
-      // vi trong DB + tren trang
-      for (let i = 0; i < 40; i++) {
-        const w = (await stack.q('SELECT balance_vnd FROM ad_wallets WHERE customer_id = $1', [custA.id]))[0];
-        if (w && Number(w.balance_vnd) === 20_000_000) break;
-        if (i === 39) throw new Error(`so du vi ${w?.balance_vnd}`);
-        await sleep(150);
-      }
-      await admin.reload();
-      await rowOf(admin, /UI A|Cong ty UI A/).waitFor({ timeout: 10_000 });
-      await shot(admin, '11-wallet-credited');
-      return 'balance 20.000.000';
-    }, () => admin);
 
     // customer ctx
     const custCtx = await newCtx();
@@ -248,13 +256,14 @@ async function main(): Promise<void> {
     // F3. cong khach: dang nhap TOTP, vi, tao chien dich, gui duyet
     let campName = `UI chien dich ${randomBytes(2).toString('hex')}`;
     const f3 = await flow('F3 cong khach: dang nhap TOTP -> vi -> tao chien dich -> Gui duyet', async () => {
-      must(f2, 'phu thuoc F2');
+      must(f2 && prep2, 'phu thuoc F2/SETUP 2');
       await uiLogin(cust, emailA, CUST_PW, custSecret.v, Date.now());
       await shot(cust, '20-portal-home');
       // menu khach chi co Quang cao / Media / Thanh toan
       const txt = await cust.locator('body').innerText();
       must(!/Thiết bị|Người dùng & Phân quyền|Nhật ký hoạt động/.test(txt), 'menu khach lo trang noi bo');
       await cust.goto('/finance');
+      await walletTab(cust);
       await cust.getByRole('heading', { name: 'Ví quảng cáo' }).waitFor();
       await cust.getByText(/20/).first().waitFor();
       // khach tu tao yeu cau nap tien (QR)
@@ -353,7 +362,7 @@ async function main(): Promise<void> {
     const ops = await opsCtx.newPage();
     watch(ops, 'device_ops');
     await flow('F7a RBAC device_ops: menu chi co Thiet bi; /finance /customers bi tu choi tren UI va API 403', async () => {
-      must(prep, 'phu thuoc SETUP');
+      must(prep2, 'phu thuoc SETUP 2');
       await uiLogin(ops, lim.email, lim.pw, lim.secret, Date.now());
       await ops.goto('/devices');
       await ops.getByRole('heading', { name: 'Quản lý thiết bị' }).waitFor();
@@ -393,6 +402,7 @@ async function main(): Promise<void> {
     await flow('F8 dang xuat + phien het hieu luc quay ve /login', async () => {
       must(f1, 'phu thuoc F1');
       await admin.goto('/overview');
+      await admin.getByRole('button', { name: /Thông báo/ }).first().click();
       await admin.getByRole('button', { name: 'Đăng xuất' }).click();
       await admin.waitForURL(/\/login/, { timeout: 10_000 });
       await admin.goto('/finance');

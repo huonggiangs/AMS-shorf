@@ -176,7 +176,7 @@ export async function snapshot(w: World): Promise<Snapshot> {
  * BAT BIEN sau khi he thong yen (da settle). `acked` = event_id (hop le, tinh tien) ma thiet bi da nhan 202.
  * Tra ve danh sach vi pham (rong = dung) de test in ra cung seed/tai hien.
  */
-export async function violations(w: World, acked: { byCampaign: Map<string, Set<string>> }): Promise<string[]> {
+export async function violations(w: World, acked: { byCampaign: Map<string, Set<string>>; flagged?: Set<string> }): Promise<string[]> {
   const v: string[] = [];
   const s = await snapshot(w);
   const allAcked = new Set<string>();
@@ -186,8 +186,8 @@ export async function violations(w: World, acked: { byCampaign: Map<string, Set<
   if (new Set(rows).size !== rows.length) v.push('ev_ad_impression co event_id trung');
   const missing = [...allAcked].filter((id) => !rows.includes(id));
   if (missing.length) v.push(`MAT ${missing.length} su kien da duoc gateway xac nhan 202 (vd ${missing[0]})`);
-  const extra = rows.filter((id) => !allAcked.has(id));
-  if (extra.length) v.push(`${extra.length} su kien co trong DB nhung thiet bi chua tung duoc 202 (thiet bi se gui lai: chi la canh bao neu khong gui)`);
+  const extra = rows.filter((id) => !allAcked.has(id) && !acked.flagged?.has(id));
+  if (extra.length) v.push(`${extra.length} su kien co trong DB ma thiet bi khong he gui (phantom)`);
   if (s.hourlyImpressions !== rows.length) v.push(`impression_hourly=${s.hourlyImpressions} != so dong ev_ad_impression=${rows.length}`);
   // 2. vi: so cai == cache; chi tieu chien dich == vi
   const rec = await reconcileLedger(w.rt);

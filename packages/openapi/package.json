@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "OpenAPI 3.1: admin/customer API + device gateway API, sinh tu route + zod that",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "generate": "tsx scripts/generate.ts",
     "check": "tsx scripts/check-drift.ts",
@@ -23,6 +25,7 @@
     "@ams/runtime": "workspace:*",
     "@ams/shared": "workspace:*",
     "@ams/config": "workspace:*",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@apidevtools/swagger-parser": "12.1.0"
   }
 }

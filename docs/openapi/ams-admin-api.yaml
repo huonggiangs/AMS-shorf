@@ -1,0 +1,6367 @@
+openapi: 3.1.0
+info:
+  title: AMS - Admin / Customer API
+  version: 0.1.0
+  summary: API quản trị + cổng khách hàng + webhook thanh toán của hệ thống quản lý quảng cáo AMS
+  description: |-
+    File này được SINH TỰ ĐỘNG (`pnpm --filter @ams/openapi generate`); không sửa tay. `pnpm --filter @ams/openapi check` báo lỗi khi file lệch khỏi route/zod thật.
+
+    Nguồn: danh sách route lấy từ ứng dụng Hono thật (`createApp` + `mountFinanceRoutes`); body request trích từ zod thật trong `services/api` và `services/payments`; schema phản hồi lấy từ `apps/web-admin/src/api/schemas.ts` (hợp đồng phía client, dạng *input*; `additionalProperties: true` nghĩa là có thể có thêm trường).
+
+    Xác thực: cookie `ams_session` (HttpOnly, SameSite=Lax) + header `X-CSRF-Token` cho phương thức ghi. Lỗi: `{ "error": { "code", "message", "details"? } }`.
+    Số tiền luôn là số nguyên đồng (VND), không dùng số thực.
+
+    ## TODO (p0-domain): chưa có trong tài liệu này
+    Endpoint lệnh thiết bị phía admin (tạo/liệt kê/huỷ `device_commands`), trạng thái chiến dịch mới, outbox, chi tiêu. p0-domain đang bổ sung; khi route xuất hiện, `check` sẽ báo lệch, chạy lại `generate` (yêu cầu ở ops/agents/g1-openapi.requests.md).
+servers:
+  - url: http://api.ams.localhost
+    description: Docker local (Caddy)
+  - url: http://localhost:8787
+    description: API trực tiếp (dev)
+tags:
+  - name: activation-log
+  - name: approvals
+  - name: audit-log
+  - name: auth
+  - name: campaigns
+  - name: contracts
+  - name: customers
+  - name: dashboard
+  - name: devices
+  - name: health
+  - name: me
+  - name: media
+  - name: partners
+  - name: payments
+  - name: permissions
+  - name: refund-requests
+  - name: revenue
+  - name: rtb-floors
+  - name: schedule
+  - name: screens
+  - name: settings
+  - name: topups
+  - name: users
+  - name: wallet
+  - name: wallet-adjustments
+  - name: wallets
+  - name: webhooks
+paths:
+  /admin/v1/activation-log:
+    get:
+      operationId: adminGetActivationLog
+      tags:
+        - activation-log
+      summary: GET /admin/v1/activation-log
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:450
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivationLog"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/activation-log/{id}/undo:
+    post:
+      operationId: adminPostActivationLogByIdUndo
+      tags:
+        - activation-log
+      summary: POST /admin/v1/activation-log/{id}/undo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:456
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/approvals:
+    get:
+      operationId: adminGetApprovals
+      tags:
+        - approvals
+      summary: GET /admin/v1/approvals
+      parameters:
+        - &a1
+          name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - &a2
+          name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+        - &a3
+          name: q
+          in: query
+          description: Tìm kiếm văn bản (các cột tìm kiếm của danh sách)
+          schema:
+            type: string
+        - &a4
+          name: sort
+          in: query
+          description: "`<trường>:<asc|desc>`"
+          schema:
+            type: string
+        - &a5
+          name: filter
+          in: query
+          description: "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng"
+          schema:
+            type: string
+      x-ams-permission:
+        module: approvals
+        action: view
+      x-ams-source: services/api/src/routes/approvals.ts:11
+      description: |-
+        Quyền cần có: mô-đun `approvals`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/audit-log:
+    get:
+      operationId: adminGetAuditLog
+      tags:
+        - audit-log
+      summary: GET /admin/v1/audit-log
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: admin
+        action: view
+      x-ams-source: services/api/src/routes/audit-log.ts:40
+      description: |-
+        Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEntryPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/campaigns:
+    get:
+      operationId: adminGetCampaigns
+      tags:
+        - campaigns
+      summary: GET /admin/v1/campaigns
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: campaigns
+        action: view
+      x-ams-source: services/api/src/routes/campaigns.ts:224
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostCampaigns
+      tags:
+        - campaigns
+      summary: POST /admin/v1/campaigns
+      parameters: []
+      x-ams-permission:
+        module: campaigns
+        action: write
+      x-ams-source: services/api/src/routes/campaigns.ts:235
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostCampaignsRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/campaigns/{id}:
+    delete:
+      operationId: adminDeleteCampaignsById
+      tags:
+        - campaigns
+      summary: DELETE /admin/v1/campaigns/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: delete
+      x-ams-source: services/api/src/routes/campaigns.ts:441
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Đã xóa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+    get:
+      operationId: adminGetCampaignsById
+      tags:
+        - campaigns
+      summary: GET /admin/v1/campaigns/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: view
+      x-ams-source: services/api/src/routes/campaigns.ts:230
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: adminPutCampaignsById
+      tags:
+        - campaigns
+      summary: PUT /admin/v1/campaigns/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: write
+      x-ams-source: services/api/src/routes/campaigns.ts:262
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutCampaignsByIdRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/campaigns/{id}/approve:
+    post:
+      operationId: adminPostCampaignsByIdApprove
+      tags:
+        - campaigns
+      summary: POST /admin/v1/campaigns/{id}/approve
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: approve
+      x-ams-source: services/api/src/routes/campaigns.ts:352
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApproveResult"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/campaigns/{id}/end:
+    post:
+      operationId: adminPostCampaignsByIdEnd
+      tags:
+        - campaigns
+      summary: POST /admin/v1/campaigns/{id}/end
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: approve
+      x-ams-source: services/api/src/routes/campaigns.ts:427
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/campaigns/{id}/pause:
+    post:
+      operationId: adminPostCampaignsByIdPause
+      tags:
+        - campaigns
+      summary: POST /admin/v1/campaigns/{id}/pause
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: write
+      x-ams-source: services/api/src/routes/campaigns.ts:308
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/campaigns/{id}/reject:
+    post:
+      operationId: adminPostCampaignsByIdReject
+      tags:
+        - campaigns
+      summary: POST /admin/v1/campaigns/{id}/reject
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: approve
+      x-ams-source: services/api/src/routes/campaigns.ts:404
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostCampaignsByIdRejectRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/campaigns/{id}/resume:
+    post:
+      operationId: adminPostCampaignsByIdResume
+      tags:
+        - campaigns
+      summary: POST /admin/v1/campaigns/{id}/resume
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: write
+      x-ams-source: services/api/src/routes/campaigns.ts:321
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/campaigns/{id}/submit:
+    post:
+      operationId: adminPostCampaignsByIdSubmit
+      tags:
+        - campaigns
+      summary: POST /admin/v1/campaigns/{id}/submit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: write
+      x-ams-source: services/api/src/routes/campaigns.ts:294
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/contracts:
+    get:
+      operationId: adminGetContracts
+      tags:
+        - contracts
+      summary: GET /admin/v1/contracts
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: customers
+        action: view
+      x-ams-source: services/api/src/routes/contracts.ts:183
+      description: |-
+        Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostContracts
+      tags:
+        - contracts
+      summary: POST /admin/v1/contracts
+      parameters: []
+      x-ams-permission:
+        module: customers
+        action: write
+      x-ams-source: services/api/src/routes/contracts.ts:195
+      description: |-
+        Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostContractsRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/contracts/{id}:
+    get:
+      operationId: adminGetContractsById
+      tags:
+        - contracts
+      summary: GET /admin/v1/contracts/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: customers
+        action: view
+      x-ams-source: services/api/src/routes/contracts.ts:188
+      description: |-
+        Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: adminPutContractsById
+      tags:
+        - contracts
+      summary: PUT /admin/v1/contracts/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: customers
+        action: write
+      x-ams-source: services/api/src/routes/contracts.ts:234
+      description: |-
+        Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutContractsByIdRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/contracts/{id}/render:
+    post:
+      operationId: adminPostContractsByIdRender
+      tags:
+        - contracts
+      summary: POST /admin/v1/contracts/{id}/render
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: customers
+        action: view
+      x-ams-source: services/api/src/routes/contracts.ts:281
+      description: |-
+        Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostContractsByIdRenderRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractRender"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/customers:
+    get:
+      operationId: adminGetCustomers
+      tags:
+        - customers
+      summary: GET /admin/v1/customers
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: customers
+        action: view
+      x-ams-source: services/api/src/routes/customers.ts:147
+      description: |-
+        Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostCustomers
+      tags:
+        - customers
+      summary: POST /admin/v1/customers
+      parameters: []
+      x-ams-permission:
+        module: customers
+        action: write
+      x-ams-source: services/api/src/routes/customers.ts:160
+      description: |-
+        Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostCustomersRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/customers/{id}:
+    get:
+      operationId: adminGetCustomersById
+      tags:
+        - customers
+      summary: GET /admin/v1/customers/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: customers
+        action: view
+      x-ams-source: services/api/src/routes/customers.ts:153
+      description: |-
+        Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: adminPutCustomersById
+      tags:
+        - customers
+      summary: PUT /admin/v1/customers/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: customers
+        action: write
+      x-ams-source: services/api/src/routes/customers.ts:200
+      description: |-
+        Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutCustomersByIdRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/dashboard/overview:
+    get:
+      operationId: adminGetDashboardOverview
+      tags:
+        - dashboard
+      summary: GET /admin/v1/dashboard/overview
+      parameters: []
+      x-ams-permission:
+        module: overview
+        action: view
+      x-ams-source: services/api/src/routes/dashboard.ts:13
+      description: |-
+        Quyền cần có: mô-đun `overview`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Overview"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/devices:
+    get:
+      operationId: adminGetDevices
+      tags:
+        - devices
+      summary: GET /admin/v1/devices
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: devices
+        action: view
+      x-ams-source: services/api/src/routes/devices.ts:95
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DevicePage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/devices/bulk:
+    post:
+      operationId: adminPostDevicesBulk
+      tags:
+        - devices
+      summary: POST /admin/v1/devices/bulk
+      parameters: []
+      x-ams-permission:
+        module: devices
+        action: write
+      x-ams-source: services/api/src/routes/devices.ts:101
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostDevicesBulkRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/devices/pair:
+    post:
+      operationId: adminPostDevicesPair
+      tags:
+        - devices
+      summary: POST /admin/v1/devices/pair
+      parameters: []
+      x-ams-permission:
+        module: devices
+        action: write
+      x-ams-source: services/api/src/routes/devices.ts:122
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostDevicesPairRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/devices/{id}:
+    get:
+      operationId: adminGetDevicesById
+      tags:
+        - devices
+      summary: GET /admin/v1/devices/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: devices
+        action: view
+      x-ams-source: services/api/src/routes/devices.ts:142
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/media:
+    get:
+      operationId: adminGetMedia
+      tags:
+        - media
+      summary: GET /admin/v1/media
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: media
+        action: view
+      x-ams-source: services/api/src/routes/media.ts:199
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/media/import:
+    post:
+      operationId: adminPostMediaImport
+      tags:
+        - media
+      summary: POST /admin/v1/media/import
+      parameters: []
+      x-ams-permission:
+        module: media
+        action: write
+      x-ams-source: services/api/src/routes/media.ts:320
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostMediaImportRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/media/upload-url:
+    post:
+      operationId: adminPostMediaUploadUrl
+      tags:
+        - media
+      summary: POST /admin/v1/media/upload-url
+      parameters: []
+      x-ams-permission:
+        module: media
+        action: write
+      x-ams-source: services/api/src/routes/media.ts:213
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostMediaUploadUrlRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrl"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/media/{id}:
+    delete:
+      operationId: adminDeleteMediaById
+      tags:
+        - media
+      summary: DELETE /admin/v1/media/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: media
+        action: delete
+      x-ams-source: services/api/src/routes/media.ts:397
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Đã xóa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+    get:
+      operationId: adminGetMediaById
+      tags:
+        - media
+      summary: GET /admin/v1/media/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: media
+        action: view
+      x-ams-source: services/api/src/routes/media.ts:205
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/media/{id}/approve:
+    post:
+      operationId: adminPostMediaByIdApprove
+      tags:
+        - media
+      summary: POST /admin/v1/media/{id}/approve
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: media
+        action: approve
+      x-ams-source: services/api/src/routes/media.ts:368
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/media/{id}/confirm:
+    post:
+      operationId: adminPostMediaByIdConfirm
+      tags:
+        - media
+      summary: POST /admin/v1/media/{id}/confirm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: media
+        action: write
+      x-ams-source: services/api/src/routes/media.ts:255
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostMediaByIdConfirmRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/media/{id}/overlay:
+    put:
+      operationId: adminPutMediaByIdOverlay
+      tags:
+        - media
+      summary: PUT /admin/v1/media/{id}/overlay
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: media
+        action: write
+      x-ams-source: services/api/src/routes/media.ts:346
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutMediaByIdOverlayRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/media/{id}/reject:
+    post:
+      operationId: adminPostMediaByIdReject
+      tags:
+        - media
+      summary: POST /admin/v1/media/{id}/reject
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: media
+        action: approve
+      x-ams-source: services/api/src/routes/media.ts:383
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostMediaByIdRejectRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/partners:
+    get:
+      operationId: adminGetPartners
+      tags:
+        - partners
+      summary: GET /admin/v1/partners
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-source: services/api/src/routes/partners.ts:81
+      description: Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostPartners
+      tags:
+        - partners
+      summary: POST /admin/v1/partners
+      parameters: []
+      x-ams-permission:
+        module: partners
+        action: write
+      x-ams-source: services/api/src/routes/partners.ts:89
+      description: |-
+        Quyền cần có: mô-đun `partners`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostPartnersRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Partner"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/partners/{id}:
+    get:
+      operationId: adminGetPartnersById
+      tags:
+        - partners
+      summary: GET /admin/v1/partners/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: partners
+        action: view
+      x-ams-source: services/api/src/routes/partners.ts:85
+      description: |-
+        Quyền cần có: mô-đun `partners`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Partner"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: adminPutPartnersById
+      tags:
+        - partners
+      summary: PUT /admin/v1/partners/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: partners
+        action: write
+      x-ams-source: services/api/src/routes/partners.ts:101
+      description: |-
+        Quyền cần có: mô-đun `partners`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutPartnersByIdRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Partner"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/payments/manual-queue:
+    get:
+      operationId: adminGetPaymentsManualQueue
+      tags:
+        - payments
+      summary: GET /admin/v1/payments/manual-queue
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:302
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualQueue"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/payments/manual-queue/{id}/resolve:
+    post:
+      operationId: adminPostPaymentsManualQueueByIdResolve
+      tags:
+        - payments
+      summary: POST /admin/v1/payments/manual-queue/{id}/resolve
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:315
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostPaymentsManualQueueByIdResolveRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/permissions/{adminId}:
+    get:
+      operationId: adminGetPermissionsByAdminId
+      tags:
+        - permissions
+      summary: GET /admin/v1/permissions/{adminId}
+      parameters:
+        - name: adminId
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: admin
+        action: view
+      x-ams-source: services/api/src/routes/users.ts:271
+      description: |-
+        Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: adminPutPermissionsByAdminId
+      tags:
+        - permissions
+      summary: PUT /admin/v1/permissions/{adminId}
+      parameters:
+        - name: adminId
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: admin
+        action: write
+      x-ams-source: services/api/src/routes/users.ts:283
+      description: |-
+        Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutPermissionsByAdminIdRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/refund-requests:
+    get:
+      operationId: adminGetRefundRequests
+      tags:
+        - refund-requests
+      summary: GET /admin/v1/refund-requests
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:403
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefundRequests"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/refund-requests/{id}/approve:
+    post:
+      operationId: adminPostRefundRequestsByIdApprove
+      tags:
+        - refund-requests
+      summary: POST /admin/v1/refund-requests/{id}/approve
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:411
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostRefundRequestsByIdApproveRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/refund-requests/{id}/paid:
+    post:
+      operationId: adminPostRefundRequestsByIdPaid
+      tags:
+        - refund-requests
+      summary: POST /admin/v1/refund-requests/{id}/paid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:439
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostRefundRequestsByIdPaidRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/refund-requests/{id}/reject:
+    post:
+      operationId: adminPostRefundRequestsByIdReject
+      tags:
+        - refund-requests
+      summary: POST /admin/v1/refund-requests/{id}/reject
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:429
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostRefundRequestsByIdRejectRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/revenue:
+    get:
+      operationId: adminGetRevenue
+      tags:
+        - revenue
+      summary: GET /admin/v1/revenue
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+      x-ams-source: services/api/src/routes/revenue.ts:9
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Revenue"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/rtb-floors:
+    get:
+      operationId: adminGetRtbFloors
+      tags:
+        - rtb-floors
+      summary: GET /admin/v1/rtb-floors
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: partners
+        action: view
+      x-ams-source: services/api/src/routes/rtb-floors.ts:29
+      description: |-
+        Quyền cần có: mô-đun `partners`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RtbFloorPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostRtbFloors
+      tags:
+        - rtb-floors
+      summary: POST /admin/v1/rtb-floors
+      parameters: []
+      x-ams-permission:
+        module: partners
+        action: write
+      x-ams-source: services/api/src/routes/rtb-floors.ts:33
+      description: |-
+        Quyền cần có: mô-đun `partners`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostRtbFloorsRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RtbFloor"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/rtb-floors/{id}:
+    put:
+      operationId: adminPutRtbFloorsById
+      tags:
+        - rtb-floors
+      summary: PUT /admin/v1/rtb-floors/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: partners
+        action: write
+      x-ams-source: services/api/src/routes/rtb-floors.ts:44
+      description: |-
+        Quyền cần có: mô-đun `partners`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutRtbFloorsByIdRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RtbFloor"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/schedule:
+    get:
+      operationId: adminGetSchedule
+      tags:
+        - schedule
+      summary: GET /admin/v1/schedule
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/schedule.ts:72
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleSlotPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostSchedule
+      tags:
+        - schedule
+      summary: POST /admin/v1/schedule
+      parameters: []
+      x-ams-permission:
+        module: schedule
+        action: write
+      x-ams-source: services/api/src/routes/schedule.ts:79
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostScheduleRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleSlot"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/schedule/{id}:
+    delete:
+      operationId: adminDeleteScheduleById
+      tags:
+        - schedule
+      summary: DELETE /admin/v1/schedule/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: schedule
+        action: delete
+      x-ams-source: services/api/src/routes/schedule.ts:114
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Đã xóa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+    get:
+      operationId: adminGetScheduleById
+      tags:
+        - schedule
+      summary: GET /admin/v1/schedule/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/schedule.ts:77
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleSlot"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: adminPutScheduleById
+      tags:
+        - schedule
+      summary: PUT /admin/v1/schedule/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: schedule
+        action: write
+      x-ams-source: services/api/src/routes/schedule.ts:99
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutScheduleByIdRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleSlot"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/screens:
+    get:
+      operationId: adminGetScreens
+      tags:
+        - screens
+      summary: GET /admin/v1/screens
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: screens
+        action: view
+      x-ams-source: services/api/src/routes/screens.ts:95
+      description: |-
+        Quyền cần có: mô-đun `screens`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScreenPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostScreens
+      tags:
+        - screens
+      summary: POST /admin/v1/screens
+      parameters: []
+      x-ams-permission:
+        module: screens
+        action: write
+      x-ams-source: services/api/src/routes/screens.ts:107
+      description: |-
+        Quyền cần có: mô-đun `screens`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostScreensRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Screen"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/screens/{id}:
+    get:
+      operationId: adminGetScreensById
+      tags:
+        - screens
+      summary: GET /admin/v1/screens/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: screens
+        action: view
+      x-ams-source: services/api/src/routes/screens.ts:100
+      description: |-
+        Quyền cần có: mô-đun `screens`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Screen"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: adminPutScreensById
+      tags:
+        - screens
+      summary: PUT /admin/v1/screens/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: screens
+        action: write
+      x-ams-source: services/api/src/routes/screens.ts:150
+      description: |-
+        Quyền cần có: mô-đun `screens`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutScreensByIdRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Screen"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/settings/sepay:
+    get:
+      operationId: adminGetSettingsSepay
+      tags:
+        - settings
+      summary: GET /admin/v1/settings/sepay
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:488
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SepaySettings"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: adminPutSettingsSepay
+      tags:
+        - settings
+      summary: PUT /admin/v1/settings/sepay
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:493
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutSettingsSepayRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SepaySettings"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/settings/sepay/test:
+    post:
+      operationId: adminPostSettingsSepayTest
+      tags:
+        - settings
+      summary: POST /admin/v1/settings/sepay/test
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: write
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:519
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/topups:
+    get:
+      operationId: adminGetTopups
+      tags:
+        - topups
+      summary: GET /admin/v1/topups
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:260
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopupPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostTopups
+      tags:
+        - topups
+      summary: POST /admin/v1/topups
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: write
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:276
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topup"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/topups/{id}/confirm:
+    post:
+      operationId: adminPostTopupsByIdConfirm
+      tags:
+        - topups
+      summary: POST /admin/v1/topups/{id}/confirm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:296
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/users:
+    get:
+      operationId: adminGetUsers
+      tags:
+        - users
+      summary: GET /admin/v1/users
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: admin
+        action: view
+      x-ams-source: services/api/src/routes/users.ts:133
+      description: |-
+        Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostUsers
+      tags:
+        - users
+      summary: POST /admin/v1/users
+      parameters: []
+      x-ams-permission:
+        module: admin
+        action: write
+      x-ams-source: services/api/src/routes/users.ts:139
+      description: |-
+        Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostUsersRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/users/{id}:
+    get:
+      operationId: adminGetUsersById
+      tags:
+        - users
+      summary: GET /admin/v1/users/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: admin
+        action: view
+      x-ams-source: services/api/src/routes/users.ts:137
+      description: |-
+        Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: adminPutUsersById
+      tags:
+        - users
+      summary: PUT /admin/v1/users/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: admin
+        action: write
+      x-ams-source: services/api/src/routes/users.ts:198
+      description: |-
+        Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutUsersByIdRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/users/{id}/resend-invite:
+    post:
+      operationId: adminPostUsersByIdResendInvite
+      tags:
+        - users
+      summary: POST /admin/v1/users/{id}/resend-invite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: admin
+        action: write
+      x-ams-source: services/api/src/routes/users.ts:185
+      description: |-
+        Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/wallet-adjustments:
+    get:
+      operationId: adminGetWalletAdjustments
+      tags:
+        - wallet-adjustments
+      summary: GET /admin/v1/wallet-adjustments
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:376
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/wallet-adjustments/{id}/approve:
+    post:
+      operationId: adminPostWalletAdjustmentsByIdApprove
+      tags:
+        - wallet-adjustments
+      summary: POST /admin/v1/wallet-adjustments/{id}/approve
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:382
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/wallets:
+    get:
+      operationId: adminGetWallets
+      tags:
+        - wallets
+      summary: GET /admin/v1/wallets
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:343
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/wallets/{customerId}:
+    get:
+      operationId: adminGetWalletsByCustomerId
+      tags:
+        - wallets
+      summary: GET /admin/v1/wallets/{customerId}
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: view
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:354
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Wallet"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/wallets/{customerId}/adjustments:
+    post:
+      operationId: adminPostWalletsByCustomerIdAdjustments
+      tags:
+        - wallets
+      summary: POST /admin/v1/wallets/{customerId}/adjustments
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: write
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:365
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostWalletsByCustomerIdAdjustmentsRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /auth/invite/accept:
+    post:
+      operationId: authPostInviteAccept
+      tags:
+        - auth
+      summary: POST /auth/invite/accept
+      parameters: []
+      x-ams-source: services/api/src/auth/routes.ts:273
+      description: Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthPostInviteAcceptRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security: []
+  /auth/login:
+    post:
+      operationId: authPostLogin
+      tags:
+        - auth
+      summary: POST /auth/login
+      parameters: []
+      x-ams-source: services/api/src/auth/routes.ts:112
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthPostLoginRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security: []
+  /auth/logout:
+    post:
+      operationId: authPostLogout
+      tags:
+        - auth
+      summary: POST /auth/logout
+      parameters: []
+      x-ams-source: services/api/src/auth/routes.ts:238
+      description: Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /auth/me:
+    get:
+      operationId: authGetMe
+      tags:
+        - auth
+      summary: GET /auth/me
+      parameters: []
+      x-ams-source: services/api/src/auth/routes.ts:258
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /auth/mfa/enroll:
+    post:
+      operationId: authPostMfaEnroll
+      tags:
+        - auth
+      summary: POST /auth/mfa/enroll
+      parameters: []
+      x-ams-source: services/api/src/auth/routes.ts:163
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthPostMfaEnrollRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaEnroll"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - {}
+        - cookieAuth: []
+  /auth/mfa/verify:
+    post:
+      operationId: authPostMfaVerify
+      tags:
+        - auth
+      summary: POST /auth/mfa/verify
+      parameters: []
+      x-ams-source: services/api/src/auth/routes.ts:194
+      description: Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthPostMfaVerifyRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security: []
+  /health:
+    get:
+      operationId: GetHealth
+      tags:
+        - health
+      summary: GET /health
+      parameters: []
+      description: Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security: []
+  /portal/v1/campaigns:
+    get:
+      operationId: portalGetCampaigns
+      tags:
+        - campaigns
+      summary: GET /portal/v1/campaigns
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: campaigns
+        action: view
+      x-ams-source: services/api/src/routes/campaigns.ts:224
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: portalPostCampaigns
+      tags:
+        - campaigns
+      summary: POST /portal/v1/campaigns
+      parameters: []
+      x-ams-permission:
+        module: campaigns
+        action: write
+      x-ams-source: services/api/src/routes/campaigns.ts:235
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPostCampaignsRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /portal/v1/campaigns/{id}:
+    get:
+      operationId: portalGetCampaignsById
+      tags:
+        - campaigns
+      summary: GET /portal/v1/campaigns/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: view
+      x-ams-source: services/api/src/routes/campaigns.ts:230
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: portalPutCampaignsById
+      tags:
+        - campaigns
+      summary: PUT /portal/v1/campaigns/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: write
+      x-ams-source: services/api/src/routes/campaigns.ts:262
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPutCampaignsByIdRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /portal/v1/campaigns/{id}/pause:
+    post:
+      operationId: portalPostCampaignsByIdPause
+      tags:
+        - campaigns
+      summary: POST /portal/v1/campaigns/{id}/pause
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: write
+      x-ams-source: services/api/src/routes/campaigns.ts:308
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /portal/v1/campaigns/{id}/resume:
+    post:
+      operationId: portalPostCampaignsByIdResume
+      tags:
+        - campaigns
+      summary: POST /portal/v1/campaigns/{id}/resume
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: write
+      x-ams-source: services/api/src/routes/campaigns.ts:321
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /portal/v1/campaigns/{id}/submit:
+    post:
+      operationId: portalPostCampaignsByIdSubmit
+      tags:
+        - campaigns
+      summary: POST /portal/v1/campaigns/{id}/submit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: write
+      x-ams-source: services/api/src/routes/campaigns.ts:294
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /portal/v1/me:
+    get:
+      operationId: portalGetMe
+      tags:
+        - me
+      summary: GET /portal/v1/me
+      parameters: []
+      x-ams-source: services/api/src/routes/portal.ts:13
+      description: |-
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/media:
+    get:
+      operationId: portalGetMedia
+      tags:
+        - media
+      summary: GET /portal/v1/media
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: media
+        action: view
+      x-ams-source: services/api/src/routes/media.ts:199
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/media/import:
+    post:
+      operationId: portalPostMediaImport
+      tags:
+        - media
+      summary: POST /portal/v1/media/import
+      parameters: []
+      x-ams-permission:
+        module: media
+        action: write
+      x-ams-source: services/api/src/routes/media.ts:320
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPostMediaImportRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /portal/v1/media/upload-url:
+    post:
+      operationId: portalPostMediaUploadUrl
+      tags:
+        - media
+      summary: POST /portal/v1/media/upload-url
+      parameters: []
+      x-ams-permission:
+        module: media
+        action: write
+      x-ams-source: services/api/src/routes/media.ts:213
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPostMediaUploadUrlRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrl"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /portal/v1/media/{id}:
+    get:
+      operationId: portalGetMediaById
+      tags:
+        - media
+      summary: GET /portal/v1/media/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: media
+        action: view
+      x-ams-source: services/api/src/routes/media.ts:205
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/media/{id}/confirm:
+    post:
+      operationId: portalPostMediaByIdConfirm
+      tags:
+        - media
+      summary: POST /portal/v1/media/{id}/confirm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: media
+        action: write
+      x-ams-source: services/api/src/routes/media.ts:255
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPostMediaByIdConfirmRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /portal/v1/media/{id}/overlay:
+    put:
+      operationId: portalPutMediaByIdOverlay
+      tags:
+        - media
+      summary: PUT /portal/v1/media/{id}/overlay
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: media
+        action: write
+      x-ams-source: services/api/src/routes/media.ts:346
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPutMediaByIdOverlayRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /portal/v1/topups:
+    get:
+      operationId: portalGetTopups
+      tags:
+        - topups
+      summary: GET /portal/v1/topups
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: external
+      x-ams-source: services/payments/src/routes.ts:231
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopupPage"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: portalPostTopups
+      tags:
+        - topups
+      summary: POST /portal/v1/topups
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: write
+        account: external
+      x-ams-source: services/payments/src/routes.ts:226
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopupCreated"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /portal/v1/wallet:
+    get:
+      operationId: portalGetWallet
+      tags:
+        - wallet
+      summary: GET /portal/v1/wallet
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: external
+      x-ams-source: services/payments/src/routes.ts:180
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalWallet"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/wallet/refund-requests:
+    get:
+      operationId: portalGetWalletRefundRequests
+      tags:
+        - wallet
+      summary: GET /portal/v1/wallet/refund-requests
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: external
+      x-ams-source: services/payments/src/routes.ts:253
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefundRequests"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: portalPostWalletRefundRequests
+      tags:
+        - wallet
+      summary: POST /portal/v1/wallet/refund-requests
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: write
+        account: external
+      x-ams-source: services/payments/src/routes.ts:240
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPostWalletRefundRequestsRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /webhooks/payments/sepay:
+    post:
+      operationId: webhookPostPaymentsSepay
+      tags:
+        - webhooks
+      summary: POST /webhooks/payments/sepay
+      parameters: []
+      x-ams-source: services/payments/src/routes.ts:135
+      description: 'SePay gọi vào đây khi có giao dịch. Xác thực HMAC-SHA256 (`X-SePay-Signature: sha256=<hex>` + `X-SePay-Timestamp`, lệch >5 phút bị từ chối) hoặc `Authorization: Apikey <khóa>`. Trả `{"success":true}`; webhook trùng (cùng `id`) chỉ cộng tiền một lần.'
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - sepayHmac: []
+          sepayTimestamp: []
+        - sepayApiKey: []
+components:
+  schemas:
+    ActivationLog:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type:
+                  - string
+                  - number
+              customer_id:
+                type:
+                  - string
+                  - "null"
+              trigger_topup_id:
+                type:
+                  - string
+                  - "null"
+              actions:
+                type: array
+                items: {}
+                default: []
+              created_at:
+                type:
+                  - string
+                  - "null"
+            required:
+              - id
+            additionalProperties: true
+      required:
+        - items
+      additionalProperties: true
+    AdminPostCampaignsByIdRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+      required:
+        - reason
+      additionalProperties: true
+    AdminPostCampaignsRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  minLength: 1
+                  maxLength: 64
+            - type: "null"
+        screen_type:
+          type: string
+          enum:
+            - tv
+            - elevator
+            - led
+          default: tv
+        screen_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        media_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        budget_vnd:
+          type: integer
+          minimum: 1
+          maximum: 10000000000000
+        duration_sec:
+          type: integer
+          minimum: 5
+          maximum: 120
+          default: 15
+        start_date:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+            - type: "null"
+        end_date:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+            - type: "null"
+      required:
+        - name
+        - budget_vnd
+      additionalProperties: true
+    AdminPostContractsByIdRenderRequest:
+      type: object
+      properties:
+        advance_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+        months:
+          type: integer
+          minimum: 1
+          maximum: 120
+      additionalProperties: true
+    AdminPostContractsRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        number:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 60
+            - type: "null"
+        title:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 300
+            - type: "null"
+        value_vnd:
+          type: integer
+          minimum: 0
+          maximum: 100000000000000
+        vat_rate:
+          type: integer
+          minimum: 0
+          maximum: 30
+        start_date:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+            - type: "null"
+        months:
+          type: integer
+          minimum: 1
+          maximum: 120
+          default: 12
+        advance_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 0
+        payment_terms:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 300
+            - type: "null"
+      required:
+        - customer_id
+        - value_vnd
+      additionalProperties: true
+    AdminPostCustomersRequest:
+      type: object
+      properties:
+        legal_name:
+          type: string
+          minLength: 1
+          maxLength: 300
+        short_name:
+          anyOf:
+            - type: string
+              maxLength: 120
+            - type: "null"
+        tax_code:
+          anyOf:
+            - type: string
+            - type: "null"
+        address:
+          anyOf:
+            - type: string
+              maxLength: 500
+            - type: "null"
+        representative:
+          anyOf:
+            - type: string
+              maxLength: 120
+            - type: "null"
+        rep_title:
+          anyOf:
+            - type: string
+              maxLength: 120
+            - type: "null"
+        phone:
+          anyOf:
+            - type: string
+              maxLength: 40
+            - type: "null"
+        email:
+          anyOf:
+            - type: string
+              maxLength: 200
+            - type: "null"
+        contact:
+          anyOf:
+            - type: string
+              maxLength: 120
+            - type: "null"
+        industry:
+          anyOf:
+            - type: string
+              maxLength: 120
+            - type: "null"
+        payment_terms:
+          anyOf:
+            - type: string
+              maxLength: 200
+            - type: "null"
+        credit_limit_vnd:
+          type: integer
+          minimum: 0
+          maximum: 10000000000000
+        owner_id:
+          anyOf:
+            - type: string
+              maxLength: 64
+            - type: "null"
+        status:
+          type: string
+          enum:
+            - cooperating
+            - suspended
+            - pending_payment
+            - terminated
+      required:
+        - legal_name
+      additionalProperties: true
+    AdminPostDevicesBulkRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - verify
+            - block
+            - unblock
+        ids:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+          minItems: 1
+          maxItems: 500
+      required:
+        - action
+        - ids
+      additionalProperties: true
+    AdminPostDevicesPairRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          pattern: ^\d{6}$
+        owner_name:
+          type: string
+          maxLength: 100
+      required:
+        - code
+      additionalProperties: true
+    AdminPostMediaByIdConfirmRequest:
+      type: object
+      properties:
+        width:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        height:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        duration_sec:
+          type: number
+          minimum: 0
+          maximum: 36000
+      additionalProperties: true
+    AdminPostMediaByIdRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+      required:
+        - reason
+      additionalProperties: true
+    AdminPostMediaImportRequest:
+      type: object
+      properties:
+        source:
+          type: string
+          enum:
+            - youtube
+            - drive
+            - dropbox
+            - url
+        url:
+          type: string
+          minLength: 8
+          maxLength: 2048
+        name:
+          type: string
+          maxLength: 200
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+      required:
+        - source
+        - url
+      additionalProperties: true
+    AdminPostMediaUploadUrlRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        content_type:
+          type: string
+          maxLength: 100
+        size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 10737418240
+        width:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        height:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        duration_sec:
+          type: number
+          minimum: 0
+          maximum: 36000
+        target_type:
+          type: string
+          enum:
+            - tv
+            - elevator
+            - led
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        format:
+          type: string
+          maxLength: 20
+        overlay:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - {}
+            - type: "null"
+      required:
+        - name
+        - content_type
+        - size_bytes
+      additionalProperties: true
+    AdminPostPartnersRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        protocol:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 40
+            - type: "null"
+        endpoint:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 500
+            - type: "null"
+        auth:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 200
+            - type: "null"
+        floor_cpm_vnd:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+        enabled:
+          type: boolean
+      required:
+        - name
+      additionalProperties: true
+    AdminPostPaymentsManualQueueByIdResolveRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+      additionalProperties: true
+    AdminPostRefundRequestsByIdApproveRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          maxLength: 500
+      additionalProperties: true
+    AdminPostRefundRequestsByIdPaidRequest:
+      type: object
+      properties:
+        voucher_ref:
+          type: string
+          minLength: 3
+          maxLength: 100
+      required:
+        - voucher_ref
+      additionalProperties: true
+    AdminPostRefundRequestsByIdRejectRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          minLength: 3
+          maxLength: 500
+      required:
+        - note
+      additionalProperties: true
+    AdminPostRtbFloorsRequest:
+      type: object
+      properties:
+        category:
+          type: string
+          minLength: 1
+          maxLength: 80
+        floor_cpm_vnd:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+      required:
+        - category
+        - floor_cpm_vnd
+      additionalProperties: true
+    AdminPostScheduleRequest:
+      type: object
+      properties:
+        start_min:
+          type: integer
+          minimum: 0
+          maximum: 1440
+        end_min:
+          type: integer
+          minimum: 0
+          maximum: 1440
+        campaign_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 3
+        reward_points:
+          type: integer
+          minimum: 0
+          maximum: 100000
+          default: 0
+        regions:
+          type: array
+          items:
+            type: string
+            maxLength: 10
+          maxItems: 20
+          default: []
+      required:
+        - start_min
+        - end_min
+        - campaign_id
+      additionalProperties: true
+    AdminPostScreensRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 300
+        type:
+          type: string
+          enum:
+            - elevator
+            - led
+        venue_kind:
+          type: string
+          maxLength: 40
+          default: Chung cư
+        size:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 60
+            - type: "null"
+        resolution:
+          type: string
+          maxLength: 30
+        screens:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 1
+        region:
+          type: string
+          minLength: 1
+          maxLength: 60
+        address:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 500
+            - type: "null"
+      required:
+        - name
+        - type
+        - resolution
+        - region
+      additionalProperties: true
+    AdminPostUsersRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 30
+            - type: "null"
+        role:
+          type: string
+          enum:
+            - super_admin
+            - content_manager
+            - finance
+            - device_ops
+            - customer
+            - partner
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        expires_at:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+            - type: "null"
+        permissions:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+      required:
+        - name
+        - email
+        - role
+      additionalProperties: true
+    AdminPostWalletsByCustomerIdAdjustmentsRequest:
+      type: object
+      properties:
+        amount_vnd:
+          type: integer
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 500
+      required:
+        - amount_vnd
+        - reason
+      additionalProperties: true
+    AdminPutCampaignsByIdRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  minLength: 1
+                  maxLength: 64
+            - type: "null"
+        screen_type:
+          type: string
+          enum:
+            - tv
+            - elevator
+            - led
+          default: tv
+        screen_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        media_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        budget_vnd:
+          type: integer
+          minimum: 1
+          maximum: 10000000000000
+        duration_sec:
+          type: integer
+          minimum: 5
+          maximum: 120
+          default: 15
+        start_date:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+            - type: "null"
+        end_date:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+            - type: "null"
+      additionalProperties: true
+    AdminPutContractsByIdRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 300
+        value_vnd:
+          type: integer
+          minimum: 0
+          maximum: 100000000000000
+        vat_rate:
+          type: integer
+          minimum: 0
+          maximum: 30
+        start_date:
+          type: string
+        end_date:
+          type: string
+        advance_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+        payment_terms:
+          type: string
+          maxLength: 300
+        status:
+          type: string
+          enum:
+            - pending_sign
+            - effective
+            - suspended
+            - expired
+            - terminated
+            - draft
+      additionalProperties: true
+    AdminPutCustomersByIdRequest:
+      type: object
+      properties:
+        legal_name:
+          type: string
+          minLength: 1
+          maxLength: 300
+        short_name:
+          anyOf:
+            - type: string
+              maxLength: 120
+            - type: "null"
+        tax_code:
+          anyOf:
+            - type: string
+            - type: "null"
+        address:
+          anyOf:
+            - type: string
+              maxLength: 500
+            - type: "null"
+        representative:
+          anyOf:
+            - type: string
+              maxLength: 120
+            - type: "null"
+        rep_title:
+          anyOf:
+            - type: string
+              maxLength: 120
+            - type: "null"
+        phone:
+          anyOf:
+            - type: string
+              maxLength: 40
+            - type: "null"
+        email:
+          anyOf:
+            - type: string
+              maxLength: 200
+            - type: "null"
+        contact:
+          anyOf:
+            - type: string
+              maxLength: 120
+            - type: "null"
+        industry:
+          anyOf:
+            - type: string
+              maxLength: 120
+            - type: "null"
+        payment_terms:
+          anyOf:
+            - type: string
+              maxLength: 200
+            - type: "null"
+        credit_limit_vnd:
+          type: integer
+          minimum: 0
+          maximum: 10000000000000
+        owner_id:
+          anyOf:
+            - type: string
+              maxLength: 64
+            - type: "null"
+        status:
+          type: string
+          enum:
+            - cooperating
+            - suspended
+            - pending_payment
+            - terminated
+      additionalProperties: true
+    AdminPutMediaByIdOverlayRequest:
+      type: object
+      properties:
+        format:
+          type: string
+          maxLength: 20
+        overlay:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - {}
+            - type: "null"
+      additionalProperties: true
+    AdminPutPartnersByIdRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        protocol:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 40
+            - type: "null"
+        endpoint:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 500
+            - type: "null"
+        auth:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 200
+            - type: "null"
+        floor_cpm_vnd:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+        enabled:
+          type: boolean
+      additionalProperties: true
+    AdminPutPermissionsByAdminIdRequest:
+      type: object
+      properties:
+        permissions:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+      required:
+        - permissions
+      additionalProperties: true
+    AdminPutRtbFloorsByIdRequest:
+      type: object
+      properties:
+        floor_cpm_vnd:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+      required:
+        - floor_cpm_vnd
+      additionalProperties: true
+    AdminPutScheduleByIdRequest:
+      type: object
+      properties:
+        start_min:
+          type: integer
+          minimum: 0
+          maximum: 1440
+        end_min:
+          type: integer
+          minimum: 0
+          maximum: 1440
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 5
+        reward_points:
+          type: integer
+          minimum: 0
+          maximum: 100000
+      additionalProperties: true
+    AdminPutScreensByIdRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 300
+        region:
+          type: string
+          maxLength: 60
+        address:
+          type: string
+          maxLength: 500
+        status:
+          type: string
+          enum:
+            - online
+            - checking
+            - needs_update
+            - offline
+      additionalProperties: true
+    AdminPutSettingsSepayRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        bank:
+          type: string
+          enum:
+            - Vietcombank
+            - VietinBank
+            - BIDV
+            - Agribank
+            - MBBank
+            - Techcombank
+            - ACB
+            - VPBank
+            - TPBank
+            - Sacombank
+            - HDBank
+            - OCB
+            - MSB
+            - SHB
+            - VIB
+            - SeABank
+        account_number:
+          type: string
+          pattern: ^[0-9]{6,20}$
+        account_holder:
+          type: string
+          minLength: 2
+          maxLength: 100
+        prefix:
+          type: string
+          pattern: ^[A-Za-z]{2,8}$
+        min_activate_vnd:
+          type: integer
+          minimum: 0
+        auto_activate:
+          type: boolean
+        daily_limit_vnd:
+          type: integer
+          minimum: 0
+      additionalProperties: true
+    AdminPutUsersByIdRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        phone:
+          anyOf:
+            - type: string
+              maxLength: 30
+            - type: "null"
+        role:
+          type: string
+          enum:
+            - super_admin
+            - content_manager
+            - finance
+            - device_ops
+            - customer
+            - partner
+        customer_id:
+          anyOf:
+            - type: string
+              maxLength: 64
+            - type: "null"
+        expires_at:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+          enum:
+            - active
+            - locked
+      additionalProperties: true
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        name:
+          type:
+            - string
+            - "null"
+        email:
+          type: string
+        phone:
+          type:
+            - string
+            - "null"
+        role:
+          type: string
+        customer_id:
+          type:
+            - string
+            - "null"
+        customer_name:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+        expires_at:
+          type:
+            - string
+            - "null"
+        perm_count:
+          type: number
+      required:
+        - id
+        - email
+        - role
+        - status
+      additionalProperties: true
+    AdminUserPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    ApproveResult:
+      type: object
+      properties:
+        status:
+          type: string
+        reserved_vnd:
+          type: integer
+          default: 0
+        shortfall_vnd:
+          type: integer
+          default: 0
+        message:
+          type: string
+      required:
+        - status
+      additionalProperties: true
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        at:
+          type: string
+        actor:
+          type:
+            - string
+            - "null"
+        action:
+          type: string
+        object:
+          type:
+            - string
+            - "null"
+        ip:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - at
+        - action
+      additionalProperties: true
+    AuditEntryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    AuthPostInviteAcceptRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 10
+          maxLength: 200
+        password:
+          type: string
+          minLength: 10
+          maxLength: 128
+      required:
+        - token
+        - password
+      additionalProperties: true
+    AuthPostLoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 254
+        password:
+          type: string
+          minLength: 1
+          maxLength: 256
+      required:
+        - email
+        - password
+      additionalProperties: true
+    AuthPostMfaEnrollRequest:
+      type: object
+      properties:
+        mfa_token:
+          type: string
+          maxLength: 200
+      additionalProperties: true
+    AuthPostMfaVerifyRequest:
+      type: object
+      properties:
+        mfa_token:
+          type: string
+          maxLength: 200
+        code:
+          type: string
+          maxLength: 16
+      required:
+        - code
+      additionalProperties: true
+    Campaign:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        name:
+          type: string
+        customer_id:
+          type:
+            - string
+            - "null"
+        brand:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+        screen_type:
+          type:
+            - string
+            - "null"
+        duration_sec:
+          type:
+            - number
+            - "null"
+        budget_vnd:
+          type: integer
+          default: 0
+        reserved_vnd:
+          type: integer
+          default: 0
+        start_date:
+          type:
+            - string
+            - "null"
+        end_date:
+          type:
+            - string
+            - "null"
+        impressions:
+          type: number
+          default: 0
+        target_impressions:
+          type:
+            - number
+            - "null"
+        source:
+          type:
+            - string
+            - "null"
+        creator:
+          type:
+            - string
+            - "null"
+        media_id:
+          type:
+            - string
+            - "null"
+        media_name:
+          type:
+            - string
+            - "null"
+        pacing_pct:
+          type:
+            - number
+            - "null"
+        reward_per_view:
+          type:
+            - number
+            - "null"
+        reject_reason:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - name
+        - status
+      additionalProperties: true
+    CampaignPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Campaign"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    Contract:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        number:
+          type: string
+        customer_id:
+          type: string
+        customer_name:
+          type:
+            - string
+            - "null"
+        title:
+          type:
+            - string
+            - "null"
+        value_vnd:
+          type: integer
+          default: 0
+        start_date:
+          type:
+            - string
+            - "null"
+        end_date:
+          type:
+            - string
+            - "null"
+        paid_pct:
+          type: number
+          default: 0
+        status:
+          type: string
+      required:
+        - id
+        - number
+        - customer_id
+        - status
+      additionalProperties: true
+    ContractPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Contract"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    ContractRender:
+      type: object
+      properties:
+        html:
+          type: string
+        amount_in_words:
+          type: string
+      required:
+        - html
+      additionalProperties: true
+    Customer:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        code:
+          type:
+            - string
+            - "null"
+        legal_name:
+          type: string
+        short_name:
+          type:
+            - string
+            - "null"
+        tax_code:
+          type:
+            - string
+            - "null"
+        address:
+          type:
+            - string
+            - "null"
+        representative:
+          type:
+            - string
+            - "null"
+        rep_title:
+          type:
+            - string
+            - "null"
+        phone:
+          type:
+            - string
+            - "null"
+        email:
+          type:
+            - string
+            - "null"
+        contact:
+          type:
+            - string
+            - "null"
+        industry:
+          type:
+            - string
+            - "null"
+        owner:
+          type:
+            - string
+            - "null"
+        payment_terms:
+          type:
+            - string
+            - "null"
+        credit_limit_vnd:
+          type: integer
+          default: 0
+        debt_vnd:
+          type: integer
+          default: 0
+        status:
+          type: string
+        since:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - legal_name
+        - status
+      additionalProperties: true
+    CustomerPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    Device:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        name:
+          type: string
+        kind:
+          type:
+            - string
+            - "null"
+        model:
+          type:
+            - string
+            - "null"
+        os:
+          type:
+            - string
+            - "null"
+        owner_name:
+          type:
+            - string
+            - "null"
+        app_version:
+          type:
+            - string
+            - "null"
+        region:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+        last_seen_at:
+          type:
+            - string
+            - "null"
+        views:
+          type: number
+          default: 0
+        recent_ads:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - name
+        - status
+      additionalProperties: true
+    DevicePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Device"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    ErrorBody:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: snake_case, vd validation_error, forbidden, not_found, invalid_state
+            message:
+              type: string
+              description: Tiếng Việt cho người dùng
+            details: {}
+          required:
+            - code
+            - message
+      required:
+        - error
+    GenericObject:
+      type: object
+      additionalProperties: true
+    LoginResult:
+      type: object
+      properties:
+        mfa_required:
+          type: boolean
+          default: false
+        mfa_token:
+          type: string
+        mfa_enroll_required:
+          type: boolean
+        csrf_token:
+          type: string
+      additionalProperties: true
+    ManualQueue:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type:
+                  - string
+                  - number
+              event_id:
+                type:
+                  - string
+                  - "null"
+              reason:
+                type: string
+              customer_id:
+                type:
+                  - string
+                  - "null"
+              topup_id:
+                type:
+                  - string
+                  - "null"
+              received_at:
+                type:
+                  - string
+                  - "null"
+              amount_vnd:
+                type: integer
+                default: 0
+              content:
+                type:
+                  - string
+                  - "null"
+            required:
+              - id
+              - reason
+            additionalProperties: true
+      required:
+        - items
+      additionalProperties: true
+    Me:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type:
+                - string
+                - number
+            email:
+              type: string
+            name:
+              type:
+                - string
+                - "null"
+            role:
+              type: string
+            customer_id:
+              type:
+                - string
+                - "null"
+            mfa_enabled:
+              type: boolean
+            last_login_at:
+              type:
+                - string
+                - "null"
+          required:
+            - id
+            - email
+            - role
+          additionalProperties: true
+        permissions:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          default: {}
+        customer_scope:
+          anyOf:
+            - type: object
+              properties:
+                customer_id:
+                  type: string
+                code:
+                  type:
+                    - string
+                    - "null"
+                name:
+                  type:
+                    - string
+                    - "null"
+                campaign_grants:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - customer_id
+              additionalProperties: true
+            - type: "null"
+        dev_mode:
+          type: boolean
+        csrf_token:
+          type: string
+      required:
+        - user
+      additionalProperties: true
+    Media:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        name:
+          type: string
+        kind:
+          type:
+            - string
+            - "null"
+        mime:
+          type:
+            - string
+            - "null"
+        width:
+          type:
+            - number
+            - "null"
+        height:
+          type:
+            - number
+            - "null"
+        duration_sec:
+          type:
+            - number
+            - "null"
+        size_bytes:
+          type:
+            - number
+            - "null"
+        status:
+          type: string
+        owner_name:
+          type:
+            - string
+            - "null"
+        source_url:
+          type:
+            - string
+            - "null"
+        thumb_url:
+          type:
+            - string
+            - "null"
+        reject_reason:
+          type:
+            - string
+            - "null"
+        format:
+          type:
+            - string
+            - "null"
+        sha256:
+          type:
+            - string
+            - "null"
+        overlay: {}
+      required:
+        - id
+        - name
+        - status
+      additionalProperties: true
+    MediaPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Media"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    MfaEnroll:
+      type: object
+      properties:
+        secret:
+          type: string
+        otpauth_url:
+          type: string
+        qr_url:
+          type: string
+        mfa_token:
+          type: string
+      required:
+        - secret
+      additionalProperties: true
+    Overview:
+      type: object
+      properties:
+        kpi:
+          type: object
+          additionalProperties:
+            type:
+              - number
+              - string
+          default: {}
+        trend:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              views:
+                type: number
+              revenue_vnd:
+                type: number
+            required:
+              - label
+              - views
+              - revenue_vnd
+            additionalProperties: true
+          default: []
+        revenue_split:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value:
+                type: number
+            required:
+              - name
+              - value
+            additionalProperties: true
+          default: []
+        slot_fill:
+          type: array
+          items:
+            type: object
+            properties:
+              day:
+                type: string
+              values:
+                type: array
+                items:
+                  type: number
+            required:
+              - day
+              - values
+            additionalProperties: true
+          default: []
+        alerts:
+          type: array
+          items:
+            type: object
+            properties:
+              level:
+                type: string
+              title:
+                type: string
+              text:
+                type: string
+            required:
+              - level
+              - title
+            additionalProperties: true
+          default: []
+        top_campaigns:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type:
+                  - string
+                  - number
+              name:
+                type: string
+              customer_id:
+                type:
+                  - string
+                  - "null"
+              brand:
+                type:
+                  - string
+                  - "null"
+              status:
+                type: string
+              screen_type:
+                type:
+                  - string
+                  - "null"
+              duration_sec:
+                type:
+                  - number
+                  - "null"
+              budget_vnd:
+                type: integer
+                default: 0
+              reserved_vnd:
+                type: integer
+                default: 0
+              start_date:
+                type:
+                  - string
+                  - "null"
+              end_date:
+                type:
+                  - string
+                  - "null"
+              impressions:
+                type: number
+                default: 0
+              target_impressions:
+                type:
+                  - number
+                  - "null"
+              source:
+                type:
+                  - string
+                  - "null"
+              creator:
+                type:
+                  - string
+                  - "null"
+              media_id:
+                type:
+                  - string
+                  - "null"
+              media_name:
+                type:
+                  - string
+                  - "null"
+              pacing_pct:
+                type:
+                  - number
+                  - "null"
+              reward_per_view:
+                type:
+                  - number
+                  - "null"
+              reject_reason:
+                type:
+                  - string
+                  - "null"
+            required:
+              - id
+              - name
+              - status
+            additionalProperties: true
+          default: []
+      additionalProperties: true
+    Partner:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        name:
+          type: string
+        protocol:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+        enabled:
+          type: boolean
+        ecpm_vnd:
+          type: integer
+          default: 0
+        fill_rate:
+          type:
+            - number
+            - "null"
+        endpoint:
+          type:
+            - string
+            - "null"
+        auth:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - name
+        - status
+      additionalProperties: true
+    PartnerPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Partner"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    PortalPostCampaignsRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  minLength: 1
+                  maxLength: 64
+            - type: "null"
+        screen_type:
+          type: string
+          enum:
+            - tv
+            - elevator
+            - led
+          default: tv
+        screen_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        media_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        budget_vnd:
+          type: integer
+          minimum: 1
+          maximum: 10000000000000
+        duration_sec:
+          type: integer
+          minimum: 5
+          maximum: 120
+          default: 15
+        start_date:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+            - type: "null"
+        end_date:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+            - type: "null"
+      required:
+        - name
+        - budget_vnd
+      additionalProperties: true
+    PortalPostMediaByIdConfirmRequest:
+      type: object
+      properties:
+        width:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        height:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        duration_sec:
+          type: number
+          minimum: 0
+          maximum: 36000
+      additionalProperties: true
+    PortalPostMediaImportRequest:
+      type: object
+      properties:
+        source:
+          type: string
+          enum:
+            - youtube
+            - drive
+            - dropbox
+            - url
+        url:
+          type: string
+          minLength: 8
+          maxLength: 2048
+        name:
+          type: string
+          maxLength: 200
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+      required:
+        - source
+        - url
+      additionalProperties: true
+    PortalPostMediaUploadUrlRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        content_type:
+          type: string
+          maxLength: 100
+        size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 10737418240
+        width:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        height:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        duration_sec:
+          type: number
+          minimum: 0
+          maximum: 36000
+        target_type:
+          type: string
+          enum:
+            - tv
+            - elevator
+            - led
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        format:
+          type: string
+          maxLength: 20
+        overlay:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - {}
+            - type: "null"
+      required:
+        - name
+        - content_type
+        - size_bytes
+      additionalProperties: true
+    PortalPostWalletRefundRequestsRequest:
+      type: object
+      properties:
+        amount_vnd:
+          type: integer
+          exclusiveMinimum: true
+          minimum: 0
+        reason:
+          type: string
+          maxLength: 500
+      required:
+        - amount_vnd
+      additionalProperties: true
+    PortalPutCampaignsByIdRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  minLength: 1
+                  maxLength: 64
+            - type: "null"
+        screen_type:
+          type: string
+          enum:
+            - tv
+            - elevator
+            - led
+          default: tv
+        screen_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        media_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        budget_vnd:
+          type: integer
+          minimum: 1
+          maximum: 10000000000000
+        duration_sec:
+          type: integer
+          minimum: 5
+          maximum: 120
+          default: 15
+        start_date:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+            - type: "null"
+        end_date:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+            - type: "null"
+      additionalProperties: true
+    PortalPutMediaByIdOverlayRequest:
+      type: object
+      properties:
+        format:
+          type: string
+          maxLength: 20
+        overlay:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - {}
+            - type: "null"
+      additionalProperties: true
+    PortalWallet:
+      type: object
+      properties:
+        balance_vnd:
+          type: integer
+          default: 0
+        reserved_vnd:
+          type: integer
+          default: 0
+        spent_vnd:
+          type: integer
+          default: 0
+        available_vnd:
+          type: integer
+          default: 0
+        payment:
+          anyOf:
+            - type: object
+              properties:
+                bank:
+                  type: string
+                account_number:
+                  type: string
+                account_holder:
+                  type: string
+                prefix:
+                  type: string
+                  default: AMS
+              required:
+                - bank
+                - account_number
+                - account_holder
+              additionalProperties: true
+            - type: "null"
+      additionalProperties: true
+    RefundRequests:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type:
+                  - string
+                  - number
+              customer_id:
+                type: string
+              customer_name:
+                type:
+                  - string
+                  - "null"
+              amount_vnd:
+                type: integer
+                default: 0
+              reason:
+                type:
+                  - string
+                  - "null"
+              status:
+                type: string
+              decision_note:
+                type:
+                  - string
+                  - "null"
+              created_at:
+                type:
+                  - string
+                  - "null"
+              decided_at:
+                type:
+                  - string
+                  - "null"
+            required:
+              - id
+              - customer_id
+              - status
+            additionalProperties: true
+      required:
+        - items
+      additionalProperties: true
+    Revenue:
+      type: object
+      properties:
+        months:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              revenue_vnd:
+                type: number
+              reward_vnd:
+                type: number
+            required:
+              - label
+              - revenue_vnd
+              - reward_vnd
+            additionalProperties: true
+          default: []
+      additionalProperties: true
+    RtbFloor:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        category:
+          type: string
+        floor_cpm_vnd:
+          type: integer
+          default: 0
+        fill_rate:
+          type:
+            - number
+            - "null"
+      required:
+        - id
+        - category
+      additionalProperties: true
+    RtbFloorPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RtbFloor"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    ScheduleSlot:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        campaign_id:
+          type:
+            - string
+            - "null"
+        name:
+          type: string
+        start_min:
+          type: number
+        end_min:
+          type: number
+        color:
+          type: number
+      required:
+        - id
+        - name
+        - start_min
+        - end_min
+      additionalProperties: true
+    ScheduleSlotPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduleSlot"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    Screen:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        name:
+          type: string
+        type:
+          type: string
+        venue_kind:
+          type:
+            - string
+            - "null"
+        size:
+          type:
+            - string
+            - "null"
+        resolution:
+          type:
+            - string
+            - "null"
+        screens:
+          type: number
+          default: 1
+        region:
+          type:
+            - string
+            - "null"
+        status:
+          type: string
+      required:
+        - id
+        - name
+        - type
+        - status
+      additionalProperties: true
+    ScreenPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Screen"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    SepaySettings:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: false
+        bank:
+          type:
+            - string
+            - "null"
+        account_number:
+          type:
+            - string
+            - "null"
+        account_holder:
+          type:
+            - string
+            - "null"
+        prefix:
+          type: string
+          default: AMS
+        webhook_url:
+          type: string
+        auth_mode:
+          type:
+            - string
+            - "null"
+        auto_activate:
+          type: boolean
+        min_activate_vnd:
+          type: integer
+          default: 0
+        env:
+          type:
+            - string
+            - "null"
+        dev_mode:
+          type: boolean
+        has_secret:
+          type: boolean
+        recent:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type:
+                  - string
+                  - number
+              at:
+                type: string
+              content:
+                type:
+                  - string
+                  - "null"
+              amount_vnd:
+                type: integer
+                default: 0
+              result:
+                type:
+                  - string
+                  - "null"
+              customer:
+                type:
+                  - string
+                  - "null"
+            required:
+              - id
+              - at
+            additionalProperties: true
+      required:
+        - webhook_url
+      additionalProperties: true
+    Topup:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        code:
+          type:
+            - string
+            - "null"
+        customer_id:
+          type:
+            - string
+            - "null"
+        customer_name:
+          type:
+            - string
+            - "null"
+        method:
+          type:
+            - string
+            - "null"
+        amount_vnd:
+          type: integer
+          default: 0
+        status:
+          type: string
+        created_at:
+          type: string
+        payment_code:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - status
+        - created_at
+      additionalProperties: true
+    TopupCreated:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        payment_code:
+          type: string
+        content:
+          type: string
+        qr_url:
+          type: string
+        bank:
+          type: string
+        account_number:
+          type: string
+        account_holder:
+          type: string
+        amount_vnd:
+          type: integer
+          default: 0
+        min_amount_vnd:
+          type: integer
+          default: 0
+      required:
+        - id
+        - payment_code
+      additionalProperties: true
+    TopupPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Topup"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    UploadUrl:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - number
+        url:
+          type: string
+        method:
+          type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - id
+        - url
+      additionalProperties: true
+    Wallet:
+      type: object
+      properties:
+        customer_id:
+          type: string
+        customer_name:
+          type:
+            - string
+            - "null"
+        balance_vnd:
+          type: integer
+          default: 0
+        reserved_vnd:
+          type: integer
+          default: 0
+        spent_vnd:
+          type: integer
+          default: 0
+        available_vnd:
+          type: integer
+          default: 0
+      required:
+        - customer_id
+      additionalProperties: true
+    WalletPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Wallet"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+  responses:
+    Error:
+      description: "Lỗi: luôn có dạng { error: { code, message, details? } }"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: ams_session
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Bắt buộc cho POST/PUT/PATCH/DELETE; lấy từ /auth/me hoặc phản hồi đăng nhập (`csrf_token`).
+    sepayHmac:
+      type: apiKey
+      in: header
+      name: X-SePay-Signature
+      description: "`sha256=<hex HMAC-SHA256 của body (có timestamp)>`"
+    sepayTimestamp:
+      type: apiKey
+      in: header
+      name: X-SePay-Timestamp
+    sepayApiKey:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "`Apikey <khóa>`"
+x-todo:
+  - device command endpoints (create/list/cancel device_commands) - p0-domain
+  - campaign state / outbox / spend visibility endpoints - p0-domain

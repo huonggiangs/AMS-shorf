@@ -15,6 +15,8 @@ export interface Extracted {
   bodyExpr?: string;
   perm?: { module: string; action: string; kind?: string };
   list: boolean;
+  /** ma 2xx ghi nhan trong c.json(x, 2xx) / .body(..., 2xx) (khong co => 200) */
+  statuses: number[];
   line: number;
 }
 export interface FileExtract {
@@ -117,10 +119,17 @@ export async function extractFile(file: string): Promise<FileExtract> {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && METHODS.has(node.expression.name.text) && node.arguments.length >= 2 && ts.isStringLiteralLike(node.arguments[0]!)) {
       const method = node.expression.name.text.toUpperCase();
       const subpath = (node.arguments[0] as ts.StringLiteralLike).text;
-      const r: Extracted = { method, subpath, list: false, line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1 };
+      const r: Extracted = { method, subpath, list: false, statuses: [], line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1 };
       routes.push(r);
       let bodyExpr: string | undefined;
       const inner = (n: ts.Node): void => {
+        if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && ['json', 'body', 'text', 'html'].includes(n.expression.name.text)) {
+          const last = n.arguments[1];
+          if (last && ts.isNumericLiteral(last)) {
+            const code = Number(last.text);
+            if (code >= 200 && code < 300 && !r.statuses.includes(code)) r.statuses.push(code);
+          }
+        }
         if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) {
           const fn = n.expression.text;
           if (BODY_FNS.has(fn) && n.arguments.length >= 2 && !bodyExpr) bodyExpr = n.arguments[1]!.getText(sf);

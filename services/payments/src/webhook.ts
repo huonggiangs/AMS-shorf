@@ -47,12 +47,16 @@ function parseTimestamp(raw: string): number | null {
 export async function authenticateWebhook(rt: Runtime, headers: Headers, rawBody: string, db: Db = rt.db): Promise<AuthResult> {
   const { hmacSecret, apiKey } = await loadSecrets(rt, db);
   const auth = headers.get('authorization');
+  const sigHdr = headers.get('x-sepay-signature');
   if (auth && /^apikey\s+/i.test(auth)) {
-    if (!apiKey) return { ok: false, reason: 'no_secret_configured' };
     const given = auth.replace(/^apikey\s+/i, '').trim();
-    return timingSafeEqualStr(given, apiKey) ? { ok: true, via: 'apikey' } : { ok: false, reason: 'bad_signature' };
+    // luon so sanh hang thoi gian (voi chuoi rong neu chua cau hinh de khong lo thoi gian)
+    const same = timingSafeEqualStr(given, apiKey ?? '');
+    if (apiKey && same) return { ok: true, via: 'apikey' };
+    // sai khoa: neu co kem chu ky HMAC thi con duoc thu che do HMAC; neu khong -> tu choi
+    if (!sigHdr) return { ok: false, reason: apiKey ? 'bad_signature' : 'no_secret_configured' };
   }
-  const sig = headers.get('x-sepay-signature');
+  const sig = sigHdr;
   if (!sig) return { ok: false, reason: 'no_auth' };
   if (!hmacSecret) return { ok: false, reason: 'no_secret_configured' };
   const tsRaw = headers.get('x-sepay-timestamp');

@@ -121,6 +121,39 @@ export interface SepayUpdate {
   min_amount_vnd?: number;
   auto_activate?: boolean;
   daily_limit_vnd?: number;
+  /** API Key webhook (SePay gui `Authorization: Apikey <key>`). '' = xoa. Chi ghi, khong bao gio doc ra. */
+  api_key?: string;
+  /** Khoa HMAC-SHA256 (tuy chon). '' = xoa. */
+  webhook_secret?: string;
+  auth_mode?: 'hmac' | 'apikey';
+}
+
+/** Goi y che khoa: chi 4 ky tu cuoi, khong du de doan khoa. */
+export const maskTail = (s: string | null | undefined): string | null => (s ? `••••${s.slice(-4)}` : null);
+
+export interface SecretStatus {
+  apikey_set: boolean;
+  apikey_hint: string | null;
+  apikey_source: 'env' | 'db' | null;
+  secret_set: boolean;
+  secret_hint: string | null;
+  secret_source: 'env' | 'db' | null;
+}
+
+/** Trang thai bi mat de hien thi (da che). KHONG tra gia tri that. */
+export async function secretStatus(rt: Runtime, db: Db = rt.db): Promise<SecretStatus> {
+  const env = rt.config.env;
+  const sec = await loadSecrets(rt, db);
+  const fromEnvKey = !!env['SEPAY_API_KEY'];
+  const fromEnvSec = !!env['SEPAY_WEBHOOK_SECRET'];
+  return {
+    apikey_set: !!sec.apiKey,
+    apikey_hint: maskTail(sec.apiKey),
+    apikey_source: sec.apiKey ? (fromEnvKey ? 'env' : 'db') : null,
+    secret_set: !!sec.hmacSecret,
+    secret_hint: maskTail(sec.hmacSecret),
+    secret_source: sec.hmacSecret ? (fromEnvSec ? 'env' : 'db') : null,
+  };
 }
 
 export async function saveSepayConfig(rt: Runtime, db: Db, u: SepayUpdate, actor: string | null): Promise<void> {
@@ -138,6 +171,21 @@ export async function saveSepayConfig(rt: Runtime, db: Db, u: SepayUpdate, actor
   if (u.min_amount_vnd !== undefined) next.min_amount_vnd = u.min_amount_vnd;
   if (u.auto_activate !== undefined) next.auto_activate = u.auto_activate ? 1 : 0;
   if (u.daily_limit_vnd !== undefined) next.daily_limit_vnd = u.daily_limit_vnd;
+  if (u.api_key !== undefined) {
+    if (u.api_key === '') delete next.apikey_enc;
+    else {
+      if (!key) throw new Error('Thiếu FIELD_ENC_KEY để mã hóa API Key');
+      next.apikey_enc = await encryptField(key, u.api_key, 'settings.sepay.apikey');
+    }
+  }
+  if (u.webhook_secret !== undefined) {
+    if (u.webhook_secret === '') delete next.secret_enc;
+    else {
+      if (!key) throw new Error('Thiếu FIELD_ENC_KEY để mã hóa khóa webhook');
+      next.secret_enc = await encryptField(key, u.webhook_secret, 'settings.sepay.secret');
+    }
+  }
+  if (u.auth_mode !== undefined) next.auth = u.auth_mode === 'apikey' ? 'apikey' : 'hmac';
   const value = JSON.stringify(next);
   const r = await db.run('UPDATE settings SET value = ?, updated_by = ?, updated_at = ? WHERE key = ?', [value, actor, iso(rt), 'sepay']);
   if (r.changes === 0) await db.run('INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?,?,?,?)', ['sepay', value, actor, iso(rt)]);

@@ -1,7 +1,8 @@
 # Worker "api" (Hono): admin API, portal, auth, webhook SePay. Mã nguồn: services/api (điểm vào src/worker.ts).
 # - Các chỗ giữ dấu dạng __TÊN__ được scripts/deploy-cloudflare.mjs thay bằng ID thật (từ Terraform/bootstrap) và ghi ra
 #   wrangler.generated.toml cùng thư mục. KHÔNG chạy `wrangler deploy` trực tiếp với tệp này.
-# - Bí mật (SESSION_SECRET, FIELD_ENC_KEY, SEPAY_WEBHOOK_SECRET, R2_*...) đặt bằng `wrangler secret put`, không ghi ở đây.
+# - Bí mật (SESSION_SECRET, FIELD_ENC_KEY, SEPAY_WEBHOOK_SECRET, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, MAIL_HTTP_URL, MAIL_HTTP_KEY, MAIL_FROM)
+#   do scripts/deploy-cloudflare.mjs đặt (hoặc `wrangler secret put`), không ghi ở đây.
 # - Tên miền (zone anio.vn phải nằm trong tài khoản Cloudflare): web + /api/* ở ams.anio.vn, gateway ở gw-ams.anio.vn (staging: ams-stg / gw-ams-stg).
 #   Custom domain do wrangler tự tạo bản ghi DNS. Worker api nhận đường dẫn có tiền tố /api (xem ops/agents/f2-infra.requests.md).
 # - Binding KHÔNG kế thừa giữa các môi trường, nên mỗi [env.*] khai báo đủ.
@@ -33,6 +34,7 @@ PORTAL_PUBLIC_URL = "https://ams-stg.anio.vn"
 API_PUBLIC_URL = "https://ams-stg.anio.vn/api"
 API_BASE_PATH = "/api"
 S3_BUCKET = "ams-media-staging"
+R2_BUCKET_NAME = "ams-media-staging"  # runtime Cloudflare dùng tên này để ký presigned URL (cùng với secret R2_*)
 LOG_LEVEL = "info"
 
 [[env.staging.d1_databases]]
@@ -84,7 +86,7 @@ class_name = "PresenceShard"
 script_name = "ams-edge-gateway-staging"
 
 [env.staging.triggers]
-# đối soát bù SePay mỗi 10 phút + đối soát doanh thu/impression 02:15 UTC hằng ngày
+# mỗi phút: quét outbox (worker.ts bỏ qua phần còn lại) | */10: đối soát bù SePay | 02:15 UTC hằng ngày: đối soát doanh thu/impression
 crons = ["* * * * *", "*/10 * * * *", "15 2 * * *"]
 
 [env.production]
@@ -104,6 +106,7 @@ PORTAL_PUBLIC_URL = "https://ams.anio.vn"
 API_PUBLIC_URL = "https://ams.anio.vn/api"
 API_BASE_PATH = "/api"
 S3_BUCKET = "ams-media-production"
+R2_BUCKET_NAME = "ams-media-production"  # runtime Cloudflare dùng tên này để ký presigned URL (cùng với secret R2_*)
 LOG_LEVEL = "info"
 
 [[env.production.d1_databases]]
@@ -155,5 +158,5 @@ class_name = "PresenceShard"
 script_name = "ams-edge-gateway-production"
 
 [env.production.triggers]
-# đối soát bù SePay mỗi 10 phút + đối soát doanh thu/impression 02:15 UTC hằng ngày
+# mỗi phút: quét outbox (worker.ts bỏ qua phần còn lại) | */10: đối soát bù SePay | 02:15 UTC hằng ngày: đối soát doanh thu/impression
 crons = ["* * * * *", "*/10 * * * *", "15 2 * * *"]

@@ -1,0 +1,1772 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AMS - Device Gateway API",
+    "version": "0.1.0-protocol.1",
+    "summary": "Giao thức thiết bị (TV/thang máy/LED) <-> edge gateway",
+    "description": "File SINH TỰ ĐỘNG từ gateway thật (route Hono + zod trong `services/edge-gateway/src/protocol.ts`). Mô tả văn xuôi: docs/DEVICE-PROTOCOL.md.\n\n## Chữ ký thiết bị (Ed25519)\nMỗi request (trừ /health và /v1/manifest/g/{group}) mang 4 header: `x-device-id`, `x-timestamp`, `x-nonce`, `x-signature`.\nChuỗi ký (UTF-8, nối bằng `\\n`): `METHOD\\nPATH?QUERY\\nTIMESTAMP\\nNONCE\\nSHA256_HEX(body)`; body rỗng => sha256 của chuỗi rỗng. `PATH?QUERY` đúng như gửi trên đường truyền.\nLệch đồng hồ > 300s => 401 `stale_timestamp`; nonce dùng lại => 409 `replay`.\n\n## Lỗi\nMã: `bad_request` (400), `invalid_signature` (401), `stale_timestamp` (401), `unknown_device` (401), `device_blocked` (403), `replay` (409), `payload_too_large` (413), `validation_failed` (422), `rate_limited` (429), `overloaded` (503), `not_found` (404), `internal` (500). 429/503 kèm `Retry-After` (đã jitter): thiết bị PHẢI chờ đúng giá trị đó.\n\n## TODO (p0-domain): chưa có trong tài liệu này\nMở rộng lệnh thiết bị (loại lệnh mới, endpoint tải lệnh riêng nếu có) do p0-domain bổ sung. `/v1/commands/ack` và `commands[]` của heartbeat đã có và đã được sinh từ mã. Khi p0 thêm route, `check` báo lệch; chạy lại `generate`."
+  },
+  "servers": [
+    {
+      "url": "http://gw.ams.localhost",
+      "description": "Docker local (Caddy)"
+    },
+    {
+      "url": "http://localhost:8788",
+      "description": "Gateway trực tiếp (dev)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "device",
+      "description": "Thiết bị đã ký"
+    },
+    {
+      "name": "system"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "GetHealth",
+        "tags": [
+          "system"
+        ],
+        "security": [],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Sức khỏe dịch vụ",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/commands/ack": {
+      "post": {
+        "operationId": "gatewayPostCommandsAck",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Báo kết quả lệnh",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandAckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandAckResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/events": {
+      "post": {
+        "operationId": "gatewayPostEvents",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Gửi lô sự kiện (tối đa 50, idempotent theo event_id)",
+        "description": "Thân tối đa 16 KB. Impression hợp lệ khi vcr_pct >= ngưỡng; sự kiện không có trong manifest bị từ chối từng cái (`rejected`).",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Đã nhận",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/heartbeat": {
+      "post": {
+        "operationId": "gatewayPostHeartbeat",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Nhịp sống + nhận lệnh",
+        "description": "Thân tối đa 2 KB. Trả khoảng nghỉ kế tiếp có jitter, etag manifest và lệnh đang chờ (giao at-least-once; xác nhận qua `cmd_ack` hoặc /v1/commands/ack). 429/503 kèm `Retry-After`.",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeartbeatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartbeatResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/manifest": {
+      "get": {
+        "operationId": "gatewayGetManifest",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Manifest của thiết bị (đầy đủ hoặc delta)",
+        "description": "Điều kiện: `If-None-Match`/`?etag=` trùng => 304. `?delta=1&etag=<base>` => bản delta nếu còn. Header `X-Manifest-Kind: full|delta`. Thiết bị PHẢI kiểm `sha256` từng creative trước khi phát.",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          },
+          {
+            "name": "daypart",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z_]{1,16}$"
+            }
+          },
+          {
+            "name": "etag",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "delta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Manifest",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Manifest-Kind": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "full",
+                    "delta"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Manifest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ManifestDelta"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Không đổi"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/manifest/g/{group}": {
+      "get": {
+        "operationId": "gatewayGetManifestGByGroup",
+        "tags": [
+          "device"
+        ],
+        "security": [],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Manifest công khai theo nhóm (cache CDN)",
+        "description": "Không cần chữ ký; tắt bằng `MANIFEST_PUBLIC=0`. `group` lấy từ `manifest_group` của heartbeat.",
+        "parameters": [
+          {
+            "name": "etag",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "delta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Manifest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Manifest"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ManifestDelta"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Không đổi"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/pair": {
+      "post": {
+        "operationId": "gatewayPostPair",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Xin mã ghép đôi 6 số / hỏi trạng thái ghép đôi",
+        "description": "Body rỗng. Hiển thị `code` trên TV; người dùng nhập vào app điện thoại (API khách gọi `redeemPairingCode`).",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "paired=true hoặc mã mới",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/register": {
+      "post": {
+        "operationId": "gatewayPostRegister",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Đăng ký thiết bị (idempotent theo pubkey)",
+        "description": "Ký bằng chính khóa riêng tương ứng `pubkey` trong body (không có X-Device-Id). Trả `attestation_nonce` để kiểm chứng. Giới hạn theo IP.",
+        "parameters": [
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã đăng ký trước đó",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Thiết bị mới",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CommandAckRequest": {
+        "type": "object",
+        "properties": {
+          "acks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ok",
+                    "failed"
+                  ],
+                  "default": "ok"
+                },
+                "result": {
+                  "type": "string",
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": true
+            },
+            "minItems": 1,
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "acks"
+        ],
+        "additionalProperties": true
+      },
+      "CommandAckResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "acked": {
+            "type": "integer"
+          },
+          "known": {
+            "type": "integer"
+          },
+          "unknown": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "acked",
+          "known",
+          "unknown"
+        ],
+        "additionalProperties": true
+      },
+      "ErrorBody": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "snake_case, vd validation_error, forbidden, not_found, invalid_state"
+              },
+              "message": {
+                "type": "string",
+                "description": "Tiếng Việt cho người dùng"
+              },
+              "details": {}
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "EventsRequest": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "impression"
+                    },
+                    "event_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    },
+                    "ts": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "campaign_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "creative_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "slot_id": {
+                      "type": "string",
+                      "maxLength": 40
+                    },
+                    "vcr_pct": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "played_ms": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 3600000
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "event_id",
+                    "ts",
+                    "campaign_id",
+                    "creative_id",
+                    "vcr_pct",
+                    "played_ms"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "proof_of_play"
+                    },
+                    "event_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    },
+                    "ts": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "creative_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "duration_ms": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 3600000
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "event_id",
+                    "ts",
+                    "creative_id",
+                    "duration_ms"
+                  ],
+                  "additionalProperties": true
+                }
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "additionalProperties": true
+      },
+      "EventsResponse": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "integer"
+          },
+          "valid": {
+            "type": "integer"
+          },
+          "flagged": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "event_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "event_id",
+                "reason"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "accepted",
+          "valid",
+          "flagged",
+          "rejected"
+        ],
+        "additionalProperties": true
+      },
+      "GenericObject": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "service": {
+            "type": "string"
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "service",
+          "runtime"
+        ],
+        "additionalProperties": true
+      },
+      "HeartbeatRequest": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "default": 0
+          },
+          "app_ver": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "soc_temp": {
+            "type": "integer",
+            "minimum": -40,
+            "maximum": 150
+          },
+          "rssi": {
+            "type": "integer",
+            "minimum": -120,
+            "maximum": 0
+          },
+          "dl_mbps": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "cache_used_mb": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_slots": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "manifest_etag": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "cmd_ack": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "maxItems": 20
+          }
+        },
+        "additionalProperties": true
+      },
+      "HeartbeatResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "next_interval": {
+            "type": "number",
+            "description": "giay, da cong jitter"
+          },
+          "interval_base": {
+            "type": "number"
+          },
+          "manifest_etag": {
+            "type": "string"
+          },
+          "manifest_group": {
+            "type": "string"
+          },
+          "manifest_url": {
+            "type": "string",
+            "description": "duong tuong doi /v1/manifest/g/{group}"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_.-]{0,39}$"
+                },
+                "args": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "id",
+                "type"
+              ],
+              "additionalProperties": true
+            },
+            "description": "lenh cho thiet bi, giao at-least-once; ack bang cmd_ack trong heartbeat ke tiep hoac POST /v1/commands/ack"
+          },
+          "min_app_version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "server_time",
+          "next_interval",
+          "interval_base",
+          "manifest_etag",
+          "manifest_group",
+          "manifest_url",
+          "commands"
+        ],
+        "additionalProperties": true
+      },
+      "Manifest": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer"
+          },
+          "group": {
+            "type": "string"
+          },
+          "tz": {
+            "type": "string",
+            "description": "start_min/end_min tinh theo mui gio nay (Asia/Ho_Chi_Minh)"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ttl_s": {
+            "type": "integer"
+          },
+          "creatives": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "campaign_id": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "description": "hex; thiet bi PHAI kiem tra truoc khi phat"
+                },
+                "duration_s": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "px_w": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "px_h": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "fullscreen",
+                    "menu_banner",
+                    "l_banner",
+                    "pause_ad",
+                    "qr_corner",
+                    "reward"
+                  ]
+                },
+                "overlay": {
+                  "type": "object",
+                  "properties": {
+                    "sponsor_tag": {
+                      "type": "string",
+                      "maxLength": 60
+                    },
+                    "brand_label": {
+                      "type": "string",
+                      "maxLength": 60
+                    },
+                    "headline": {
+                      "type": "string",
+                      "maxLength": 140
+                    },
+                    "hotline": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "maxLength": 60
+                        },
+                        "number": {
+                          "type": "string",
+                          "maxLength": 24
+                        },
+                        "sub": {
+                          "type": "string",
+                          "maxLength": 100
+                        }
+                      },
+                      "required": [
+                        "number"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "qr": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        "label": {
+                          "type": "string",
+                          "maxLength": 60
+                        },
+                        "title": {
+                          "type": "string",
+                          "maxLength": 80
+                        }
+                      },
+                      "required": [
+                        "url"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "scte_id": {
+                      "type": "string",
+                      "maxLength": 64
+                    },
+                    "badges": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 30
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                },
+                "media_type": {
+                  "type": "string",
+                  "enum": [
+                    "video",
+                    "image"
+                  ]
+                },
+                "size_bytes": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "campaign_id",
+                "url",
+                "sha256",
+                "duration_s",
+                "px_w",
+                "px_h",
+                "format",
+                "media_type",
+                "size_bytes"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "schedule": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "slot_id": {
+                  "type": "string"
+                },
+                "campaign_id": {
+                  "type": "string"
+                },
+                "creative_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "daypart": {
+                  "type": "string"
+                },
+                "start_min": {
+                  "type": "integer"
+                },
+                "end_min": {
+                  "type": "integer"
+                },
+                "priority": {
+                  "type": "integer"
+                },
+                "reward_points": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "slot_id",
+                "campaign_id",
+                "creative_ids",
+                "daypart",
+                "start_min",
+                "end_min",
+                "priority",
+                "reward_points"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "version",
+          "group",
+          "tz",
+          "etag",
+          "generated_at",
+          "ttl_s",
+          "creatives",
+          "schedule"
+        ],
+        "additionalProperties": true
+      },
+      "ManifestDelta": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer"
+          },
+          "group": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "base_etag": {
+            "type": "string"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ttl_s": {
+            "type": "integer"
+          },
+          "creatives_added": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "campaign_id": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "description": "hex; thiet bi PHAI kiem tra truoc khi phat"
+                },
+                "duration_s": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "px_w": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "px_h": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "fullscreen",
+                    "menu_banner",
+                    "l_banner",
+                    "pause_ad",
+                    "qr_corner",
+                    "reward"
+                  ]
+                },
+                "overlay": {
+                  "type": "object",
+                  "properties": {
+                    "sponsor_tag": {
+                      "type": "string",
+                      "maxLength": 60
+                    },
+                    "brand_label": {
+                      "type": "string",
+                      "maxLength": 60
+                    },
+                    "headline": {
+                      "type": "string",
+                      "maxLength": 140
+                    },
+                    "hotline": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "maxLength": 60
+                        },
+                        "number": {
+                          "type": "string",
+                          "maxLength": 24
+                        },
+                        "sub": {
+                          "type": "string",
+                          "maxLength": 100
+                        }
+                      },
+                      "required": [
+                        "number"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "qr": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        "label": {
+                          "type": "string",
+                          "maxLength": 60
+                        },
+                        "title": {
+                          "type": "string",
+                          "maxLength": 80
+                        }
+                      },
+                      "required": [
+                        "url"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "scte_id": {
+                      "type": "string",
+                      "maxLength": 64
+                    },
+                    "badges": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 30
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                },
+                "media_type": {
+                  "type": "string",
+                  "enum": [
+                    "video",
+                    "image"
+                  ]
+                },
+                "size_bytes": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "campaign_id",
+                "url",
+                "sha256",
+                "duration_s",
+                "px_w",
+                "px_h",
+                "format",
+                "media_type",
+                "size_bytes"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "creatives_removed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "schedule": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "slot_id": {
+                  "type": "string"
+                },
+                "campaign_id": {
+                  "type": "string"
+                },
+                "creative_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "daypart": {
+                  "type": "string"
+                },
+                "start_min": {
+                  "type": "integer"
+                },
+                "end_min": {
+                  "type": "integer"
+                },
+                "priority": {
+                  "type": "integer"
+                },
+                "reward_points": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "slot_id",
+                "campaign_id",
+                "creative_ids",
+                "daypart",
+                "start_min",
+                "end_min",
+                "priority",
+                "reward_points"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "version",
+          "group",
+          "etag",
+          "base_etag",
+          "generated_at",
+          "ttl_s",
+          "creatives_added",
+          "creatives_removed",
+          "schedule"
+        ],
+        "additionalProperties": true
+      },
+      "PairResponse": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "paired": {
+                "type": "boolean",
+                "const": true
+              },
+              "trust_level": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "paired",
+              "trust_level"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "paired": {
+                "type": "boolean",
+                "const": false
+              },
+              "code": {
+                "type": "string",
+                "pattern": "^\\d{6}$"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "expires_in": {
+                "type": "integer"
+              },
+              "ttl_s": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "paired",
+              "code",
+              "expires_at",
+              "expires_in",
+              "ttl_s"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "minLength": 43,
+            "maxLength": 43
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "tv",
+              "elevator",
+              "led_p5",
+              "phone",
+              "virtual"
+            ],
+            "default": "tv"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "os": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "region": {
+            "type": "string",
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": true
+      },
+      "RegisterResponse": {
+        "type": "object",
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "trust_level": {
+            "type": "integer"
+          },
+          "attestation_nonce": {
+            "type": "string"
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "protocol": {
+            "type": "integer"
+          },
+          "heartbeat_interval": {
+            "type": "integer",
+            "description": "giay"
+          },
+          "created": {
+            "type": "boolean",
+            "description": "true => 201 (thiet bi moi), false => 200 (da dang ky truoc)"
+          }
+        },
+        "required": [
+          "device_id",
+          "trust_level",
+          "attestation_nonce",
+          "server_time",
+          "protocol",
+          "heartbeat_interval",
+          "created"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Lỗi: luôn có dạng { error: { code, message, details? } }",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorBody"
+            }
+          }
+        }
+      },
+      "RetryLater": {
+        "description": "Quá tải hoặc quá giới hạn: chờ `Retry-After` giây rồi thử lại",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorBody"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "deviceSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-signature",
+        "description": "Ed25519 trên METHOD\\nPATH?QUERY\\nTIMESTAMP\\nNONCE\\nSHA256(body); kèm X-Device-Id, X-Timestamp, X-Nonce."
+      }
+    }
+  },
+  "x-todo": [
+    "extra device command types or a dedicated command-fetch endpoint, if p0-domain adds one"
+  ]
+}

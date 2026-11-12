@@ -92,6 +92,12 @@ async function startWeb(distDir: string, apiPort: number): Promise<{ url: string
 export async function startStack(log: (m: string) => void): Promise<Stack> {
   const cleanups: (() => Promise<void> | void)[] = [];
   const close = async () => {
+    // pool pg cua API/gateway co the nhan 57P01 (admin shutdown) khi dung Postgres luc don dep: nuot loi do.
+    process.on('uncaughtException', (e: NodeJS.ErrnoException & { code?: string }) => {
+      if (e?.code === '57P01' || /terminating connection/.test(String(e?.message))) return;
+      console.error(e);
+      process.exit(1);
+    });
     for (const c of cleanups.reverse()) {
       try {
         await c();

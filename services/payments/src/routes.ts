@@ -4,7 +4,7 @@ import type { Context, Hono } from 'hono';
 import { ZodError, z } from 'zod';
 import { defaultResolveActor, requirePerm, type ActorResolver, type FinanceActor } from './actor.js';
 import { runActivation, undoActivation } from './activation.js';
-import { BANKS, DEFAULT_MIN_TOPUP_VND, SAMPLE_ACCOUNT, devSimulateAllowed, loadSecrets, loadSepayConfig, qrUrl, saveSepayConfig, sepayMode, transferContent } from './config.js';
+import { BANKS, DEFAULT_MIN_TOPUP_VND, SAMPLE_ACCOUNT, devSimulateAllowed, loadSecrets, loadSepayConfig, qrUrl, saveSepayConfig, secretStatus, sepayMode, transferContent } from './config.js';
 import { applyBalance, creditTopup, getWallet } from './ledger.js';
 import { FinanceError, type FinanceCore, type FinancePort } from './port.js';
 import { audit, bumpManifest, iso, n, notify, startOfVnDayIso } from './util.js';
@@ -469,13 +469,14 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
   async function sepayView(db: Db) {
     const cfg = await loadSepayConfig(rt, db);
     const sec = await loadSecrets(rt, db);
+    const st = await secretStatus(rt, db);
     const recent = await db.query<Record<string, unknown>>(
       `SELECT w.id, w.received_at, w.payload, w.result, c.short_name AS customer FROM payment_webhooks w LEFT JOIN customers c ON c.id = w.matched_customer_id
        ORDER BY w.received_at DESC, w.id DESC LIMIT 20`);
     return {
       enabled: cfg.enabled, bank: cfg.bank, account_number: cfg.account_number, account_holder: cfg.account_holder, prefix: cfg.prefix,
       webhook_url: cfg.webhook_url, auth_mode: cfg.auth_mode, auto_activate: cfg.auto_activate, min_activate_vnd: cfg.min_amount_vnd, daily_limit_vnd: cfg.daily_limit_vnd,
-      env: sepayMode(rt), dev_mode: devSimulateAllowed(rt), has_secret: !!(sec.hmacSecret || sec.apiKey),
+      env: sepayMode(rt), dev_mode: devSimulateAllowed(rt), has_secret: !!(sec.hmacSecret || sec.apiKey), ...st,
       sample_account: cfg.account_number === SAMPLE_ACCOUNT, banks: BANKS,
       recent: recent.map((r) => {
         let amount = 0, content: string | null = null;
@@ -502,16 +503,28 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
       min_activate_vnd: z.number().int().min(0).optional(),
       auto_activate: z.boolean().optional(),
       daily_limit_vnd: z.number().int().min(0).optional(),
+      // bi mat: chi ghi. '' = xoa. Khong bao gio tra lai.
+      api_key: z.union([z.literal(''), z.string().min(8, 'API Key tối thiểu 8 ký tự').max(200).regex(/^\S+$/, 'API Key không được chứa khoảng trắng')]).optional(),
+      webhook_secret: z.union([z.literal(''), z.string().min(8, 'Khóa webhook tối thiểu 8 ký tự').max(200).regex(/^\S+$/, 'Khóa webhook không được chứa khoảng trắng')]).optional(),
+      auth_mode: z.enum(['hmac', 'apikey']).optional(),
     }).passthrough());
     const before = await loadSepayConfig(rt);
+    const secBefore = await secretStatus(rt);
     await saveSepayConfig(rt, rt.db, {
       ...(b.enabled !== undefined ? { enabled: b.enabled } : {}), ...(b.bank ? { bank: b.bank } : {}), ...(b.account_number ? { account_number: b.account_number } : {}),
       ...(b.account_holder ? { account_holder: b.account_holder.toUpperCase() } : {}), ...(b.prefix ? { prefix: b.prefix.toUpperCase() } : {}),
       ...(b.min_activate_vnd !== undefined ? { min_amount_vnd: b.min_activate_vnd } : {}), ...(b.auto_activate !== undefined ? { auto_activate: b.auto_activate } : {}),
       ...(b.daily_limit_vnd !== undefined ? { daily_limit_vnd: b.daily_limit_vnd } : {}),
+      ...(b.api_key !== undefined ? { api_key: b.api_key } : {}), ...(b.webhook_secret !== undefined ? { webhook_secret: b.webhook_secret } : {}),
+      ...(b.auth_mode ? { auth_mode: b.auth_mode } : {}),
     }, a.id);
+    const secAfter = await secretStatus(rt);
     const mask = (s: string | null) => (s ? `***${s.slice(-3)}` : null);
-    await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.update', type: 'settings', id: 'sepay', ip: a.ip, diff: { bank: [before.bank, b.bank ?? before.bank], account: [mask(before.account_number), mask(b.account_number ?? before.account_number)], prefix: [before.prefix, b.prefix?.toUpperCase() ?? before.prefix] } });
+    await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.update', type: 'settings', id: 'sepay', ip: a.ip, diff: { bank: [before.bank, b.bank ?? before.bank], account: [mask(before.account_number), mask(b.account_number ?? before.account_number)], prefix: [before.prefix, b.prefix?.toUpperCase() ?? before.prefix],
+      // chi ghi trang thai da che, khong bao gio ghi gia tri bi mat
+      ...(b.api_key !== undefined ? { api_key: [secBefore.apikey_hint, secAfter.apikey_hint] } : {}),
+      ...(b.webhook_secret !== undefined ? { webhook_secret: [secBefore.secret_hint, secAfter.secret_hint] } : {}),
+      ...(b.auth_mode ? { auth_mode: [before.auth_mode, b.auth_mode] } : {}) } });
     return c.json(await sepayView(rt.db));
   }));
 
@@ -527,13 +540,21 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
     if (!cfg.account_holder) problems.push('chưa nhập tên chủ tài khoản');
     if (!sec.hmacSecret && !sec.apiKey) problems.push('chưa cấu hình khóa bí mật webhook (SEPAY_WEBHOOK_SECRET / SEPAY_API_KEY)');
     let signature_ok = false;
+    let apikey_ok = false;
+    const body = JSON.stringify({ id: 'selftest', transferType: 'in', transferAmount: 1 });
     if (sec.hmacSecret) {
-      const body = JSON.stringify({ id: 'selftest', transferType: 'in', transferAmount: 1 });
       const ts = String(Math.floor(rt.clock.now().getTime() / 1000));
       const h = new Headers({ 'x-sepay-timestamp': ts, 'x-sepay-signature': `sha256=${await hmacSha256Hex(sec.hmacSecret, `${ts}.${body}`)}` });
       signature_ok = (await authenticateWebhook(rt, h, body)).ok;
     }
-    return c.json({ ok: problems.length === 0 && (signature_ok || !!sec.apiKey), signature_ok, problems, message: problems.length ? `Cần xử lý: ${problems.join('; ')}.` : 'Cấu hình hợp lệ. Dán URL webhook vào my.sepay.vn > Webhooks rồi bấm Gửi thử bên SePay.' });
+    if (sec.apiKey) apikey_ok = (await authenticateWebhook(rt, new Headers({ authorization: `Apikey ${sec.apiKey}` }), body)).ok;
+    const mode = sepayMode(rt);
+    const warnings: string[] = [];
+    if (mode !== 'production') warnings.push(`Đang ở chế độ ${mode}: không dùng cho tiền thật.`);
+    if (!cfg.webhook_url) warnings.push('Chưa có URL webhook (SEPAY_WEBHOOK_URL).');
+    const ok = problems.length === 0 && (signature_ok || apikey_ok);
+    // chi bao trang thai, khong lo bi mat; khong goi mang, khong cong tien
+    return c.json({ ok, signature_ok, apikey_ok, mode, problems, warnings, message: problems.length ? `Cần xử lý: ${problems.join('; ')}.` : 'Cấu hình hợp lệ. Dán URL webhook vào my.sepay.vn > Webhooks rồi bấm Gửi thử bên SePay.' });
   }));
 
   return { port, devSimulate };

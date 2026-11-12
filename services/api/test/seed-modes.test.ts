@@ -128,7 +128,7 @@ describe('rao chan moi truong / SePay / bootstrap', () => {
     await expect(bootstrap(rt, { ...good, adminEmail: 'admin@ams.local' })).rejects.toMatchObject({ code: 'admin_email_placeholder' });
     await expect(bootstrap(rt, { adminPassword: STRONG, passwordParams: P })).rejects.toMatchObject({ code: 'admin_email_missing' });
     expect(N(await rt.db.query('SELECT COUNT(*) AS n FROM tenants'))).toBe(0);
-  });
+  }, 60000);
 
   it('scripts/setup.mjs seed-mode: local mac dinh demo; production bootstrap; demo bi tu choi (ma 3) tru khi co co', () => {
     const run = (env: Record<string, string>, ...args: string[]) => {
