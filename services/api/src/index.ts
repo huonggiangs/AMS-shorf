@@ -13,3 +13,4 @@ if (/[\\/]services[\\/]api[\\/](src[\\/]index\.ts|dist[\\/]index\.js)$/.test(ent
     process.exit(1);
   });
 }
+export { createOutboxHandlers, runOutbox, sweepOutbox, reconcileApprovals } from './outbox.js';

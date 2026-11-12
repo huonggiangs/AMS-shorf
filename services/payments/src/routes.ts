@@ -1,5 +1,5 @@
 import type { Db, Runtime } from '@ams/runtime';
-import { hmacSha256Hex } from '@ams/shared';
+import { hmacSha256Hex, isInvalidTransition } from '@ams/shared';
 import type { Context, Hono } from 'hono';
 import { ZodError, z } from 'zod';
 import { defaultResolveActor, requirePerm, type ActorResolver, type FinanceActor } from './actor.js';
@@ -9,6 +9,7 @@ import { applyBalance, creditTopup, getWallet } from './ledger.js';
 import { FinanceError, type FinanceCore, type FinancePort } from './port.js';
 import { audit, bumpManifest, iso, n, notify, startOfVnDayIso } from './util.js';
 import { endDueCampaigns, runDailyFinanceJobs, startDueCampaigns } from './jobs.js';
+import { settleSpendRemainders } from './spend.js';
 import { authenticateWebhook, createSepayFetcher, processIncoming, reconcileSepay, sepayPayload, storeRejected } from './webhook.js';
 import { releaseCampaign, reserveCampaign, spendCampaign } from './ledger.js';
 
@@ -49,6 +50,7 @@ export function createFinancePort(): FinancePort {
         // chien dich den ngay bat dau/het han: kiem tra moi 10 phut (khong doi toi cron ngay)
         await startDueCampaigns(rt);
         await endDueCampaigns(rt);
+        await settleSpendRemainders(rt); // hoan tat quyet toan chi tieu bi dut giua chung
         // doi soat bu SePay moi 10 phut (chi khi co token API va khong phai mock)
         if (rt.config.env['SEPAY_API_TOKEN'] && (rt.config.env['SEPAY_MODE'] ?? 'production') !== 'mock') await reconcileSepay(rt, createSepayFetcher(rt.config.env));
       } else {
@@ -70,6 +72,10 @@ function wrap(fn: H): H {
       if (e instanceof FinanceError) {
         const r = err(e.code, e.message, e.status, e.details);
         return c.json(r.body, r.status as 400);
+      }
+      if (isInvalidTransition(e)) {
+        const r = err('invalid_state', e.message, 409);
+        return c.json(r.body, 409);
       }
       if (e instanceof ZodError) {
         const r = err('validation_error', 'Dữ liệu không hợp lệ', 400, e.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));

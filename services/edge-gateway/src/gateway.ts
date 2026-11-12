@@ -9,11 +9,14 @@ import { CtlCache, DEFAULT_INTERVALS, RpsLoad, computeInterval, retryAfter, type
 import { ManifestService, groupOfDevice, groupString, parseGroup } from './manifest.js';
 import { issuePairingCode } from './pairing.js';
 import { KvPresence, type Presence } from './presence.js';
-import { MAX_BODY_BYTES, MAX_HEARTBEAT_BODY_BYTES, PAIR_CODE_TTL_S, PROTOCOL_VERSION, heartbeatBody, registerBody } from './protocol.js';
+import { ackCommands, hasCommandFlag, type Delivered, sweepCommands, takeDeliverable } from './commands.js';
+import { MAX_ACK_BODY_BYTES, MAX_BODY_BYTES, MAX_HEARTBEAT_BODY_BYTES, PAIR_CODE_TTL_S, PROTOCOL_VERSION, commandAckBody, heartbeatBody, registerBody } from './protocol.js';
 import { HttpProblem, clientIp, defaultRng, defer, envInt, nowSec, problem, type Rng } from './util.js';
 import { redeemPairingCode } from './pairing.js';
 
-export { redeemPairingCode, issuePairingCode, enqueueCommand } from './pairing.js';
+export { redeemPairingCode, issuePairingCode } from './pairing.js';
+export { enqueueCommand, ackCommands, sweepCommands, listCommands, CommandError } from './commands.js';
+export type { DeviceCommand, EnqueueOptions, CommandStatus } from './commands.js';
 export { INGEST_TOPIC } from './events.js';
 export type { ImpressionRow, IngestMessage } from './events.js';
 
@@ -31,6 +34,8 @@ export interface Gateway {
   app: Hono;
   /** Xa bo dem telemetry heartbeat + last_seen xuong event store/DB (cron moi phut, hoac cuoi test). */
   flush(): Promise<void>;
+  /** Quet lenh thiet bi (het han, giao qua nhieu lan, dung co hieu). Goi moi phut (cron Cloudflare / timer Node). */
+  sweep(): Promise<{ expired: number; failed: number; reflagged: number }>;
   manifests: ManifestService;
   devices: DeviceDirectory;
 }
@@ -84,6 +89,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   const sampleEvery = Math.max(1, envInt(env, 'TELEMETRY_SAMPLE_EVERY', 1)); // 1 = ghi moi heartbeat; 5 = 1/5 (de xuat #7)
   const flushSize = envInt(env, 'TELEMETRY_FLUSH_SIZE', 200);
   const publicManifest = env['MANIFEST_PUBLIC'] !== '0';
+  const cmdRedeliverS = envInt(env, 'CMD_REDELIVER_S', 120);
 
   // ----- bo dem telemetry: gop lo, khong qua Queue tung heartbeat -----
   let hbRows: HbRow[] = [];
@@ -238,22 +244,10 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     if (prevTs === null || nowS - prevTs > 600) seenDirty.set(dev.id, { ts: now.toISOString(), appVer: hb.app_ver ?? null });
     if (hbRows.length >= flushSize) defer(c, flush());
 
-    let commands: unknown[] = [];
-    const rawCmd = await rt.kv.get(`cmd:${dev.id}`);
-    if (rawCmd) {
-      try {
-        const all = JSON.parse(rawCmd) as { id: string }[];
-        const ack = new Set(hb.cmd_ack ?? []);
-        const left = all.filter((x) => !ack.has(x.id));
-        if (left.length !== all.length) {
-          if (left.length === 0) await rt.kv.del(`cmd:${dev.id}`);
-          else await rt.kv.set(`cmd:${dev.id}`, JSON.stringify(left), 7 * 24 * 3600);
-        }
-        commands = left;
-      } catch {
-        await rt.kv.del(`cmd:${dev.id}`);
-      }
-    }
+    // lenh thiet bi (bang device_commands): ack cu (cmd_ack trong heartbeat) -> acked; giao pending/delivered-qua-han, danh dau delivered
+    let commands: Delivered[] = [];
+    if (hb.cmd_ack?.length) await ackCommands(rt, dev.id, hb.cmd_ack.map((id) => ({ id })));
+    if (hb.cmd_ack?.length || (await hasCommandFlag(rt, dev.id))) commands = await takeDeliverable(rt, dev.id, cmdRedeliverS);
     return c.json({
       ok: true,
       server_time: now.toISOString(),
@@ -265,6 +259,15 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
       commands,
       ...(cfg.min_app_version ? { min_app_version: cfg.min_app_version } : {}),
     });
+  });
+
+  // ------------------------------------------------------------ command ack
+  app.post('/v1/commands/ack', async (c) => {
+    const body = await readBody(c, MAX_ACK_BODY_BYTES);
+    const dev = await authenticateDevice(c, deps, body);
+    const parsed = commandAckBody.parse(parseJson(body));
+    const r = await ackCommands(rt, dev.id, parsed.acks);
+    return c.json({ ok: true, acked: r.acked, known: r.known, unknown: r.unknown });
   });
 
   // ---------------------------------------------------------------- manifest
@@ -337,7 +340,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   }
 
   app.notFound((c) => problem(c, 'not_found', 'Khong tim thay duong dan.'));
-  return { app, flush, manifests, devices };
+  return { app, flush, sweep: () => sweepCommands(rt), manifests, devices };
 }
 
 export type { DeviceRec };

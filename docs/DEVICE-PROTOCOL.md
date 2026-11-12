@@ -165,7 +165,7 @@ Chữ ký thiết bị. Thân JSON nhỏ (mục tiêu <512 byte, **tối đa c�
 | `app_ver` | string | cập nhật `devices.app_version` |
 | `soc_temp` (độ C), `rssi` (dBm, <=0), `dl_mbps`, `cache_used_mb`, `cache_slots` | số | telemetry; có thể bị lấy mẫu phía server (không ảnh hưởng phản hồi) |
 | `manifest_etag` | string | etag đang giữ (thông tin) |
-| `cmd_ack` | string[] <=20 | id lệnh đã thực thi; server xóa lệnh khỏi hàng đợi |
+| `cmd_ack` | string[] <=20 | (cũ, vẫn nhận) id lệnh đã thực thi; nên dùng `POST /v1/commands/ack` (mục 6.1) |
 
 Phản hồi `200`:
 
@@ -176,10 +176,14 @@ Phản hồi `200`:
 - `next_interval` (giây): **app phải ngủ đúng giá trị này** rồi heartbeat lại (không tự đặt chu kỳ). Server tính: `interval_base` theo `state` (đang phát 300, chờ 600, lỗi 120, giám sát 15; có thể đổi bằng biến cấu hình), nhân thêm khi tải cao (từ 70% công suất; 100% -> x2,2; tối đa x4) hoặc công tắc điều khiển, rồi **jitter đều ±20%** quanh `interval_base`. Luôn có `ceil(0,8 x base) <= next_interval <= floor(1,2 x base)`.
 - Online suy diễn: coi thiết bị online nếu `last_seen < 2,5 x chu kỳ` (phía hiển thị).
 - `manifest_etag`: nếu khác etag đang giữ, gọi `GET /v1/manifest`. `manifest_group`/`manifest_url`: dạng công khai để CDN cache (mục 7.3).
-- `commands`: mảng `{id, type, args?}`. Giao lại ở mỗi heartbeat cho đến khi nhận `cmd_ack` chứa id (ít nhất một lần: lệnh phải **idempotent**). `type` quy ước ban đầu: `refresh_manifest` (làm mới ngay), `reboot`, `set_monitor` (đặt `state` 3). App gặp `type` lạ thì bỏ qua và vẫn ack.
+- `commands`: mảng `{id, type, args?}` lấy từ bảng `device_commands` (vòng đời `pending -> delivered -> acked|failed`, hoặc `expired`). Heartbeat trả các lệnh đang chờ và đánh dấu `delivered`; nếu chưa ack sau **120 giây** (`CMD_REDELIVER_S`) thì được giao lại ở heartbeat kế tiếp, tối đa **10 lần giao** (`MAX_DELIVERIES`) rồi chuyển `failed`. Lệnh quá hạn (TTL mặc định 7 ngày) bị sweeper chuyển `expired`, không giao nữa. Tối đa 50 lệnh mở/thiết bị (`queue_full`). Ít nhất một lần: lệnh phải **idempotent** (app nhớ id đã thực thi). `type` ban đầu: `refresh_manifest`, `reboot`, `set_monitor` (đặt `state` 3). `type` lạ thì bỏ qua và vẫn ack. Lệnh enqueue có `audit_log` (`device.command.enqueue`) và `idempotency_key` (UNIQUE theo thiết bị).
 - `min_app_version` (tùy chọn, chỉ có khi vận hành đặt công tắc, ví dụ `"2.4.0"`): bản tối thiểu server chấp nhận; thấp hơn thì app nên tự cập nhật.
 - Heartbeat gần nhau hơn 5 giây: `429 rate_limited` + `Retry-After`.
 - **Giảm tải:** khi quá tải server trả `503 overloaded` kèm `Retry-After` (giây, đã jitter ±20%) trước khi tốn CPU xác thực. App ngủ đúng `Retry-After` rồi thử lại, không tự rút ngắn.
+
+### 6.1 `POST /v1/commands/ack`
+
+Chữ ký thiết bị. Thân: `{"acks":[{"id":"<command id>","status":"ok"|"failed","result":{...}?}]}` (tối đa 20 mục, thân bị giới hạn kích thước). Phản hồi `200`: `{"ok":true,"acked":N,"known":N,"unknown":N}`. `ok` -> `acked`, `failed` -> `failed` (không giao lại). Id lạ hoặc đã ack được tính vào `unknown`/bỏ qua, không lỗi (idempotent). Có thể ack ngay sau khi thực thi, không cần chờ heartbeat.
 
 ## 7. Manifest
 

@@ -61,13 +61,3 @@ export async function redeemPairingCode(rt: Runtime, code: string, userId: strin
   await rt.kv.del(`dev:${r.device_id}`);
   return { ok: true, deviceId: r.device_id };
 }
-
-/** Day lenh cho thiet bi (nhan o heartbeat ke tiep; thiet bi xac nhan bang cmd_ack). */
-export async function enqueueCommand(rt: Runtime, deviceId: string, cmd: { type: string; args?: Record<string, unknown> }): Promise<string> {
-  const id = rt.id();
-  const raw = await rt.kv.get(`cmd:${deviceId}`);
-  const list = raw ? (JSON.parse(raw) as unknown[]) : [];
-  list.push({ id, ...cmd });
-  await rt.kv.set(`cmd:${deviceId}`, JSON.stringify(list.slice(-20)), 7 * 24 * 3600);
-  return id;
-}

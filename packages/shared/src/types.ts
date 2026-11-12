@@ -23,15 +23,7 @@ export type Action = (typeof ACTIONS)[number];
 
 export type AccountKind = 'internal' | 'customer' | 'partner';
 
-export type CampaignState =
-  | 'draft'
-  | 'pending_review'
-  | 'awaiting_funds'
-  | 'scheduled'
-  | 'active'
-  | 'paused'
-  | 'rejected'
-  | 'ended';
+// CampaignState: dinh nghia tai ./campaign-state.ts (nguon duy nhat)
 export type ContractState = 'draft' | 'pending_sign' | 'active' | 'paused' | 'expired' | 'terminated';
 export type CustomerState = 'pending_payment' | 'active' | 'paused' | 'terminated';
 export type TopupStatus = 'pending' | 'credited' | 'rejected' | 'unmatched';

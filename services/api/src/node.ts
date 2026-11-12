@@ -3,6 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { createDockerRuntime } from '@ams/runtime/docker';
 import type { Runtime } from '@ams/runtime';
 import { createApp } from './app.js';
+import { pruneOutbox } from '@ams/runtime';
+import { sweepOutbox } from './outbox.js';
 import { mountFinanceRoutes } from './finance-mount.js';
 import type { FinancePort } from './ports.js';
 
@@ -29,6 +31,34 @@ function startScheduler(rt: Runtime, port: () => FinancePort | undefined): () =>
   return () => clearInterval(t);
 }
 
+/**
+ * Worker outbox (duyet -> giu tien -> manifest): thu lai viec dang do; an toan chay nhieu ban sao (chiem bang UPDATE co dieu kien).
+ * Doc lap voi API_SCHEDULER (job tai chinh theo cron). Tat bang OUTBOX_WORKER=0; chu ky OUTBOX_INTERVAL_MS (mac dinh 5000).
+ */
+function startOutboxWorker(rt: Runtime, port: () => FinancePort | undefined, env: Record<string, string | undefined>): () => void {
+  const every = Math.max(200, Number(env['OUTBOX_INTERVAL_MS'] ?? 5_000));
+  const fin = async () => {
+    const p = port();
+    if (!p) throw new Error('finance chua san sang');
+    return p;
+  };
+  let busy = false;
+  const o = setInterval(() => {
+    if (busy) return;
+    busy = true;
+    sweepOutbox(rt, fin)
+      .catch((e) => console.error('[api] outbox loi:', (e as Error).message))
+      .finally(() => (busy = false));
+  }, every);
+  o.unref();
+  const day = setInterval(() => void pruneOutbox(rt.db, rt).catch(() => undefined), 6 * 3600_000);
+  day.unref();
+  return () => {
+    clearInterval(o);
+    clearInterval(day);
+  };
+}
+
 /** Khoi dong tren Docker/PC: Postgres + Redis + MinIO + SMTP (xem createDockerRuntime). PORT=0 => cong ngau nhien (tra ve trong `port`). */
 export async function startNode(env: Record<string, string | undefined> = process.env): Promise<{ close: () => Promise<void>; port: number; rt: Runtime }> {
   const rt = await createDockerRuntime(env);
@@ -45,8 +75,10 @@ export async function startNode(env: Record<string, string | undefined> = proces
   });
   console.log(`[api] lang nghe cong ${port}`);
   const stopScheduler = env['API_SCHEDULER'] === '0' ? () => undefined : startScheduler(rt, () => finance);
+  const stopOutbox = env['OUTBOX_WORKER'] === '0' ? () => undefined : startOutboxWorker(rt, () => finance, env);
   const close = async () => {
     stopScheduler();
+    stopOutbox();
     await new Promise<void>((r) => server.close(() => r()));
     await rt.close?.();
   };

@@ -85,7 +85,7 @@ script_name = "ams-edge-gateway-staging"
 
 [env.staging.triggers]
 # đối soát bù SePay mỗi 10 phút + đối soát doanh thu/impression 02:15 UTC hằng ngày
-crons = ["*/10 * * * *", "15 2 * * *"]
+crons = ["* * * * *", "*/10 * * * *", "15 2 * * *"]
 
 [env.production]
 name = "ams-api-production"
@@ -156,4 +156,4 @@ script_name = "ams-edge-gateway-production"
 
 [env.production.triggers]
 # đối soát bù SePay mỗi 10 phút + đối soát doanh thu/impression 02:15 UTC hằng ngày
-crons = ["*/10 * * * *", "15 2 * * *"]
+crons = ["* * * * *", "*/10 * * * *", "15 2 * * *"]

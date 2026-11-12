@@ -70,6 +70,16 @@ export const heartbeatBody = z.object({
 });
 export type HeartbeatBody = z.infer<typeof heartbeatBody>;
 
+/** POST /v1/commands/ack: thiet bi bao ket qua lenh (ok -> acked, failed -> failed). */
+export const MAX_ACK_BODY_BYTES = 4096;
+export const commandAckBody = z.object({
+  acks: z
+    .array(z.object({ id: z.string().min(1).max(40), status: z.enum(['ok', 'failed']).default('ok'), result: z.string().max(500).optional() }))
+    .min(1)
+    .max(20),
+});
+export type CommandAckBody = z.infer<typeof commandAckBody>;
+
 export const impressionEvent = z.object({
   type: z.literal('impression').default('impression'),
   event_id: z.string().regex(UUID_V7_RE),

@@ -1,4 +1,5 @@
 import type { Db, Runtime } from '@ams/runtime';
+import { transitionCampaign } from '@ams/shared';
 import { FinanceError, type FundingResult, type SpendResult } from './port.js';
 import { audit, iso, n, notify, withTx } from './util.js';
 
@@ -123,11 +124,13 @@ async function tryReserve(db: Db, rt: Runtime, c: CampRow, amount: number): Prom
   );
   if (!w) return false;
   const st = targetState(rt, c);
-  const claim = await db.run(
-    `UPDATE campaigns SET funding_state = 'reserved', reserved_vnd = ?, approved_budget_vnd = ?, state = ?, approved_at = COALESCE(approved_at, ?), updated_at = ?
-     WHERE id = ? AND funding_state <> 'reserved' AND state NOT IN ('ended','rejected')`,
-    [amount, amount, st, iso(rt), iso(rt), c.id],
-  );
+  // chuyen trang thai qua module duy nhat (awaiting_funds -> active|scheduled|paused); changes = 0 => da giu roi / da doi trang thai
+  const claimed = await transitionCampaign(db, {
+    id: c.id, from: 'awaiting_funds', to: st, nowIso: iso(rt), allowNone: true,
+    set: { funding_state: 'reserved', reserved_vnd: amount, approved_budget_vnd: amount, approved_at: { sql: 'COALESCE(approved_at, ?)', params: [iso(rt)] } },
+    where: { sql: "funding_state <> 'reserved'" },
+  });
+  const claim = { changes: claimed };
   if (claim.changes !== 1) {
     // dong thoi da giu roi (hoac khong the tai tro): tra lai phan vua giu
     await db.run('UPDATE ad_wallets SET reserved_vnd = reserved_vnd - ?, updated_at = ? WHERE customer_id = ? AND reserved_vnd >= ?', [amount, iso(rt), c.customer_id, amount]);
@@ -147,11 +150,13 @@ export async function reserveCampaign(rt: Runtime, dbIn: Db, campaignId: string,
       return { state: (['active', 'scheduled', 'paused'].includes(s) ? s : 'active') as FundingResult['state'], shortfall: 0 };
     }
     if (c.state === 'ended' || c.state === 'rejected') throw new FinanceError('campaign_not_fundable', 'Chiến dịch đã kết thúc hoặc bị từ chối', 409);
+    if (c.state !== 'awaiting_funds') throw new FinanceError('invalid_state', 'Chỉ giữ tiền được cho chiến dịch đã duyệt (đang chờ nạp tiền)', 409);
     if (await tryReserve(db, rt, c, approvedBudgetVnd)) return { state: targetState(rt, c), shortfall: 0 };
     const w = (await getWallet(db, c.customer_id))!;
+    // state da la awaiting_funds (kiem o tren): chi ghi tien/funding_state, KHONG doi state
     await db.run(
-      `UPDATE campaigns SET state = 'awaiting_funds', funding_state = 'awaiting_funds', approved_budget_vnd = ?, approved_at = COALESCE(approved_at, ?), updated_at = ?
-       WHERE id = ? AND funding_state <> 'reserved'`,
+      `UPDATE campaigns SET funding_state = 'awaiting_funds', approved_budget_vnd = ?, approved_at = COALESCE(approved_at, ?), updated_at = ?
+       WHERE id = ? AND state = 'awaiting_funds' AND funding_state <> 'reserved'`,
       [approvedBudgetVnd, iso(rt), iso(rt), campaignId],
     );
     const shortfall = Math.max(0, approvedBudgetVnd - w.available);
@@ -213,11 +218,11 @@ export async function spendCampaign(rt: Runtime, dbIn: Db, campaignId: string, a
       await entry(db, rt, { customerId: c.customer_id, kind: 'spend', amount: amt, w, refType: ref?.type ?? 'campaign', refId: ref?.id ?? campaignId, note: 'Chi phát quảng cáo' });
       let exhausted = false;
       if (left === 0) {
-        const stop = await db.run(
-          "UPDATE campaigns SET state = 'ended', funding_state = 'released', updated_at = ? WHERE id = ? AND funding_state = 'reserved' AND reserved_vnd = 0",
-          [iso(rt), campaignId],
-        );
-        exhausted = stop.changes === 1;
+        const stopped = await transitionCampaign(db, {
+          id: campaignId, from: ['scheduled', 'active', 'paused'], to: 'ended', nowIso: iso(rt), allowNone: true,
+          set: { funding_state: 'released' }, where: { sql: "funding_state = 'reserved' AND reserved_vnd = 0" },
+        });
+        exhausted = stopped === 1;
         if (exhausted) {
           await notify(db, rt, { customer: c.customer_id, kind: 'budget_exhausted', title: 'Chiến dịch hết ngân sách và đã dừng', refType: 'campaign', refId: campaignId });
           await audit(db, rt, { action: 'finance.campaign.budget_exhausted', type: 'campaign', id: campaignId, customer: c.customer_id });

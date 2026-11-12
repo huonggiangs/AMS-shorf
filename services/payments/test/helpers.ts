@@ -31,7 +31,7 @@ export async function mkCampaign(rt: TestRuntime, customerId: string, budget: nu
   const id = rt.id();
   seq++;
   await rt.db.run(
-    "INSERT INTO campaigns (id, customer_id, name, state, budget_cap_vnd, start_at, created_at, updated_at) VALUES (?,?,?, 'pending_review', ?, ?, ?, ?)",
+    "INSERT INTO campaigns (id, customer_id, name, state, budget_cap_vnd, start_at, created_at, updated_at) VALUES (?,?,?, 'awaiting_funds', ?, ?, ?, ?)",
     [id, customerId, 'C' + seq, budget, o.startAt === undefined ? '2026-11-01T00:00:00.000Z' : o.startAt, o.createdAt ?? NOW, NOW],
   );
   return id;

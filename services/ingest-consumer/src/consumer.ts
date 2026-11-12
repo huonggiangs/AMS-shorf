@@ -14,6 +14,8 @@ export interface SpendRequest {
   idempotencyKey: string;
   firstTs: string;
   lastTs: string;
+  /** danh sach su kien tinh tien (id + micro-VND): ben tai chinh khu trung THEO TUNG event_id, nen gom lo khac nhau / giao lai / mat dien deu khong tru kep hay mat */
+  events?: { id: string; micro: number }[];
 }
 export type SpendFn = (req: SpendRequest) => Promise<void>;
 
@@ -89,16 +91,20 @@ export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): Ing
     stats.received += rows.length;
     const byId = new Map<string, ImpressionRow>();
     for (const r of rows) if (!byId.has(r.event_id)) byId.set(r.event_id, r);
-    const ids = [...byId.keys()];
-    const won = await claim('ingest:imp:', ids);
+    stats.duplicates += rows.length - byId.size;
+    // Duong nhanh: cho "xong" (kv) chi duoc DAT SAU KHI chi tieu + ghi su kien deu thanh cong, nen mat dien/that bai
+    // khong bao gio de lai dau "da xu ly" gia (khac cho chiem truoc, tung lam mat ca chi tieu lan su kien khi tien trinh chet giua chung).
+    const pending: ImpressionRow[] = [];
+    for (const r of byId.values()) {
+      if ((await rt.kv.get(`ingest:done:${r.event_id}`).catch(() => null)) === '1') stats.duplicates++;
+      else pending.push(r);
+    }
+    if (pending.length === 0) return;
     try {
-      const have = won.size > 0 ? await existingIds([...won]) : new Set<string>();
-      const fresh = [...won].filter((id) => !have.has(id)).map((id) => byId.get(id)!);
-      stats.duplicates += rows.length - fresh.length;
-      if (fresh.length === 0) return;
-      // THU TU: chi tieu truoc, ghi su kien sau. Chi tieu idempotent theo tap event_id nen giao lai an toan
-      // (neu ghi su kien that bai sau khi da tru, lan thu lai tru-lai la no-op). Dao nguoc thu tu se mat chi tieu khi giao lai.
-      const billable = fresh.filter((r) => r.valid === 1 && r.revenue_micro_vnd > 0);
+      // THU TU BAT BIEN: (1) chi tieu, (2) ghi su kien, (3) danh dau xong.
+      // Chi tieu khu trung theo TUNG event_id o ben tai chinh nen (1) chay lai luon an toan; vi vay "su kien da co trong bang" => "chi tieu da ghi nhan",
+      // va ta KHONG loc theo su kien da ton tai truoc khi chi tieu (neu loc, mat dien giua (1) va (2) hoac (2) ghi do se tru kep / mat tien).
+      const billable = pending.filter((r) => r.valid === 1 && r.revenue_micro_vnd > 0);
       const byCampaign = new Map<string, ImpressionRow[]>();
       for (const r of billable) byCampaign.set(r.campaign_id, [...(byCampaign.get(r.campaign_id) ?? []), r]);
       for (const [campaignId, list] of byCampaign) {
@@ -120,17 +126,22 @@ export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): Ing
           idempotencyKey: 'imp:' + (await sha256Hex(sorted.join(','))).slice(0, 32),
           firstTs: list.reduce((m, r) => (r.ts < m ? r.ts : m), list[0]!.ts),
           lastTs: list.reduce((m, r) => (r.ts > m ? r.ts : m), list[0]!.ts),
+          events: list.map((r) => ({ id: r.event_id, micro: Number(r.revenue_micro_vnd) })),
         });
         stats.spendCalls++;
       }
-      await sink.append('ad_impression', fresh as unknown as Record<string, unknown>[]); // DbEventStore: UNIQUE + impression_hourly
-      stats.appended += fresh.length;
-      stats.invalid += fresh.filter((r) => r.valid !== 1).length;
+      const have = await existingIds(pending.map((r) => r.event_id)); // su kien da ghi o lan truoc (ghi do): khong ghi lai
+      const fresh = pending.filter((r) => !have.has(r.event_id));
+      stats.duplicates += pending.length - fresh.length;
+      if (fresh.length > 0) {
+        await sink.append('ad_impression', fresh as unknown as Record<string, unknown>[]); // DbEventStore: UNIQUE + impression_hourly
+        stats.appended += fresh.length;
+        stats.invalid += fresh.filter((r) => r.valid !== 1).length;
+      }
+      for (const r of pending) await rt.kv.set(`ingest:done:${r.event_id}`, '1', ttl).catch(() => undefined);
     } catch (e) {
       stats.errors++;
-      // tra lai quyen giu de lan giao lai (queue retry) xu ly lai; chi tieu idempotent theo tap event_id, ghi su kien idempotent theo UNIQUE
-      await release('ingest:imp:', won);
-      throw e;
+      throw e; // queue giao lai: moi buoc tren idempotent
     }
   }
 

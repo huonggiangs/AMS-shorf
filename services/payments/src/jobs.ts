@@ -1,5 +1,7 @@
 import type { Runtime } from '@ams/runtime';
+import { transitionCampaign } from '@ams/shared';
 import { releaseCampaign } from './ledger.js';
+import { pruneSpendEvents, settleSpendRemainders } from './spend.js';
 import { audit, bumpManifest, iso, n, notify } from './util.js';
 
 export interface LedgerMismatch {
@@ -51,21 +53,24 @@ export async function reconcileLedger(rt: Runtime): Promise<{ checked: number; m
 
 /** scheduled -> active khi den ngay bat dau (chi khi da giu tien). */
 export async function startDueCampaigns(rt: Runtime): Promise<number> {
-  const r = await rt.db.run(
-    "UPDATE campaigns SET state = 'active', updated_at = ? WHERE state = 'scheduled' AND funding_state = 'reserved' AND start_at IS NOT NULL AND start_at <= ?",
-    [iso(rt), iso(rt)],
-  );
-  if (r.changes > 0) await bumpManifest(rt);
-  return r.changes;
+  const changed = await transitionCampaign(rt.db, {
+    from: 'scheduled', to: 'active', nowIso: iso(rt),
+    where: { sql: "funding_state = 'reserved' AND start_at IS NOT NULL AND start_at <= ?", params: [iso(rt)] },
+  });
+  if (changed > 0) await bumpManifest(rt);
+  return changed;
 }
 
-/** Het han (end_at): ket thuc va hoan phan giu chua dung. */
+/**
+ * Het han (end_at): hoan phan giu chua dung roi ket thuc. THU TU: hoan tien truoc (idempotent), doi trang thai sau;
+ * mat dien giua chung thi lan quet ke tiep van thay chien dich (state chua doi) va chay lai ca hai buoc.
+ */
 export async function endDueCampaigns(rt: Runtime): Promise<number> {
   const due = await rt.db.query<{ id: string }>(
-    "SELECT id FROM campaigns WHERE state IN ('active','scheduled','paused') AND funding_state = 'reserved' AND end_at IS NOT NULL AND end_at < ?", [iso(rt)]);
+    "SELECT id FROM campaigns WHERE state IN ('active','scheduled','paused') AND end_at IS NOT NULL AND end_at < ?", [iso(rt)]);
   for (const c of due) {
-    await rt.db.run("UPDATE campaigns SET state = 'ended', updated_at = ? WHERE id = ?", [iso(rt), c.id]);
     await releaseCampaign(rt, rt.db, c.id);
+    await transitionCampaign(rt.db, { id: c.id, from: ['active', 'scheduled', 'paused'], to: 'ended', nowIso: iso(rt), allowNone: true, set: { funding_state: { sql: "CASE WHEN funding_state = 'none' THEN 'none' ELSE 'released' END" } } });
   }
   if (due.length) await bumpManifest(rt);
   return due.length;
@@ -97,5 +102,7 @@ export async function runDailyFinanceJobs(rt: Runtime) {
   const ended = await endDueCampaigns(rt);
   const ledger = await reconcileLedger(rt);
   const alerts = await lowBalanceAlerts(rt);
-  return { started, ended, ledger, alerts };
+  const settled = await settleSpendRemainders(rt);
+  const pruned = await pruneSpendEvents(rt);
+  return { started, ended, ledger, alerts, settled, pruned };
 }

@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { secureHeaders } from 'hono/secure-headers';
 import { ZodError } from 'zod';
 import type { Runtime } from '@ams/runtime';
+import { isInvalidTransition } from '@ams/shared';
 import { HttpError } from './lib/errors.js';
 import { clientIp } from './lib/http.js';
 import { authenticate, csrfGuard, requireExternal, requireInternal } from './auth/middleware.js';
@@ -96,6 +97,8 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
       for (const [k, v] of Object.entries(err.headers ?? {})) c.header(k, v);
       return c.json({ error: { code: err.code, message: err.message, ...(err.details !== undefined ? { details: err.details } : {}) } }, err.status);
     }
+    // chuyen trang thai chien dich khong hop le / thua cuoc dua (packages/shared/src/campaign-state.ts)
+    if (isInvalidTransition(err)) return c.json({ error: { code: 'invalid_state', message: err.message } }, 409);
     if (err instanceof ZodError) return c.json({ error: { code: 'validation_error', message: 'Dữ liệu không hợp lệ.', details: err.flatten() } }, 422);
     const status = (err as { status?: number }).status;
     if (status === 413) return c.json({ error: { code: 'payload_too_large', message: 'Nội dung gửi lên quá lớn.' } }, 413);

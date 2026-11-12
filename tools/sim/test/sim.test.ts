@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { enqueueCommand, listCommands } from '@ams/edge-gateway';
 import { Recorder, VirtualDevice, createInProcessEnv, percentile, runFleet } from '../src/index.js';
 
 describe('stats', () => {
@@ -106,4 +107,50 @@ describe('thiet bi ao', () => {
       await env.close();
     }
   }, 120_000);
+});
+
+describe('lenh thiet bi (device_commands)', () => {
+  it('heartbeat giao lenh, thiet bi ao thuc thi dung loai, ack qua endpoint; giao lai khong thuc thi lai; lenh failed duoc bao', async () => {
+    const env = await createInProcessEnv();
+    try {
+      const rec = new Recorder();
+      const d = new VirtualDevice({ transport: env.transport, rec, confirmPairing: env.confirmPairing, rng: () => 0, failCommandTypes: ['reboot'] });
+      expect(await d.register()).toBe(true);
+      const a = await enqueueCommand(env.rt, d.id, { type: 'refresh_manifest' }, { createdBy: 'admin-x', idempotencyKey: 'sim-1' });
+      const b = await enqueueCommand(env.rt, d.id, { type: 'set_monitor', args: { on: true } });
+      const c = await enqueueCommand(env.rt, d.id, { type: 'reboot' });
+      const e = await enqueueCommand(env.rt, d.id, { type: 'loai_la_tuong_lai' });
+      const hb = await d.heartbeat(1);
+      expect(hb!.commands.map((x) => x.id)).toEqual([a, b, c, e]);
+      expect(d.report.commandsExecuted.map((x) => x.type)).toEqual(['refresh_manifest', 'set_monitor', 'reboot', 'loai_la_tuong_lai']);
+      expect(d.monitor).toBe(true);
+      expect(d.forceManifest).toBe(true);
+      expect(d.report).toMatchObject({ commandsReceived: 4, commandsAcked: 3, commandsFailed: 1 });
+      const rows = Object.fromEntries((await listCommands(env.rt, d.id)).map((x) => [x.type, x.status]));
+      expect(rows).toEqual({ refresh_manifest: 'acked', set_monitor: 'acked', reboot: 'failed', loai_la_tuong_lai: 'acked' });
+      expect(rec.summary()['cmd_ack']!.statuses['200']).toBe(1);
+      // heartbeat sau: het lenh; set_monitor dua state = 3 vao heartbeat
+      const again = await d.heartbeat(1);
+      expect(again!.commands).toEqual([]);
+      expect(d.report.errors).toEqual([]);
+    } finally {
+      await env.close();
+    }
+  });
+
+  it('ackMode=heartbeat (cmd_ack cu) van dua lenh ve acked; lenh giao lai khong bi thuc thi hai lan phia thiet bi', async () => {
+    const env = await createInProcessEnv({ dialect: 'postgres', env: { CMD_REDELIVER_S: '0' } });
+    try {
+      const d = new VirtualDevice({ transport: env.transport, rec: new Recorder(), confirmPairing: env.confirmPairing, rng: () => 0, ackMode: 'heartbeat' });
+      await d.register();
+      const id = await enqueueCommand(env.rt, d.id, { type: 'refresh_manifest' });
+      await d.heartbeat(1); // nhan, chua ack
+      expect((await listCommands(env.rt, d.id))[0]!.status).toBe('delivered');
+      await d.heartbeat(1); // CMD_REDELIVER_S=0: giao lai trong cung heartbeat voi cmd_ack => da ack nen khong giao nua
+      expect((await listCommands(env.rt, d.id))[0]).toMatchObject({ id, status: 'acked' });
+      expect(d.report.commandsExecuted).toHaveLength(1);
+    } finally {
+      await env.close();
+    }
+  });
 });

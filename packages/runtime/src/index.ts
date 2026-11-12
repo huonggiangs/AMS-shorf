@@ -17,3 +17,5 @@ export async function createTestRuntime(opts?: TestRuntimeOptions): Promise<Test
 export async function createDockerRuntime(env: Record<string, string | undefined>): Promise<Runtime> {
   return (await import('./docker.js')).createDockerRuntime(env);
 }
+export * from './outbox.js';
+export * from './faults.js';

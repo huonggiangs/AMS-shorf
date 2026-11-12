@@ -255,7 +255,9 @@ describe('heartbeat', () => {
     expect(a.commands).toEqual([{ id, type: 'refresh_manifest' }]);
     const b = await J(await d.call('POST', '/v1/heartbeat', { cmd_ack: [id] }));
     expect(b.commands).toEqual([]);
-    expect(await h.rt.kv.get(`cmd:${d.id}`)).toBeNull();
+    expect(await h.rt.kv.get(`cmd:${d.id}`)).toBeNull(); // KV cu khong con dung
+    const row = (await h.rt.db.query<{ status: string }>('SELECT status FROM device_commands WHERE id = ?', [id]))[0]!;
+    expect(row.status).toBe('acked');
   });
 
   it('telemetry gop lo: khong qua queue, flush ghi ev_heartbeat va last_seen_at', async () => {

@@ -16,6 +16,8 @@ export async function startNode(env: Record<string, string | undefined> = proces
   if (test || env['INGEST_INLINE'] === '1') createIngestConsumer(rt, { spend: spendFnFor(rt) }).subscribe();
   const timer = setInterval(() => void gw.flush().catch((e) => console.error('[gateway] flush loi', e)), Number(env['TELEMETRY_FLUSH_MS'] ?? 10_000));
   timer.unref();
+  const sweeper = setInterval(() => void gw.sweep().catch((e) => console.error('[gateway] sweep loi', e)), Number(env['COMMAND_SWEEP_MS'] ?? 60_000));
+  sweeper.unref();
   const port = Number(env['PORT'] ?? 8788);
   const server = serve({ fetch: gw.app.fetch, port, hostname: '0.0.0.0' });
   console.log(`[edge-gateway] lang nghe ${port} (runtime=${rt.config.runtime})`);
@@ -23,6 +25,7 @@ export async function startNode(env: Record<string, string | undefined> = proces
     port,
     async close() {
       clearInterval(timer);
+      clearInterval(sweeper);
       server.close();
       await gw.flush().catch(() => undefined);
       await rt.close?.();

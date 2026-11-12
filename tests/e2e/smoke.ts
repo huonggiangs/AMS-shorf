@@ -13,6 +13,8 @@ import { generateTotpSecret, hmacSha256Hex, sha256Hex, totp, uuidv7 } from '@ams
 import { VirtualDevice, Recorder, httpTransport } from '@ams/sim';
 import type { Manifest } from '@ams/edge-gateway/protocol';
 import { startNode as startApi } from '@ams/api/node';
+import { enqueueCommand } from '@ams/edge-gateway';
+import type { Runtime } from '@ams/runtime';
 import { startNode as startGateway } from '@ams/edge-gateway/node';
 import { startConsumer } from '@ams/ingest-consumer/node';
 import { startFakeS3, startFakeSmtp, type FakeS3, type FakeSmtp } from './fakes.js';
@@ -257,6 +259,9 @@ async function main(): Promise<void> {
     eq(cols.length, 3, 'cot creatives.sha256/format/overlay');
     const a = await q("SELECT column_name FROM information_schema.columns WHERE table_name = 'admins' AND column_name IN ('phone','expires_at')");
     eq(a.length, 2, 'cot admins.phone/expires_at');
+    ok(/0004_domain_p0/.test(out), 'migration 0004 chua duoc ap dung: ' + out.slice(-200));
+    const t4 = await q("SELECT table_name FROM information_schema.tables WHERE table_name IN ('outbox','device_commands','spend_events')");
+    eq(t4.length, 3, 'bang outbox/device_commands/spend_events');
     migrated = true;
     return out.trim().split('\n').pop()!.slice(0, 120);
   }, { needs: upPg });
@@ -291,13 +296,15 @@ async function main(): Promise<void> {
   let gwUrl = '';
   let consumerUrl = '';
   let apiPort = 0;
+  let apiRt: Runtime | undefined;
   const up = await step('khoi dong API (node.ts) + gateway + ingest-consumer; /health 200', async () => {
-    const api = await startApi({ ...env, PORT: '0' });
+    const api = await startApi({ ...env, PORT: '0', OUTBOX_INTERVAL_MS: '500' });
+    apiRt = api.rt;
     cleanups.push(() => api.close());
     apiPort = api.port;
     apiUrl = `http://127.0.0.1:${apiPort}`;
     const gwPort = await freePort();
-    const gw = await startGateway({ ...env, PORT: String(gwPort) });
+    const gw = await startGateway({ ...env, PORT: String(gwPort), COMMAND_SWEEP_MS: '500' });
     cleanups.push(() => gw.close());
     gwUrl = `http://127.0.0.1:${gwPort}`;
     const cons = await startConsumer({ ...env, PORT: '0' });
@@ -782,10 +789,119 @@ async function main(): Promise<void> {
     ok(ws.items.some((x) => x.customer_id === custA.id), 'wallets co khach A');
   }, { needs: okTopup });
 
+
+  // ---------- P0 mien nghiep vu (docs/DOMAIN-REVISION-PROPOSAL.md muc 1-4)
+  const redisCli = (...a: string[]) => execFileSync('redis-cli', ['-p', String(redisPort), ...a]).toString().trim();
+  const epochNow = () => Number(redisCli('get', 'manifest:epoch') || '0');
+  let campD = '';
+
+  await step('P0-1+2 outbox: duyet chien dich A de lai dung mot viec campaign.approved + mot manifest.bump, deu done', async () => {
+    const rows = await q("SELECT topic, status, dedupe_key FROM outbox WHERE dedupe_key LIKE $1 OR dedupe_key LIKE $2 ORDER BY topic", [`campaign.approved:${campA}:%`, `manifest.bump:campaign.approved:${campA}:%`]);
+    eq(rows.map((r) => `${r.topic}:${r.status}`), ['campaign.approved:done', 'manifest.bump:done'], 'outbox cua A');
+    const approved = rows.find((r) => r.topic === 'campaign.approved')!;
+    ok(String(approved.dedupe_key).startsWith(`campaign.approved:${campA}:`), 'khoa khu trung');
+    const pend = await one("SELECT COUNT(*) AS n FROM outbox WHERE status <> 'done'");
+    eq(num(pend.n), 0, 'khong con viec dang cho/chet');
+  }, { needs: okApprove });
+
+  await step('P0-1 co che trang thai qua API that: hanh dong sai trang thai -> 409 invalid_state (khong doi gi); hai nguoi duyet cung luc -> 200 + 409', async () => {
+    for (const [m, p, b] of [['POST', `/admin/v1/campaigns/${campA}/resume`], ['POST', `/admin/v1/campaigns/${campA}/submit`], ['POST', `/admin/v1/campaigns/${campA}/approve`], ['PUT', `/admin/v1/campaigns/${campA}`, { name: 'doi' }]] as [string, string, unknown?][]) {
+      const r = await admin.call(m, p, b);
+      eq(r.status, 409, `${m} ${p}`);
+      eq((r.body as any).error.code, 'invalid_state', `${m} ${p} code`); // eslint-disable-line @typescript-eslint/no-explicit-any
+    }
+    eq((await one('SELECT state FROM campaigns WHERE id = $1', [campA])).state, 'active', 'A khong doi');
+    const d = await admin.expect<{ id: string }>(201, 'POST', '/admin/v1/campaigns', { name: 'E2E chien dich D (dua duyet)', customer_id: custA.id, screen_type: 'tv', media_id: mediaA2, budget_vnd: 100_000 });
+    campD = d.id;
+    await admin.expect(200, 'POST', `/admin/v1/campaigns/${campD}/submit`);
+    const rs = await Promise.all([admin.call('POST', `/admin/v1/campaigns/${campD}/approve`), admin.call('POST', `/admin/v1/campaigns/${campD}/approve`)]);
+    eq(rs.map((x) => x.status).sort(), [200, 409], 'hai lan duyet dong thoi');
+    const row = await one('SELECT state, funding_state, reserved_vnd FROM campaigns WHERE id = $1', [campD]);
+    eq([row.state, row.funding_state, num(row.reserved_vnd)], ['active', 'reserved', 100_000], 'D sau duyet');
+    const ob = await one("SELECT COUNT(*) AS n FROM outbox WHERE topic = 'campaign.approved' AND dedupe_key LIKE $1", [`%${campD}%`]);
+    eq(num(ob.n), 1, 'dung mot viec outbox');
+    const rsv = await one("SELECT COUNT(*) AS n FROM wallet_entries WHERE kind = 'reserve' AND ref_id = $1", [campD]);
+    eq(num(rsv.n), 1, 'giu tien dung mot lan');
+  }, { needs: okApprove });
+
+  await step('P0-2 sau su co (mat dien giua cap nhat trang thai duyet va ghi outbox): worker tu dong ghi bu, giu tien, tang epoch manifest', async () => {
+    const c = await admin.expect<{ id: string }>(201, 'POST', '/admin/v1/campaigns', { name: 'E2E chien dich E (mat dien)', customer_id: custA.id, screen_type: 'tv', media_id: mediaA2, budget_vnd: 50_000 });
+    await admin.expect(200, 'POST', `/admin/v1/campaigns/${c.id}/submit`);
+    const before = epochNow();
+    // mo phong tien trinh API chet NGAY SAU khi danh dau duyet (buoc 1) va TRUOC khi ghi outbox: chi co UPDATE trang thai, khong co dong outbox
+    await pgc.query(
+      "UPDATE campaigns SET state = 'awaiting_funds', funding_state = 'awaiting_funds', approved_budget_vnd = budget_cap_vnd, approved_at = $2, approved_by = 'e2e-crash' WHERE id = $1 AND state = 'pending_review'",
+      [c.id, new Date().toISOString()],
+    );
+    eq(num((await one('SELECT COUNT(*) AS n FROM outbox WHERE dedupe_key LIKE $1', [`%${c.id}%`])).n), 0, 'chua co outbox');
+    await waitFor('worker giu tien cho chien dich E', async () => (await one('SELECT state FROM campaigns WHERE id = $1', [c.id])).state === 'active', 20_000, 300);
+    const row = await one('SELECT funding_state, reserved_vnd FROM campaigns WHERE id = $1', [c.id]);
+    eq([row.funding_state, num(row.reserved_vnd)], ['reserved', 50_000], 'E da giu tien');
+    const rs = await q('SELECT topic, status FROM outbox WHERE dedupe_key LIKE $1 ORDER BY topic', [`%${c.id}%`]);
+    eq(rs.map((r) => `${r.topic}:${r.status}`), ['campaign.approved:done', 'manifest.bump:done'], 'outbox E');
+    ok(epochNow() > before, 'epoch manifest phai tang');
+    eq(num((await one("SELECT COUNT(*) AS n FROM wallet_entries WHERE kind = 'reserve' AND ref_id = $1", [c.id])).n), 1, 'giu tien dung mot lan');
+  }, { needs: okApprove });
+
+  await step('P0-3 lenh thiet bi: enqueue (idempotency) -> heartbeat giao -> thiet bi ack qua /v1/commands/ack; audit; het han -> expired, khong giao', async () => {
+    ok(apiRt, 'khong co runtime API');
+    const adminId = String((await one('SELECT id FROM admins WHERE email = $1', [ADMIN_EMAIL])).id);
+    const a = await enqueueCommand(apiRt, device.id, { type: 'refresh_manifest' }, { idempotencyKey: 'e2e-refresh', createdBy: adminId });
+    const a2 = await enqueueCommand(apiRt, device.id, { type: 'refresh_manifest' }, { idempotencyKey: 'e2e-refresh', createdBy: adminId });
+    eq(a2, a, 'idempotency_key -> cung id');
+    const b = await enqueueCommand(apiRt, device.id, { type: 'set_monitor', args: { on: true } }, { createdBy: adminId });
+    eq(num((await one('SELECT COUNT(*) AS n FROM device_commands WHERE device_id = $1', [device.id])).n), 2, 'hai lenh (khong nhan doi)');
+    eq((await one('SELECT status FROM device_commands WHERE id = $1', [a])).status, 'pending', 'pending truoc heartbeat');
+    const hb = await device.heartbeat(1);
+    ok(hb, 'heartbeat');
+    eq(hb.commands.map((x) => x.id), [a, b], 'lenh giao o heartbeat, theo thu tu tao');
+    const st = await q('SELECT id, status, deliveries FROM device_commands WHERE device_id = $1 ORDER BY created_at, id', [device.id]);
+    eq(st.map((r) => [r.status, num(r.deliveries)]), [['acked', 1], ['acked', 1]], 'thiet bi ao ack qua endpoint');
+    eq(device.report.commandsExecuted.map((x) => x.type), ['refresh_manifest', 'set_monitor'], 'thiet bi thuc thi dung loai');
+    const aud = await one("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'device.command.enqueue' AND object_id = $1 AND actor_id = $2", [device.id, adminId]);
+    eq(num(aud.n), 2, 'audit_log: moi lenh moi mot dong (lan day trung khoa khong ghi them)');
+    device.monitor = false; // tra lai trang thai thuong cho cac buoc sau
+    const hb2 = await device.heartbeat(1);
+    eq(hb2!.commands, [], 'khong giao lai lenh da ack');
+    // het han: khong giao, gateway quet -> expired
+    const old = await enqueueCommand(apiRt, device.id, { type: 'reboot' }, { ttlS: 1, idempotencyKey: 'e2e-expire' });
+    await sleep(2200);
+    const hb3 = await device.heartbeat(1);
+    eq(hb3!.commands, [], 'lenh het han khong duoc giao');
+    await waitFor('quet lenh het han', async () => (await one('SELECT status FROM device_commands WHERE id = $1', [old])).status === 'expired', 8000, 300);
+    // co hieu kv nam o Redis that
+    ok(redisCli('exists', `cmdflag:${device.id}`) === '0', 'co hieu cmdflag da xoa khi het lenh mo');
+  }, { needs: okDev });
+
+  await step('P0-4 chi tieu: gui lai cac su kien cu trong lo moi + xoa dau "xong" o Redis roi gui lai tat ca -> chi su kien moi duoc tinh (khong tru kep)', async () => {
+    const before = await one('SELECT spent_vnd FROM campaigns WHERE id = $1', [campA]);
+    eq(num(before.spent_vnd), 82, 'A truoc');
+    const fresh = ev({}, 6000);
+    const mix = [batch1[0]!, batch1[1]!, batch2[0]!, fresh]; // 3 su kien cu + 1 moi
+    const r = await device.request('events', 'POST', '/v1/events', { events: mix });
+    eq(r.status, 202, 'events');
+    await waitSpent(campA, 102); // 82 + floor(0 + 20,5) = 102, du 0,5
+    const c = await one('SELECT spent_vnd, spend_remainder_micro FROM campaigns WHERE id = $1', [campA]);
+    eq([num(c.spent_vnd), num(c.spend_remainder_micro)], [102, 500_000], 'chi them dung 1 su kien moi');
+    eq(num((await one('SELECT COUNT(*) AS n FROM spend_events WHERE campaign_id = $1', [campA])).n), 5, 'spend_events: 4 cu + 1 moi');
+    // mat bo nho dem "xong" (Redis flush / het han): khu trung ben vung o DB van chan tru kep
+    redisCli('eval', "for _,k in ipairs(redis.call('keys','ingest:done:*')) do redis.call('del',k) end", '0');
+    eq(redisCli('keys', 'ingest:done:*'), '', 'da xoa dau xong');
+    const r2 = await device.request('events', 'POST', '/v1/events', { events: [...batch1, ...batch2, fresh] });
+    eq(r2.status, 202, 'events gui lai tat ca');
+    await sleep(2000);
+    const c2 = await one('SELECT spent_vnd, spend_remainder_micro FROM campaigns WHERE id = $1', [campA]);
+    eq([num(c2.spent_vnd), num(c2.spend_remainder_micro)], [102, 500_000], 'khong tru kep sau khi mat dau xong');
+    const led = await one("SELECT COALESCE(SUM(amount_vnd),0) AS s FROM wallet_entries WHERE customer_id = $1 AND kind = 'spend' AND ref_type = 'impression_batch'", [custA.id]);
+    eq(num(led.s), 102 + 30, 'so cai spend (impression) cua khach A = 102 (A) + 30 (C)');
+    const w = await one('SELECT spent_vnd FROM ad_wallets WHERE customer_id = $1', [custA.id]);
+    eq(num(w.spent_vnd), 132, 'vi: tong da chi');
+  }, { needs: okImp });
+
   await step('nhat ky kiem toan ghi du cac hanh dong nghiep vu (customer/campaign/media/finance/device)', async () => {
-    const a = await q("SELECT action, COUNT(*) AS n FROM audit_log WHERE action IN ('customer.create','contract.create','media.upload_url','media.confirm','campaign.create','campaign.submit','campaign.approve','finance.activation','device.pair','device.bulk_block','campaign.pause','campaign.resume') GROUP BY action");
+    const a = await q("SELECT action, COUNT(*) AS n FROM audit_log WHERE action IN ('customer.create','contract.create','media.upload_url','media.confirm','campaign.create','campaign.submit','campaign.approve','finance.activation','device.pair','device.bulk_block','campaign.pause','campaign.resume','device.command.enqueue') GROUP BY action");
     const got = new Set(a.map((x) => x.action));
-    for (const need of ['customer.create', 'contract.create', 'media.confirm', 'campaign.approve', 'finance.activation', 'device.pair', 'device.bulk_block']) ok(got.has(need), `thieu audit ${need}`);
+    for (const need of ['customer.create', 'contract.create', 'media.confirm', 'campaign.approve', 'finance.activation', 'device.pair', 'device.bulk_block', 'device.command.enqueue']) ok(got.has(need), `thieu audit ${need}`);
   }, { needs: okTopup });
 }
 

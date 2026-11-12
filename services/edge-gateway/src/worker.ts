@@ -133,6 +133,7 @@ export default {
   async scheduled(_c: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const b = boot(env);
     ctx.waitUntil(b.gw.flush().catch(() => undefined));
+    ctx.waitUntil(b.gw.sweep().then(() => undefined, () => undefined)); // het han lenh thiet bi
     if (!env.EVENTS_AE) return;
     const now = Math.floor(Date.now() / 1000);
     const n = SHARDS(env);

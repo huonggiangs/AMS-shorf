@@ -9,10 +9,12 @@ import type { Ctx, ListSpec, SqlFrag } from '../lib/http.js';
 import { campaignScope, mediaScope } from '../lib/scope.js';
 import { apiTarget, dbTarget, fitsTarget, parsePx, type TargetType } from '../lib/creative.js';
 import { dayEnd, dayStart, isDate, todayVn } from '../lib/dates.js';
-import { bumpManifest, ensureDefaultSlot } from '../lib/manifest.js';
+import { ensureDefaultSlot } from '../lib/manifest.js';
+import { enqueueOutbox, type Db, type Runtime } from '@ams/runtime';
+import { CAMPAIGN_DELETABLE_STATES, CAMPAIGN_EDITABLE_STATES, InvalidTransitionError, assertTransition, transitionCampaign, type CampaignState } from '@ams/shared';
+import { TOPIC_CAMPAIGN_APPROVED, approvedKey, enqueueManifestBump, runOutbox } from '../outbox.js';
 import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv, AuthUser } from '../types.js';
-import type { Db, Runtime } from '@ams/runtime';
 
 const CAMP_SELECT = `c.id, c.name, c.customer_id, c.state, c.budget_cap_vnd, c.approved_budget_vnd, c.reserved_vnd, c.spent_vnd, c.funding_state, c.target_types, c.duration_s,
   c.start_at, c.end_at, c.reject_reason, c.created_at, c.approved_at, cu.payment_code AS customer_code, cu.short_name AS customer_short, adv.name AS advertiser_name, ua.name AS creator_name,
@@ -207,6 +209,15 @@ async function emailCampaignOwner(rt: Runtime, row: CampRow, subject: string, ht
   if (to && /@/.test(to)) await trySend(rt, { to, subject, html: htmlBody, text: htmlBody.replace(/<[^>]+>/g, '') });
 }
 
+/** Xu ly outbox ngay sau commit (khong nem): cron/interval van hoi tu neu buoc nay that bai hoac tien trinh chet. */
+async function drainOutbox(c: Ctx): Promise<void> {
+  try {
+    await runOutbox(getRt(c), c.get('finance'));
+  } catch (e) {
+    console.error('[campaign] xu ly outbox loi:', (e as Error).name);
+  }
+}
+
 export function campaignRoutes(external: boolean): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
 
@@ -251,7 +262,7 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
   r.put('/:id', requirePerm('campaigns', 'write'), async (c) => {
     const rt = getRt(c);
     const row = await loadCampaign(c, c.req.param('id'), true);
-    if (!['draft', 'rejected'].includes(row.state)) throw conflict('Chỉ sửa được chiến dịch ở trạng thái bản nháp hoặc bị trả lại.', 'invalid_state');
+    if (!CAMPAIGN_EDITABLE_STATES.includes(row.state as CampaignState)) throw conflict('Chỉ sửa được chiến dịch ở trạng thái bản nháp hoặc bị trả lại.', 'invalid_state');
     const b = await parseBody(c, updateBody);
     const start = b.start_date ?? isoDate(row.start_at) ?? todayVn(rt);
     const end = b.end_date === null ? null : (b.end_date ?? isoDate(row.end_at));
@@ -267,8 +278,8 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     };
     await rt.db.tx(async (db) => {
       const res = await db.run(
-        `UPDATE campaigns SET name = ?, budget_cap_vnd = ?, duration_s = ?, start_at = ?, end_at = ?, target_types = ?, updated_at = ? WHERE id = ? AND state IN ('draft','rejected')`,
-        [next.name, next.budget_cap_vnd, next.duration_s, next.start_at, next.end_at, next.target_types, rt.clock.now().toISOString(), row.id],
+        `UPDATE campaigns SET name = ?, budget_cap_vnd = ?, duration_s = ?, start_at = ?, end_at = ?, target_types = ?, updated_at = ? WHERE id = ? AND state IN (${CAMPAIGN_EDITABLE_STATES.map(() => '?').join(',')})`,
+        [next.name, next.budget_cap_vnd, next.duration_s, next.start_at, next.end_at, next.target_types, rt.clock.now().toISOString(), row.id, ...CAMPAIGN_EDITABLE_STATES],
       );
       if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
       if (b.media_id) await attachMedia(c, db, row.id, row.customer_id, b.media_id, target, b.screen_id);
@@ -283,13 +294,12 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
   r.post('/:id/submit', requirePerm('campaigns', 'write'), async (c) => {
     const rt = getRt(c);
     const row = await loadCampaign(c, c.req.param('id'), true);
-    if (!['draft', 'rejected'].includes(row.state)) throw conflict('Chỉ gửi duyệt được chiến dịch ở trạng thái bản nháp hoặc bị trả lại.', 'invalid_state');
+    assertTransition(row.state, 'pending_review', 'Chỉ gửi duyệt được chiến dịch ở trạng thái bản nháp hoặc bị trả lại.');
     if (num(row.budget_cap_vnd) <= 0) throw unprocessable('Ngân sách phải lớn hơn 0.', 'budget_required');
     const cust = (await rt.db.query<{ state: string }>('SELECT state FROM customers WHERE id = ?', [row.customer_id]))[0];
     if (cust?.state === 'terminated') throw conflict('Khách hàng đã chấm dứt hợp tác.', 'customer_inactive');
     await rt.db.tx(async (db) => {
-      const res = await db.run(`UPDATE campaigns SET state = 'pending_review', reject_reason = NULL, updated_at = ? WHERE id = ? AND state IN ('draft','rejected')`, [rt.clock.now().toISOString(), row.id]);
-      if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
+      await transitionCampaign(db, { id: row.id, from: row.state as CampaignState, to: 'pending_review', nowIso: rt.clock.now().toISOString(), set: { reject_reason: null } });
       await auditCtx(c, db, { action: 'campaign.submit', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { state: { from: row.state, to: 'pending_review' } } });
     });
     return c.json((await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0]);
@@ -300,11 +310,11 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     const row = await loadCampaign(c, c.req.param('id'), true);
     if (!['active', 'scheduled'].includes(row.state)) throw conflict('Chỉ tạm dừng được chiến dịch đang phát hoặc đã lên lịch.', 'invalid_state');
     await rt.db.tx(async (db) => {
-      const res = await db.run(`UPDATE campaigns SET state = 'paused', updated_at = ? WHERE id = ? AND state IN ('active','scheduled')`, [rt.clock.now().toISOString(), row.id]);
-      if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
+      await transitionCampaign(db, { id: row.id, from: row.state as CampaignState, to: 'paused', nowIso: rt.clock.now().toISOString() });
       await auditCtx(c, db, { action: 'campaign.pause', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { state: { from: row.state, to: 'paused' } } });
+      await enqueueManifestBump(db, rt, 'campaign.pause', row.id);
     });
-    await bumpManifest(rt);
+    await drainOutbox(c);
     return c.json((await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0]);
   });
 
@@ -326,13 +336,13 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     }
     void u;
     const nowIso = rt.clock.now().toISOString();
-    const next = row.funding_state === 'reserved' ? (row.start_at && row.start_at > nowIso ? 'scheduled' : 'active') : 'awaiting_funds';
+    const next: CampaignState = row.funding_state === 'reserved' ? (row.start_at && row.start_at > nowIso ? 'scheduled' : 'active') : 'awaiting_funds';
     await rt.db.tx(async (db) => {
-      const res = await db.run(`UPDATE campaigns SET state = ?, updated_at = ? WHERE id = ? AND state = 'paused'`, [next, nowIso, row.id]);
-      if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
+      await transitionCampaign(db, { id: row.id, from: 'paused', to: next, nowIso });
       await auditCtx(c, db, { action: 'campaign.resume', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { state: { from: 'paused', to: next } } });
+      await enqueueManifestBump(db, rt, 'campaign.resume', row.id);
     });
-    await bumpManifest(rt);
+    await drainOutbox(c);
     return c.json((await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0]);
   });
 
@@ -343,21 +353,21 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     const rt = getRt(c);
     const u = c.get('user');
     const row = await loadCampaign(c, c.req.param('id'), true);
-    if (row.state !== 'pending_review') throw conflict('Chỉ duyệt được chiến dịch đang chờ duyệt.', 'invalid_state');
+    // approve = CHI pending_review -> awaiting_funds (scheduled/active/paused -> awaiting_funds la hoan tac kich hoat cua payments, khong phai duyet)
+    if (row.state !== 'pending_review') throw new InvalidTransitionError(row.state, 'awaiting_funds', 'not_allowed', 'Chỉ duyệt được chiến dịch đang chờ duyệt.');
     const cust = (await rt.db.query<{ state: string }>('SELECT state FROM customers WHERE id = ?', [row.customer_id]))[0];
     if (!cust || ['paused', 'terminated'].includes(cust.state)) throw conflict('Khách hàng đang tạm dừng hoặc đã chấm dứt hợp tác, không thể duyệt.', 'customer_inactive');
     if (num(row.budget_cap_vnd) <= 0) throw unprocessable('Ngân sách phải lớn hơn 0.', 'budget_required');
     const creatives = await rt.db.query<{ id: string; review_state: string }>("SELECT id, review_state FROM creatives WHERE campaign_id = ? AND review_state NOT IN ('rejected','returned')", [row.id]);
     if (!creatives.length) throw unprocessable('Chiến dịch chưa có tệp creative hợp lệ. Hãy gắn tệp media trước khi duyệt.', 'no_creative');
     const nowIso = rt.clock.now().toISOString();
-    // 1) danh dau da duyet nguyen tu (chong hai nguoi duyet cung luc); tien do FinancePort lo, thieu tien thi o lai awaiting_funds
+    // BUOC 1 (mot giao dich): danh dau da duyet nguyen tu (UPDATE co dieu kien: hai nguoi duyet cung luc chi mot thang, nguoi kia 409)
+    // + GHI outbox "campaign.approved". Giu tien (buoc 2) va bao manifest (buoc 3) do handler outbox lam, idempotent, hoi tu sau su co.
     await rt.db.tx(async (db) => {
-      const res = await db.run(
-        `UPDATE campaigns SET state = 'awaiting_funds', funding_state = 'awaiting_funds', approved_budget_vnd = budget_cap_vnd, approved_by = ?, approved_at = ?, reject_reason = NULL, updated_at = ?
-          WHERE id = ? AND state = 'pending_review'`,
-        [u.id, nowIso, nowIso, row.id],
-      );
-      if (res.changes === 0) throw conflict('Chiến dịch vừa được người khác xử lý.', 'invalid_state');
+      await transitionCampaign(db, {
+        id: row.id, from: 'pending_review', to: 'awaiting_funds', nowIso, staleMessage: 'Chiến dịch vừa được người khác xử lý.',
+        set: { funding_state: 'awaiting_funds', approved_budget_vnd: { sql: 'budget_cap_vnd' }, approved_by: u.id, approved_at: nowIso, reject_reason: null },
+      });
       const ap = await db.run("UPDATE creatives SET review_state = 'approved', state = CASE WHEN state = 'uploading' THEN state ELSE 'ready' END, review_note = NULL WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
       // manifest chi phat chien dich co lich: tao lich ca ngay mac dinh neu admin chua xep lich rieng
       await ensureDefaultSlot(rt, db, row.id, jsonParse<string[]>(row.target_types, ['tv'])[0] ?? 'tv');
@@ -365,23 +375,27 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
         action: 'campaign.approve', objectType: 'campaign', objectId: row.id, customerId: row.customer_id,
         diff: { approved_budget_vnd: num(row.budget_cap_vnd), creatives_approved: ap.changes },
       });
+      await enqueueOutbox(db, rt, { topic: TOPIC_CAMPAIGN_APPROVED, payload: { campaignId: row.id, actorId: u.id, approvedAt: nowIso }, dedupeKey: approvedKey(row.id, nowIso) });
     });
-    // 2) giu tien (a2): idempotent; loi tai chinh khong lam mat viec da duyet
-    let status: string = 'awaiting_funds';
-    let reserved = 0;
-    let shortfall = num(row.budget_cap_vnd);
+    // BUOC 2-3: xu ly ngay (khong nem). Neu that bai/tien trinh chet, cron/interval xu ly outbox tiep tuc va hoi tu.
+    await drainOutbox(c);
+    const after = await loadCampaign(c, row.id);
+    const pendingJob = (await rt.db.query<{ status: string }>('SELECT status FROM outbox WHERE dedupe_key = ?', [approvedKey(row.id, nowIso)]))[0];
+    const funded = after.funding_state === 'reserved';
+    let status: string = funded ? (after.state === 'paused' ? 'scheduled' : after.state) : 'awaiting_funds';
+    const reserved = funded ? num(after.approved_budget_vnd) : 0;
+    let shortfall = 0;
     let warning: string | undefined;
-    try {
-      const fin = await c.get('finance')();
-      const rr = await fin.reserveForCampaign(rt, { campaignId: row.id, actorId: u.id });
-      status = rr.campaign_state;
-      reserved = rr.reserved_vnd;
-      shortfall = rr.shortfall_vnd;
-    } catch (e) {
-      console.error('[campaign.approve] reserveForCampaign loi:', (e as Error).name);
+    if (pendingJob && pendingJob.status !== 'done') {
+      status = 'awaiting_funds';
+      shortfall = num(row.budget_cap_vnd);
       warning = 'Đã duyệt nhưng chưa giữ được tiền từ ví (lỗi tạm thời); hệ thống sẽ tự thử lại khi ví đủ.';
+    } else if (!funded) {
+      const w = (await rt.db.query<{ balance_vnd: unknown; reserved_vnd: unknown }>('SELECT balance_vnd, reserved_vnd FROM ad_wallets WHERE customer_id = ?', [row.customer_id]))[0];
+      // khong giu duoc (thieu tien, hoac FinancePort rong): neu so du du ma van chua giu thi bao ca ngan sach nhu cu
+      const short = Math.max(0, num(after.approved_budget_vnd) - (w ? num(w.balance_vnd) - num(w.reserved_vnd) : 0));
+      shortfall = short > 0 ? short : num(after.approved_budget_vnd);
     }
-    await bumpManifest(rt);
     const message = warning ?? (status === 'awaiting_funds' ? `Đã duyệt nhưng ví thiếu ${shortfall.toLocaleString('vi-VN')} ₫. Quảng cáo tự chạy sau khi nạp đủ.` : `Đã duyệt, đã giữ ${reserved.toLocaleString('vi-VN')} ₫ từ ví.`);
     await emailCampaignOwner(rt, row, `Chiến dịch "${row.name}" đã được duyệt`, `<p>Chiến dịch <b>${esc(row.name)}</b> đã được duyệt (${esc(status)}).</p>`);
     return c.json({ status, reserved_vnd: reserved, shortfall_vnd: shortfall, message, ...(warning ? { warning } : {}) });
@@ -392,19 +406,19 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     const u = c.get('user');
     const row = await loadCampaign(c, c.req.param('id'), true);
     const b = await parseBody(c, z.object({ reason: z.string().trim().min(3, 'Nhập lý do (tối thiểu 3 ký tự)').max(500) }));
-    if (!['pending_review', 'awaiting_funds', 'scheduled', 'active', 'paused'].includes(row.state)) throw conflict('Không thể trả lại chiến dịch ở trạng thái này.', 'invalid_state');
+    assertTransition(row.state, 'rejected', 'Không thể trả lại chiến dịch ở trạng thái này.');
     const wasApproved = row.state !== 'pending_review';
     if (wasApproved) await releaseIfFunded(c, row, 'thu hồi duyệt'); // hoan phan giu chua dung truoc khi doi trang thai
     const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
-      const res = await db.run(
-        `UPDATE campaigns SET state = 'rejected', reject_reason = ?, approved_budget_vnd = 0, approved_by = NULL, approved_at = NULL, funding_state = CASE WHEN funding_state = 'none' THEN 'none' ELSE 'released' END, updated_at = ? WHERE id = ? AND state = ?`,
-        [b.reason, nowIso, row.id, row.state],
-      );
-      if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
+      await transitionCampaign(db, {
+        id: row.id, from: row.state as CampaignState, to: 'rejected', nowIso,
+        set: { reject_reason: b.reason, approved_budget_vnd: 0, approved_by: null, approved_at: null, funding_state: { sql: "CASE WHEN funding_state = 'none' THEN 'none' ELSE 'released' END" } },
+      });
       await auditCtx(c, db, { action: 'campaign.reject', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { state: { from: row.state, to: 'rejected' }, reason: b.reason, revoked: wasApproved } });
+      await enqueueManifestBump(db, rt, 'campaign.reject', row.id);
     });
-    await bumpManifest(rt);
+    await drainOutbox(c);
     void u;
     await emailCampaignOwner(rt, row, `Chiến dịch "${row.name}" cần chỉnh sửa`, `<p>Chiến dịch <b>${esc(row.name)}</b> được trả lại.</p><p>Lý do: ${esc(b.reason)}</p>`);
     return c.json((await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0]);
@@ -413,21 +427,21 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
   r.post('/:id/end', requirePerm('campaigns', 'approve'), async (c) => {
     const rt = getRt(c);
     const row = await loadCampaign(c, c.req.param('id'), true);
-    if (!['awaiting_funds', 'scheduled', 'active', 'paused'].includes(row.state)) throw conflict('Không thể kết thúc chiến dịch ở trạng thái này.', 'invalid_state');
+    assertTransition(row.state, 'ended', 'Không thể kết thúc chiến dịch ở trạng thái này.');
     const rel = await releaseIfFunded(c, row, 'kết thúc chiến dịch');
     await rt.db.tx(async (db) => {
-      const res = await db.run(`UPDATE campaigns SET state = 'ended', funding_state = CASE WHEN funding_state = 'none' THEN 'none' ELSE 'released' END, updated_at = ? WHERE id = ? AND state = ?`, [rt.clock.now().toISOString(), row.id, row.state]);
-      if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
+      await transitionCampaign(db, { id: row.id, from: row.state as CampaignState, to: 'ended', nowIso: rt.clock.now().toISOString(), set: { funding_state: { sql: "CASE WHEN funding_state = 'none' THEN 'none' ELSE 'released' END" } } });
       await auditCtx(c, db, { action: 'campaign.end', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { released_vnd: rel.released_vnd } });
+      await enqueueManifestBump(db, rt, 'campaign.end', row.id);
     });
-    await bumpManifest(rt);
+    await drainOutbox(c);
     return c.json({ ...(await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0], released_vnd: rel.released_vnd });
   });
 
   r.delete('/:id', requirePerm('campaigns', 'delete'), async (c) => {
     const rt = getRt(c);
     const row = await loadCampaign(c, c.req.param('id'), true);
-    if (!['draft', 'rejected', 'pending_review', 'awaiting_funds'].includes(row.state)) throw conflict('Chỉ xóa được chiến dịch bản nháp, bị trả lại, chờ duyệt hoặc chờ nạp tiền. Chiến dịch đã chạy hãy kết thúc.', 'invalid_state');
+    if (!CAMPAIGN_DELETABLE_STATES.includes(row.state as CampaignState)) throw conflict('Chỉ xóa được chiến dịch bản nháp, bị trả lại, chờ duyệt hoặc chờ nạp tiền. Chiến dịch đã chạy hãy kết thúc.', 'invalid_state');
     await releaseIfFunded(c, row, 'xóa chiến dịch');
     await rt.db.tx(async (db) => {
       await db.run('DELETE FROM schedule_slots WHERE campaign_id = ?', [row.id]);
@@ -436,8 +450,9 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       const res = await db.run('DELETE FROM campaigns WHERE id = ? AND state = ?', [row.id, row.state]);
       if (res.changes === 0) throw conflict('Chiến dịch vừa đổi trạng thái, hãy tải lại.', 'invalid_state');
       await auditCtx(c, db, { action: 'campaign.delete', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { name: row.name, state: row.state } });
+      await enqueueManifestBump(db, rt, 'campaign.delete', row.id);
     });
-    await bumpManifest(rt);
+    await drainOutbox(c);
     return c.json({ ok: true });
   });
 

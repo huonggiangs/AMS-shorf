@@ -1,0 +1,25 @@
+{
+  "name": "@ams/chaos-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Test chaos (gateway/ingest/payments tren test runtime)",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ams/edge-gateway": "workspace:*",
+    "@ams/ingest-consumer": "workspace:*",
+    "@ams/payments": "workspace:*",
+    "@ams/runtime": "workspace:*",
+    "@ams/shared": "workspace:*",
+    "@ams/sim": "workspace:*",
+    "hono": "4.9.9",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.0",
+    "vitest": "3.2.4"
+  }
+}

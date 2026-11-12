@@ -233,6 +233,74 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
 
+  tests/chaos:
+    dependencies:
+      '@ams/edge-gateway':
+        specifier: workspace:*
+        version: link:../../services/edge-gateway
+      '@ams/ingest-consumer':
+        specifier: workspace:*
+        version: link:../../services/ingest-consumer
+      '@ams/payments':
+        specifier: workspace:*
+        version: link:../../services/payments
+      '@ams/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@ams/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@ams/sim':
+        specifier: workspace:*
+        version: link:../../tools/sim
+      hono:
+        specifier: 4.9.9
+        version: 4.9.9
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 22.18.0
+        version: 22.18.0
+      vitest:
+        specifier: 3.2.4
+        version: 3.2.4(@types/node@22.18.0)(jsdom@25.0.1)(tsx@4.20.6)
+
+  tests/contract:
+    dependencies:
+      '@ams/edge-gateway':
+        specifier: workspace:*
+        version: link:../../services/edge-gateway
+      '@ams/ingest-consumer':
+        specifier: workspace:*
+        version: link:../../services/ingest-consumer
+      '@ams/payments':
+        specifier: workspace:*
+        version: link:../../services/payments
+      '@ams/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@ams/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@ams/sim':
+        specifier: workspace:*
+        version: link:../../tools/sim
+      hono:
+        specifier: 4.9.9
+        version: 4.9.9
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 22.18.0
+        version: 22.18.0
+      vitest:
+        specifier: 3.2.4
+        version: 3.2.4(@types/node@22.18.0)(jsdom@25.0.1)(tsx@4.20.6)
+
   tests/e2e:
     dependencies:
       '@ams/api':

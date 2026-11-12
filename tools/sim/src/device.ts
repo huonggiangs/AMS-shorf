@@ -20,6 +20,10 @@ export interface DeviceOpts {
   /** xac suat thiet bi la doi tuong ngau nhien cua RNG (de test xac dinh) */
   rng?: () => number;
   maxAttempts?: number;
+  /** 'endpoint' (mac dinh): ack qua POST /v1/commands/ack; 'heartbeat': ack cu qua cmd_ack o heartbeat ke tiep */
+  ackMode?: 'endpoint' | 'heartbeat';
+  /** loai lenh ma thiet bi nay bao 'failed' (de thu duong that bai) */
+  failCommandTypes?: string[];
 }
 
 export interface DeviceReport {
@@ -36,6 +40,18 @@ export interface DeviceReport {
   eventsValid: number;
   retries: number;
   errors: string[];
+  /** lenh nhan o heartbeat (tinh ca giao lai), so da ack ok / failed */
+  commandsReceived: number;
+  commandsAcked: number;
+  commandsFailed: number;
+  /** id lenh da thuc thi (moi id mot lan: giao lai duoc khu trung phia thiet bi vi lenh phai idempotent) */
+  commandsExecuted: { id: string; type: string; args?: unknown }[];
+}
+
+export interface DeviceCommandMsg {
+  id: string;
+  type: string;
+  args?: Record<string, unknown>;
 }
 
 const BASE_BACKOFF_MS = 1000;
@@ -50,7 +66,14 @@ export class VirtualDevice {
   id = '';
   etag: string | null = null;
   manifest: Manifest | null = null;
-  report: DeviceReport = { deviceId: '', registered: false, paired: false, heartbeats: 0, intervals: [], manifestFetches: 0, manifest304: 0, creatives: 0, eventsSent: 0, eventsAccepted: 0, eventsValid: 0, retries: 0, errors: [] };
+  report: DeviceReport = { deviceId: '', registered: false, paired: false, heartbeats: 0, intervals: [], manifestFetches: 0, manifest304: 0, creatives: 0, eventsSent: 0, eventsAccepted: 0, eventsValid: 0, retries: 0, errors: [], commandsReceived: 0, commandsAcked: 0, commandsFailed: 0, commandsExecuted: [] };
+  /** lenh da thuc thi (khu trung giao lai) */
+  private doneCommands = new Set<string>();
+  /** id cho ack qua heartbeat o lan ke tiep */
+  private pendingAck: string[] = [];
+  /** lenh refresh_manifest vua nhan: lan sync ke tiep tai lai du etag khong doi */
+  forceManifest = false;
+  monitor = false;
   private o: Required<Pick<DeviceOpts, 'transport' | 'rec'>> & DeviceOpts;
   constructor(o: DeviceOpts) {
     this.o = o;
@@ -129,21 +152,59 @@ export class VirtualDevice {
   }
 
   /** @returns next_interval (giay) hoac null neu loi */
-  async heartbeat(state = 1): Promise<{ next: number; etag: string } | null> {
-    const res = await this.request('heartbeat', 'POST', '/v1/heartbeat', { state, app_ver: '0.0.1-sim', soc_temp: 45 + Math.floor(Math.random() * 20), rssi: -40 - Math.floor(Math.random() * 30), dl_mbps: 20, cache_used_mb: 300, cache_slots: 8 });
+  async heartbeat(state = 1): Promise<{ next: number; etag: string; commands: DeviceCommandMsg[] } | null> {
+    const body: Record<string, unknown> = { state: this.monitor ? 3 : state, app_ver: '0.0.1-sim', soc_temp: 45 + Math.floor(Math.random() * 20), rssi: -40 - Math.floor(Math.random() * 30), dl_mbps: 20, cache_used_mb: 300, cache_slots: 8 };
+    if (this.pendingAck.length) body['cmd_ack'] = this.pendingAck.slice(0, 20);
+    const res = await this.request('heartbeat', 'POST', '/v1/heartbeat', body);
     if (res.status !== 200) {
       this.report.errors.push(`heartbeat ${res.status}`);
       return null;
     }
-    const j = JSON.parse(res.text) as { next_interval: number; interval_base: number; manifest_etag: string };
+    this.pendingAck = this.pendingAck.slice(20);
+    const j = JSON.parse(res.text) as { next_interval: number; interval_base: number; manifest_etag: string; commands?: DeviceCommandMsg[] };
     this.report.heartbeats++;
     this.report.intervals.push({ base: j.interval_base, next: j.next_interval });
-    return { next: j.next_interval, etag: j.manifest_etag };
+    const commands = j.commands ?? [];
+    this.report.commandsReceived += commands.length;
+    await this.handleCommands(commands);
+    return { next: j.next_interval, etag: j.manifest_etag, commands };
+  }
+
+  /**
+   * Xu ly lenh theo docs/DEVICE-PROTOCOL.md: thuc thi MOT LAN moi id (giao lai chi ack lai), `refresh_manifest` -> tai lai manifest,
+   * `set_monitor` -> state 3, `reboot`/loai la -> chi ack. Ack qua endpoint (hoac heartbeat ke tiep neu ackMode='heartbeat').
+   */
+  private async handleCommands(cmds: DeviceCommandMsg[]): Promise<void> {
+    if (cmds.length === 0) return;
+    const acks: { id: string; status: 'ok' | 'failed'; result?: string }[] = [];
+    for (const c of cmds) {
+      const fail = this.o.failCommandTypes?.includes(c.type) ?? false;
+      if (!this.doneCommands.has(c.id)) {
+        this.doneCommands.add(c.id);
+        if (!fail) {
+          if (c.type === 'refresh_manifest') this.forceManifest = true;
+          else if (c.type === 'set_monitor') this.monitor = c.args?.['on'] !== false;
+        }
+        this.report.commandsExecuted.push({ id: c.id, type: c.type, ...(c.args ? { args: c.args } : {}) });
+        if (fail) this.report.commandsFailed++;
+        else this.report.commandsAcked++;
+      }
+      acks.push(fail ? { id: c.id, status: 'failed', result: 'sim: khong ho tro' } : { id: c.id, status: 'ok' });
+    }
+    if ((this.o.ackMode ?? 'endpoint') === 'heartbeat') {
+      for (const a of acks) if (a.status === 'ok' && !this.pendingAck.includes(a.id)) this.pendingAck.push(a.id);
+      return;
+    }
+    for (let i = 0; i < acks.length; i += 20) {
+      const res = await this.request('cmd_ack', 'POST', '/v1/commands/ack', { acks: acks.slice(i, i + 20) });
+      if (res.status !== 200) this.report.errors.push(`cmd_ack ${res.status}`);
+    }
   }
 
   /** Tai manifest neu etag doi (dung ?etag= de nhan 304). */
   async syncManifest(serverEtag?: string): Promise<void> {
-    if (serverEtag && serverEtag === this.etag) return;
+    if (serverEtag && serverEtag === this.etag && !this.forceManifest) return;
+    this.forceManifest = false;
     const res = await this.request('manifest', 'GET', this.etag ? `/v1/manifest?etag=${this.etag}` : '/v1/manifest');
     this.report.manifestFetches++;
     if (res.status === 304) {

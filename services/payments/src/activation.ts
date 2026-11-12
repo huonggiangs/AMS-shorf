@@ -1,5 +1,5 @@
 import type { Db, Runtime } from '@ams/runtime';
-import { sha256Hex, toBase64Url, randomBytes } from '@ams/shared';
+import { sha256Hex, toBase64Url, randomBytes, transitionCampaign } from '@ams/shared';
 import { loadSepayConfig } from './config.js';
 import { runAwaitingFunds } from './ledger.js';
 import { audit, bumpManifest, iso, n, notify, withTx } from './util.js';
@@ -151,7 +151,7 @@ async function undoActivationTx(rt: Runtime, dbIn: Db, logId: string, actor: str
         const c = (await db.query<{ spent_vnd: unknown; funding_state: string }>('SELECT spent_vnd, funding_state FROM campaigns WHERE id = ?', [a.campaign_id]))[0];
         if (!c || n(c.spent_vnd) > 0 || c.funding_state !== 'reserved') { skipped.push(`campaign:${a.campaign_id}`); continue; }
         await releaseCampaignNoCascade(rt, db, a.campaign_id);
-        await db.run("UPDATE campaigns SET state = 'awaiting_funds', funding_state = 'awaiting_funds', updated_at = ? WHERE id = ? AND funding_state = 'released'", [iso(rt), a.campaign_id]);
+        await transitionCampaign(db, { id: a.campaign_id, from: ['scheduled', 'active', 'paused'], to: 'awaiting_funds', nowIso: iso(rt), allowNone: true, set: { funding_state: 'awaiting_funds' }, where: { sql: "funding_state = 'released'" } });
         undone.push(`campaign:${a.campaign_id}`);
       } else if (a.type === 'portal_account_created') {
         await db.run("UPDATE admins SET status = 'disabled' WHERE id = ? AND status = 'invited'", [a.admin_id]);
