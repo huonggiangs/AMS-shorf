@@ -2,7 +2,8 @@
 # - Các chỗ giữ dấu dạng __TÊN__ được scripts/deploy-cloudflare.mjs thay bằng ID thật (từ Terraform/bootstrap) và ghi ra
 #   wrangler.generated.toml cùng thư mục. KHÔNG chạy `wrangler deploy` trực tiếp với tệp này.
 # - Bí mật (SESSION_SECRET, FIELD_ENC_KEY, SEPAY_WEBHOOK_SECRET, R2_*...) đặt bằng `wrangler secret put`, không ghi ở đây.
-# - Tên miền: route theo zone; bản ghi DNS (proxied) do Terraform tạo (infra/cloudflare/terraform) hoặc tạo tay theo docs/DEPLOY-CLOUDFLARE.md.
+# - Tên miền (zone anio.vn phải nằm trong tài khoản Cloudflare): web + /api/* ở ams.anio.vn, gateway ở gw-ams.anio.vn (staging: ams-stg / gw-ams-stg).
+#   Custom domain do wrangler tự tạo bản ghi DNS. Worker api nhận đường dẫn có tiền tố /api (xem ops/agents/f2-infra.requests.md).
 # - Binding KHÔNG kế thừa giữa các môi trường, nên mỗi [env.*] khai báo đủ.
 # - Migration D1 dùng chung nguồn packages/db/migrations (áp bằng `wrangler d1 migrations apply`).
 name = "ams-api"
@@ -17,15 +18,20 @@ enabled = true
 
 [env.staging]
 name = "ams-api-staging"
-routes = [{ pattern = "api-staging.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" }]
+routes = [{ pattern = "ams-stg.anio.vn/api/*", zone_name = "anio.vn" }]  # /api/* của web; Worker nhận đường dẫn CÓ tiền tố /api
 
 [env.staging.vars]
 RUNTIME = "cloudflare"
 ENVIRONMENT = "staging"
 SEPAY_MODE = "sandbox"
-APP_PUBLIC_URL = "https://admin-staging.__AMS_DOMAIN__"
-PORTAL_PUBLIC_URL = "https://portal-staging.__AMS_DOMAIN__"
-API_PUBLIC_URL = "https://api-staging.__AMS_DOMAIN__"
+PUBLIC_ADMIN_URL = "https://ams-stg.anio.vn"
+PUBLIC_API_URL = "https://ams-stg.anio.vn/api"
+PUBLIC_GATEWAY_URL = "https://gw-ams-stg.anio.vn"
+SEPAY_WEBHOOK_URL = "https://ams-stg.anio.vn/api/webhooks/payments/sepay"
+APP_PUBLIC_URL = "https://ams-stg.anio.vn"
+PORTAL_PUBLIC_URL = "https://ams-stg.anio.vn"
+API_PUBLIC_URL = "https://ams-stg.anio.vn/api"
+API_BASE_PATH = "/api"
 S3_BUCKET = "ams-media-staging"
 LOG_LEVEL = "info"
 
@@ -83,15 +89,20 @@ crons = ["*/10 * * * *", "15 2 * * *"]
 
 [env.production]
 name = "ams-api-production"
-routes = [{ pattern = "api.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" }]
+routes = [{ pattern = "ams.anio.vn/api/*", zone_name = "anio.vn" }]  # /api/* của web; Worker nhận đường dẫn CÓ tiền tố /api
 
 [env.production.vars]
 RUNTIME = "cloudflare"
 ENVIRONMENT = "production"
 SEPAY_MODE = "production"
-APP_PUBLIC_URL = "https://admin.__AMS_DOMAIN__"
-PORTAL_PUBLIC_URL = "https://portal.__AMS_DOMAIN__"
-API_PUBLIC_URL = "https://api.__AMS_DOMAIN__"
+PUBLIC_ADMIN_URL = "https://ams.anio.vn"
+PUBLIC_API_URL = "https://ams.anio.vn/api"
+PUBLIC_GATEWAY_URL = "https://gw-ams.anio.vn"
+SEPAY_WEBHOOK_URL = "https://ams.anio.vn/api/webhooks/payments/sepay"
+APP_PUBLIC_URL = "https://ams.anio.vn"
+PORTAL_PUBLIC_URL = "https://ams.anio.vn"
+API_PUBLIC_URL = "https://ams.anio.vn/api"
+API_BASE_PATH = "/api"
 S3_BUCKET = "ams-media-production"
 LOG_LEVEL = "info"
 

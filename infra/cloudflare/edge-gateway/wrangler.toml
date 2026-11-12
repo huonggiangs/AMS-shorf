@@ -16,15 +16,20 @@ head_sampling_rate = 0.1
 
 [env.staging]
 name = "ams-edge-gateway-staging"
-routes = [{ pattern = "gw-staging.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" }]
+routes = [{ pattern = "gw-ams-stg.anio.vn", custom_domain = true }]  # host MỘT cấp để dùng Universal SSL miễn phí
 
 [env.staging.vars]
 RUNTIME = "cloudflare"
 ENVIRONMENT = "staging"
 SEPAY_MODE = "sandbox"
-APP_PUBLIC_URL = "https://admin-staging.__AMS_DOMAIN__"
-PORTAL_PUBLIC_URL = "https://portal-staging.__AMS_DOMAIN__"
-API_PUBLIC_URL = "https://api-staging.__AMS_DOMAIN__"
+PUBLIC_ADMIN_URL = "https://ams-stg.anio.vn"
+PUBLIC_API_URL = "https://ams-stg.anio.vn/api"
+PUBLIC_GATEWAY_URL = "https://gw-ams-stg.anio.vn"
+SEPAY_WEBHOOK_URL = "https://ams-stg.anio.vn/api/webhooks/payments/sepay"
+APP_PUBLIC_URL = "https://ams-stg.anio.vn"
+PORTAL_PUBLIC_URL = "https://ams-stg.anio.vn"
+API_PUBLIC_URL = "https://ams-stg.anio.vn/api"
+API_BASE_PATH = "/api"
 S3_BUCKET = "ams-media-staging"
 LOG_LEVEL = "info"
 
@@ -80,15 +85,20 @@ crons = ["* * * * *"]
 
 [env.production]
 name = "ams-edge-gateway-production"
-routes = [{ pattern = "gw.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" }]
+routes = [{ pattern = "gw-ams.anio.vn", custom_domain = true }]  # host MỘT cấp để dùng Universal SSL miễn phí
 
 [env.production.vars]
 RUNTIME = "cloudflare"
 ENVIRONMENT = "production"
 SEPAY_MODE = "production"
-APP_PUBLIC_URL = "https://admin.__AMS_DOMAIN__"
-PORTAL_PUBLIC_URL = "https://portal.__AMS_DOMAIN__"
-API_PUBLIC_URL = "https://api.__AMS_DOMAIN__"
+PUBLIC_ADMIN_URL = "https://ams.anio.vn"
+PUBLIC_API_URL = "https://ams.anio.vn/api"
+PUBLIC_GATEWAY_URL = "https://gw-ams.anio.vn"
+SEPAY_WEBHOOK_URL = "https://ams.anio.vn/api/webhooks/payments/sepay"
+APP_PUBLIC_URL = "https://ams.anio.vn"
+PORTAL_PUBLIC_URL = "https://ams.anio.vn"
+API_PUBLIC_URL = "https://ams.anio.vn/api"
+API_BASE_PATH = "/api"
 S3_BUCKET = "ams-media-production"
 LOG_LEVEL = "info"
 
