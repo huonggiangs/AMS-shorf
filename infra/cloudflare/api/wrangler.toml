@@ -1,0 +1,148 @@
+# Worker "api" (Hono): admin API, portal, auth, webhook SePay. Mã nguồn: services/api (điểm vào src/worker.ts).
+# - Các dấu __XXX__ được scripts/deploy-cloudflare.mjs thay bằng ID thật (từ Terraform/bootstrap) và ghi ra
+#   wrangler.generated.toml cùng thư mục. KHÔNG chạy `wrangler deploy` trực tiếp với tệp này.
+# - Bí mật (SESSION_SECRET, FIELD_ENC_KEY, SEPAY_WEBHOOK_SECRET, R2_*...) đặt bằng `wrangler secret put`, không ghi ở đây.
+# - Tên miền: route theo zone; bản ghi DNS (proxied) do Terraform tạo (infra/cloudflare/terraform) hoặc tạo tay theo docs/DEPLOY-CLOUDFLARE.md.
+# - Binding KHÔNG kế thừa giữa các môi trường, nên mỗi [env.*] khai báo đủ.
+# - Migration D1 dùng chung nguồn packages/db/migrations (áp bằng `wrangler d1 migrations apply`).
+name = "ams-api"
+main = "../../../services/api/src/worker.ts"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+preview_urls = false
+
+[observability]
+enabled = true
+
+[env.staging]
+name = "ams-api-staging"
+routes = [{ pattern = "api-staging.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" }]
+
+[env.staging.vars]
+RUNTIME = "cloudflare"
+ENVIRONMENT = "staging"
+SEPAY_MODE = "sandbox"
+APP_PUBLIC_URL = "https://admin-staging.__AMS_DOMAIN__"
+PORTAL_PUBLIC_URL = "https://portal-staging.__AMS_DOMAIN__"
+API_PUBLIC_URL = "https://api-staging.__AMS_DOMAIN__"
+S3_BUCKET = "ams-media-staging"
+LOG_LEVEL = "info"
+
+[[env.staging.d1_databases]]
+binding = "DB_CORE"
+database_name = "ams-core-staging"
+database_id = "__D1_CORE_ID__"
+migrations_dir = "../../../packages/db/migrations"
+
+[[env.staging.d1_databases]]
+binding = "DB_FINANCE"
+database_name = "ams-finance-staging"
+database_id = "__D1_FINANCE_ID__"
+
+[[env.staging.d1_databases]]
+binding = "DB_AUDIT"
+database_name = "ams-audit-staging"
+database_id = "__D1_AUDIT_ID__"
+
+[[env.staging.kv_namespaces]]
+binding = "KV"
+id = "__KV_ID__"
+
+[[env.staging.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "ams-media-staging"
+
+[[env.staging.r2_buckets]]
+binding = "REPORTS"
+bucket_name = "ams-reports-staging"
+
+[[env.staging.r2_buckets]]
+binding = "AUDIT_ARCHIVE"
+bucket_name = "ams-audit-staging"
+
+[[env.staging.queues.producers]]
+binding = "JOBS_QUEUE"
+queue = "ams-jobs-staging"
+
+[[env.staging.queues.consumers]]
+queue = "ams-jobs-staging"
+max_batch_size = 20
+max_batch_timeout = 5
+max_retries = 5
+dead_letter_queue = "ams-jobs-dlq-staging"
+
+[[env.staging.durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceShard"
+script_name = "ams-edge-gateway-staging"
+
+[env.staging.triggers]
+# đối soát bù SePay mỗi 10 phút + đối soát doanh thu/impression 02:15 UTC hằng ngày
+crons = ["*/10 * * * *", "15 2 * * *"]
+
+[env.production]
+name = "ams-api-production"
+routes = [{ pattern = "api.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" }]
+
+[env.production.vars]
+RUNTIME = "cloudflare"
+ENVIRONMENT = "production"
+SEPAY_MODE = "production"
+APP_PUBLIC_URL = "https://admin.__AMS_DOMAIN__"
+PORTAL_PUBLIC_URL = "https://portal.__AMS_DOMAIN__"
+API_PUBLIC_URL = "https://api.__AMS_DOMAIN__"
+S3_BUCKET = "ams-media-production"
+LOG_LEVEL = "info"
+
+[[env.production.d1_databases]]
+binding = "DB_CORE"
+database_name = "ams-core-production"
+database_id = "__D1_CORE_ID__"
+migrations_dir = "../../../packages/db/migrations"
+
+[[env.production.d1_databases]]
+binding = "DB_FINANCE"
+database_name = "ams-finance-production"
+database_id = "__D1_FINANCE_ID__"
+
+[[env.production.d1_databases]]
+binding = "DB_AUDIT"
+database_name = "ams-audit-production"
+database_id = "__D1_AUDIT_ID__"
+
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "__KV_ID__"
+
+[[env.production.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "ams-media-production"
+
+[[env.production.r2_buckets]]
+binding = "REPORTS"
+bucket_name = "ams-reports-production"
+
+[[env.production.r2_buckets]]
+binding = "AUDIT_ARCHIVE"
+bucket_name = "ams-audit-production"
+
+[[env.production.queues.producers]]
+binding = "JOBS_QUEUE"
+queue = "ams-jobs-production"
+
+[[env.production.queues.consumers]]
+queue = "ams-jobs-production"
+max_batch_size = 20
+max_batch_timeout = 5
+max_retries = 5
+dead_letter_queue = "ams-jobs-dlq-production"
+
+[[env.production.durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceShard"
+script_name = "ams-edge-gateway-production"
+
+[env.production.triggers]
+# đối soát bù SePay mỗi 10 phút + đối soát doanh thu/impression 02:15 UTC hằng ngày
+crons = ["*/10 * * * *", "15 2 * * *"]

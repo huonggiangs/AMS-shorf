@@ -1,0 +1,36 @@
+flowchart TB
+  DEV["Thiết bị<br/>Smart TV, màn thang máy,<br/>LED P5, app điện thoại"]
+  subgraph HOT["Đường nóng: chỉ ghi append-only"]
+    direction LR
+    GW["Edge Gateway<br/>heartbeat, events, manifest"]
+    Q["Hàng đợi<br/>Queues / Redpanda"]
+    ING["Ingest consumer<br/>xác thực, khử trùng"]
+    EV[("Event store<br/>R2 Parquet / ClickHouse")]
+    PRES["Presence<br/>DO / Redis"]
+  end
+  subgraph ADM["Đường quản trị"]
+    direction LR
+    WEB["Web admin<br/>Cổng khách hàng"]
+    API["API Hono<br/>auth, RBAC, audit"]
+    FIN["Payments<br/>ví, sổ cái, kích hoạt"]
+    SET["Settlement<br/>đối soát, hoa hồng"]
+    SCH["Scheduler<br/>dựng manifest"]
+  end
+  subgraph STO["Lưu trữ"]
+    direction LR
+    DB[("DB giao dịch<br/>D1 / PostgreSQL")]
+    OBJ[("Kho đối tượng<br/>R2 / S3")]
+  end
+  SEPAY["SePay"]
+  RTB["Đối tác RTB"]
+  DEV --> GW
+  GW --> Q --> ING --> EV
+  GW --> PRES
+  WEB --> API --> FIN
+  API --> DB
+  SEPAY -- "webhook" --> FIN
+  FIN --> DB
+  EV --> SET --> DB
+  SCH --> OBJ
+  RTB <--> SCH
+  GW -. "đọc manifest" .-> OBJ

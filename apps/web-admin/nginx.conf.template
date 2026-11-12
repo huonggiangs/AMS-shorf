@@ -1,0 +1,50 @@
+# Cấu hình nginx cho web-admin (infra sở hữu). Biến duy nhất thay thế: ${API_UPSTREAM}.
+# Web gọi API qua /api/... (cùng origin, cookie ams_session đi cùng, không cần CORS).
+# /api/xyz  ->  ${API_UPSTREAM}/xyz   (ví dụ /api/admin/v1/devices -> api:8787/admin/v1/devices)
+map $http_x_forwarded_proto $fwd_proto { default $http_x_forwarded_proto; '' $scheme; }
+
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    server_tokens off;
+    client_max_body_size 2m;   # tệp media đi thẳng lên MinIO/R2 bằng presigned URL, không qua đây
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    # CSP: media/ảnh có thể đến từ MinIO cục bộ hoặc R2; QR SePay từ qr.sepay.vn
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob: https://qr.sepay.vn http://localhost:9000 https:; media-src 'self' blob: http://localhost:9000 https:; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:9000 https:; frame-ancestors 'none'; base-uri 'self'" always;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location /api/ {
+        proxy_pass ${API_UPSTREAM}/;      # dấu / cuối: cắt tiền tố /api
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $fwd_proto;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 60s;
+    }
+
+    # Tệp băm tên: cache dài
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # SPA: mọi đường dẫn khác về index.html (không cache để cập nhật bản mới ngay)
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ /index.html;
+    }
+}

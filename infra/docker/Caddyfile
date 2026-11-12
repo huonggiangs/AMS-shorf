@@ -1,0 +1,55 @@
+# Caddy: tên miền cục bộ *.ams.localhost, HTTPS tự ký (CA nội bộ của Caddy).
+# Trình duyệt sẽ cảnh báo chứng chỉ lần đầu; chạy `make trust-ca` (hoặc `scripts/ams.ps1 trust-ca`)
+# để xuất CA gốc và cài vào máy nếu muốn bỏ cảnh báo.
+# *.localhost luôn trỏ về 127.0.0.1 trên Chrome/Edge/Firefox/Windows 11, không cần sửa hosts.
+{
+	# CA nội bộ, không gọi Let's Encrypt
+	local_certs
+	skip_install_trust
+}
+
+(security_headers) {
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+# Web quản trị. nginx trong web-admin tự chuyển /api/* sang api (cùng origin => cookie phiên đơn giản).
+admin.ams.localhost {
+	tls internal
+	import security_headers
+	encode zstd gzip
+	reverse_proxy web-admin:8080
+}
+
+# Cổng khách hàng/đối tác: cùng ứng dụng web, phân biệt theo tên miền.
+portal.ams.localhost {
+	tls internal
+	import security_headers
+	encode zstd gzip
+	reverse_proxy web-admin:8080
+}
+
+# API trực tiếp (admin API, portal API, webhook SePay, /dev/sepay/simulate)
+api.ams.localhost {
+	tls internal
+	import security_headers
+	encode zstd gzip
+	reverse_proxy api:8787 {
+		health_uri /health
+		health_interval 15s
+	}
+}
+
+# Edge gateway cho thiết bị/bộ giả lập (heartbeat, events, manifest)
+gw.ams.localhost {
+	tls internal
+	import security_headers
+	reverse_proxy edge-gateway:8788 {
+		health_uri /health
+		health_interval 15s
+	}
+}

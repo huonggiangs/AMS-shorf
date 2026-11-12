@@ -1,0 +1,6 @@
+flowchart LR
+  L["<b>1. Docker local trên PC</b><br/>Hono trên Node<br/>PostgreSQL 16 + Redis<br/>MinIO + Mailpit<br/>Redpanda + ClickHouse (profile events)<br/>Dùng: phát triển, nghiệm thu,<br/>10-50 nghìn thiết bị ảo"]
+  C["<b>2. Cloudflare</b><br/>Workers Hono<br/>D1 + KV<br/>Durable Objects (presence)<br/>Queues / Pipelines<br/>R2 + Analytics Engine<br/>Dùng: bản chạy thật đầu tiên,<br/>mục tiêu 1-3 triệu thiết bị"]
+  K["<b>3. Hạ tầng riêng</b><br/>Gateway Go + L4 LB nhiều vùng<br/>PostgreSQL + replica, Redis Cluster<br/>Redpanda + ClickHouse<br/>S3 tương thích<br/>Cloudflare giữ CDN, WAF, DNS, media<br/>Dùng: 10 triệu thiết bị trở lên"]
+  L -- "bật adapter Cloudflare,<br/>rclone media,<br/>nhập cấu hình" --> C
+  C -- "dual-write 2 tuần,<br/>cắt 1% → 10% → 50% → 100%,<br/>luôn có đường quay lui" --> K

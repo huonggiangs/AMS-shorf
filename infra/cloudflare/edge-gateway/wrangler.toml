@@ -1,0 +1,143 @@
+# Worker "edge-gateway": heartbeat, events, manifest (đường nóng). Mã nguồn: services/edge-gateway (src/worker.ts).
+# Worker này CŨNG là consumer của hàng đợi ams-ingest (xuất `queue()` handler) và chủ của Durable Object PresenceShard.
+# Xem ghi chú về dấu __XXX__ và bí mật trong infra/cloudflare/api/wrangler.toml.
+name = "ams-edge-gateway"
+main = "../../../services/edge-gateway/src/worker.ts"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+preview_urls = false
+
+[observability]
+enabled = true
+[observability.logs]
+# đường nóng: lấy mẫu 10% log để kiểm soát chi phí
+head_sampling_rate = 0.1
+
+[env.staging]
+name = "ams-edge-gateway-staging"
+routes = [{ pattern = "gw-staging.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" }]
+
+[env.staging.vars]
+RUNTIME = "cloudflare"
+ENVIRONMENT = "staging"
+SEPAY_MODE = "sandbox"
+APP_PUBLIC_URL = "https://admin-staging.__AMS_DOMAIN__"
+PORTAL_PUBLIC_URL = "https://portal-staging.__AMS_DOMAIN__"
+API_PUBLIC_URL = "https://api-staging.__AMS_DOMAIN__"
+S3_BUCKET = "ams-media-staging"
+LOG_LEVEL = "info"
+
+[[env.staging.d1_databases]]
+binding = "DB_CORE"
+database_name = "ams-core-staging"
+database_id = "__D1_CORE_ID__"
+
+[[env.staging.d1_databases]]
+binding = "DB_FINANCE"
+database_name = "ams-finance-staging"
+database_id = "__D1_FINANCE_ID__"
+
+[[env.staging.d1_databases]]
+binding = "DB_AUDIT"
+database_name = "ams-audit-staging"
+database_id = "__D1_AUDIT_ID__"
+
+[[env.staging.kv_namespaces]]
+binding = "KV"
+id = "__KV_ID__"
+
+[[env.staging.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "ams-media-staging"
+
+[[env.staging.queues.producers]]
+binding = "INGEST_QUEUE"
+queue = "ams-ingest-staging"
+
+[[env.staging.queues.consumers]]
+queue = "ams-ingest-staging"
+max_batch_size = 100
+max_batch_timeout = 5
+max_retries = 5
+dead_letter_queue = "ams-ingest-dlq-staging"
+
+[[env.staging.durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceShard"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["PresenceShard"]
+
+[[env.staging.analytics_engine_datasets]]
+binding = "EVENTS_AE"
+dataset = "ams_events_staging"
+
+[env.staging.triggers]
+# gộp presence và đẩy lô sự kiện mỗi phút
+crons = ["* * * * *"]
+
+[env.production]
+name = "ams-edge-gateway-production"
+routes = [{ pattern = "gw.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" }]
+
+[env.production.vars]
+RUNTIME = "cloudflare"
+ENVIRONMENT = "production"
+SEPAY_MODE = "production"
+APP_PUBLIC_URL = "https://admin.__AMS_DOMAIN__"
+PORTAL_PUBLIC_URL = "https://portal.__AMS_DOMAIN__"
+API_PUBLIC_URL = "https://api.__AMS_DOMAIN__"
+S3_BUCKET = "ams-media-production"
+LOG_LEVEL = "info"
+
+[[env.production.d1_databases]]
+binding = "DB_CORE"
+database_name = "ams-core-production"
+database_id = "__D1_CORE_ID__"
+
+[[env.production.d1_databases]]
+binding = "DB_FINANCE"
+database_name = "ams-finance-production"
+database_id = "__D1_FINANCE_ID__"
+
+[[env.production.d1_databases]]
+binding = "DB_AUDIT"
+database_name = "ams-audit-production"
+database_id = "__D1_AUDIT_ID__"
+
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "__KV_ID__"
+
+[[env.production.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "ams-media-production"
+
+[[env.production.queues.producers]]
+binding = "INGEST_QUEUE"
+queue = "ams-ingest-production"
+
+[[env.production.queues.consumers]]
+queue = "ams-ingest-production"
+max_batch_size = 100
+max_batch_timeout = 5
+max_retries = 5
+dead_letter_queue = "ams-ingest-dlq-production"
+
+[[env.production.durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceShard"
+
+[[env.production.migrations]]
+tag = "v1"
+new_sqlite_classes = ["PresenceShard"]
+
+[[env.production.analytics_engine_datasets]]
+binding = "EVENTS_AE"
+dataset = "ams_events_production"
+
+[env.production.triggers]
+# gộp presence và đẩy lô sự kiện mỗi phút
+crons = ["* * * * *"]

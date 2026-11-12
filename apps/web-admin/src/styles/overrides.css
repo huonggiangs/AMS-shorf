@@ -1,0 +1,8 @@
+/* Additions on top of the prototype stylesheet (app.css is copied unchanged except colour tokens). */
+html,body{background:var(--bg,#F1F5F9)}
+.tvn input,.tvn select,.tvn textarea{font:inherit}
+.tvn .fd textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--card);color:var(--ink);min-height:70px}
+.tvn button:disabled{opacity:.55;cursor:not-allowed}
+.tvn .sr-skip:focus{left:8px!important;top:8px;z-index:100;background:var(--card);padding:8px 12px;border-radius:8px}
+.tvn .fd input[type=file]{padding:6px}
+.tvn pre{white-space:pre-wrap}

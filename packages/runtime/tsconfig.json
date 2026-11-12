@@ -9,5 +9,8 @@
     "src/**/*",
     "test/**/*",
     "*.ts"
+  ],
+  "exclude": [
+    "src/cloudflare/**"
   ]
 }

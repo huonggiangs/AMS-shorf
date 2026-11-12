@@ -11,7 +11,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "gen": "node scripts/embed.mjs"
   },
   "dependencies": {
     "@ams/shared": "workspace:*"

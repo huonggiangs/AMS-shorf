@@ -1,0 +1,103 @@
+== Khoi luong dinh (khop muc 3 dac ta) ==
+ 100k: heartbeat       833/s | lo su kien      167/s | manifest      111/s | tong     1,111 req/s | req/thang      1.0 ty (online 8h/ngay)
+   1M: heartbeat     8,333/s | lo su kien    1,667/s | manifest    1,111/s | tong    11,111 req/s | req/thang      9.6 ty (online 8h/ngay)
+  10M: heartbeat    83,333/s | lo su kien   16,667/s | manifest   11,111/s | tong   111,111 req/s | req/thang     96.0 ty (online 8h/ngay)
+  50M: heartbeat   416,667/s | lo su kien   83,333/s | manifest   55,556/s | tong   555,556 req/s | req/thang    480.0 ty (online 8h/ngay)
+
+== Cloudflare, tung dong, USD/thang (A = dac ta; B/C/D = toi uu dan, xem COST-MODEL.md) ==
+
+-- design A --
+Dong                                                  100k            1M           10M           50M
+Workers: phi co ban                                      5             5             5             5
+Workers: request                                       285         2,877        28,797       143,997
+Workers: CPU time                                       45           451         4,511        22,559
+Queues                                               1,036        10,368       103,680       518,400
+Durable Objects: request (presence)                    108         1,080        10,800        54,000
+Durable Objects: duration                               17           172         1,411        11,320
+Durable Objects: SQLite rows written                     0             0             0            68
+KV: doc                                                 79           835         8,395        41,995
+KV: ghi/D1/quan tri (co dinh EST)                       60            60            60            60
+Pipelines: giao Parquet -> R2                            0            26           285         1,437
+R2: luu tru (su kien + media)                           31            37           103           396
+R2: Class B (tai media)                                  0             7           104           536
+Bang thong (R2/CDN egress mien phi)                      0             0             0             0
+TONG                                                 1,665        15,917       158,151       794,772
+
+-- design D --
+Dong                                                  100k            1M           10M           50M
+Workers: phi co ban                                      5             5             5             5
+Workers: request                                       256         2,589        25,917       129,597
+Workers: CPU time                                       43           431         4,319        21,599
+Queues                                                   0             0             0             0
+Durable Objects: request (presence)                    108         1,080        10,800        54,000
+Durable Objects: duration                               17           172         1,411        11,320
+Durable Objects: SQLite rows written                     0             0             0            68
+KV: doc                                                 31           355         3,595        17,995
+KV: ghi/D1/quan tri (co dinh EST)                       60            60            60            60
+Pipelines: giao Parquet -> R2                            0            26           285         1,437
+R2: luu tru (su kien + media)                           31            37           103           396
+R2: Class B (tai media)                                  0             7           104           536
+Bang thong (R2/CDN egress mien phi)                      0             0             0             0
+TONG                                                   550         4,762        46,599       237,013
+
+== Tom tat Cloudflare: A / B / C / D (USD/thang) ==
+design A: 100k: 1,665 | 1M: 15,917 | 10M: 158,151 | 50M: 794,772
+design B: 100k: 801 | 1M: 7,277 | 10M: 71,751 | 50M: 362,772
+design C: 100k: 629 | 1M: 5,550 | 10M: 54,471 | 50M: 276,373
+design D: 100k: 550 | 1M: 4,762 | 10M: 46,599 | 50M: 237,013
+
+== Ha tang rieng (hot-path; CF giu CDN/WAF/media) ==
+
+-- VN bare-metal (Vinahost-class) -- Xeon doi cu: hieu nang/luong ~0.6 so voi Zen4 (EST)
+ 100k: tong     6,944 (chua nhan su/khau hao     2,694) | may 5 (gw 1, rp 3, ch 2, redis 2, pg 1) | 0.0 Gbps | 0.1 TB CH | 0.5 FTE
+   1M: tong    12,846 (chua nhan su/khau hao     3,346) | may 6 (gw 1, rp 3, ch 2, redis 2, pg 3) | 0.3 Gbps | 1.0 TB CH | 2 FTE
+  10M: tong    24,363 (chua nhan su/khau hao    11,363) | may 19 (gw 2, rp 3, ch 6, redis 4, pg 4) | 2.7 Gbps | 9.8 TB CH | 3 FTE
+  50M: tong    54,874 (chua nhan su/khau hao    34,874) | may 52 (gw 7, rp 3, ch 26, redis 12, pg 4) | 13.3 Gbps | 48.8 TB CH | 5 FTE
+
+-- EU Hetzner AX102 (tham chieu, xa VN) -- RTT ~250-300ms tu VN (EST); khong dap ung luu tru trong nuoc
+ 100k: tong     5,052 (chua nhan su/khau hao       802) | may 5 (gw 1, rp 3, ch 2, redis 2, pg 1) | 0.0 Gbps | 0.1 TB CH | 0.5 FTE
+   1M: tong    10,424 (chua nhan su/khau hao       924) | may 6 (gw 1, rp 3, ch 2, redis 2, pg 3) | 0.3 Gbps | 1.0 TB CH | 2 FTE
+  10M: tong    15,050 (chua nhan su/khau hao     2,050) | may 15 (gw 1, rp 3, ch 3, redis 4, pg 4) | 2.7 Gbps | 9.8 TB CH | 3 FTE
+  50M: tong    25,114 (chua nhan su/khau hao     5,114) | may 38 (gw 5, rp 3, ch 14, redis 12, pg 4) | 13.3 Gbps | 48.8 TB CH | 5 FTE
+
+== Chi phi / thiet bi / thang va / 1000 impression (A, D vs VN) ==
+ 100k: CF-A $0.0167/tb $0.009/1k imp | CF-D $0.0055/tb $0.003/1k imp | VN $0.0694/tb $0.036/1k imp
+   1M: CF-A $0.0159/tb $0.008/1k imp | CF-D $0.0048/tb $0.002/1k imp | VN $0.0128/tb $0.007/1k imp
+  10M: CF-A $0.0158/tb $0.008/1k imp | CF-D $0.0047/tb $0.002/1k imp | VN $0.0024/tb $0.001/1k imp
+  50M: CF-A $0.0159/tb $0.008/1k imp | CF-D $0.0047/tb $0.002/1k imp | VN $0.0011/tb $0.001/1k imp
+
+== Quet diem giao nhau (VN, gom nhan su) ==
+design A: VN re hon CF tu ~0.45M thiet bi (CF $7,190 vs VN $7,005)
+design B: VN re hon CF tu ~2.26M thiet bi (CF $16,486 vs VN $15,525)
+design C: VN re hon CF tu ~3.01M thiet bi (CF $16,714 vs VN $15,663)
+design D: VN re hon CF tu ~3.31M thiet bi (CF $15,771 vs VN $15,718)
+
+== Mat do tai tren 1 Durable Object (dinh, EST) / Queue ==
+ 100k: 52 hb/s/DO (gioi han mem 1,000/s) | design A can >= 1 queue (5,000 msg/s/queue)
+   1M: 65 hb/s/DO (gioi han mem 1,000/s) | design A can >= 2 queue (5,000 msg/s/queue)
+  10M: 81 hb/s/DO (gioi han mem 1,000/s) | design A can >= 20 queue (5,000 msg/s/queue)
+  50M: 51 hb/s/DO (gioi han mem 1,000/s) | design A can >= 100 queue (5,000 msg/s/queue)
+
+== Nhay cam tai 10M va 50M: tong CF (design A / D) va VN, USD/thang ==
+co so (hb120/ev600/mf900/8h)                10M: A   158,151 D    46,599 VN   24,363 | 50M: A   794,772 D   237,013 VN   54,874
+heartbeat 30s                               10M: A   534,521 D   163,770 VN   32,667 | 50M: A 2,676,625 D   822,865 VN   98,347
+heartbeat 60s                               10M: A   283,608 D    85,656 VN   27,131 | 50M: A 1,422,057 D   432,297 VN   69,691
+heartbeat 300s                              10M: A    82,877 D    23,165 VN   21,626 | 50M: A   418,402 D   119,842 VN   46,082
+heartbeat 600s                              10M: A    57,785 D    15,354 VN   21,366 | 50M: A   292,945 D    80,786 VN   43,314
+gop lo su kien 300s                         10M: A   181,191 D    52,359 VN   24,623 | 50M: A   909,972 D   265,813 VN   56,663
+gop lo su kien 1200s                        10M: A   146,631 D    43,719 VN   24,233 | 50M: A   737,172 D   222,613 VN   53,735
+gop lo su kien 1800s                        10M: A   142,791 D    42,759 VN   24,190 | 50M: A   717,972 D   217,813 VN   53,518
+poll manifest 900s                          10M: A   158,151 D    46,599 VN   24,363 | 50M: A   794,772 D   237,013 VN   54,874
+poll manifest 3600s                         10M: A   152,247 D    46,599 VN   24,233 | 50M: A   765,252 D   237,013 VN   53,735
+online 4 gio/ngay                           10M: A    79,166 D    23,391 VN   22,896 | 50M: A   397,668 D   118,789 VN   48,514
+online 12 gio/ngay                          10M: A   237,135 D    69,808 VN   25,342 | 50M: A 1,191,877 D   355,237 VN   61,234
+online 24 gio/ngay                          10M: A   474,088 D   139,433 VN   29,256 | 50M: A 2,383,189 D   709,910 VN   80,315
+thich ung: hb 300s, ev 1800s, mf 3600s      10M: A    61,613 D    19,325 VN   21,323 | 50M: A   312,082 D   100,642 VN   44,076
+CPU/req x2                                  10M: A   162,663 D    50,919 VN   24,363 | 50M: A   817,332 D   258,613 VN   54,874
+CPU/req x0.5                                10M: A   155,895 D    44,439 VN   24,363 | 50M: A   783,492 D   226,213 VN   54,874
+KV-ghi-presence (phan khuyen nghi) 1M: 35,995 USD/thang chi rieng ghi KV
+KV-ghi-presence (phan khuyen nghi) 10M: 359,995 USD/thang chi rieng ghi KV
+KV-ghi-presence (phan khuyen nghi) 50M: 1,799,995 USD/thang chi rieng ghi KV
+Analytics Engine ghi moi heartbeat 1M: 1,798 USD/thang (neu bat tinh phi)
+Analytics Engine ghi moi heartbeat 10M: 17,998 USD/thang (neu bat tinh phi)
+Analytics Engine ghi moi heartbeat 50M: 89,998 USD/thang (neu bat tinh phi)

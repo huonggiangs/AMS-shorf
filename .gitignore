@@ -1,12 +1,20 @@
-node_modules/
-dist/
+# Bí mật và dữ liệu cục bộ: KHÔNG commit
 .env
 .env.*
 !.env.example
-*.log
-.DS_Store
+node_modules/
+dist/
 coverage/
+.turbo/
+*.log
+# Cloudflare / Terraform
+infra/cloudflare/.generated/
+infra/cloudflare/ids.*.json
+infra/cloudflare/terraform/.terraform/
+infra/cloudflare/terraform/*.tfstate
+infra/cloudflare/terraform/*.tfstate.*
+infra/cloudflare/terraform/terraform.tfvars
 .wrangler/
-*.sqlite
-*.sqlite-journal
-.pglite/
+.dev.vars
+backups/
+infra/cloudflare/*/wrangler.generated.toml

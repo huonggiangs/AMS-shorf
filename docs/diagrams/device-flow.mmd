@@ -1,0 +1,26 @@
+sequenceDiagram
+  participant D as Thiết bị
+  participant G as Edge Gateway
+  participant P as Presence (DO/Redis)
+  participant Q as Hàng đợi
+  participant C as Ingest consumer
+  participant E as Event store
+  participant M as Manifest (KV/CDN)
+  D->>G: POST /v1/register (pubkey Ed25519)
+  G-->>D: device_id + nonce attestation
+  D->>G: POST /v1/pair (mã 6 số, hết hạn 5 phút)
+  Note over D,G: Mỗi 120 giây ± 20% jitter
+  D->>G: POST /v1/heartbeat (chữ ký, nonce, telemetry)
+  G->>P: cập nhật presence, TTL 6 phút
+  G-->>D: next_interval, manifest_etag, Retry-After nếu quá tải
+  D->>M: GET /v1/manifest?etag (poll 15 phút)
+  M-->>D: 304 hoặc lịch phát mới
+  Note over D,G: Mỗi 10 phút hoặc đủ 20 sự kiện
+  D->>G: POST /v1/events (tối đa 50, ký, event_id UUIDv7)
+  Note over G: ký, nonce, trust, rate limit
+  G->>Q: đẩy lô sự kiện
+  G-->>D: 202 đã nhận
+  Q->>C: giao lô
+  Note over C: khử trùng event_id, kiểm VCR
+  C->>E: ghi impression hợp lệ
+  C->>E: ghi lý do từ chối

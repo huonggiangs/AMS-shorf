@@ -1,0 +1,20 @@
+flowchart TD
+  A["SePay gửi webhook<br/>POST /webhooks/payments/sepay"] --> L["Lưu nguyên văn payload<br/>payment_webhooks"]
+  L --> B{"1. Khử trùng<br/>id đã xử lý?"}
+  B -- "đã có" --> B1["Trả success true<br/>không cộng lần hai"]
+  B -- "mới" --> C{"2. Xác thực<br/>HMAC, timestamp ≤ 5 phút"}
+  C -- "sai" --> C1["Từ chối 401<br/>ghi signature_ok = 0"]
+  C -- "đúng" --> D{"3. transferType = in?"}
+  D -- "out" --> D1["Bỏ qua, ghi log"]
+  D -- "in" --> E{"4. Đối chiếu<br/>mã AMS khách hàng + số tiền"}
+  E -- "không khớp" --> E1["Hàng đợi thủ công<br/>của Tài chính"]
+  E -- "khớp" --> F["5. Cộng ví<br/>topups + wallet_entries<br/>một transaction"]
+  F --> G{"6. Bộ kích hoạt tự động"}
+  G --> G1["Chiến dịch awaiting_funds<br/>giữ ngân sách, tự chạy"]
+  G --> G2["Khách pending_payment<br/>đạt mức tối thiểu: kích hoạt,<br/>hợp đồng active, tạo tài khoản"]
+  G --> G3["Dưới mức tối thiểu<br/>chỉ cộng ví"]
+  G1 --> H["activation_log + audit_log<br/>thông báo cho khách"]
+  G2 --> H
+  G3 --> H
+  H --> I["Phản hồi 200<br/>success true"]
+  J["Job đối soát hằng ngày<br/>API giao dịch SePay"] -. "bù webhook thiếu" .-> E

@@ -7,10 +7,13 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./test": "./src/test.ts",
+    "./docker": "./src/docker.ts",
+    "./cloudflare": "./src/cloudflare/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.workers.json",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

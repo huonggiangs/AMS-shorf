@@ -1,0 +1,459 @@
+# AMS - Docker Compose cho môi trường local (đặc tả mục 11.2, PLAN mục 5).
+#
+# Cách dùng (luôn truyền --env-file; `make`/`scripts/ams.ps1` đã làm sẵn):
+#   docker compose --env-file .env -f infra/docker/docker-compose.yml --profile core up -d
+#   docker compose --env-file .env -f infra/docker/docker-compose.yml --profile core --profile events up -d
+#
+# Profiles:
+#   core    : proxy, web-admin, api, edge-gateway, postgres, redis, minio, mailpit (+ migrate-seed, minio-init chạy một lần)
+#   events  : redpanda, clickhouse, ingest-consumer  (kiểm thử luồng heartbeat/impression)
+#   obs     : otel-collector, grafana
+#   tunnel  : cloudflared quick tunnel -> api (để SePay gọi webhook về PC)
+#   payments: worker nền services/payments (bật khi dịch vụ này có tiến trình riêng)
+#
+# Kiểm cú pháp không cần daemon:
+#   docker compose --env-file .env.example -f infra/docker/docker-compose.yml --profile '*' config -q
+#
+# Mọi cổng chỉ mở ở 127.0.0.1 (không lộ ra mạng LAN). Giá trị mặc định "change-me-*"
+# CHỈ để lệnh `config` chạy được; `make setup` sinh khóa ngẫu nhiên vào .env.
+
+name: ams
+
+x-node-service: &node-service
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  networks: [ams]
+  logging: &default-logging
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-app-env: &app-env
+  RUNTIME: docker
+  NODE_ENV: ${NODE_ENV:-production}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://${POSTGRES_USER:-ams}:${POSTGRES_PASSWORD:-change-me-postgres}@postgres:5432/${POSTGRES_DB:-ams}
+  REDIS_URL: redis://:${REDIS_PASSWORD:-change-me-redis}@redis:6379
+  S3_ENDPOINT: http://minio:9000
+  S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_BUCKET: ${S3_BUCKET:-ams-media}
+  S3_ACCESS_KEY: ${MINIO_ROOT_USER:-amsminio}
+  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+  S3_FORCE_PATH_STYLE: "true"
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  SMTP_FROM: ${SMTP_FROM:-AMS <no-reply@ams.localhost>}
+  SESSION_SECRET: ${SESSION_SECRET:-change-me-session}
+  FIELD_ENC_KEY: ${FIELD_ENC_KEY:-change-me-field-enc-key}
+  SEPAY_MODE: ${SEPAY_MODE:-mock}
+  SEPAY_WEBHOOK_SECRET: ${SEPAY_WEBHOOK_SECRET:-change-me-sepay}
+  QUEUE_DRIVER: ${QUEUE_DRIVER:-redis}
+  KAFKA_BROKERS: ${KAFKA_BROKERS:-redpanda:9092}
+  CLICKHOUSE_URL: ${CLICKHOUSE_URL:-}
+  CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+  CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+  APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://admin.ams.localhost}
+  PORTAL_PUBLIC_URL: ${PORTAL_PUBLIC_URL:-https://portal.ams.localhost}
+  API_PUBLIC_URL: ${API_PUBLIC_URL:-https://api.ams.localhost}
+
+services:
+  # ---------------------------------------------------------------- proxy
+  proxy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
+    profiles: [core]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PROXY_HTTP_PORT:-80}:80"
+      - "127.0.0.1:${PROXY_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    networks: [ams]
+    depends_on:
+      web-admin: { condition: service_healthy }
+      api: { condition: service_healthy }
+      edge-gateway: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- ứng dụng
+  web-admin:
+    <<: *node-service
+    build:
+      context: ../..
+      dockerfile: apps/web-admin/Dockerfile
+      args:
+        VITE_API_BASE: /api
+    image: ams/web-admin:local
+    profiles: [core]
+    environment:
+      API_UPSTREAM: http://api:8787
+    ports:
+      - "127.0.0.1:${WEB_ADMIN_PORT:-8080}:8080"
+    # nginx-unprivileged cần ghi cache/pid vào các thư mục này
+    # filesystem chỉ đọc: entrypoint nginx ghi conf.d (từ mẫu), cache và pid vào tmpfs thuộc user 101
+    tmpfs:
+      - /tmp:uid=101,gid=101
+      - /var/cache/nginx:uid=101,gid=101
+      - /etc/nginx/conf.d:uid=101,gid=101,mode=755
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    <<: *node-service
+    build:
+      context: ../..
+      dockerfile: services/api/Dockerfile
+      target: runtime
+    image: ams/api:local
+    profiles: [core]
+    environment:
+      <<: *app-env
+      PORT: "8787"
+      SERVICE_NAME: api
+    ports:
+      - "127.0.0.1:${API_PORT:-8787}:8787"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+      migrate-seed: { condition: service_completed_successfully }
+      mailpit: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+
+  edge-gateway:
+    <<: *node-service
+    build:
+      context: ../..
+      dockerfile: services/edge-gateway/Dockerfile
+    image: ams/edge-gateway:local
+    profiles: [core]
+    environment:
+      <<: *app-env
+      PORT: "8788"
+      SERVICE_NAME: edge-gateway
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-8788}:8788"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate-seed: { condition: service_completed_successfully }
+      # chỉ chờ khi profile `events` đang bật; nếu không thì bỏ qua (cần Compose >= 2.20)
+      redpanda: { condition: service_healthy, required: false }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8788/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+
+  ingest-consumer:
+    <<: *node-service
+    build:
+      context: ../..
+      dockerfile: services/ingest-consumer/Dockerfile
+    image: ams/ingest-consumer:local
+    profiles: [events]
+    environment:
+      <<: *app-env
+      # profile events: luôn dùng Redpanda + ClickHouse cho consumer
+      QUEUE_DRIVER: redpanda
+      CLICKHOUSE_URL: http://clickhouse:8123
+      SERVICE_NAME: ingest-consumer
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate-seed: { condition: service_completed_successfully }
+      redpanda: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+
+  payments:
+    <<: *node-service
+    build:
+      context: ../..
+      dockerfile: services/payments/Dockerfile
+    image: ams/payments:local
+    profiles: [payments]
+    environment:
+      <<: *app-env
+      SERVICE_NAME: payments
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate-seed: { condition: service_completed_successfully }
+
+  # Chạy một lần: migration + seed (đặc tả 14/1a). Đặt SEED=0 trong .env để bỏ seed.
+  migrate-seed:
+    build:
+      context: ../..
+      dockerfile: services/api/Dockerfile
+      target: migrate
+    image: ams/migrate-seed:local
+    profiles: [core]
+    restart: "no"
+    networks: [ams]
+    environment:
+      <<: *app-env
+      SEED: ${SEED:-1}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@ams.localhost}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-change-me-admin}
+      SEED_ADMIN_TOTP_SECRET: ${SEED_ADMIN_TOTP_SECRET:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- dữ liệu
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    profiles: [core]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ams}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ams}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [ams]
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    logging: *default-logging
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    profiles: [core]
+    restart: unless-stopped
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me-redis}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-change-me-redis}
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    networks: [ams]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *default-logging
+
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}
+    profiles: [core]
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-amsminio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+    networks: [ams]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    logging: *default-logging
+
+  # Chạy một lần: tạo bucket media/reports (riêng tư).
+  minio-init:
+    image: ${MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-04-16T18-13-26Z}
+    profiles: [core]
+    restart: "no"
+    networks: [ams]
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-amsminio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+      S3_BUCKET: ${S3_BUCKET:-ams-media}
+      S3_REPORTS_BUCKET: ${S3_REPORTS_BUCKET:-ams-reports}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+        mc mb --ignore-existing "local/$$S3_REPORTS_BUCKET"
+        mc anonymous set none "local/$$S3_BUCKET"
+        mc anonymous set none "local/$$S3_REPORTS_BUCKET"
+        echo "minio-init: bucket sẵn sàng"
+
+  mailpit:
+    image: ${MAILPIT_IMAGE:-axllent/mailpit:v1.21}
+    profiles: [core]
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: "5000"
+      MP_DATABASE: /data/mailpit.db
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+    volumes:
+      - mailpitdata:/data
+    networks: [ams]
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- profile events
+  redpanda:
+    image: ${REDPANDA_IMAGE:-redpandadata/redpanda:v24.3.18}
+    profiles: [events]
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "127.0.0.1:${REDPANDA_EXTERNAL_PORT:-19092}:19092"
+    volumes:
+      - rpdata:/var/lib/redpanda/data
+    networks: [ams]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *default-logging
+
+  clickhouse:
+    image: ${CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:24.8}
+    profiles: [events]
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-ams}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "127.0.0.1:${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "127.0.0.1:${CLICKHOUSE_NATIVE_PORT:-9440}:9000"
+    volumes:
+      - chdata:/var/lib/clickhouse
+      - ../clickhouse/init:/docker-entrypoint-initdb.d:ro
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    networks: [ams]
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- profile obs
+  otel-collector:
+    image: ${OTEL_IMAGE:-otel/opentelemetry-collector-contrib:0.111.0}
+    profiles: [obs]
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "127.0.0.1:${OTEL_GRPC_PORT:-4317}:4317"
+      - "127.0.0.1:${OTEL_HTTP_PORT:-4318}:4318"
+    networks: [ams]
+    logging: *default-logging
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:11.3.0}
+    profiles: [obs]
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-grafana}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+      POSTGRES_USER: ${POSTGRES_USER:-ams}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ams}
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks: [ams]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health | grep -q ok"]
+      interval: 15s
+      timeout: 3s
+      retries: 8
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- profile tunnel
+  # Quick tunnel: không cần tài khoản. URL công khai (https://xxxx.trycloudflare.com) in ra
+  # trong log; `make tunnel` tự lọc và in URL webhook SePay. URL đổi mỗi lần chạy.
+  tunnel:
+    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2024.12.2}
+    profiles: [tunnel]
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://api:8787"]
+    networks: [ams]
+    depends_on:
+      api: { condition: service_healthy }
+    logging: *default-logging
+
+networks:
+  ams:
+    name: ams_net
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  mailpitdata:
+  rpdata:
+  chdata:
+  grafanadata:
+  caddy_data:
+  caddy_config:

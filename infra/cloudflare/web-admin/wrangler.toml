@@ -1,0 +1,50 @@
+# Web admin + cổng khách hàng trên Cloudflare: Workers Static Assets (khuyến nghị thay cho Pages).
+# Build tĩnh: pnpm --filter @ams/web-admin build  (VITE_API_BASE=/api)  ->  apps/web-admin/dist
+# worker.js chỉ làm 2 việc: chuyển /api/* sang Worker `api` qua service binding (cùng origin, cookie đơn giản)
+# và trả tệp tĩnh (SPA). Tương đương nginx + Caddy ở bản Docker.
+# Dấu __XXX__ do scripts/deploy-cloudflare.mjs thay khi deploy.
+name = "ams-web-admin"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = false
+preview_urls = false
+
+[assets]
+directory = "../../../apps/web-admin/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# Để worker.js chạy TRƯỚC với /api/*, các đường khác vẫn được trả thẳng từ assets
+run_worker_first = ["/api/*"]
+
+[env.staging]
+name = "ams-web-admin-staging"
+routes = [
+  { pattern = "admin-staging.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" },
+  { pattern = "portal-staging.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" },
+]
+[[env.staging.services]]
+binding = "API"
+service = "ams-api-staging"
+
+[env.production]
+name = "ams-web-admin-production"
+routes = [
+  { pattern = "admin.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" },
+  { pattern = "portal.__AMS_DOMAIN__/*", zone_name = "__AMS_DOMAIN__" },
+]
+[[env.production.services]]
+binding = "API"
+service = "ams-api-production"
+
+# [env.*.assets] không kế thừa trong một số bản wrangler: khai báo lại cho chắc
+[env.staging.assets]
+directory = "../../../apps/web-admin/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[env.production.assets]
+directory = "../../../apps/web-admin/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
