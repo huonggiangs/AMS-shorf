@@ -61,12 +61,12 @@ Thay `<env>` bằng `staging`/`production`; cấu hình sinh ra: `infra/cloudfla
 | Nạp lại từ tệp | tạo DB mới `npx wrangler d1 create ams-core-<env>-restore`, rồi `npx wrangler d1 execute ams-core-<env>-restore --remote --file backups/<...>/core.sql` | Dùng cho mất toàn bộ DB hoặc tài khoản; sau đó trỏ `database_id` mới vào `ids.<env>.json` và deploy lại |
 Lưu ý: migration phải tương thích ngược để quay lui mã không hỏng dữ liệu (DEPLOY-CLOUDFLARE mục 8.2). Bản export chứa dữ liệu cá nhân và số liệu tài chính: lưu mã hóa, hạn chế truy cập.
 
-### 2.3 Cloudflare R2 và MinIO (media, báo cáo, bản sao audit)
+### 2.3 Cloudflare R2 và volume media Docker (media, báo cáo, bản sao audit)
 
 Bucket: `ams-media-<env>` (media quảng cáo), `ams-reports-<env>`, `ams-audit-<env>` (bản sao audit; object lock là việc **Sẽ làm**, THREAT-MODEL mục 3). Repo **chưa có** cơ chế sao lưu R2. Đề xuất, chưa kiểm chứng:
 - Định kỳ sao chép sang một bucket/nhà cung cấp khác (rclone với endpoint S3 của R2, hoặc `wrangler r2 object get`); R2 bền vững nhưng không thay thế bản sao khi xóa nhầm hoặc mất tài khoản.
 - Media có thể phục hồi một phần từ khách (họ giữ bản gốc) và từ bảng `creatives`; báo cáo sinh lại được; **bản sao audit** là chứng cứ pháp lý (giữ ≥ 12 tháng), ưu tiên bản sao thứ hai.
-- Docker/MinIO: `docker run --rm --network ams_net -v "$PWD/backups/minio:/out" --entrypoint /bin/sh quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z -c 'mc alias set l http://minio:9000 "$USER" "$PASS" && mc mirror l/ams-media /out/ams-media'` (điền khóa từ `.env`, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`; chưa chạy thật). Hoặc sao lưu cả volume `miniodata`.
+- Docker local (`OBJECT_STORE=fs`, không còn MinIO): toàn bộ tệp nằm trong volume `ams_mediadata` (thư mục `/data/objects`: `media/` bản gốc, `renditions/` bản chuyển mã, `.meta/` content-type). Sao lưu bằng tar (Docker Hub là registry duy nhất cần): `docker run --rm -v ams_mediadata:/data:ro -v "$PWD/backups:/out" alpine tar czf /out/mediadata-$(date +%F).tgz -C /data .`. Khôi phục vào volume rỗng: `docker run --rm -v ams_mediadata:/data -v "$PWD/backups:/out" alpine tar xzf /out/mediadata-<ngày>.tgz -C /data` rồi `chown -R 1000:1000 /data` (user `node`) (chưa chạy thật).
 
 ### 2.4 ClickHouse (profile `events`, chỉ Docker thử nghiệm)
 
@@ -124,7 +124,7 @@ Nguyên tắc: **dừng ghi trước, khôi phục, kiểm chứng, rồi mới 
 2. `scripts/backup-postgres.sh verify <tệp mới nhất>` rồi `scripts/backup-postgres.sh restore <tệp>`.
 3. `pnpm --filter @ams/api migrate` (idempotent; áp migration mới hơn bản sao lưu nếu có).
 4. `$DC up -d`, kiểm tra RUNBOOK mục 3, kiểm chứng nghiệp vụ (mục 5).
-5. MinIO/Redis: khôi phục volume hoặc `mc mirror` ngược; nếu không có, media phải tải lên lại.
+5. Volume media/Redis: giải nén bản tar vào volume (mục 2.3); nếu không có, media phải tải lên lại.
 Làm lại từ đầu bằng dữ liệu mẫu (chỉ local): `make reset` rồi `make up && make seed` (xóa sạch); ngoài local dùng `make bootstrap`.
 
 ## 4. Diễn tập khôi phục (thủ tục thử, bắt buộc mỗi quý)
@@ -155,7 +155,7 @@ Phần kiểm chứng nghiệp vụ nên làm sau mỗi lần diễn tập: dùn
 - [ ] `outbox` không có `dead`; hàng đợi sự kiện chảy (RUNBOOK 4.1).
 - [ ] Thiết bị mô phỏng gửi heartbeat và nhận manifest (`tools/sim`); chiến dịch đang chạy vẫn đúng trạng thái.
 - [ ] Gửi thử webhook SePay (sandbox hoặc "Gửi thử"): nhận `{"success":true}`, gửi lặp không cộng hai lần.
-- [ ] Media đã tải xem được (đường dẫn R2/MinIO còn đủ tệp).
+- [ ] Media đã tải xem được (R2 hoặc volume `mediadata` còn đủ tệp).
 
 ## 6. Rủi ro tồn đọng (cần chốt trước go-live)
 

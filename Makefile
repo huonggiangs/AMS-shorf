@@ -26,7 +26,7 @@ config: env-check ## Kiểm cú pháp docker compose (mọi profile)
 build: env-check ## Build image các dịch vụ
 	@$(DC) --profile core build
 
-up: env-check ## Chạy profile core (postgres, redis, minio, mailpit, api, web-admin, edge-gateway, ingest-consumer, media-worker, clamav, proxy)
+up: env-check ## Chạy profile core (postgres, redis, mailpit, api, web-admin, edge-gateway, ingest-consumer, media-worker, clamav, proxy)
 	@$(DC) --profile core up -d --build
 	@node scripts/setup.mjs creds
 
@@ -67,7 +67,7 @@ down: ## Dừng container (giữ dữ liệu)
 	@$(DC) --profile '*' down --remove-orphans
 
 reset: ## XÓA TOÀN BỘ dữ liệu local (volume) rồi dừng. Hỏi xác nhận; bỏ hỏi: make reset YES=1
-	@if [ "$(YES)" != "1" ]; then printf "Lệnh này XÓA Postgres/MinIO/Redis/Mailpit local. Gõ 'xoa' để tiếp tục: "; read a; [ "$$a" = "xoa" ] || { echo "Đã hủy."; exit 1; }; fi
+	@if [ "$(YES)" != "1" ]; then printf "Lệnh này XÓA Postgres/volume media/Redis/Mailpit local. Gõ 'xoa' để tiếp tục: "; read a; [ "$$a" = "xoa" ] || { echo "Đã hủy."; exit 1; }; fi
 	@$(DC) --profile '*' down -v --remove-orphans
 
 logs: ## Xem log: make logs   hoặc   make logs S=api

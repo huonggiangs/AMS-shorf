@@ -244,7 +244,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const id = rt.id();
     const key = `media/${customerId}/${id}/${safeName(b.name)}`;
     const nowIso = rt.clock.now().toISOString();
-    const signed = await rt.objects.putSigned(key, mime, 900);
+    const signed = await rt.objects.putSigned(key, mime, 900, { maxBytes: b.size_bytes });
     await rt.db.tx(async (db) => {
       await db.run(
         `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, uploaded_by, uploader_kind, scan_state, review_state, state, format, overlay, created_at)

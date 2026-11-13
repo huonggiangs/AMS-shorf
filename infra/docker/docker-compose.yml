@@ -5,7 +5,8 @@
 #   docker compose --env-file .env -f infra/docker/docker-compose.yml --profile core --profile events up -d
 #
 # Profiles:
-#   core    : proxy, web-admin, api, edge-gateway, ingest-consumer, media-worker, clamav, postgres, redis, minio, mailpit (+ env-guard, migrate-seed, minio-init chạy một lần)
+#   core    : proxy, web-admin, api, edge-gateway, ingest-consumer, media-worker, clamav, postgres, redis, mailpit (+ env-guard, migrate-seed chạy một lần)
+#             Kho tệp local = volume `mediadata` dùng chung (OBJECT_STORE=fs), KHÔNG cần MinIO/S3; Caddy phát công khai `renditions/*` cho TV.
 #   events  : redpanda, clickhouse  (tùy chọn; đặt CLICKHOUSE_URL=http://clickhouse:8123 để ghi sự kiện vào ClickHouse)
 #   obs     : otel-collector, grafana
 #   tunnel  : cloudflared quick tunnel -> api (để SePay gọi webhook về PC)
@@ -40,13 +41,15 @@ x-app-env: &app-env
   LOG_LEVEL: ${LOG_LEVEL:-info}
   DATABASE_URL: postgres://${POSTGRES_USER:-ams}:${POSTGRES_PASSWORD:-change-me-postgres}@postgres:5432/${POSTGRES_DB:-ams}
   REDIS_URL: redis://:${REDIS_PASSWORD:-change-me-redis}@redis:6379
-  S3_ENDPOINT: http://minio:9000
-  S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
-  S3_REGION: ${S3_REGION:-us-east-1}
-  S3_BUCKET: ${S3_BUCKET:-ams-media}
-  S3_ACCESS_KEY: ${MINIO_ROOT_USER:-amsminio}
-  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
-  S3_FORCE_PATH_STYLE: "true"
+  # Kho tep local: he thong tep tren volume `mediadata` (khong can S3/MinIO). Production dung S3/R2: dat OBJECT_STORE=s3 + S3_*.
+  OBJECT_STORE: ${OBJECT_STORE:-fs}
+  OBJECT_STORE_DIR: /data/objects
+  # URL ky tai len/xem ban goc do API phuc vu (tuong doi: qua nginx cua web-admin /api/storage/...)
+  OBJECT_STORE_SIGNED_BASE_URL: ${OBJECT_STORE_SIGNED_BASE_URL:-/api/storage}
+  OBJECT_STORE_MAX_UPLOAD_MB: ${OBJECT_STORE_MAX_UPLOAD_MB:-600}
+  # Dia chi TV tai media (Caddy phuc vu renditions/* tu volume). Tren TV that: doi thanh http://<IP LAN cua PC>:9000/media-public
+  PUBLIC_MEDIA_BASE_URL: ${PUBLIC_MEDIA_BASE_URL:-http://localhost:9000/media-public}
+  MEDIA_PUBLIC_PREFIXES: ${MEDIA_PUBLIC_PREFIXES:-renditions}
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
   SMTP_USER: ${SMTP_USER:-}
@@ -81,8 +84,26 @@ services:
     ports:
       - "127.0.0.1:${PROXY_HTTP_PORT:-80}:80"
       - "127.0.0.1:${PROXY_HTTPS_PORT:-443}:443"
+      # HTTP thuần cho TV tải media công khai (TV không tin CA nội bộ của Caddy). Muốn TV thật trong LAN truy cập: đặt MEDIA_BIND=0.0.0.0
+      - "${MEDIA_BIND:-127.0.0.1}:${MEDIA_PUBLIC_PORT:-9000}:9000"
+    environment:
+      MEDIA_PUBLIC_PREFIXES: ${MEDIA_PUBLIC_PREFIXES:-renditions}
+    # Chỉ các tiền tố trong MEDIA_PUBLIC_PREFIXES được phát công khai (mặc định `renditions`: bản đã quét + chuyển mã của media-worker).
+    # Bản gốc `media/...` KHÔNG BAO GIỜ được phát: tiền tố `media` bị từ chối.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        P=""
+        for p in $$(echo "$${MEDIA_PUBLIC_PREFIXES:-renditions}" | tr ',' ' '); do
+          case "$$p" in media|.*|*[!A-Za-z0-9._-]*) echo "proxy: MEDIA_PUBLIC_PREFIXES khong hop le/khong duoc phep: $$p" >&2; exit 1;; esac
+          P="$$P /media-public/$$p/*"
+        done
+        [ -n "$$P" ] || { echo "proxy: MEDIA_PUBLIC_PREFIXES rong" >&2; exit 1; }
+        export MEDIA_PUBLIC_PATHS="$$P"
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - mediadata:/srv/objects:ro
       - caddy_data:/data
       - caddy_config:/config
     cap_drop: [ALL]
@@ -137,6 +158,8 @@ services:
       target: runtime
     image: ams/api:local
     profiles: [core]
+    volumes:
+      - mediadata:/data/objects
     environment:
       <<: *app-env
       PORT: "8787"
@@ -146,7 +169,6 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-      minio-init: { condition: service_completed_successfully }
       migrate-seed: { condition: service_completed_successfully }
       mailpit: { condition: service_healthy }
     healthcheck:
@@ -163,6 +185,8 @@ services:
       dockerfile: services/edge-gateway/Dockerfile
     image: ams/edge-gateway:local
     profiles: [core]
+    volumes:
+      - mediadata:/data/objects:ro
     environment:
       <<: *app-env
       PORT: "8788"
@@ -230,12 +254,11 @@ services:
       G_SEPAY_WEBHOOK_SECRET: ${SEPAY_WEBHOOK_SECRET:-change-me-sepay}
       G_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres}
       G_REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me-redis}
-      G_MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         bad=""
-        for v in G_SESSION_SECRET G_FIELD_ENC_KEY G_SEPAY_WEBHOOK_SECRET G_POSTGRES_PASSWORD G_REDIS_PASSWORD G_MINIO_ROOT_PASSWORD; do
+        for v in G_SESSION_SECRET G_FIELD_ENC_KEY G_SEPAY_WEBHOOK_SECRET G_POSTGRES_PASSWORD G_REDIS_PASSWORD; do
           eval "val=\$$$$v"
           case "$$val" in change-me*|CHANGE_ME*|"") bad="$$bad $${v#G_}";; esac
         done
@@ -253,6 +276,8 @@ services:
       dockerfile: services/media-worker/Dockerfile
     image: ams/media-worker:local
     profiles: [core]
+    volumes:
+      - mediadata:/data/objects
     environment:
       <<: *app-env
       SERVICE_NAME: media-worker
@@ -272,7 +297,6 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-      minio-init: { condition: service_completed_successfully }
       migrate-seed: { condition: service_completed_successfully }
       clamav: { condition: service_healthy, required: false }
     deploy:
@@ -383,56 +407,6 @@ services:
       timeout: 3s
       retries: 10
     logging: *default-logging
-
-  minio:
-    image: ${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z}
-    profiles: [core]
-    restart: unless-stopped
-    command: ["server", "/data", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-amsminio}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
-    ports:
-      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
-      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
-    volumes:
-      - miniodata:/data
-    networks: [ams]
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-    logging: *default-logging
-
-  # Chạy một lần: tạo bucket media/reports (riêng tư).
-  minio-init:
-    image: ${MINIO_MC_IMAGE:-quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z}
-    profiles: [core]
-    restart: "no"
-    networks: [ams]
-    depends_on:
-      minio: { condition: service_healthy }
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-amsminio}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
-      S3_BUCKET: ${S3_BUCKET:-ams-media}
-      S3_REPORTS_BUCKET: ${S3_REPORTS_BUCKET:-ams-reports}
-      MINIO_PUBLIC_PREFIXES: ${MINIO_PUBLIC_PREFIXES:-renditions}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        mc mb --ignore-existing "local/$$S3_BUCKET"
-        mc mb --ignore-existing "local/$$S3_REPORTS_BUCKET"
-        # R1-03: bucket media mac dinh RIENG TU. Chi cac tien to trong MINIO_PUBLIC_PREFIXES (mac dinh `renditions`: ban da
-        # quet + chuyen ma cua media-worker) moi doc cong khai cho TV. Ban goc `media/...` (chua quet/chua duyet) KHONG bao gio mo.
-        # Muon TV tai ban goc nhu truoc (khong khuyen nghi): MINIO_PUBLIC_PREFIXES="renditions media".
-        mc anonymous set none "local/$$S3_BUCKET"
-        for p in $$MINIO_PUBLIC_PREFIXES; do mc anonymous set download "local/$$S3_BUCKET/$$p"; done
-        mc anonymous set none "local/$$S3_REPORTS_BUCKET"
-        echo "minio-init: bucket sẵn sàng"
 
   mailpit:
     image: ${MAILPIT_IMAGE:-axllent/mailpit:v1.21}
@@ -570,7 +544,7 @@ networks:
 volumes:
   pgdata:
   redisdata:
-  miniodata:
+  mediadata:
   clamavdata:
   mailpitdata:
   rpdata:

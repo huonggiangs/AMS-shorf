@@ -67,3 +67,40 @@ gw.ams.localhost {
 		health_interval 15s
 	}
 }
+
+# ---- Media công khai cho TV (CHỈ ĐỌC): phát tĩnh từ volume dùng chung `mediadata` (mount ở /srv/objects, :ro).
+# Chỉ các tiền tố trong MEDIA_PUBLIC_PREFIXES (mặc định `renditions`) => MEDIA_PUBLIC_PATHS="/media-public/renditions/*";
+# mọi đường dẫn khác (bản gốc media/..., .meta/, .tmp/) trả 404. Không liệt kê thư mục. URL TV: PUBLIC_MEDIA_BASE_URL/<key>.
+(media_public) {
+	@mpub path {$MEDIA_PUBLIC_PATHS:/media-public/renditions/*}
+	@mbad not method GET HEAD OPTIONS
+	header {
+		X-Content-Type-Options nosniff
+		Access-Control-Allow-Origin *
+		-Server
+	}
+	handle /media-public/healthz {
+		respond "ok" 200
+	}
+	handle @mpub {
+		respond @mbad 405
+		header Cache-Control "public, max-age=300"
+		uri strip_prefix /media-public
+		root * /srv/objects
+		file_server {
+			hide .*
+		}
+	}
+	handle {
+		respond 404
+	}
+}
+
+# HTTPS (tên miền cục bộ) và HTTP thuần :9000 (cho TV/thiết bị không tin CA nội bộ)
+media.ams.localhost {
+	tls internal
+	import media_public
+}
+http://:9000 {
+	import media_public
+}

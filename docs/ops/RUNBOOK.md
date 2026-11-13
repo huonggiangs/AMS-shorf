@@ -18,7 +18,7 @@ Mọi lệnh thay đổi dữ liệu thật (production) cần **hai người** 
 | Ghi sự kiện, trừ tiền | `ingest-consumer` :8789 | consumer của Queue `ams-ingest-<env>` (trong Worker gateway) | **Lượt hiển thị không được tính tiền** (sự kiện nằm chờ trong hàng đợi) |
 | CSDL giao dịch | `postgres` | D1 `ams-core-<env>` (finance/audit tách sẵn nhưng hiện chưa dùng, xem DR mục 1) | Hệ thống dừng |
 | KV, rate limit, hàng đợi | `redis` (AOF bật) | KV `ams-kv-<env>`, Queues | Mất rate limit/cache; Redis mất hàng đợi sự kiện chưa xử lý |
-| Tệp media | `minio` (bucket `ams-media`, `ams-reports`) | R2 `ams-media-<env>`, `ams-reports-<env>`, `ams-audit-<env>` | Không tải/xem media |
+| Tệp media | volume `mediadata` (`/data/objects`, `OBJECT_STORE=fs`) | R2 `ams-media-<env>`, `ams-reports-<env>`, `ams-audit-<env>` | Không tải/xem media |
 | Email | `mailpit` (chỉ bắt thư thử) | Chưa cấu hình dịch vụ gửi thư thật (DEPLOY-CLOUDFLARE mục 5) | Không gửi được thư mời/kích hoạt |
 
 ## 2. Khởi động và dừng
@@ -31,11 +31,11 @@ Mọi lệnh thay đổi dữ liệu thật (production) cần **hai người** 
 | Thêm ClickHouse | `make up-events` | `clickhouse` healthy (xem mục 6) |
 | Thêm Grafana/OTel | `make up-obs` | Grafana ở http://localhost:3000 |
 | Dừng (giữ dữ liệu) | `make down` | `make ps` rỗng |
-| **Xóa sạch dữ liệu local** | `make reset` (hỏi gõ `xoa`) | **Mất Postgres, MinIO, Redis, Mailpit**. Sao lưu trước: `scripts/backup-postgres.sh backup` |
+| **Xóa sạch dữ liệu local** | `make reset` (hỏi gõ `xoa`) | **Mất Postgres, volume media, Redis, Mailpit**. Sao lưu trước: `scripts/backup-postgres.sh backup` |
 | Chẩn đoán | `make doctor` | In công cụ, `.env`, container, cổng |
 | Xem log | `make logs` hoặc `make logs S=api` | |
 
-Thứ tự khởi động do `depends_on` lo: postgres, redis, minio, mailpit, `minio-init`, `migrate-seed`, rồi `api`, `edge-gateway`, `ingest-consumer`, `web-admin`, `proxy`. Khởi động lại một dịch vụ: `$DC restart api`.
+Thứ tự khởi động do `depends_on` lo: postgres, redis, mailpit, `migrate-seed`, rồi `api`, `edge-gateway`, `ingest-consumer`, `web-admin`, `proxy`. Khởi động lại một dịch vụ: `$DC restart api`.
 Dừng **an toàn khi cần bảo trì DB**: dừng nơi ghi trước, giữ DB: `$DC stop proxy api edge-gateway ingest-consumer`.
 
 ### Cloudflare
@@ -117,7 +117,7 @@ docker system df
 Bảng phình nhanh nhất thường là `ev_heartbeat`, `ev_ad_impression`, `ev_proof_of_play` (sự kiện), rồi `impression_hourly`, `outbox`, `spend_events`. **Hiện mã chỉ tự dọn `outbox` (giữ 14 ngày) và `spend_events`; các bảng `ev_*` không có chính sách giữ dữ liệu tự động ở chế độ Postgres/D1** (ClickHouse có `TTL` 14 ngày cho `heartbeat` trong `packages/db/clickhouse/001_events.sql`). Đây là khoảng trống đã biết: ghi vào backlog.
 
 **Xử lý:**
-1. **Sao lưu trước khi xóa bất cứ gì:** `scripts/backup-postgres.sh backup`.
+1. **Sao lưu trước khi xóa bất cứ gì:** `scripts/backup-postgres.sh backup`. Media local (volume `ams_mediadata`): sao lưu bằng tar, xem DISASTER-RECOVERY mục 2.3.
 2. Dọn sự kiện nóng cũ (chỉ heartbeat, giá trị thấp nhất): `DELETE FROM ev_heartbeat WHERE ts < '<ISO-8601 cách đây 14 ngày>'` rồi `VACUUM (ANALYZE) ev_heartbeat` (Postgres; ngoài giờ cao điểm, xóa theo lô nếu bảng rất lớn). **Không** xóa `ev_ad_impression` đã gộp vào `impression_hourly` khi chưa chạy đối soát doanh thu; **không bao giờ** sửa/xóa `audit_log`, `wallet_entries`, `wallet_ledger` (trigger chặn và đó là bằng chứng tài chính).
 3. Đĩa Docker đầy: `docker system prune` **chỉ** xóa image/cache không dùng; **không** chạy `docker volume prune` (xóa volume dữ liệu) và không `make reset`. Mở rộng đĩa hoặc chuyển volume `pgdata` sang ổ lớn hơn.
 4. D1 gần 10 GB: chuyển bảng sự kiện sang kho khác (kế hoạch giai đoạn 2: ClickHouse/R2 Parquet, COST-MODEL); trước mắt dọn `ev_heartbeat` như trên.
@@ -188,7 +188,7 @@ Luôn: làm **staging trước**, ghi nhật ký, không dán khóa vào chat/em
 | `FIELD_ENC_KEY` | **Không có cơ chế xoay vòng trong mã hiện tại**: không có phiên bản khóa và không có script mã hóa lại. Đổi giá trị = không giải mã được MST, số tài khoản, TOTP, bí mật SePay đã lưu | **Chỉ xoay khi nghi lộ**, và cần kỹ sư viết script giải mã bằng khóa cũ, mã hóa bằng khóa mới, trong một giao dịch, chạy trên bản sao trước (ghi vào backlog; THREAT-MODEL mục 7.2 cũng ghi yêu cầu "theo phiên bản") | Sao lưu khóa cũ tới khi xong. Mất khóa = mất dữ liệu mã hóa |
 | Khóa Ed25519 của thiết bị | Thiết bị bị lộ khóa | Chặn thiết bị (web admin > Thiết bị > Chặn, hoặc `POST /admin/v1/devices/bulk`), ghép đôi lại | Khóa sinh trên thiết bị, không có khóa chung để xoay |
 | Token API Cloudflare | Deploy ngừng | My Profile > API Tokens > Roll; cập nhật `CLOUDFLARE_API_TOKEN` (`.env`, GitHub Secrets) | Quyền tối thiểu: DEPLOY-CLOUDFLARE mục 3 |
-| Khóa R2/MinIO (`R2_ACCESS_KEY_ID`..., `MINIO_ROOT_PASSWORD`) | URL ký mới lỗi tới khi đổi xong | Tạo khóa mới, đặt secret/`.env`, deploy, rồi thu hồi khóa cũ | |
+| Khóa R2/S3 (`R2_ACCESS_KEY_ID`..., `S3_SECRET_KEY`; Docker local fs: `SESSION_SECRET` ký URL tải lên) | URL ký mới lỗi tới khi đổi xong | Tạo khóa mới, đặt secret/`.env`, deploy, rồi thu hồi khóa cũ | |
 | Mật khẩu Postgres/Redis (Docker) | Dịch vụ không kết nối | Đổi trong DB (`ALTER USER`) **và** `.env`, rồi `$DC up -d` | Đổi `.env` một mình không đổi mật khẩu trong volume đã tạo |
 
 Sau xoay vòng: kiểm tra mục 3, đăng nhập thử, gửi thử webhook SePay (sandbox/staging), và ghi audit.

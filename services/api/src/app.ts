@@ -20,6 +20,7 @@ import { deviceRoutes } from './routes/devices.js';
 import { historyRoutes, portalHistoryRoutes } from './routes/history.js';
 import { invoiceRoutes, payoutRoutes, portalInvoiceRoutes } from './routes/invoices.js';
 import { mediaRoutes } from './routes/media.js';
+import { storageRoutes, STORAGE_UPLOAD_PATH } from './routes/storage.js';
 import { partnerRoutes } from './routes/partners.js';
 import { portalRoutes } from './routes/portal.js';
 import { revenueRoutes } from './routes/revenue.js';
@@ -54,16 +55,16 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
     // phan hoi API khong duoc cache o trung gian (co du lieu theo phien)
     if (!c.res.headers.has('Cache-Control')) c.res.headers.set('Cache-Control', 'no-store');
   });
-  app.use(
-    '*',
-    bodyLimit({
-      maxSize: 2 * 1024 * 1024,
-      onError: (c) => c.json({ error: { code: 'payload_too_large', message: 'Nội dung gửi lên quá lớn.' } }, 413),
-    }),
-  );
+  const jsonLimit = bodyLimit({
+    maxSize: 2 * 1024 * 1024,
+    onError: (c) => c.json({ error: { code: 'payload_too_large', message: 'Nội dung gửi lên quá lớn.' } }, 413),
+  });
+  // PUT /storage/upload/* (OBJECT_STORE=fs) co gioi han rieng theo chu ky URL (routes/storage.ts)
+  app.use('*', (c, next) => (c.req.path.startsWith(STORAGE_UPLOAD_PATH) ? next() : jsonLimit(c, next)));
 
   app.get('/health', (c) => c.json({ ok: true, service: 'ams-api', runtime: rt.config.runtime }));
 
+  app.route('/storage', storageRoutes());
   app.route('/auth', authRoutes());
 
   // Chuoi middleware phai dang ky TRUOC khi mountFinance gan route /admin/v1/* va /portal/v1/* cua a2.

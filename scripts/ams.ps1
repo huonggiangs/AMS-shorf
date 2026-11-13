@@ -75,7 +75,7 @@ switch ($Command) {
   'down'      { Invoke-DC @('--profile', '*', 'down', '--remove-orphans') }
   'reset' {
     if (-not $Yes) {
-      $a = Read-Host "Lệnh này XÓA Postgres/MinIO/Redis/Mailpit local. Gõ 'xoa' để tiếp tục"
+      $a = Read-Host "Lệnh này XÓA Postgres/volume media/Redis/Mailpit local. Gõ 'xoa' để tiếp tục"
       if ($a -ne 'xoa') { 'Đã hủy.'; exit 1 }
     }
     Invoke-DC @('--profile', '*', 'down', '-v', '--remove-orphans')

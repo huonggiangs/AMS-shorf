@@ -52,7 +52,7 @@ export interface Config { runtime: 'docker'|'cloudflare'|'k8s'|'test'; env: Reco
 export interface Runtime { db: Db; kv: Kv; queue: Queue; objects: ObjectStore; mail: Mailer; events: EventStore; clock: Clock; config: Config; id(): string /* ULID */; }
 ```
 
-Bản cài đặt: `createTestRuntime()` (pglite + memory), `createDockerRuntime(env)` (pg, ioredis, S3/MinIO, SMTP→Mailpit, EventStore ghi bảng Postgres `ev_*` hoặc ClickHouse khi `CLICKHOUSE_URL`), `createCloudflareRuntime(env)` (D1, KV, Queues, R2, EventStore→Queue/Analytics Engine). Bản Cloudflare phải **biên dịch được** (`tsc`) dù chưa chạy thật ở đây.
+Bản cài đặt: `createTestRuntime()` (pglite + memory), `createDockerRuntime(env)` (pg, ioredis, kho tệp fs trên volume (`OBJECT_STORE=fs`) hoặc S3, SMTP→Mailpit, EventStore ghi bảng Postgres `ev_*` hoặc ClickHouse khi `CLICKHOUSE_URL`), `createCloudflareRuntime(env)` (D1, KV, Queues, R2, EventStore→Queue/Analytics Engine). Bản Cloudflare phải **biên dịch được** (`tsc`) dù chưa chạy thật ở đây.
 
 ## 4. Hợp đồng API (tiền tố)
 
@@ -72,7 +72,7 @@ Phân quyền: 6 vai trò × 12 mô-đun (`overview, devices, tv_experience, cam
 
 ## 5. Cổng, tên miền, dịch vụ (Docker local)
 
-`api` 8787 · `edge-gateway` 8788 · `web-admin` 5173 (dev) / nginx 8080 · `postgres` 5432 · `redis` 6379 · `minio` 9000/9001 · `mailpit` 8025 (SMTP 1025) · Caddy 80/443 → `admin.ams.localhost`, `portal.ams.localhost`, `api.ams.localhost`, `gw.ams.localhost`. Biến môi trường: `.env.example` ở gốc (agent infra sở hữu, các agent khác bổ sung dòng qua `requests.md`).
+`api` 8787 · `edge-gateway` 8788 · `web-admin` 5173 (dev) / nginx 8080 · `postgres` 5432 · `redis` 6379 · Caddy media (HTTP, chỉ đọc `renditions/*`) 9000 · volume `mediadata` thay MinIO · `mailpit` 8025 (SMTP 1025) · Caddy 80/443 → `admin.ams.localhost`, `portal.ams.localhost`, `api.ams.localhost`, `gw.ams.localhost`. Biến môi trường: `.env.example` ở gốc (agent infra sở hữu, các agent khác bổ sung dòng qua `requests.md`).
 
 ## 6. Phân việc và quyền sở hữu thư mục
 

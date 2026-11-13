@@ -73,7 +73,6 @@ const GENERATORS = {
   SEPAY_WEBHOOK_SECRET: () => hex(32),
   POSTGRES_PASSWORD: () => hex(24),
   REDIS_PASSWORD: () => hex(24),
-  MINIO_ROOT_PASSWORD: () => hex(24),
   GRAFANA_ADMIN_PASSWORD: () => b64url(18),
   SEED_ADMIN_PASSWORD: () => `${b64url(14)}Aa1!`, // đạt chính sách mật khẩu thông thường
   SEED_ADMIN_TOTP_SECRET: () => base32(randomBytes(20)),
@@ -114,7 +113,7 @@ function cmdEnv({ force = false } = {}) {
   const { text } = buildEnv(example, {});
   writeFileSync(ENV_FILE, text, { mode: 0o600 });
   try { chmodSync(ENV_FILE, 0o600); } catch { /* Windows */ }
-  ok(`Đã tạo .env với khóa ngẫu nhiên (SESSION_SECRET, FIELD_ENC_KEY 32 byte, SEPAY_WEBHOOK_SECRET, MinIO, Postgres, Redis...)`);
+  ok(`Đã tạo .env với khóa ngẫu nhiên (SESSION_SECRET, FIELD_ENC_KEY 32 byte, SEPAY_WEBHOOK_SECRET, Postgres, Redis...)`);
   warn('Hãy sao lưu .env và đặc biệt FIELD_ENC_KEY: mất khóa này sẽ không giải mã được dữ liệu nhạy cảm.');
 }
 
@@ -167,7 +166,7 @@ function checkHost() {
 }
 
 function checkPorts(env) {
-  const ports = [['PROXY_HTTP_PORT', 80], ['PROXY_HTTPS_PORT', 443], ['WEB_ADMIN_PORT', 8080], ['API_PORT', 8787], ['GATEWAY_PORT', 8788], ['POSTGRES_PORT', 5432], ['REDIS_PORT', 6379], ['MINIO_API_PORT', 9000], ['MAILPIT_UI_PORT', 8025]];
+  const ports = [['PROXY_HTTP_PORT', 80], ['PROXY_HTTPS_PORT', 443], ['WEB_ADMIN_PORT', 8080], ['API_PORT', 8787], ['GATEWAY_PORT', 8788], ['POSTGRES_PORT', 5432], ['REDIS_PORT', 6379], ['MEDIA_PUBLIC_PORT', 9000], ['MAILPIT_UI_PORT', 8025]];
   return Promise.all(ports.map(([k, d]) => new Promise(async (res) => {
     const port = Number(env[k] || d);
     const { createServer } = await import('node:net');
@@ -208,7 +207,7 @@ export function envProblems(env) {
   if (env.SEPAY_MODE === 'production' && (!env.SEPAY_WEBHOOK_SECRET || env.SEPAY_WEBHOOK_SECRET.length < 32 || WEAK.test(env.SEPAY_WEBHOOK_SECRET))) p.push('SEPAY_MODE=production cần SEPAY_WEBHOOK_SECRET thật (>= 32 ký tự, không phải giá trị mẫu/mock/CHANGE_ME)');
   if (env.SEPAY_MODE === 'production' && env.SEPAY_API_KEY && WEAK.test(env.SEPAY_API_KEY)) p.push('SEPAY_MODE=production nhưng SEPAY_API_KEY là giá trị mẫu');
   if (ams && !isLocalAms(ams) && env.AMS_ALLOW_DEMO_SEED === '1') p.push(`AMS_ALLOW_DEMO_SEED=1 ở AMS_ENV=${ams}: seed demo được phép; chắc chắn đây không phải CSDL thật`);
-  const need = ['SESSION_SECRET', 'FIELD_ENC_KEY', 'SEPAY_WEBHOOK_SECRET', 'POSTGRES_PASSWORD', 'REDIS_PASSWORD', 'MINIO_ROOT_PASSWORD', 'SEED_ADMIN_PASSWORD'];
+  const need = ['SESSION_SECRET', 'FIELD_ENC_KEY', 'SEPAY_WEBHOOK_SECRET', 'POSTGRES_PASSWORD', 'REDIS_PASSWORD', 'SEED_ADMIN_PASSWORD'];
   for (const k of need) if (!env[k] || env[k] === PLACEHOLDER || /^change-me/i.test(env[k])) p.push(`${k} chưa được sinh (chạy: make setup)`);
   if (env.FIELD_ENC_KEY && env.FIELD_ENC_KEY !== PLACEHOLDER) {
     let len = -1; try { len = Buffer.from(env.FIELD_ENC_KEY, 'base64').length; } catch { /* noop */ }
@@ -264,7 +263,7 @@ function cmdCreds() {
   console.log(`Cổng khách   : ${e.PORTAL_PUBLIC_URL || 'https://portal.ams.localhost'}`);
   console.log(`API          : ${e.API_PUBLIC_URL || 'https://api.ams.localhost'}/health`);
   console.log(`Email (Mailpit): http://localhost:${e.MAILPIT_UI_PORT || 8025}`);
-  console.log(`MinIO console: http://localhost:${e.MINIO_CONSOLE_PORT || 9001}  (user ${e.MINIO_ROOT_USER})`);
+  console.log(`Media TV     : ${e.PUBLIC_MEDIA_BASE_URL || 'http://localhost:9000/media-public'}/renditions/...  (kho tệp = volume mediadata)`);
   console.log(`Super admin  : ${e.SEED_ADMIN_EMAIL}  /  ${e.SEED_ADMIN_PASSWORD}`);
   console.log('Mã TOTP      : chạy `node scripts/setup.mjs totp` nếu đăng nhập yêu cầu 2FA');
   console.log('');
@@ -296,7 +295,7 @@ async function cmdDoctor() {
     if (!ps.out) warn('Chưa có container nào. Chạy: make up');
     for (const line of ps.out.split('\n').filter(Boolean)) {
       const [svc, state, health, exit] = line.split('\t');
-      const oneShot = ['migrate-seed', 'minio-init'].includes(svc);
+      const oneShot = ['migrate-seed'].includes(svc);
       if (oneShot) (state === 'exited' && exit === '0') ? ok(`${svc}: đã chạy xong`) : bad(`${svc}: ${state} (exit ${exit}). Xem: make logs S=${svc}`);
       else if (state === 'running' && (health === 'healthy' || health === '')) ok(`${svc}: chạy tốt ${health ? '(healthy)' : ''}`);
       else bad(`${svc}: ${state} ${health}. Xem: make logs S=${svc}`);
@@ -304,7 +303,7 @@ async function cmdDoctor() {
   }
   console.log(c.b('--- Cổng dịch vụ ---'));
   await checkPorts(env);
-  const urls = [['api', `http://localhost:${env.API_PORT || 8787}/health`], ['edge-gateway', `http://localhost:${env.GATEWAY_PORT || 8788}/health`], ['web-admin', `http://localhost:${env.WEB_ADMIN_PORT || 8080}/healthz`], ['MinIO', `http://localhost:${env.MINIO_API_PORT || 9000}/minio/health/live`], ['Mailpit', `http://localhost:${env.MAILPIT_UI_PORT || 8025}/livez`]];
+  const urls = [['api', `http://localhost:${env.API_PORT || 8787}/health`], ['edge-gateway', `http://localhost:${env.GATEWAY_PORT || 8788}/health`], ['web-admin', `http://localhost:${env.WEB_ADMIN_PORT || 8080}/healthz`], ['Media (Caddy)', `http://localhost:${env.MEDIA_PUBLIC_PORT || 9000}/media-public/healthz`], ['Mailpit', `http://localhost:${env.MAILPIT_UI_PORT || 8025}/livez`]];
   for (const [name, url] of urls) { const s = await probe(url); (s === 200) ? ok(`${name} ${url} -> 200`) : warn(`${name} ${url} -> ${s} (bình thường nếu chưa chạy make up)`); }
 }
 

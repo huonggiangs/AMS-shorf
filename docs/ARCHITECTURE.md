@@ -79,7 +79,7 @@ Quy ước SQL chung Postgres/D1: id `TEXT` ULID/UUIDv7, thời gian `TEXT` ISO-
 | `Db` | PostgreSQL 16 (pg) | D1 | PostgreSQL + pgBouncer, replica |
 | `Kv` | Redis | KV | Redis Cluster |
 | `Queue` | Redis/Redpanda | Queues | Redpanda/Kafka |
-| `ObjectStore` | MinIO | R2 | S3 tương thích |
+| `ObjectStore` | Hệ thống tệp (volume `mediadata`; không cần MinIO) | R2 | S3 tương thích |
 | `EventStore` | Bảng `ev_*` hoặc ClickHouse | Queue/Pipelines/Analytics Engine | ClickHouse cluster |
 | `Mailer` | Mailpit | Dịch vụ gửi thư | Dịch vụ gửi thư |
 | `Clock`, `Config`, `id()` | chung | chung | chung |

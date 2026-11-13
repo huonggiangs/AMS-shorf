@@ -6,8 +6,8 @@ set LOG=%~dp0ams-local-log.txt
 echo === AMS local %date% %time% === > "%LOG%"
 where git >nul 2>&1 && (git pull --ff-only >> "%LOG%" 2>&1) || echo (khong co git: bo qua pull) >> "%LOG%"
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ams.ps1 setup >> "%LOG%" 2>&1
-rem Sua .env cu: cong Postgres 5432 hay bi chiem -> 55432; anh MinIO chuyen sang quay.io
-powershell -NoProfile -Command "$p='.env'; if(Test-Path $p){ $t=(Get-Content $p -Raw) -replace '(?m)^POSTGRES_PORT=5432\s*$','POSTGRES_PORT=55432'; if($t -notmatch '(?m)^MINIO_IMAGE='){ $t=$t.TrimEnd()+\"`r`nMINIO_IMAGE=quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z`r`nMINIO_MC_IMAGE=quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z`r`n\" }; Set-Content $p $t -NoNewline }" >> "%LOG%" 2>&1
+rem Sua .env cu: cong Postgres 5432 hay bi chiem -> 55432; kho tep local nay dung volume (khong con MinIO)
+powershell -NoProfile -Command "$p='.env'; if(Test-Path $p){ $t=(Get-Content $p -Raw) -replace '(?m)^POSTGRES_PORT=5432\s*$','POSTGRES_PORT=55432'; if($t -notmatch '(?m)^OBJECT_STORE='){ $t=$t.TrimEnd()+\"`r`nOBJECT_STORE=fs`r`n\" }; Set-Content $p $t -NoNewline }" >> "%LOG%" 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ams.ps1 up >> "%LOG%" 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ams.ps1 seed >> "%LOG%" 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ams.ps1 ps >> "%LOG%" 2>&1
