@@ -16,3 +16,6 @@ Gợi ý thêm: phát `settings.tv_experience` (tần suất, lock_ads_enabled) 
 
 ## w4-reconcile (chuyển tiếp thông điệp điều phối, KHÔNG thuộc w2)
 Điều phối viên gửi nhầm cho w2 yêu cầu R1-05 (activation.ts:116 gửi mail trong transaction → tách ra outbox) và R1-06 (xác nhận thủ công rồi webhook thật = cộng đôi). Hai việc này nằm ở `services/payments/**`, ngoài phạm vi sở hữu của w2 nên w2 không đụng; xin giao cho w4-reconcile.
+
+## g1-openapi
+build.ts đã liệt kê các route mới (g1 làm sẵn). Lưu ý: `tsc -p packages/openapi` bị OOM/Killed (137) trong sandbox, kể cả với --max-old-space-size=6144; w2 không xác nhận được typecheck gói này, các gói còn lại sạch.

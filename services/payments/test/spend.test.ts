@@ -38,4 +38,16 @@ describe.each(['sqlite', 'postgres'] as const)('createSpendFn (%s)', (dialect) =
     await spend(req(camp, cust, 600_000, 'b')); // tong 1,2 -> tru 1
     expect(await spent(cust)).toBe(1);
   });
+
+  it.each(['rejected', 'ended'])('chien dich %s: chi tieu la no-op (khong tru, khong chiem event), giao lai van no-op', async (state) => {
+    const { cust, camp } = await setup(5_000_000);
+    const spend = createSpendFn(rt);
+    await rt.db.run('UPDATE campaigns SET state = ? WHERE id = ?', [state, camp]); // funding_state van 'reserved' cho toi khi hoan tien chay
+    await spend(req(camp, cust, 3_000_000, 'z1'));
+    await spend(req(camp, cust, 3_000_000, 'z1'));
+    await spend({ ...req(camp, cust, 0, 'z2'), events: [{ id: 'ev-' + camp, micro: 4_000_000 }] });
+    expect(await spent(cust)).toBe(0);
+    expect(Number((await rt.db.query<{ r: unknown }>('SELECT reserved_vnd AS r FROM campaigns WHERE id = ?', [camp]))[0]!.r)).toBe(5_000_000);
+    expect((await rt.db.query('SELECT 1 FROM spend_events WHERE event_id = ?', ['ev-' + camp])).length).toBe(0);
+  });
 });

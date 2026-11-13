@@ -36,6 +36,13 @@ export const onUnauthorized = (fn: Listener) => {
   return () => unauthorizedListeners.delete(fn);
 };
 
+const pwRequiredListeners = new Set<Listener>();
+/** Subscribe to 403 `password_change_required` (forced password change pending): any request can raise it. */
+export const onPasswordChangeRequired = (fn: Listener) => {
+  pwRequiredListeners.add(fn);
+  return () => pwRequiredListeners.delete(fn);
+};
+
 export type Query = Record<string, string | number | boolean | undefined | null>;
 
 export interface ReqOpts<S extends z.ZodTypeAny | undefined> {
@@ -95,6 +102,7 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
   if (!res.ok) {
     const err = (json as { error?: { code?: string; message?: string; details?: unknown } } | undefined)?.error;
     if (res.status === 401 && !opts.quiet401) unauthorizedListeners.forEach((l) => l());
+    if (res.status === 403 && err?.code === 'password_change_required') pwRequiredListeners.forEach((l) => l());
     throw new ApiError(
       res.status,
       err?.code ?? `http_${res.status}`,

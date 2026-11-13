@@ -328,7 +328,8 @@ export async function seedDemo(rt: SeedRuntime, opts: SeedOptions = {}): Promise
         id: id(), campaign_id: camp?.id ?? null, customer_id: camp?.cus.id ?? cus.id, name: file, target_type: 'tv', px_w: w, px_h: h, orientation: w >= h ? 'landscape' : 'portrait',
         kind: m?.[1]?.toLowerCase() === 'png' ? 'image' : 'video', source: 'upload', source_url: null, storage_key: `seed/${(camp?.cus.id ?? cus.id)}/${file}`, mime: m?.[1] === 'PNG' ? 'image/png' : 'video/mp4',
         size_bytes: 8_000_000, duration_s: m?.[4] ? +m[4] : null, codec: m?.[1] === 'MP4' ? 'h264' : null, uploaded_by: adminByName['Ngọc Mai'] ?? null, uploader_kind: 'internal',
-        scan_state: 'skipped', review_state: reviewState, review_note: null, state: reviewState === 'approved' ? 'ready' : 'pending_review', created_at: nowIso,
+        // DEMO-ONLY: du lieu mau coi nhu da quet sach de cong quet media (API duyet + manifest gateway) khong chan demo/e2e khi khong co media-worker/ClamAV. Production KHONG dung seed nay.
+        scan_state: 'clean', review_state: reviewState, review_note: null, state: reviewState === 'approved' ? 'ready' : 'pending_review', created_at: nowIso,
       });
       bump('creatives');
       seenFiles.add(file);

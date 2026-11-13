@@ -14,6 +14,7 @@ import { shardOf } from '@ams/shared';
 import { seedAdFixture } from '@ams/edge-gateway/testing';
 import { startNode as startGateway } from '@ams/edge-gateway/node';
 import { startConsumer } from '@ams/ingest-consumer/node';
+import { startFakeS3 } from '../../../tests/e2e/fakes.js';
 import { b64u, signed, loadKey, uuidv7, type DeviceCred, type Fixture } from './common.js';
 
 const ROOT = new URL('../../../', import.meta.url).pathname;
@@ -178,10 +179,13 @@ async function main(): Promise<void> {
   report['redis'] = execFileSync('redis-server', ['--version']).toString().match(/v=(\S+)/)?.[1];
   const redisCli = (cmd: string[]): string => execFileSync('redis-cli', ['-p', String(redisPort), ...cmd]).toString();
 
+  // gateway doc ban chuyen ma tu object store (renditions/...): can mot S3 tra loi that (404 = chua co ban chuyen ma); dung ban gia cua e2e
+  const s3 = await startFakeS3('ams-media');
+  cleanups.push(() => s3.close());
   const env: Record<string, string> = {
     DATABASE_URL: dbUrl,
     REDIS_URL: `redis://127.0.0.1:${redisPort}`,
-    S3_ENDPOINT: 'http://127.0.0.1:1',
+    S3_ENDPOINT: s3.url,
     S3_BUCKET: 'ams-media',
     S3_ACCESS_KEY: 'x',
     S3_SECRET_KEY: 'x',
@@ -432,18 +436,19 @@ async function main(): Promise<void> {
   // ---------- ben vung: doi hang doi + telemetry xa het, doi chieu DB
   const q = async (sql: string) => (await pgc.query(sql)).rows[0];
   let imp = 0;
-  for (let i = 0; i < Number(args['drain-wait'] ?? 90); i++) {
+  const drain: { tS: number; rows: number }[] = [];
+  const dStart = performance.now();
+  while ((performance.now() - dStart) / 1000 < Number(args['drain-wait'] ?? 90)) {
     imp = Number((await q('SELECT COUNT(*) AS n FROM ev_ad_impression')).n);
+    drain.push({ tS: +((performance.now() - dStart) / 1000).toFixed(1), rows: imp });
     if (imp >= acceptedEv) break;
-    await sleep(1000);
+    await sleep(2000);
   }
+  report['drainSeries'] = drain;
   await sleep(4000); // 2 chu ky xa telemetry (TELEMETRY_FLUSH_MS=2000)
-  const hbRows = Number((await q('SELECT COUNT(*) AS n FROM ev_heartbeat')).n);
-  const impDistinct = Number((await q('SELECT COUNT(DISTINCT event_id) AS n FROM ev_ad_impression')).n);
-  const hourly = Number((await q('SELECT COALESCE(SUM(impressions),0) AS n FROM impression_hourly')).n);
-  const spend = await q('SELECT COUNT(*) AS n FROM spend_events').catch(() => null);
+  const snap = await q('SELECT (SELECT COUNT(*) FROM ev_ad_impression) AS rows, (SELECT COUNT(DISTINCT event_id) FROM ev_ad_impression) AS dist, (SELECT COALESCE(SUM(impressions),0) FROM impression_hourly) AS hourly, (SELECT COUNT(*) FROM spend_events) AS spend, (SELECT COUNT(*) FROM ev_heartbeat) AS hb');
   const consStats = await fetch(`http://127.0.0.1:${cons!.port}/health`).then((r) => r.json()).catch(() => null);
-  report['durability'] = { consumerStats: consStats, eventsAcceptedByGateway: acceptedEv, ev_ad_impression_rows: imp, distinctEventIds: impDistinct, impression_hourly_sum: hourly, spend_events: spend, heartbeats200: hbOk, ev_heartbeat_rows: hbRows };
+  report['durability'] = { consumerStats: consStats, eventsAcceptedByGateway: acceptedEv, ev_ad_impression_rows: Number(snap.rows), distinctEventIds: Number(snap.dist), impression_hourly_sum: Number(snap.hourly), spend_events: Number(snap.spend), heartbeats200: hbOk, ev_heartbeat_rows: Number(snap.hb), backlogEvents: acceptedEv - Number(snap.rows) };
 
   // idempotent: gui lai CUNG event_id (nonce moi) -> khong tang so dem
   {
@@ -453,12 +458,14 @@ async function main(): Promise<void> {
     const t = Date.now() - 5000;
     const ev = { type: 'impression', event_id: uuidv7(t), ts: new Date(t).toISOString(), campaign_id: it.campaign_id, creative_id: it.creative_id, slot_id: it.slot_id, vcr_pct: 100, played_ms: 15000 };
     const body = JSON.stringify({ events: [ev] });
-    const before = Number((await q('SELECT COUNT(*) AS n FROM ev_ad_impression')).n);
     const codes: number[] = [];
     for (let i = 0; i < 3; i++) codes.push((await fetch(base() + '/v1/events', { method: 'POST', headers: signed(key, d.id, 'POST', '/v1/events', body, Math.floor(Date.now() / 1000)), body })).status);
-    await sleep(2500);
-    const after = Number((await q('SELECT COUNT(*) AS n FROM ev_ad_impression')).n);
-    report['dedupe'] = { statuses: codes, rowsAdded: after - before };
+    for (let i = 0; i < 15; i++) {
+      if (Number((await pgc.query('SELECT COUNT(*) AS n FROM ev_ad_impression WHERE event_id = $1', [ev.event_id])).rows[0].n) >= 1) break;
+      await sleep(2000);
+    }
+    await sleep(3000);
+    report['dedupe'] = { statuses: codes, rowsForThatEventId: Number((await pgc.query('SELECT COUNT(*) AS n FROM ev_ad_impression WHERE event_id = $1', [ev.event_id])).rows[0].n) };
   }
   // chi so thiet bi online trong Redis (presence)
   report['presenceKeys'] = Number(redisCli(['eval', "return #redis.call('keys','presence:*')", '0']).trim());

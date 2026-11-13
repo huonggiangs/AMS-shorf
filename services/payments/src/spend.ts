@@ -107,7 +107,7 @@ export async function settleRemainder(rt: Runtime, campaignId: string, ref: stri
 
 /** Job dinh ky: quyet toan cac phan du >= 1 VND con sot (vd. mat dien giua buoc A va B khi chien dich khong con phat sinh impression moi). */
 export async function settleSpendRemainders(rt: Runtime, limit = 200): Promise<number> {
-  const rows = await rt.db.query<{ id: string }>('SELECT id FROM campaigns WHERE spend_remainder_micro >= ? AND state NOT IN ('rejected','ended') ORDER BY id LIMIT ?', [MICRO, limit]);
+  const rows = await rt.db.query<{ id: string }>("SELECT id FROM campaigns WHERE spend_remainder_micro >= ? AND state NOT IN ('rejected','ended') ORDER BY id LIMIT ?", [MICRO, limit]);
   let charged = 0;
   for (const c of rows) {
     const r = await settleRemainder(rt, c.id, `sweep:${iso(rt)}`);

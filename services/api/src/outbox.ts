@@ -1,8 +1,9 @@
 // Xu ly outbox cua API (P0 muc 2): duyet chien dich -> giu tien -> bao gateway xay lai manifest.
 // Thay doi trang thai + dong outbox duoc ghi CUNG giao dich (routes/campaigns.ts); o day la cac handler idempotent va bo xu ly,
 // goi duoc tu Node (setInterval), Cloudflare (cron) va test.
-import { enqueueOutbox, processOutbox, type OutboxHandlers, type OutboxOptions, type OutboxResult, type Runtime } from '@ams/runtime';
+import { enqueueOutbox, processOutbox, pruneOutbox, type OutboxHandlers, type OutboxOptions, type OutboxResult, type Runtime } from '@ams/runtime';
 import { CAMPAIGN_DELETABLE_STATES, MANIFEST_EPOCH_KEY } from '@ams/shared';
+import { mailOutboxHandlers, pruneMailOutbox } from '@ams/payments';
 import { writeAudit } from './lib/audit.js';
 import type { FinancePort } from './ports.js';
 
@@ -54,6 +55,8 @@ export function enqueueManifestBump(db: Parameters<typeof enqueueOutbox>[0], rt:
  */
 export function createOutboxHandlers(getFinance: () => Promise<FinancePort>): OutboxHandlers {
   return {
+    // thu chao/kich hoat (payments): handler nem loi => outbox thu lai co lui, khong chi gui "best-effort" mot lan
+    ...mailOutboxHandlers(),
     [TOPIC_CAMPAIGN_APPROVED]: async (msg, rt) => {
       const p = msg.payload as CampaignApprovedPayload | null;
       if (!p?.campaignId) return; // payload hong: bo (khong thu lai vo han)
@@ -155,4 +158,9 @@ export async function reconcileReleases(rt: Runtime): Promise<number> {
 export async function sweepOutbox(rt: Runtime, getFinance: () => Promise<FinancePort>, opts?: OutboxOptions): Promise<OutboxResult & { requeued: number }> {
   const requeued = (await reconcileApprovals(rt)) + (await reconcileReleases(rt));
   return { ...(await runOutbox(rt, getFinance, opts)), requeued };
+}
+
+/** Don outbox dinh ky: dong xong cu (14 ngay) + thu da gui/chet som (chua link moi dang ro, xem pruneMailOutbox). */
+export async function pruneOutboxAll(rt: Runtime): Promise<number> {
+  return (await pruneOutbox(rt.db, rt)) + (await pruneMailOutbox(rt));
 }

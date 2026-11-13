@@ -68,6 +68,8 @@ export const meSchema = z
       .nullish(),
     dev_mode: z.boolean().optional(),
     csrf_token: z.string().optional(),
+    /** forced password change pending (server answers 403 `password_change_required` to everything else) */
+    must_change_password: z.boolean().optional(),
   })
   .passthrough();
 export type Me = z.infer<typeof meSchema>;

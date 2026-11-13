@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { type FormEvent, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider';
 import { api, errMsg } from '../api/client';
 import { Btn, Note, PageHead, StatusTag } from '../components/ui';
@@ -57,14 +57,7 @@ export function ChangePasswordForm({ forced = false, onDone }: { forced?: boolea
 export default function Profile() {
   const t = useT();
   const ui = useUi();
-  const { me, logout, isExternal } = useAuth();
-  // meSchema cua AuthProvider bo truong `must_change_password`: doc truc tiep de hien canh bao khi bi buoc doi mat khau
-  const [forced, setForced] = useState(false);
-  useEffect(() => {
-    let live = true;
-    api.get('/auth/me', { quiet401: true }).then((r) => { if (live) setForced((r as { must_change_password?: boolean } | undefined)?.must_change_password === true); }).catch(() => undefined);
-    return () => { live = false; };
-  }, []);
+  const { me, logout, isExternal, mustChangePassword: forced, reload } = useAuth();
   if (!me) return null;
   const u = me.user;
   const name = u.name || u.email;
@@ -98,7 +91,7 @@ export default function Profile() {
             <select className="sel" value={ui.lang} onChange={(e) => ui.setLang(e.target.value as 'vi' | 'en')} aria-label={t('Ngôn ngữ')}><option value="vi">Tiếng Việt</option><option value="en">English</option></select>
           </div>
           <div className="ch" style={{ marginTop: 18 }}><h2>Đổi mật khẩu</h2></div>
-          <ChangePasswordForm onDone={() => setForced(false)} />
+          <ChangePasswordForm onDone={() => { void reload(); }} />
         </div>
       </div>
     </>

@@ -35,11 +35,13 @@ function Splash() {
 }
 
 function Guard() {
-  const { status, can, isExternal } = useAuth();
+  const { status, can, isExternal, mustChangePassword } = useAuth();
   const loc = useLocation();
   if (status === 'loading') return <Splash />;
   if (status === 'anon') return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
   void can; void isExternal;
+  // surviving session with a forced password change (page reload): lock everything except Profile (change-password form)
+  if (mustChangePassword && !loc.pathname.startsWith('/profile')) return <Navigate to="/profile" replace />;
   return <Shell />;
 }
 

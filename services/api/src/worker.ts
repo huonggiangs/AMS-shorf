@@ -2,8 +2,7 @@ import { createCloudflareRuntime } from '@ams/runtime/cloudflare';
 import type { CloudflareEnv, CloudflareRuntime } from '@ams/runtime/cloudflare';
 import { createApp } from './app.js';
 import { mountFinanceRoutes } from './finance-mount.js';
-import { pruneOutbox } from '@ams/runtime';
-import { sweepOutbox } from './outbox.js';
+import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import type { FinancePort } from './ports.js';
 
 // Kieu toi thieu cua Workers (tranh keo @cloudflare/workers-types vao goi api).
@@ -44,7 +43,7 @@ export default {
     // outbox: moi lan cron (thu lai viec dang do; duong chinh la xu ly ngay sau commit trong request). Mot Queue consumer co the goi sweepOutbox y het.
     ctx.waitUntil(sweepOutbox(r.rt, r.finance).catch((e) => console.error('[api] outbox loi:', (e as Error).message)));
     if (event.cron === '* * * * *') return; // cron moi phut chi de outbox
-    if (!event.cron.startsWith('*/')) ctx.waitUntil(pruneOutbox(r.rt.db, r.rt).then(() => undefined, () => undefined));
+    ctx.waitUntil(pruneOutboxAll(r.rt).then(() => undefined, () => undefined));
     const fin = await r.finance();
     if (fin.scheduled) ctx.waitUntil(fin.scheduled(r.rt, event.cron));
   },

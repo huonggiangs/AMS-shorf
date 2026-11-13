@@ -5,7 +5,7 @@ import { effectivePermissions } from '@ams/config';
 import { generateTotpSecret, hashPassword, otpauthUri, sha256Hex, timingSafeEqualStr, verifyPassword, verifyTotp } from '@ams/shared';
 import type { Runtime } from '@ams/runtime';
 import { AAD, decField, encField, hashToken, newToken } from '../lib/crypto.js';
-import { HttpError, forbidden, unauthorized, unprocessable, tooMany } from '../lib/errors.js';
+import { HttpError, forbidden, notFound, unauthorized, unprocessable, tooMany } from '../lib/errors.js';
 import { clientIp, jsonParse, parseBody } from '../lib/http.js';
 import type { Ctx } from '../lib/http.js';
 import { writeAudit } from '../lib/audit.js';
@@ -38,7 +38,7 @@ interface LoginRow {
   customer_state: string | null;
 }
 
-const scryptParams = (rt: Runtime) => {
+export const scryptParams = (rt: Runtime) => {
   const n = Number(rt.config.env['SCRYPT_N']);
   return Number.isInteger(n) && n >= 1024 ? { N: n } : {};
 };
@@ -50,12 +50,6 @@ async function rateLimit(rt: Runtime, key: string, limit: number, windowSec: num
   const n = await rt.kv.incr(key, windowSec);
   if (n > limit) throw tooMany('Quá nhiều lần thử. Vui lòng thử lại sau ít phút.', windowSec);
 }
-
-const passwordSchema = z
-  .string()
-  .min(10, 'Mật khẩu tối thiểu 10 ký tự')
-  .max(128, 'Mật khẩu tối đa 128 ký tự')
-  .refine((p) => /[A-Za-z]/.test(p) && /\d/.test(p), 'Mật khẩu cần có cả chữ và số');
 
 const mfaTokenFrom = (c: Ctx, body: { mfa_token?: string | undefined }): string | undefined => body.mfa_token || getCookie(c, MFA_COOKIE) || undefined;
 
@@ -312,10 +306,28 @@ export function authRoutes(): Hono<AppEnv> {
   r.post('/change-password', authenticateAllowPasswordChange, csrfGuard, changePassword);
   r.post('/password/change', authenticateAllowPasswordChange, csrfGuard, changePassword); // ten thay the (d1-seed-prod.requests.md)
 
+  // Thong tin loi moi cho trang Kich hoat/Moi (khong tieu thu token, khong lo bi mat). Token sai/het han/da dung: 404 chung.
+  r.get('/invite/info', async (c) => {
+    const rt = c.get('rt');
+    const ip = c.get('ip');
+    await rateLimit(rt, `rl:invite-info:ip:${ip}`, 30, 900);
+    const token = c.req.query('token') ?? '';
+    if (token.length < 10 || token.length > 200) throw notFound('Liên kết không hợp lệ hoặc đã hết hạn.', 'invite_not_found');
+    const row = (
+      await rt.db.query<{ name: string; email: string; role: string; account_kind: string; customer_name: string | null; expires_at: string; accepted_at: string | null; status: string }>(
+        `SELECT a.name AS name, a.email AS email, a.role AS role, a.account_kind AS account_kind, cu.short_name AS customer_name, i.expires_at AS expires_at, i.accepted_at AS accepted_at, a.status AS status
+           FROM invites i JOIN admins a ON a.id = i.admin_id LEFT JOIN customers cu ON cu.id = a.customer_id WHERE i.token_hash = ?`,
+        [await hashToken(token)],
+      )
+    )[0];
+    if (!row || row.accepted_at || row.status !== 'invited' || row.expires_at <= rt.clock.now().toISOString()) throw notFound('Liên kết không hợp lệ hoặc đã hết hạn.', 'invite_not_found');
+    return c.json({ email: row.email, name: row.name, role: row.role, account_kind: row.account_kind, customer_name: row.customer_name, expires_at: row.expires_at });
+  });
+
   r.post('/invite/accept', async (c) => {
     const rt = c.get('rt');
     const ip = c.get('ip');
-    const body = await parseBody(c, z.object({ token: z.string().min(10).max(200), password: passwordSchema }));
+    const body = await parseBody(c, z.object({ token: z.string().min(10).max(200), password: z.string().min(1).max(128) }));
     await rateLimit(rt, `rl:invite:ip:${ip}`, 20, 900);
     const hash = await hashToken(body.token);
     const inv = (
@@ -325,6 +337,10 @@ export function authRoutes(): Hono<AppEnv> {
     if (!inv || inv.accepted_at || inv.expires_at <= nowIso) throw unprocessable('Liên kết kích hoạt không hợp lệ hoặc đã hết hạn (72 giờ). Hãy nhờ quản trị viên gửi lại lời mời.', 'invite_invalid');
     const a = (await rt.db.query<{ id: string; status: string; customer_id: string | null }>('SELECT id, status, customer_id FROM admins WHERE id = ?', [inv.admin_id]))[0];
     if (!a || a.status !== 'invited') throw unprocessable('Tài khoản không ở trạng thái chờ kích hoạt.', 'invite_invalid');
+    // cung chinh sach voi doi mat khau (>= 12 ky tu, hoa/thuong/so, khong chua phan dau email)
+    const owner = (await rt.db.query<{ email: string }>('SELECT email FROM admins WHERE id = ?', [a.id]))[0];
+    const policy = passwordPolicyError(body.password, owner ? { email: owner.email } : {});
+    if (policy) throw unprocessable(policy.replace('Mật khẩu mới', 'Mật khẩu'), 'weak_password');
     const pw = await hashPassword(body.password, scryptParams(rt));
     // nguyen tu: chi mot lan chap nhan thanh cong
     const claimed = await rt.db.run('UPDATE invites SET accepted_at = ? WHERE id = ? AND accepted_at IS NULL', [nowIso, inv.id]);

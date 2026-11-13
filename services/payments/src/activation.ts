@@ -88,6 +88,17 @@ export function mailOutboxHandlers(): OutboxHandlers {
   };
 }
 
+/**
+ * Payload mail.send chua LIEN KET MOI DANG RO (token): khong giu lau. Thu da gui xoa sau `doneHours` (mac dinh 6 gio), thu 'dead' sau `deadHours`
+ * (mac dinh 72 gio = han cua link). Thu dang cho khong bi xoa (con phai gui). Goi theo lich cung pruneOutbox.
+ */
+export async function pruneMailOutbox(rt: Runtime, doneHours = 6, deadHours = 72): Promise<number> {
+  const cut = (h: number) => new Date(rt.clock.now().getTime() - h * 3_600_000).toISOString();
+  const a = await rt.db.run("DELETE FROM outbox WHERE topic = ? AND status = 'done' AND processed_at < ?", [TOPIC_MAIL_SEND, cut(doneHours)]);
+  const b = await rt.db.run("DELETE FROM outbox WHERE topic = ? AND status = 'dead' AND processed_at < ?", [TOPIC_MAIL_SEND, cut(deadHours)]);
+  return a.changes + b.changes;
+}
+
 /** Gui thu dang cho ngay sau commit (best-effort, khong nem). Thu lai nho outbox processor. */
 export async function drainMailOutbox(rt: Runtime): Promise<void> {
   try {

@@ -1,5 +1,6 @@
 import type { Runtime } from '@ams/runtime';
 import { transitionCampaign } from '@ams/shared';
+import { sweepActivations } from './activation.js';
 import { releaseCampaign } from './ledger.js';
 import { pruneSpendEvents, settleSpendRemainders } from './spend.js';
 import { repairLedgerDrift, type RepairOptions } from './reconcile-atomic.js';
@@ -115,7 +116,7 @@ const guarded = async <T>(fn: () => Promise<T>): Promise<T | { error: string }> 
  * `scheduled()` cua routes.ts chua goi ham nay: xem docs/RECONCILIATION.md muc 5 (yeu cau thay doi cho chu routes.ts).
  */
 export async function runFrequentFinanceJobs(rt: Runtime, repair: RepairOptions = {}) {
-  return { repair: await guarded(() => repairLedgerDrift(rt, repair)) };
+  return { repair: await guarded(() => repairLedgerDrift(rt, repair)), activations: await guarded(() => sweepActivations(rt)) };
 }
 
 /** Gom cac job dinh ky (cron Cloudflare `15 2 * * *` / Docker scheduler). Doi soat bu SePay goi rieng: reconcileSepayWindow(rt, createSepayPagedFetcher(env)). */

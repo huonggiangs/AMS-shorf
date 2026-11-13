@@ -3,8 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { createDockerRuntime } from '@ams/runtime/docker';
 import type { Runtime } from '@ams/runtime';
 import { createApp } from './app.js';
-import { pruneOutbox } from '@ams/runtime';
-import { sweepOutbox } from './outbox.js';
+import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import { mountFinanceRoutes } from './finance-mount.js';
 import type { FinancePort } from './ports.js';
 
@@ -51,7 +50,7 @@ function startOutboxWorker(rt: Runtime, port: () => FinancePort | undefined, env
       .finally(() => (busy = false));
   }, every);
   o.unref();
-  const day = setInterval(() => void pruneOutbox(rt.db, rt).catch(() => undefined), 6 * 3600_000);
+  const day = setInterval(() => void pruneOutboxAll(rt).catch(() => undefined), 3600_000);
   day.unref();
   return () => {
     clearInterval(o);

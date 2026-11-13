@@ -5,6 +5,7 @@ import type { Action, Module, PermRow, Role } from '@ams/config';
 import type { Db, Runtime } from '@ams/runtime';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { diffObjects } from '../lib/audit.js';
+import { hashPassword } from '@ams/shared';
 import { hashToken, newToken } from '../lib/crypto.js';
 import { conflict, forbidden, notFound, unprocessable } from '../lib/errors.js';
 import { eq, getRt, jsonParse, num, parseBody, runList } from '../lib/http.js';
@@ -12,6 +13,8 @@ import type { Ctx, ListSpec } from '../lib/http.js';
 import { appUrl, inviteMail, trySend } from '../lib/mail.js';
 import { isDate } from '../lib/dates.js';
 import { revokeAllSessions, loadPerms } from '../auth/session.js';
+import { scryptParams } from '../auth/routes.js';
+import { forcePasswordChangeKey, passwordPolicyError } from '../auth/password-policy.js';
 import type { AdminProfile } from '../auth/session.js';
 import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv, AuthUser } from '../types.js';
@@ -199,6 +202,29 @@ export function userRoutes(): Hono<AppEnv> {
       await auditCtx(c, db, { action: 'user.resend_invite', objectType: 'admin', objectId: u.id, customerId: u.customer_id });
     });
     return c.json({ ok: true, invite_sent: later ? await (later as () => Promise<boolean>)() : false });
+  });
+
+  // Quan tri dat lai mat khau tam: bat buoc doi o lan dang nhap ke tiep (cung co force_password_change nhu bootstrap), huy moi phien.
+  r.post('/:id/reset-password', requirePerm('admin', 'write'), async (c) => {
+    const rt = getRt(c);
+    const actor = c.get('user');
+    const u = await loadUser(c, c.req.param('id'));
+    const b = await parseBody(c, z.object({ password: z.string().min(1).max(128) }));
+    if (u.id === actor.id) throw forbidden('Hãy dùng chức năng đổi mật khẩu của chính mình.', 'self_modify');
+    if (u.role === 'super_admin' && actor.role !== 'super_admin') throw forbidden('Chỉ Super Admin được đặt lại mật khẩu Super Admin.', 'escalation');
+    if (u.status === 'invited') throw conflict('Tài khoản chưa kích hoạt: hãy gửi lại lời mời.', 'invalid_state');
+    const policy = passwordPolicyError(b.password, { email: u.email });
+    if (policy) throw unprocessable(policy.replace('Mật khẩu mới', 'Mật khẩu tạm'), 'weak_password');
+    const hash = await hashPassword(b.password, scryptParams(rt));
+    const nowIso = rt.clock.now().toISOString();
+    await rt.db.tx(async (db) => {
+      await db.run('UPDATE admins SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?', [hash, u.id]);
+      await db.run('DELETE FROM settings WHERE key = ?', [forcePasswordChangeKey(u.id)]);
+      await db.run('INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?,?,?,?)', [forcePasswordChangeKey(u.id), JSON.stringify({ reason: 'admin_reset', at: nowIso, by: actor.id }), actor.id, nowIso]);
+      await auditCtx(c, db, { action: 'user.reset_password', objectType: 'admin', objectId: u.id, customerId: u.customer_id });
+    });
+    await revokeAllSessions(rt, u.id);
+    return c.json({ ok: true, must_change_password: true });
   });
 
   r.put('/:id', requirePerm('admin', 'write'), async (c) => {

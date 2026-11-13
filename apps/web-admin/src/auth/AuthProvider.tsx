@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, onUnauthorized, setCsrfToken } from '../api/client';
+import { api, ApiError, onPasswordChangeRequired, onUnauthorized, setCsrfToken } from '../api/client';
 import { enrollSchema, loginSchema, meSchema, EXTERNAL_MODULES, EXTERNAL_ROLES, type Action, type LoginResult, type Me, type Module } from '../api/schemas';
 
 type Status = 'loading' | 'anon' | 'authed';
@@ -9,6 +9,8 @@ interface AuthCtx {
   me: Me | null;
   expired: boolean;
   isExternal: boolean;
+  /** forced password change pending: only the Profile page works until the password is changed */
+  mustChangePassword: boolean;
   /** permission check mirrors server RBAC (server stays authoritative) */
   can: (m: Module, a?: Action) => boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
@@ -25,10 +27,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [me, setMe] = useState<Me | null>(null);
   const [expired, setExpired] = useState(false);
+  const [pwForced, setPwForced] = useState(false);
 
   const apply = useCallback((m: Me) => {
     if (m.csrf_token) setCsrfToken(m.csrf_token);
     setMe(m);
+    setPwForced(false);
     setStatus('authed');
     setExpired(false);
   }, []);
@@ -62,6 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [qc]);
 
+  // Any request answered 403 password_change_required (e.g. flag set by an admin while the session is open) locks navigation to Profile too.
+  useEffect(() => onPasswordChangeRequired(() => setPwForced(true)), []);
+
   const login = useCallback(async (email: string, password: string) => {
     const r = await api.post('/auth/login', { body: { email, password }, schema: loginSchema, quiet401: true });
     if (!r.mfa_required) await reload();
@@ -87,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [qc]);
 
+  const mustChangePassword = !!me && (me.must_change_password === true || pwForced);
   const isExternal = !!me && EXTERNAL_ROLES.includes(me.user.role);
   const can = useCallback(
     (m: Module, a: Action = 'view') => {
@@ -99,8 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<AuthCtx>(
-    () => ({ status, me, expired, isExternal, can, login, verifyMfa, enrollMfa, logout, reload }),
-    [status, me, expired, isExternal, can, login, verifyMfa, enrollMfa, logout, reload],
+    () => ({ status, me, expired, isExternal, mustChangePassword, can, login, verifyMfa, enrollMfa, logout, reload }),
+    [status, me, expired, isExternal, mustChangePassword, can, login, verifyMfa, enrollMfa, logout, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

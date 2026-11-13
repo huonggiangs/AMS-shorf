@@ -145,7 +145,7 @@ class Http {
 const ROOT = new URL('../../', import.meta.url).pathname;
 const BUCKET = 'ams-media';
 const PRICE_MICRO = 20_500_000; // 20,5 VND / impression: kiem phan du micro-VND
-const SECRET_SEPAY = 'e2e-sepay-secret-' + randomBytes(6).toString('hex');
+const SECRET_SEPAY = 'e2e-sepay-secret-' + randomBytes(16).toString('hex');
 const ADMIN_EMAIL = 'e2e-admin@ams.local';
 const ADMIN_PASSWORD = 'E2e-Admin-Passw0rd!';
 const ADMIN_TOTP = generateTotpSecret();
@@ -237,6 +237,8 @@ async function main(): Promise<void> {
     PORTAL_PUBLIC_URL: 'http://portal.ams.test',
     TRUST_PROXY: '1',
     SCRYPT_N: '1024',
+    AMS_ENV: 'test', // seed demo chi chay o local/test (seed-guard); SEPAY_MODE=production van duoc phep
+    AMS_LOCAL_CREDS_FILE: join(tmpdir(), `ams-e2e-creds-${process.pid}`),
     SEED_ADMIN_EMAIL: ADMIN_EMAIL,
     SEED_ADMIN_PASSWORD: ADMIN_PASSWORD,
     SEED_ADMIN_TOTP_SECRET: ADMIN_TOTP,
@@ -378,6 +380,8 @@ async function main(): Promise<void> {
     const put = await fetch(up.url, { method: 'PUT', headers: up.headers, body: fileBytes });
     if (put.status !== 200) throw new Error(`PUT presigned -> ${put.status}`);
     const res = await h.expect<any>(200, 'POST', `${h === admin ? '/admin/v1/media' : '/portal/v1/media'}/${up.id}/confirm`, { width: 1920, height: 1080, duration_sec: 15 }); // eslint-disable-line @typescript-eslint/no-explicit-any
+    // cong quet media: API chan duyet khi scan_state != 'clean'. media-worker/ClamAV khong chay trong smoke => dat 'clean' nhu worker se lam sau khi quet.
+    await q("UPDATE creatives SET scan_state = 'clean' WHERE id = $1 AND scan_state IN ('pending','unscanned','skipped')", [up.id]);
     return { id: up.id, res };
   }
   const okMedia = await step('tai media noi bo (chon customer_id, format+overlay) qua URL ky S3 that -> confirm tinh SHA-256', async () => {
