@@ -121,6 +121,9 @@ function die(m) { console.error(`\nLỖI: ${redact(m)}`); process.exit(1); }
 
 function sh(cmd, args, { cwd = ROOT, allowFail = false, capture = false, env = {}, input } = {}) {
   const piped = capture || input !== undefined;
+  // Windows chạy qua cmd.exe (shell): đường dẫn có dấu cách (vd "ANIO design") phải được bọc ngoặc kép.
+  const q = (a) => (process.platform === 'win32' && /[\s&|<>^()%!]/.test(a) && !/^".*"$/.test(a)) ? `"${a.replace(/"/g, '\\"')}"` : a;
+  if (process.platform === 'win32') { cmd = q(cmd); args = args.map((a) => q(String(a))); }
   const r = spawnSync(cmd, args, {
     cwd, encoding: 'utf8', input, stdio: piped ? [input !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'] : 'inherit',
     shell: process.platform === 'win32', env: { ...process.env, ...env },
