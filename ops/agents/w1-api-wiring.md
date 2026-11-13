@@ -1,4 +1,4 @@
-STATUS: running
+STATUS: done
 UPDATED: 2026-11-13T00:58:00Z
 
 # w1-api-wiring
@@ -8,3 +8,4 @@ UPDATED: 2026-11-13T00:58:00Z
 3. reject/end/delete: hoan tien thanh outbox `campaign.release` cung giao dich voi doi trang thai; funding_state giu 'reserved' cho toi khi hoan xong; handler chi chay khi chien dich van rejected/ended (hoac xoa); delete co tien giu = release roi xoa trong outbox (202 neu cho); reconcileReleases cho D1.
 ## Ghi chu pham vi
 Da sua ngoai danh sach so huu (can thiet de hoan thanh muc 3 va cong quet): services/api/src/routes/campaigns.ts (reject/end/delete/approve), services/api/test/helpers.ts + api.test.ts (cho phep seed 'skipped', danh dau clean), apps/web-admin/src/test/password-change.test.tsx (moi).
+UPDATED: 2026-11-13T01:04:30Z

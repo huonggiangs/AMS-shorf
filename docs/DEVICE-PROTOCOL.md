@@ -183,7 +183,7 @@ Phản hồi `200`:
 
 ### 6.1 `POST /v1/commands/ack`
 
-Chữ ký thiết bị. Thân: `{"acks":[{"id":"<command id>","status":"ok"|"failed","result":{...}?}]}` (tối đa 20 mục, thân bị giới hạn kích thước). Phản hồi `200`: `{"ok":true,"acked":N,"known":N,"unknown":N}`. `ok` -> `acked`, `failed` -> `failed` (không giao lại). Id lạ hoặc đã ack được tính vào `unknown`/bỏ qua, không lỗi (idempotent). Có thể ack ngay sau khi thực thi, không cần chờ heartbeat.
+Chữ ký thiết bị. Thân: `{"acks":[{"id":"<command id>","status":"ok"|"failed","result":{...}?}]}` (tối đa 20 mục, thân bị giới hạn kích thước). Phản hồi `200`: `{"ok":true,"acked":N,"known":N,"unknown":["<command id>", ...]}` (`acked`/`known` là số; `unknown` là MẢNG id không thuộc thiết bị này, rỗng nếu không có). `ok` -> `acked`, `failed` -> `failed` (không giao lại). Id lạ hoặc đã ack được liệt kê trong `unknown`/bỏ qua, không lỗi (idempotent). Có thể ack ngay sau khi thực thi, không cần chờ heartbeat.
 
 ## 7. Manifest
 

@@ -1,5 +1,6 @@
 import type { Db, Runtime } from '@ams/runtime';
 import { transitionCampaign } from '@ams/shared';
+import { healActivation } from './activation.js';
 import { FinanceError, type FundingResult, type SpendResult } from './port.js';
 import { applyBalanceAtomic, releaseAtomic, reserveAtomic, spendAtomic } from './reconcile-atomic.js';
 import { audit, iso, n, notify, withTx } from './util.js';
@@ -79,7 +80,11 @@ export async function creditTopup(rt: Runtime, dbIn: Db, topupId: string, confir
   const t = (await dbIn.query<{ customer_id: string; amount_vnd: unknown; status: string; provider: string | null; provider_txn_id: string | null }>(
     'SELECT customer_id, amount_vnd, status, provider, provider_txn_id FROM topups WHERE id = ?', [topupId]))[0];
   if (!t) return 'not_found';
-  if (t.status !== 'pending' && t.status !== 'unmatched') return 'already';
+  if (t.status !== 'pending' && t.status !== 'unmatched') {
+    // da ghi co: co the lan truoc vi da duoc cong nhung runActivation chua chay/hong (mat dien, loi) -> chay lai (idempotent), khong de chien dich awaiting_funds ket
+    if (t.status === 'credited') await healActivation(rt, dbIn, t.customer_id, topupId);
+    return 'already';
+  }
   // duong TU DONG (webhook/doi soat gui lai) khong bao gio cong topup dang cho nguoi xem ('unmatched'); chi nguoi xac nhan (confirmedBy) moi cong
   if (!confirmedBy && t.status === 'unmatched') return 'already';
   return withTx(dbIn, async (db) => {

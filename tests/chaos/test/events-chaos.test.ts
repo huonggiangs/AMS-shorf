@@ -6,8 +6,8 @@ import { flaky, lossy, mulberry32, type FaultConfig, type NetConfig } from '../s
 import { newAcked, runLoad, pushBatch, makeBatch } from '../src/driver.js';
 import { seeds } from '../src/seeds.js';
 
-// LOI DA BIET (requests muc 1): kv.get(creative:sha256:* | creative:rendition:*) loi => creative bi go im lang khoi manifest. Kich ban ngau nhien bo qua khoa nay; test tat dinh o duoi.
-const SKIP = ['creative:'];
+// x2: loi kv tren creative:sha256:* | creative:rendition:* da duoc sua (suy giam tung creative, khong cache ban suy giam) => khong con khoa nao bi bo qua.
+const SKIP: string[] = [];
 const injectedBy = new Map<string, number>();
 const DIALECTS = (process.env['CHAOS_DIALECTS'] ?? 'sqlite').split(',') as ('sqlite' | 'postgres')[];
 
@@ -183,9 +183,8 @@ describe('chaos: giao lai message dong thoi (consumer)', () => {
   });
 });
 
-describe('KNOWN BUG: loi KV khi dung manifest', () => {
-  // it.fails: khi gateway sua (loi KV -> 5xx/giu ban cu, khong phat manifest rong), test nay se DO -> doi thanh it().
-  it.fails('kv.get(creative:sha256:*) that bai KHONG duoc lam manifest mat creative (hien tra 200 voi creatives rong, event hop le bi tu choi not_in_manifest)', async () => {
+describe('loi KV/objects khi dung manifest (x2: da sua)', () => {
+  it('kv.get(creative:sha256:*) that bai KHONG duoc lam manifest mat creative (hien tra 200 voi creatives rong, event hop le bi tu choi not_in_manifest)', async () => {
     let on = false;
     const w = await createWorld({ wrap: (rt) => ({ ...rt, kv: { get: async (k: string) => { if (on && k.startsWith('creative:sha256:')) throw new Error('kv loi'); return rt.kv.get(k); }, set: (k, v, t) => rt.kv.set(k, v, t), del: (k) => rt.kv.del(k), incr: (k, t) => rt.kv.incr(k, t) } }) });
     try {
@@ -197,6 +196,49 @@ describe('KNOWN BUG: loi KV khi dung manifest', () => {
       on = true;
       const r = await d.manifest();
       expect(r.res.status === 200 ? r.json!.creatives.length : 1).toBe(1);
+    } finally {
+      await w.close();
+    }
+  });
+
+  it('kv.set(creative:sha256:*) va kv.get/set(creative:rendition:*) that bai: van du creative, khong go', async () => {
+    let on = false;
+    const w = await createWorld({ wrap: (rt) => ({ ...rt, kv: {
+      get: async (k: string) => { if (on && k.startsWith('creative:')) throw new Error('kv loi'); return rt.kv.get(k); },
+      set: async (k: string, v: string, t?: number) => { if (on && k.startsWith('creative:')) throw new Error('kv loi'); return rt.kv.set(k, v, t); },
+      del: (k) => rt.kv.del(k), incr: (k, t) => rt.kv.incr(k, t) } }) });
+    try {
+      const d = await Dev.create(w);
+      w.rt.clock.advance(120_000);
+      await w.rt.kv.del('manifest:HN.all.tv');
+      await w.rt.kv.incr('manifest:epoch');
+      on = true;
+      const r = await d.manifest();
+      expect(r.res.status).toBe(200);
+      expect(r.json!.creatives.length).toBe(1);
+    } finally {
+      await w.close();
+    }
+  });
+
+  it('objects.get tam thoi that bai: khong cache manifest thieu; hoi lai khi objects phuc hoi thi day du', async () => {
+    let on = false;
+    const w = await createWorld({ wrap: (rt) => ({ ...rt, objects: { ...rt.objects, get: async (k: string) => { if (on) throw new Error('objects loi'); return rt.objects.get(k); } } as typeof rt.objects }) });
+    try {
+      const d = await Dev.create(w);
+      expect((await d.manifest()).json!.creatives.length).toBe(1);
+      w.rt.clock.advance(120_000);
+      await w.rt.kv.del('manifest:HN.all.tv');
+      await w.rt.kv.del(`creative:sha256:${(await w.rt.db.query<{ id: string }>('SELECT id FROM creatives'))[0]!.id}`);
+      await w.rt.kv.incr('manifest:epoch');
+      on = true;
+      const r1 = await d.manifest();
+      // suy giam: hoac ban cu day du, hoac 5xx; KHONG BAO GIO ban rong duoc cache
+      expect(r1.res.status === 200 ? r1.json!.creatives.length : 1).toBe(1);
+      expect(await w.rt.kv.get('manifest:HN.all.tv')).toBeNull();
+      on = false;
+      const r2 = await d.manifest();
+      expect(r2.json!.creatives.length).toBe(1);
     } finally {
       await w.close();
     }

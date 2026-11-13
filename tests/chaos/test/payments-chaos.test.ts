@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import { crashable, createTestRuntime, SimulatedCrash, type Runtime, type TestRuntime } from '@ams/runtime';
 import { hmacSha256Hex, uuidv7 } from '@ams/shared';
-import { mountFinance, reconcileLedger, saveSepayConfig } from '@ams/payments';
+import { mountFinance, reconcileLedger, saveSepayConfig, creditTopup, sweepActivations, mailOutboxHandlers } from '@ams/payments';
+import { processOutbox } from '@ams/runtime';
 type ImpressionRow = { ts: string; event_id: string; device_id: string; screen_id: string | null; campaign_id: string; creative_id: string; slot_id: string | null; partner_id: string | null; region_id: string | null; vcr_pct: number; valid: 0 | 1; reject_reason: string | null; revenue_micro_vnd: number; reward_vnd: number };
 import { createWorld, settleMoney, snapshot, violations, num, MICRO } from '../src/world.js';
 import { flaky, mulberry32, sleep } from '../src/faults.js';
@@ -289,8 +290,8 @@ describe.each(DIALECTS)('nap tien dong thoi voi chi tieu + kich hoat tu dong (%s
 });
 
 describe.each(DIALECTS)('webhook + kich hoat tu dong: mat dien o moi ranh gioi ghi (%s, tx that)', (dialect) => {
-  // KNOWN BUG (requests muc 1): it.fails; khi sua xong test nay se do -> doi thanh it().
-  it.fails('crash truoc lan ghi thu k roi SePay gui lai: chien dich cho tien duoc giu tien dung mot lan', async () => {
+  // x2: da sua (creditTopup 'already' -> healActivation) => it() thuong.
+  it('crash truoc lan ghi thu k roi SePay gui lai: chien dich cho tien duoc giu tien dung mot lan', async () => {
     const setup = async (rt: TestRuntime) => {
       const cid = await mkCustomer(rt, 'ACTV');
       await rt.db.run(`INSERT INTO campaigns (id, customer_id, name, state, budget_cap_vnd, approved_budget_vnd, funding_state, start_at, created_at, updated_at, approved_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [rt.id(), cid, 'C', 'awaiting_funds', 5_000_000, 5_000_000, 'awaiting_funds', '2026-01-01T00:00:00.000Z', NOW, NOW, NOW]);
@@ -329,5 +330,84 @@ describe.each(DIALECTS)('webhook + kich hoat tu dong: mat dien o moi ranh gioi g
       }
     }
     expect(bad).toEqual([]);
+  });
+});
+
+describe.each(DIALECTS)('kich hoat hoi tu: thu chao hong + sweeper (%s)', (dialect) => {
+  const mkPending = async (rt: TestRuntime, code: string) => {
+    const id = rt.id();
+    await rt.db.run('INSERT INTO customers (id, tenant_id, legal_name, short_name, payment_code, state, email, created_at) VALUES (?,?,?,?,?,?,?,?)', [id, 'T1', 'Cong ty ' + code, code, code, 'pending_payment', code.toLowerCase() + '@example.test', NOW]);
+    await rt.db.run(`INSERT INTO campaigns (id, customer_id, name, state, budget_cap_vnd, approved_budget_vnd, funding_state, start_at, created_at, updated_at, approved_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [rt.id(), id, 'C', 'awaiting_funds', 1_000_000, 1_000_000, 'awaiting_funds', '2026-01-01T00:00:00.000Z', NOW, NOW, NOW]);
+    return id;
+  };
+  const st = async (rt: TestRuntime, cid: string) => ({
+    cust: (await rt.db.query<{ state: string }>('SELECT state FROM customers WHERE id = ?', [cid]))[0]!.state,
+    camp: (await rt.db.query<{ funding_state: string }>('SELECT funding_state FROM campaigns WHERE customer_id = ?', [cid]))[0]!.funding_state,
+  });
+
+  it('R1-05: SMTP hong khong chan kich hoat; thu nam trong outbox, thu lai duoc gui dung mot lan khi SMTP phuc hoi', async () => {
+    const rt = await mkRt(dialect);
+    try {
+      const app = new Hono();
+      mountFinance(app, rt);
+      const cid = await mkPending(rt, 'MAILF');
+      let down = true;
+      const sent: string[] = [];
+      rt.mail.send = async (m) => { if (down) throw new Error('smtp down'); sent.push(m.to); };
+      const raw = body(5001, 6_000_000, 'MAILF');
+      expect(await deliver(app, rt, raw)).toBe(1); // 200 ngay lan dau
+      expect(await st(rt, cid)).toEqual({ cust: 'active', camp: 'reserved' });
+      expect(sent).toEqual([]);
+      const pending = (await rt.db.query<{ n: unknown }>("SELECT COUNT(*) AS n FROM outbox WHERE topic = 'mail.send' AND status = 'pending'"))[0]!.n;
+      expect(num(pending)).toBe(1);
+      down = false;
+      rt.clock.advance(3600_000);
+      await processOutbox(rt, mailOutboxHandlers());
+      await processOutbox(rt, mailOutboxHandlers()); // chay lai: khong gui lan hai
+      expect(sent).toEqual(['mailf@example.test']);
+      expect((await reconcileLedger(rt)).mismatches).toEqual([]);
+    } finally {
+      await rt.close();
+    }
+  });
+
+  it('sweeper: vi da duoc cong (creditTopup) ma runActivation chua tung chay => sweepActivations kich hoat + giu tien, chay lai khong lam gi them', async () => {
+    const rt = await mkRt(dialect);
+    try {
+      const cid = await mkPending(rt, 'SWEEP');
+      const tid = rt.id();
+      await rt.db.run("INSERT INTO topups (id, code, customer_id, amount_vnd, method, provider, provider_txn_id, status, requested_at) VALUES (?,?,?,?, 'bank_transfer', 'sepay', ?, 'pending', ?)", [tid, 'NAP-S', cid, 6_000_000, '7001', NOW]);
+      expect(await creditTopup(rt, rt.db, tid, null)).toBe('credited'); // chua runActivation (mo phong mat dien)
+      expect(await st(rt, cid)).toEqual({ cust: 'pending_payment', camp: 'awaiting_funds' });
+      const r1 = await sweepActivations(rt);
+      expect(r1.failed).toBe(0);
+      expect(await st(rt, cid)).toEqual({ cust: 'active', camp: 'reserved' });
+      const w1 = await bal(rt, cid);
+      const r2 = await sweepActivations(rt);
+      expect(r2.activated).toBe(0);
+      expect(await bal(rt, cid)).toBe(w1);
+      expect((await reconcileLedger(rt)).mismatches).toEqual([]);
+    } finally {
+      await rt.close();
+    }
+  });
+
+  it('webhook gui lai sau khi vi da cong ma kich hoat chua chay: hoi tu qua heal-on-retry', async () => {
+    const rt = await mkRt(dialect);
+    try {
+      const app = new Hono();
+      mountFinance(app, rt);
+      const cid = await mkPending(rt, 'HEAL');
+      const raw = body(7002, 6_000_000, 'HEAL');
+      // lan 1: cong vi nhung KHONG kich hoat (gia lap dut): tao topup + credit truc tiep, webhook chua xong
+      const tid = rt.id();
+      await rt.db.run("INSERT INTO topups (id, code, customer_id, amount_vnd, method, provider, provider_txn_id, status, requested_at) VALUES (?,?,?,?, 'bank_transfer', 'sepay', ?, 'pending', ?)", [tid, 'NAP-H', cid, 6_000_000, '7002', NOW]);
+      await creditTopup(rt, rt.db, tid, null);
+      await deliver(app, rt, raw); // SePay gui lai
+      expect(await st(rt, cid)).toEqual({ cust: 'active', camp: 'reserved' });
+      expect(await bal(rt, cid)).toBe(6_000_000);
+    } finally {
+      await rt.close();
+    }
   });
 });

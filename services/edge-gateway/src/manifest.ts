@@ -73,6 +73,11 @@ interface GroupRecord {
   prev: Record<string, string>; // creative_id -> campaign_id cua ban truoc (de nhan impression sat luc doi lich)
 }
 
+/** Thu thap tinh trang suy giam trong mot lan xay (loi TAM THOI cua kv/objects, khac voi 'khong co'). */
+interface BuildCtx {
+  degraded: string[];
+}
+
 /** Tra cuu nhanh cho gateway: creative -> thong tin; gom ca creative cua ban ngay truoc. */
 export interface ManifestView {
   etag: string;
@@ -200,13 +205,29 @@ export class ManifestService {
       }
     }
     const epoch = (await this.rt.kv.get(EPOCH_KEY)) ?? '0'; // doc TRUOC khi xay: doi giua chung thi ban nay bi coi la cu o lan sau
-    const man = await this.build(g);
+    const ctx: BuildCtx = { degraded: [] };
+    let man: Manifest;
+    try {
+      man = await this.buildWith(g, ctx);
+    } catch (e) {
+      // DB/ha tang loi luc xay: dung ban cu (neu co) thay vi tra 5xx hang loat; khong co ban cu thi nem loi (gateway tra 5xx, thiet bi giu ban dang co)
+      console.error(`[manifest] xay ${key} that bai: ${(e as Error).message}`);
+      if (prev) return prev;
+      throw e;
+    }
     const now = this.rt.clock.now().getTime();
     let prevMap: Record<string, string> = {};
     if (prev) {
       prevMap = prev.etag === man.etag ? prev.prev : Object.fromEntries((JSON.parse(prev.json) as Manifest).creatives.map((c) => [c.id, c.campaign_id]));
     }
     const rec: GroupRecord = { etag: man.etag, json: JSON.stringify(man), builtAt: now, epoch, prev: prevMap };
+    if (ctx.degraded.length) {
+      // mot so creative khong xac minh duoc vi loi tam thoi: tuyet doi khong cache ban thieu. Co ban cu thi dung ban cu.
+      console.error(`[manifest] ban suy giam ${key} (${ctx.degraded.length} creative: ${ctx.degraded.slice(0, 5).join(',')}): khong cache`);
+      if (prev) return prev;
+      throw new Error(`manifest ${key} suy giam va khong co ban cu`); // 5xx: thiet bi giu manifest dang co, khong nhan manifest thieu
+
+    }
     await this.rt.kv.set(`manifest:${key}`, JSON.stringify(rec), 24 * 3600);
     // giu ban theo etag 1 gio de phuc vu delta
     await this.rt.kv.set(`manifest:${key}:${man.etag}`, rec.json, 3600);
@@ -214,6 +235,10 @@ export class ManifestService {
   }
 
   async build(g: GroupKey): Promise<Manifest> {
+    return this.buildWith(g, { degraded: [] });
+  }
+
+  private async buildWith(g: GroupKey, ctx: BuildCtx): Promise<Manifest> {
     const now = this.rt.clock.now();
     const nowIso = now.toISOString();
     const { type, px } = classType(g.modelClass);
@@ -249,7 +274,7 @@ export class ManifestService {
       if (px && (r.px_w !== px.w || r.px_h !== px.h)) continue; // thang may/LED khong tu co gian: dung do phan giai
       if (!r.storage_key) continue;
       // uu tien ban chuyen ma; tep goc chi duoc phat khi da quet sach (hoac quan tri cho phep tep chua quet)
-      const rend = await this.renditionOf(r);
+      const rend = await this.renditionOf(r, ctx);
       let sha: string | null;
       let key = r.storage_key;
       let sizeBytes = r.size_bytes;
@@ -266,6 +291,7 @@ export class ManifestService {
           sha = await this.sha256Of(r);
         } catch (e) {
           console.error(`[manifest] bo qua creative ${r.id}: khong tinh duoc sha256: ${(e as Error).message}`);
+          ctx.degraded.push(r.id); // loi tam thoi (khac 'tep khong ton tai' => null): khong duoc cache ban thieu nay
           sha = null;
         }
       }
@@ -312,24 +338,39 @@ export class ManifestService {
 
   /** Chi cho phat tep chua quet khi quan tri bat ro rang (settings.allow_unscanned_creatives = '1'/'true'). Mac dinh: chi `clean` (R1-03). */
   private async allowUnscanned(): Promise<boolean> {
-    try {
-      const r = (await this.rt.db.query<{ value: string }>("SELECT value FROM settings WHERE key = 'allow_unscanned_creatives'"))[0];
-      const v = String(r?.value ?? '').trim().toLowerCase().replace(/^"|"$/g, '');
-      return v === '1' || v === 'true';
-    } catch {
-      return false;
-    }
+    // loi DB KHONG duoc nuot (tra false se am tham go moi creative chua quet): de loi noi len, rebuild() dung ban cu
+    const r = (await this.rt.db.query<{ value: string }>("SELECT value FROM settings WHERE key = 'allow_unscanned_creatives'"))[0];
+    const v = String(r?.value ?? '').trim().toLowerCase().replace(/^"|"$/g, '');
+    return v === '1' || v === 'true';
   }
 
   /** Ban chuyen ma (media-worker ghi `renditions/<customer>/<id>/manifest.json`); null neu chua co. */
-  private async renditionOf(r: CreativeRow & { customer_id?: string | null }): Promise<{ key: string; sha256: string; size: number | null; content_type: string } | null> {
+  private async renditionOf(r: CreativeRow & { customer_id?: string | null }, ctx: BuildCtx): Promise<{ key: string; sha256: string; size: number | null; content_type: string } | null> {
     if (!r.customer_id) return null;
     const k = `creative:rendition:${r.id}`;
-    let raw = await this.rt.kv.get(k);
+    let raw: string | null = null;
+    try {
+      raw = await this.rt.kv.get(k);
+    } catch {
+      raw = null; // kv hong = cache miss: doc thang tu objects
+    }
     if (raw === null) {
-      const obj = await this.rt.objects.get(`renditions/${r.customer_id}/${r.id}/manifest.json`).catch(() => null);
+      let failed = false;
+      const obj = await this.rt.objects.get(`renditions/${r.customer_id}/${r.id}/manifest.json`).catch(() => {
+        failed = true;
+        return null;
+      });
+      if (failed) {
+        // loi tam thoi cua objects: KHONG cache 'none' (khong luu am tinh), roi ve tep goc (chi khi da quet sach) va danh dau suy giam
+        ctx.degraded.push(r.id);
+        return null;
+      }
       raw = obj ? new TextDecoder().decode(obj) : 'none';
-      await this.rt.kv.set(k, raw.length > 20_000 ? 'none' : raw, raw === 'none' ? 300 : 3600);
+      try {
+        await this.rt.kv.set(k, raw.length > 20_000 ? 'none' : raw, raw === 'none' ? 300 : 3600);
+      } catch {
+        /* cache hong: khong sao */
+      }
     }
     if (raw === 'none') return null;
     try {
@@ -355,12 +396,21 @@ export class ManifestService {
   private async sha256Of(r: CreativeRow): Promise<string | null> {
     if (r.sha256) return r.sha256;
     const k = `creative:sha256:${r.id}`;
-    const cached = await this.rt.kv.get(k);
+    let cached: string | null = null;
+    try {
+      cached = await this.rt.kv.get(k);
+    } catch {
+      cached = null; // kv hong = cache miss: tinh lai tu tep, khong go creative
+    }
     if (cached) return cached;
-    const obj = await this.rt.objects.get(r.storage_key!);
+    const obj = await this.rt.objects.get(r.storage_key!); // loi objects: nem (rebuild danh dau suy giam, khong cache)
     if (!obj) return null;
     const h = await sha256Hex(obj);
-    await this.rt.kv.set(k, h);
+    try {
+      await this.rt.kv.set(k, h);
+    } catch {
+      /* cache hong: khong sao */
+    }
     return h;
   }
 }

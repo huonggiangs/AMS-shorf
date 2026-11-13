@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TestRuntime } from '@ams/runtime';
 import { Hono } from 'hono';
-import { createFinanceCore, mountFinance, type FinanceActor } from '../src/index.js';
+import { createFinancePort, mountFinance, type FinanceActor } from '../src/index.js';
 import { actorHdr, mkCustomer, mkRt, sign, wallet, webhookBody } from './helpers.js';
 import { code, mkAdmin } from './stepup.js';
 
@@ -100,7 +100,7 @@ describe('route doi soat + hang cho thu cong (s1 noi w4)', () => {
 
   it('scheduled */10 chay duoc (repair + doi soat SePay khi co token, production)', async () => {
     const rt4 = await mkRt('sqlite', { SEPAY_API_TOKEN: 'tok-123456', SEPAY_MODE: 'production', SEPAY_API_KEY: 'k-12345678' });
-    const core = createFinanceCore(rt4);
+    const core = createFinancePort();
     const orig = globalThis.fetch;
     let hits = 0;
     globalThis.fetch = (async () => { hits++; return new Response(JSON.stringify({ transactions: [] }), { status: 200 }); }) as typeof fetch;

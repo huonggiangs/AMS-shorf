@@ -1,4 +1,4 @@
-import type { Db, Runtime } from '@ams/runtime';
+import { enqueueOutbox, processOutbox, type Db, type OutboxHandlers, type Runtime } from '@ams/runtime';
 import { sha256Hex, toBase64Url, randomBytes, transitionCampaign } from '@ams/shared';
 import { loadSepayConfig } from './config.js';
 import { runAwaitingFunds } from './ledger.js';
@@ -31,7 +31,70 @@ async function minForCustomer(db: Db, rt: Runtime, customerId: string): Promise<
 export async function runActivation(rt: Runtime, dbIn: Db, customerId: string, topupId: string | null): Promise<{ log_id: string | null; actions: ActivationAction[] }> {
   const r = await runActivationTx(rt, dbIn, customerId, topupId);
   if (r.actions.length) await bumpManifest(rt); // chien dich vua duoc giu tien co the da len `active`
+  await drainMailOutbox(rt); // thu chao: ngoai giao dich, loi khong bao gio chan kich hoat (R1-05)
   return r;
+}
+
+/**
+ * Kich hoat co the CHAY LAI (RECONCILIATION muc 2 / R1-05): goi tu nhanh 'already' cua creditTopup (webhook gui lai sau khi vi da duoc cong
+ * nhung runActivation chua chay/hong) va tu sweepActivations. Idempotent; luon tang epoch manifest vi lan truoc co the dut giua commit va bump.
+ */
+export async function healActivation(rt: Runtime, db: Db, customerId: string, topupId: string | null): Promise<void> {
+  await runActivation(rt, db, customerId, topupId);
+  await bumpManifest(rt);
+}
+
+/**
+ * Sweeper: tim khach co tien da co nhung chua kich hoat roi chay lai runActivation (idempotent):
+ *  - chien dich awaiting_funds ma so du kha dung >= ngan sach da duyet;
+ *  - khach pending_payment da co topup 'credited'.
+ * Goi theo lich (cung nhip job tan suat cao). Loi cua tung khach khong chan khach khac.
+ */
+export async function sweepActivations(rt: Runtime): Promise<{ checked: number; activated: number; failed: number }> {
+  const rows = await rt.db.query<{ customer_id: string }>(
+    `SELECT DISTINCT c.customer_id AS customer_id FROM campaigns c JOIN ad_wallets w ON w.customer_id = c.customer_id
+      WHERE c.state = 'awaiting_funds' AND c.funding_state = 'awaiting_funds' AND c.approved_budget_vnd > 0
+        AND w.balance_vnd - w.reserved_vnd >= c.approved_budget_vnd
+     UNION
+     SELECT c2.id AS customer_id FROM customers c2
+      WHERE c2.state = 'pending_payment' AND EXISTS (SELECT 1 FROM topups t WHERE t.customer_id = c2.id AND t.status = 'credited')`,
+  );
+  let activated = 0, failed = 0;
+  for (const r of rows) {
+    try {
+      const res = await runActivation(rt, rt.db, r.customer_id, null);
+      if (res.actions.length) activated++;
+    } catch (e) {
+      failed++;
+      console.error(`[activation-sweep] ${r.customer_id}: ${(e as Error).message}`);
+    }
+  }
+  await drainMailOutbox(rt);
+  return { checked: rows.length, activated, failed };
+}
+
+// --- thu chao qua outbox (R1-05) ---
+export const TOPIC_MAIL_SEND = 'mail.send';
+interface MailPayload { to: string; subject: string; html: string; text?: string }
+
+/** Handler outbox gui thu: NEM loi de outbox thu lai co lui luy thua. Gop vao bo handler cua API (outbox.ts) de thu lai theo lich. */
+export function mailOutboxHandlers(): OutboxHandlers {
+  return {
+    [TOPIC_MAIL_SEND]: async (msg, rt) => {
+      const p = msg.payload as MailPayload | null;
+      if (!p?.to || !p.subject) return; // payload hong: bo
+      await rt.mail.send(p);
+    },
+  };
+}
+
+/** Gui thu dang cho ngay sau commit (best-effort, khong nem). Thu lai nho outbox processor. */
+export async function drainMailOutbox(rt: Runtime): Promise<void> {
+  try {
+    await processOutbox(rt, mailOutboxHandlers(), { limit: 10, rounds: 1 });
+  } catch (e) {
+    console.error('[activation] mail outbox:', (e as Error).message);
+  }
 }
 
 async function runActivationTx(rt: Runtime, dbIn: Db, customerId: string, topupId: string | null): Promise<{ log_id: string | null; actions: ActivationAction[] }> {
@@ -113,11 +176,16 @@ async function portalAccount(
   actions.push({ type: 'portal_account_created', admin_id: adminId, invite_id: inviteId, email });
   const base = (rt.config.env['PORTAL_PUBLIC_URL'] ?? '').replace(/\/$/, '');
   const link = `${base}/invite?token=${token}`;
-  await rt.mail.send({
-    to: email,
-    subject: 'Chào mừng đến AMS: tài khoản cổng khách hàng đã sẵn sàng',
-    html: `<p>Xin chào ${escapeHtml(cust.short_name)},</p><p>Khoản thanh toán đã được ghi nhận và tài khoản của bạn đã được kích hoạt (mã khách hàng ${escapeHtml(cust.payment_code)}).</p><p><a href="${link}">Đặt mật khẩu và bật xác thực 2 lớp</a> (liên kết hết hạn sau 72 giờ).</p>`,
-    text: `Tài khoản AMS đã được kích hoạt. Đặt mật khẩu và bật 2FA tại: ${link} (hết hạn sau 72 giờ).`,
+  // thu di qua outbox CUNG giao dich (khong gui truc tiep): loi SMTP khong lam hong/rollback kich hoat; outbox thu lai (R1-05)
+  await enqueueOutbox(db, rt, {
+    topic: TOPIC_MAIL_SEND,
+    dedupeKey: `mail:welcome:${inviteId}`,
+    payload: {
+      to: email,
+      subject: 'Chào mừng đến AMS: tài khoản cổng khách hàng đã sẵn sàng',
+      html: `<p>Xin chào ${escapeHtml(cust.short_name)},</p><p>Khoản thanh toán đã được ghi nhận và tài khoản của bạn đã được kích hoạt (mã khách hàng ${escapeHtml(cust.payment_code)}).</p><p><a href="${link}">Đặt mật khẩu và bật xác thực 2 lớp</a> (liên kết hết hạn sau 72 giờ).</p>`,
+      text: `Tài khoản AMS đã được kích hoạt. Đặt mật khẩu và bật 2FA tại: ${link} (hết hạn sau 72 giờ).`,
+    } satisfies MailPayload,
   });
   actions.push({ type: 'welcome_email_sent', to: email });
 }
