@@ -45,7 +45,7 @@ Chi phí CPU/request lấy từ số đo (mục 5 báo cáo): gateway + consumer
 | Lõi gateway (0,7 ms) | 0,1 | 1,1 | 10,7 | 107 |
 | Lõi Postgres (0,3 ms) | 0,05 | 0,5 | 4,6 | 46 |
 | Lệnh Redis/s (7,5/req) | 690 | 6,9k | 69k | 688k |
-| Số primary Redis (80k lệnh/s [COST-MODEL ƯT]) | 1 | 1 | 1 đến 2 | 9 đến 12 |
+| Số primary Redis (80k lệnh/s [COST-MODEL ƯT]) | 1 | 1 | 1 đến 2 | 9 đến 14 |
 | Khóa Redis (`rps x 600 + 2N`) | 57k | 0,57M | 5,7M | 57M |
 | RAM Redis (240 đến 290 B/khóa [đo]) | 14 đến 16 MB | 0,14 đến 0,16 GB | 1,4 đến 1,6 GB | 14 đến 16 GB |
 | Consumer (số tiến trình tại 170 msg/s [đo, nhiễu]) | 1 | 1 đến 2 | 10 | 98 |
