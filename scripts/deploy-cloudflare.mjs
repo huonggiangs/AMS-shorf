@@ -16,6 +16,7 @@
 //   --overwrite-secrets  đặt lại cả bí mật đã có trên Worker (mặc định chỉ đặt cái còn thiếu)
 //   --pause              dừng hỏi Enter trước mỗi bước có ghi (cần terminal)
 //   --fake-ids           CI/ngoại tuyến: dùng ID giả, KHÔNG gọi Cloudflare, bắt buộc đi kèm --dry-run
+//   --no-crons           bỏ cron triggers (gói Workers Free giới hạn 5 cron/tài khoản; staging nên dùng; tác vụ nền phải gọi tay)
 //   --yes                bỏ hỏi xác nhận production (dùng trong CI)
 //
 // Biến bắt buộc: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID (môi trường hoặc tệp .env). Tùy chọn: CLOUDFLARE_ZONE_NAME (mặc định anio.vn).
@@ -87,6 +88,7 @@ export function parseArgs(argv) {
     else if (k === '--overwrite-secrets') a.overwriteSecrets = true;
     else if (k === '--pause') a.pause = true;
     else if (k === '--rollback') a.rollback = true;
+    else if (k === '--no-crons') a.noCrons = true;
     else if (k === '--yes' || k === '-y') a.yes = true;
     else if (k === '-h' || k === '--help') a.help = true;
     else throw new Error(`Tham số không rõ: ${k}`);
@@ -226,7 +228,8 @@ function prepareConfigs(a, ids) {
     const tpl = join(CF, w, 'wrangler.toml');
     if (!existsSync(tpl)) die(`Thiếu ${tpl}`);
     const raw = readFileSync(tpl, 'utf8');
-    const text = renderConfig(raw, { ids, financeMigrations: fin, auditMigrations: aud });
+    let text = renderConfig(raw, { ids, financeMigrations: fin, auditMigrations: aud });
+    if (a.noCrons) text = text.replace(/^crons\s*=\s*\[[^\]]*\]/gm, 'crons = []');
     const left = [...new Set(text.match(/__[A-Z0-9_]+__/g) ?? [])];
     if (left.length) die(`${w}: còn dấu chưa thay: ${left.join(', ')} (thiếu ID tài nguyên; chạy bước resources).`);
     const dst = join(CF, w, 'wrangler.generated.toml');

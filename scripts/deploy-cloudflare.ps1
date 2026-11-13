@@ -22,8 +22,9 @@ try {
   Say "--- Buoc 1: kiem tra (khong tao/sua gi tren Cloudflare), env=$Env ---"
   node scripts/deploy-cloudflare.mjs --env $Env --preflight 2>&1 | Tee-Object -FilePath $log -Append
   $ans = Read-Host "Preflight on? Deploy THAT len Cloudflare ($Env)? (go 'yes' de tiep tuc)"
+  $extra = @(); if ($Env -ne 'production') { $extra = @('--no-crons') }
   if ($ans -eq 'yes') {
-    node scripts/deploy-cloudflare.mjs --env $Env --generate-secrets --yes 2>&1 | Tee-Object -FilePath $log -Append
+    node scripts/deploy-cloudflare.mjs --env $Env --generate-secrets --yes $extra 2>&1 | Tee-Object -FilePath $log -Append
   } else { Say 'Da dung sau preflight.' }
 } catch { Say "LOI: $($_.Exception.Message)" }
 finally { Remove-Item Env:CLOUDFLARE_API_TOKEN -ErrorAction SilentlyContinue }
