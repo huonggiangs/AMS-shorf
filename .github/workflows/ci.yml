@@ -178,6 +178,7 @@ jobs:
           - { name: migrate-seed, dockerfile: services/api/Dockerfile, target: migrate }
           - { name: edge-gateway, dockerfile: services/edge-gateway/Dockerfile }
           - { name: ingest-consumer, dockerfile: services/ingest-consumer/Dockerfile }
+          - { name: media-worker, dockerfile: services/media-worker/Dockerfile }
           - { name: web-admin, dockerfile: apps/web-admin/Dockerfile }
     steps:
       - uses: actions/checkout@v4

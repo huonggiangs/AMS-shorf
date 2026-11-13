@@ -1,5 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "types": ["node"] },
-  "include": ["*.ts"]
+  "compilerOptions": {
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": { "playwright": ["/opt/npm-tools/node_modules/playwright"] }
+  },
+  "include": ["*.ts"],
+  "exclude": [".dist"]
 }

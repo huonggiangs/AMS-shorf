@@ -64,6 +64,9 @@ const SRC: { file: string; prefixes: string[] }[] = [
   { file: 'services/api/src/routes/partners.ts', prefixes: ['/admin/v1/partners'] },
   { file: 'services/api/src/routes/rtb-floors.ts', prefixes: ['/admin/v1/rtb-floors'] },
   { file: 'services/api/src/routes/portal.ts', prefixes: ['/portal/v1'] },
+  { file: 'services/api/src/routes/history.ts', prefixes: ['/admin/v1/history', '/portal/v1/history'] },
+  { file: 'services/api/src/routes/invoices.ts', prefixes: ['/admin/v1/invoices', '/admin/v1/payouts', '/portal/v1/invoices'] },
+  { file: 'services/api/src/routes/tv-experience.ts', prefixes: ['/admin/v1/tv-experience'] },
   { file: 'services/payments/src/routes.ts', prefixes: [''] },
 ];
 
@@ -385,7 +388,7 @@ export function buildGatewayDoc(routes: RouteKey[]): Json {
         `Mã: ${Object.entries(ERROR_CODES).map(([k, v]) => `\`${k}\` (${v})`).join(', ')}. 429/503 kèm \`Retry-After\` (đã jitter): thiết bị PHẢI chờ đúng giá trị đó.`,
         '',
         '## TODO (p0-domain): chưa có trong tài liệu này',
-        'Mở rộng lệnh thiết bị (loại lệnh mới, endpoint tải lệnh riêng nếu có) do p0-domain bổ sung. `/v1/commands/ack` và `commands[]` của heartbeat đã có và đã được sinh từ mã. Khi p0 thêm route, `check` báo lệch; chạy lại `generate`.',
+        'Endpoint admin để tạo/xem lệnh (hiện chỉ có hàm `enqueueCommand`, chưa có route HTTP) và loại lệnh mới do p0-domain bổ sung. `/v1/commands/ack` và `commands[]` của heartbeat (bảng `device_commands`) đã có và được sinh từ mã; xem docs/DEVICE-PROTOCOL.md mục 6. Khi p0 thêm route, `check` báo lệch; chạy lại `generate`.',
       ].join('\n'),
     },
     servers: [{ url: 'http://gw.ams.localhost', description: 'Docker local (Caddy)' }, { url: 'http://localhost:8788', description: 'Gateway trực tiếp (dev)' }],

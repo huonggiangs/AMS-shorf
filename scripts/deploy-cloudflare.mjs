@@ -109,6 +109,8 @@ function loadDotEnv() {
 const sensitive = new Set(); // token và giá trị bí mật: mọi đầu ra đi qua redact()
 export function redact(s) {
   let out = String(s ?? '');
+  const tok = process.env.CLOUDFLARE_API_TOKEN;
+  if (tok) out = out.split(tok).join('***');
   for (const v of sensitive) if (v && v.length >= 6) out = out.split(v).join('***');
   return out;
 }

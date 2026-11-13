@@ -46,8 +46,6 @@ export async function processEvents(
   const pops: PopRow[] = [];
   const hourKey = new Date(now).toISOString().slice(0, 13).replace(/\D/g, '');
   const capKey = `cap:${dev.id}:${hourKey}`;
-  const used = Number((await rt.kv.get(capKey)) ?? 0);
-  let usedDelta = 0;
   const seen = new Set<string>();
 
   for (const raw of rawEvents) {
@@ -68,6 +66,10 @@ export async function processEvents(
     }
     const ts = new Date(tsMs).toISOString();
     if (ev.type === 'proof_of_play') {
+      if (!view.creative(ev.creative_id)) {
+        rejected.push({ event_id: ev.event_id, reason: 'not_in_manifest' });
+        continue;
+      }
       pops.push({ event_id: ev.event_id, ts, screen_id: dev.screenId ?? dev.id, creative_id: ev.creative_id, duration_ms: ev.duration_ms, source: 'device' });
       continue;
     }
@@ -87,8 +89,9 @@ export async function processEvents(
     else if (e.vcr_pct < policy.minVcrPct) reason = 'vcr_low';
     else if (info.duration_s && e.played_ms < info.duration_s * 1000 * policy.minPlayedRatio) reason = 'short_play';
     if (!reason) {
-      if (used + usedDelta >= policy.maxPerDeviceHour) reason = 'rate_cap';
-      else usedDelta++;
+      // dem nguyen tu (incr) cho tung su kien: nhieu lo song song khong vuot tran (R1-04)
+      const n = await rt.kv.incr(capKey, 3700);
+      if (n > policy.maxPerDeviceHour) reason = 'rate_cap';
     }
     const valid = reason === null;
     const reward = valid && dev.screenType === 'tv' && dev.trust >= 1 ? view.reward(e.campaign_id, e.slot_id) * policy.rewardPointToVnd : 0;
@@ -109,7 +112,6 @@ export async function processEvents(
       reward_vnd: reward,
     });
   }
-  if (usedDelta > 0) await rt.kv.set(capKey, String(used + usedDelta), 3700);
   const valid = impressions.filter((r) => r.valid === 1).length;
   const msg = impressions.length + pops.length > 0 ? ({ v: 1, device_id: dev.id, impressions, pops } as IngestMessage) : null;
   return { result: { accepted: impressions.length + pops.length, valid, flagged: impressions.length - valid, rejected }, msg };

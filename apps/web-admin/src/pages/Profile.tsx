@@ -1,20 +1,77 @@
+import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthProvider';
-import { Btn, PageHead, StatusTag } from '../components/ui';
+import { api, errMsg } from '../api/client';
+import { Btn, Note, PageHead, StatusTag } from '../components/ui';
 import { useT } from '../i18n';
 import { useUi } from '../state/ui';
 import { ROLE_LABEL } from '../lib/status';
 import { fmtDateTime } from '../lib/format';
 
+const MIN_PW = 12;
+/** Cung quy tac voi may chu (services/api auth/password-policy.ts); may chu van la nguon quyet dinh. */
+export const pwHint = (pw: string): string | null => {
+  if (pw.length < MIN_PW) return `Mật khẩu mới tối thiểu ${MIN_PW} ký tự.`;
+  if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/\d/.test(pw)) return 'Mật khẩu mới cần có chữ hoa, chữ thường và chữ số.';
+  return null;
+};
+
+/** Doi mat khau: dung o Profile (tu nguyen) va o Login (bat buoc, `forced`). Thanh cong: may chu huy cac phien khac va xoa co bat buoc. */
+export function ChangePasswordForm({ forced = false, onDone }: { forced?: boolean; onDone?: () => void }) {
+  const [cur, setCur] = useState('');
+  const [nw, setNw] = useState('');
+  const [again, setAgain] = useState('');
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setErr('');
+    const bad = pwHint(nw) ?? (nw !== again ? 'Nhập lại mật khẩu mới không khớp.' : null) ?? (nw === cur ? 'Mật khẩu mới phải khác mật khẩu hiện tại.' : null);
+    if (bad) return setErr(bad);
+    setBusy(true);
+    try {
+      await api.post('/auth/change-password', { body: { current_password: cur, new_password: nw } });
+      setOk(true);
+      setCur('');
+      setNw('');
+      setAgain('');
+      onDone?.();
+    } catch (x) {
+      setErr(errMsg(x));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form onSubmit={(e) => void submit(e)} aria-label="Đổi mật khẩu">
+      <div className="fd"><label htmlFor="pw-cur">Mật khẩu hiện tại</label><input id="pw-cur" type="password" autoComplete="current-password" required value={cur} onChange={(e) => setCur(e.target.value)} /></div>
+      <div className="fd"><label htmlFor="pw-new">Mật khẩu mới</label><input id="pw-new" type="password" autoComplete="new-password" required value={nw} onChange={(e) => setNw(e.target.value)} /></div>
+      <div className="fd"><label htmlFor="pw-again">Nhập lại mật khẩu mới</label><input id="pw-again" type="password" autoComplete="new-password" required value={again} onChange={(e) => setAgain(e.target.value)} /></div>
+      {err ? <p role="alert" style={{ color: 'var(--bad)', margin: '10px 0 0' }}>{err}</p> : null}
+      {ok && !forced ? <p role="status" style={{ margin: '10px 0 0' }}>Đã đổi mật khẩu. Các phiên đăng nhập khác đã bị đăng xuất.</p> : null}
+      <div className="acts" style={{ marginTop: 14 }}><button className="btn p" type="submit" disabled={busy}>{busy ? 'Đang lưu…' : 'Đổi mật khẩu'}</button></div>
+    </form>
+  );
+}
+
 export default function Profile() {
   const t = useT();
   const ui = useUi();
   const { me, logout, isExternal } = useAuth();
+  // meSchema cua AuthProvider bo truong `must_change_password`: doc truc tiep de hien canh bao khi bi buoc doi mat khau
+  const [forced, setForced] = useState(false);
+  useEffect(() => {
+    let live = true;
+    api.get('/auth/me', { quiet401: true }).then((r) => { if (live) setForced((r as { must_change_password?: boolean } | undefined)?.must_change_password === true); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
   if (!me) return null;
   const u = me.user;
   const name = u.name || u.email;
   return (
     <>
       <PageHead title="Hồ sơ của tôi" sub="Thông tin tài khoản và tùy chọn hiển thị." />
+      {forced ? <Note warn>Tài khoản của bạn bắt buộc đổi mật khẩu. Các chức năng khác bị khóa cho đến khi bạn đổi mật khẩu bên dưới.</Note> : null}
       <div className="g g2">
         <div className="card cp">
           <div className="nm" style={{ marginBottom: 18 }}>
@@ -40,6 +97,8 @@ export default function Profile() {
             {t('Ngôn ngữ')}
             <select className="sel" value={ui.lang} onChange={(e) => ui.setLang(e.target.value as 'vi' | 'en')} aria-label={t('Ngôn ngữ')}><option value="vi">Tiếng Việt</option><option value="en">English</option></select>
           </div>
+          <div className="ch" style={{ marginTop: 18 }}><h2>Đổi mật khẩu</h2></div>
+          <ChangePasswordForm onDone={() => setForced(false)} />
         </div>
       </div>
     </>

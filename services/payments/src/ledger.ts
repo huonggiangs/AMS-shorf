@@ -1,6 +1,7 @@
 import type { Db, Runtime } from '@ams/runtime';
 import { transitionCampaign } from '@ams/shared';
 import { FinanceError, type FundingResult, type SpendResult } from './port.js';
+import { applyBalanceAtomic, releaseAtomic, reserveAtomic, spendAtomic } from './reconcile-atomic.js';
 import { audit, iso, n, notify, withTx } from './util.js';
 
 /**
@@ -56,6 +57,10 @@ export async function applyBalance(
 ): Promise<WalletRow | null> {
   await ensureWallet(db, rt, o.customerId);
   const delta = o.kind === 'refund' ? -Math.abs(o.amount) : o.amount;
+  if (db.interactiveTx === false) {
+    // D1: so cai + cache trong MOT batch (khong con cua so giua UPDATE vi va INSERT so cai)
+    return applyBalanceAtomic(db, rt, { customerId: o.customerId, delta, kind: o.kind, entryAmount: o.kind === 'refund' ? Math.abs(o.amount) : o.amount, ...(o.refType ? { refType: o.refType } : {}), ...(o.refId ? { refId: o.refId } : {}), ...(o.note ? { note: o.note } : {}) });
+  }
   const w = await walletUpdate(
     db,
     'UPDATE ad_wallets SET balance_vnd = balance_vnd + ?, updated_at = ? WHERE customer_id = ? AND balance_vnd + ? >= reserved_vnd',
@@ -71,9 +76,48 @@ export async function applyBalance(
  * Chay lai bao nhieu lan cung chi cong mot lan (chiem thua -> 'already').
  */
 export async function creditTopup(rt: Runtime, dbIn: Db, topupId: string, confirmedBy: string | null): Promise<'credited' | 'already' | 'not_found'> {
-  const t = (await dbIn.query<{ customer_id: string; amount_vnd: unknown }>('SELECT customer_id, amount_vnd FROM topups WHERE id = ?', [topupId]))[0];
+  const t = (await dbIn.query<{ customer_id: string; amount_vnd: unknown; status: string; provider: string | null; provider_txn_id: string | null }>(
+    'SELECT customer_id, amount_vnd, status, provider, provider_txn_id FROM topups WHERE id = ?', [topupId]))[0];
   if (!t) return 'not_found';
+  if (t.status !== 'pending' && t.status !== 'unmatched') return 'already';
+  // duong TU DONG (webhook/doi soat gui lai) khong bao gio cong topup dang cho nguoi xem ('unmatched'); chi nguoi xac nhan (confirmedBy) moi cong
+  if (!confirmedBy && t.status === 'unmatched') return 'already';
   return withTx(dbIn, async (db) => {
+    // --- bao ve cong kep (RECONCILIATION.md muc 2) ---
+    // (a) mot giao dich ngan hang chi duoc cong mot lan, bat ke duong nao (webhook / doi soat bu / hang doi thu cong): khoa duy nhat claim_key.
+    // (b) duong TU DONG (confirmedBy = null) gap khoan nap thu cong cung khach + cung so tien vua duoc nguoi xac nhan: giu lai cho nguoi xem, khong tu cong.
+    const path = confirmedBy ? 'manual_confirm' : t.provider_txn_id ? 'auto' : 'auto_no_txn';
+    if (!confirmedBy && t.provider_txn_id && t.status === 'pending') {
+      const hours = Number(rt.config.env['DOUBLE_CREDIT_WINDOW_HOURS'] ?? 72);
+      const since = new Date(rt.clock.now().getTime() - (Number.isFinite(hours) && hours > 0 ? hours : 72) * 3600_000).toISOString();
+      const twin = (await db.query<{ id: string }>(
+        `SELECT id FROM topups WHERE customer_id = ? AND id <> ? AND status = 'credited' AND provider_txn_id IS NULL AND confirmed_by IS NOT NULL
+           AND amount_vnd = ? AND credited_at >= ? LIMIT 1`,
+        [t.customer_id, topupId, n(t.amount_vnd), since]))[0];
+      if (twin) {
+        const held = await db.run("UPDATE topups SET status = 'unmatched', matched_by = 'manual:possible_double_credit' WHERE id = ? AND status = 'pending'", [topupId]);
+        if (held.changes === 1) {
+          await notify(db, rt, { kind: 'payment_manual_queue', title: 'Nghi cộng kép: khoản nạp trùng khoản đã xác nhận tay', body: `${n(t.amount_vnd)} ₫ · trùng topup ${twin.id}, chờ người xem`, refType: 'topup', refId: topupId });
+          await audit(db, rt, { action: 'finance.topup.hold_possible_double_credit', type: 'topup', id: topupId, customer: t.customer_id, diff: { twin_topup_id: twin.id, amount_vnd: n(t.amount_vnd), txn: t.provider_txn_id } });
+        }
+        return 'already';
+      }
+    }
+    const claimKey = t.provider_txn_id ? `txn:${t.provider ?? ''}:${t.provider_txn_id}` : `topup:${topupId}`;
+    const ck = await db.run(
+      'INSERT INTO topup_credit_claims (claim_key, topup_id, customer_id, amount_vnd, path, created_at) VALUES (?,?,?,?,?,?) ON CONFLICT (claim_key) DO NOTHING',
+      [claimKey, topupId, t.customer_id, n(t.amount_vnd), path, iso(rt)],
+    );
+    if (ck.changes !== 1) {
+      const owner = (await db.query<{ topup_id: string }>('SELECT topup_id FROM topup_credit_claims WHERE claim_key = ?', [claimKey]))[0];
+      if (owner && owner.topup_id !== topupId) {
+        // giao dich ngan hang nay da duoc cong boi topup khac: khong cong lan hai, dong yeu cau thua
+        await db.run("UPDATE topups SET status = 'rejected', matched_by = 'duplicate_txn' WHERE id = ? AND status IN ('pending','unmatched')", [topupId]);
+        await audit(db, rt, { action: 'finance.topup.duplicate_txn_blocked', type: 'topup', id: topupId, customer: t.customer_id, diff: { claim_key: claimKey, owner_topup_id: owner.topup_id } });
+        return 'already';
+      }
+      // owner = chinh topup nay: lan truoc dut giua chung (D1), chay tiep (idempotent)
+    }
     const claim = await db.run(
       "UPDATE topups SET status = 'credited', credited_at = ?, confirmed_by = COALESCE(?, confirmed_by) WHERE id = ? AND status IN ('pending','unmatched')",
       [iso(rt), confirmedBy, topupId],
@@ -117,6 +161,7 @@ function targetState(rt: Runtime, c: CampRow): 'active' | 'scheduled' | 'paused'
 /** Thu giu `amount` cho chien dich. true = da giu; false = khong du kha dung (khong thay doi gi). */
 async function tryReserve(db: Db, rt: Runtime, c: CampRow, amount: number): Promise<boolean> {
   await ensureWallet(db, rt, c.customer_id);
+  if (db.interactiveTx === false) return reserveAtomic(db, rt, { campaignId: c.id, customerId: c.customer_id, amount, targetState: targetState(rt, c) });
   const w = await walletUpdate(
     db,
     'UPDATE ad_wallets SET reserved_vnd = reserved_vnd + ?, updated_at = ? WHERE customer_id = ? AND balance_vnd - reserved_vnd >= ?',
@@ -175,6 +220,13 @@ export async function releaseCampaign(rt: Runtime, dbIn: Db, campaignId: string)
       }
       if (c.funding_state !== 'reserved') return { released: 0 };
       const amt = n(c.reserved_vnd);
+      if (db.interactiveTx === false) {
+        const r = await releaseAtomic(db, rt, { campaignId, customerId: c.customer_id, amount: amt });
+        if (r === 'inconsistent') throw new FinanceError('wallet_inconsistent', 'Số tiền giữ của ví không khớp chiến dịch', 500);
+        if (r === 'retry') continue;
+        if (amt > 0) await runAwaitingFunds(db, rt, c.customer_id, null);
+        return { released: amt };
+      }
       const claim = await db.run(
         "UPDATE campaigns SET reserved_vnd = 0, funding_state = 'released', updated_at = ? WHERE id = ? AND funding_state = 'reserved' AND reserved_vnd = ?",
         [iso(rt), campaignId, amt],
@@ -200,22 +252,33 @@ export async function spendCampaign(rt: Runtime, dbIn: Db, campaignId: string, a
       const remaining = c.funding_state === 'reserved' ? n(c.reserved_vnd) : 0;
       const amt = Math.min(amountVnd, remaining);
       if (amt <= 0) return { charged: 0, rejected: amountVnd, remaining, exhausted: remaining === 0 };
-      const claim = await db.query<{ reserved_vnd: unknown }>(
-        "UPDATE campaigns SET reserved_vnd = reserved_vnd - ?, spent_vnd = spent_vnd + ?, updated_at = ? WHERE id = ? AND funding_state = 'reserved' AND reserved_vnd >= ? RETURNING reserved_vnd",
-        [amt, amt, iso(rt), campaignId, amt],
-      );
-      if (!claim[0]) continue;
-      const left = n(claim[0].reserved_vnd); // con lai chinh xac sau khi tru (khong dung gia tri doc cu khi co chi tieu dong thoi)
-      const w = await walletUpdate(
-        db,
-        'UPDATE ad_wallets SET balance_vnd = balance_vnd - ?, reserved_vnd = reserved_vnd - ?, spent_vnd = spent_vnd + ?, updated_at = ? WHERE customer_id = ? AND reserved_vnd >= ? AND balance_vnd >= ?',
-        [amt, amt, amt, iso(rt), c.customer_id, amt, amt],
-      );
-      if (!w) {
-        await db.run('UPDATE campaigns SET reserved_vnd = reserved_vnd + ?, spent_vnd = spent_vnd - ? WHERE id = ?', [amt, amt, campaignId]);
-        throw new FinanceError('wallet_inconsistent', 'Số tiền giữ của ví không khớp chiến dịch', 500);
+      let left: number;
+      if (db.interactiveTx === false) {
+        // D1: mot batch nguyen tu (so cai + chien dich + vi); khong con cua so "chien dich da tru, vi chua tru"
+        const r = await spendAtomic(db, rt, { campaignId, customerId: c.customer_id, amount: amt, refType: ref?.type ?? 'campaign', refId: ref?.id ?? campaignId });
+        if (!r.ok) {
+          if (r.inconsistent) throw new FinanceError('wallet_inconsistent', 'Số tiền giữ của ví không khớp chiến dịch', 500);
+          continue; // co chi tieu dong thoi: doc lai
+        }
+        left = r.left;
+      } else {
+        const claim = await db.query<{ reserved_vnd: unknown }>(
+          "UPDATE campaigns SET reserved_vnd = reserved_vnd - ?, spent_vnd = spent_vnd + ?, updated_at = ? WHERE id = ? AND funding_state = 'reserved' AND reserved_vnd >= ? RETURNING reserved_vnd",
+          [amt, amt, iso(rt), campaignId, amt],
+        );
+        if (!claim[0]) continue;
+        left = n(claim[0].reserved_vnd); // con lai chinh xac sau khi tru (khong dung gia tri doc cu khi co chi tieu dong thoi)
+        const w = await walletUpdate(
+          db,
+          'UPDATE ad_wallets SET balance_vnd = balance_vnd - ?, reserved_vnd = reserved_vnd - ?, spent_vnd = spent_vnd + ?, updated_at = ? WHERE customer_id = ? AND reserved_vnd >= ? AND balance_vnd >= ?',
+          [amt, amt, amt, iso(rt), c.customer_id, amt, amt],
+        );
+        if (!w) {
+          await db.run('UPDATE campaigns SET reserved_vnd = reserved_vnd + ?, spent_vnd = spent_vnd - ? WHERE id = ?', [amt, amt, campaignId]);
+          throw new FinanceError('wallet_inconsistent', 'Số tiền giữ của ví không khớp chiến dịch', 500);
+        }
+        await entry(db, rt, { customerId: c.customer_id, kind: 'spend', amount: amt, w, refType: ref?.type ?? 'campaign', refId: ref?.id ?? campaignId, note: 'Chi phát quảng cáo' });
       }
-      await entry(db, rt, { customerId: c.customer_id, kind: 'spend', amount: amt, w, refType: ref?.type ?? 'campaign', refId: ref?.id ?? campaignId, note: 'Chi phát quảng cáo' });
       let exhausted = false;
       if (left === 0) {
         const stopped = await transitionCampaign(db, {

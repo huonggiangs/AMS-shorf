@@ -12,6 +12,8 @@ import {
 } from '../lib/creative.js';
 import { todayVn } from '../lib/dates.js';
 import { bumpManifest } from '../lib/manifest.js';
+import { enqueueMediaUploaded, runOutbox } from '../outbox.js';
+import { UNSCANNED_STATES, allowUnscannedCreatives, assertScanOk } from './creatives-scan.js';
 import { requirePerm } from '../auth/middleware.js';
 import { AD_FORMATS, isAdFormat, parseOverlay, sha256Hex, type CreativeOverlay } from '@ams/shared';
 import type { AppEnv, AuthUser } from '../types.js';
@@ -94,6 +96,7 @@ export const present = (m: MediaRow): Record<string, unknown> => ({
   campaign_id: m.campaign_id,
   target_type: apiTarget(m.target_type),
   scan_state: m.scan_state,
+  scan_warning: (UNSCANNED_STATES as readonly string[]).includes(m.scan_state) ? 'Chưa quét mã độc' : null,
   format: isAdFormat(m.format) ? m.format : 'fullscreen',
   overlay: overlayOf(m.overlay),
   sha256: m.sha256,
@@ -312,8 +315,14 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
         [w, h, w >= h ? 'landscape' : 'portrait', target, head.size, durationSec === undefined ? null : Math.round(durationSec), sha, m.id],
       );
       if (res.changes === 0) throw conflict('Tệp vừa được xác nhận ở nơi khác.', 'invalid_state');
+      await enqueueMediaUploaded(db, rt, m.id); // cung giao dich: xac nhan xong thi chac chan co viec quet (media-worker)
       await auditCtx(c, db, { action: 'media.confirm', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { px: `${w}x${h}`, size_bytes: head.size, target_type: target, sha256: sha } });
     });
+    try {
+      await runOutbox(rt, c.get('finance')); // day ngay cho media-worker; loi thi worker outbox thu lai
+    } catch (e) {
+      console.error('[media] xu ly outbox loi:', (e as Error).name);
+    }
     return c.json(present(await loadMedia(c, m.id)));
   });
 
@@ -370,10 +379,11 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const m = await loadMedia(c, c.req.param('id'));
     if (m.state === 'uploading' || m.state === 'invalid') throw conflict('Tệp chưa tải xong hoặc không hợp lệ.', 'invalid_state');
     if (m.review_state === 'approved') return c.json(present(m));
+    assertScanOk(m, await allowUnscannedCreatives(rt), { creative_id: m.id, scan_state: m.scan_state });
     await rt.db.tx(async (db) => {
-      const res = await db.run("UPDATE creatives SET review_state = 'approved', review_note = NULL, state = 'ready' WHERE id = ? AND state NOT IN ('uploading','invalid')", [m.id]);
+      const res = await db.run("UPDATE creatives SET review_state = 'approved', review_note = NULL, state = 'ready' WHERE id = ? AND state NOT IN ('uploading','invalid') AND scan_state = ?", [m.id, m.scan_state]);
       if (res.changes === 0) throw conflict('Tệp vừa đổi trạng thái.', 'invalid_state');
-      await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'approved' } } });
+      await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'approved' }, scan_state: m.scan_state } });
     });
     await bumpManifest(rt);
     await emailOwner(rt, m.customer_id, `Tệp "${m.name ?? ''}" đã được duyệt`, `<p>Tệp <b>${esc(m.name)}</b> đã được duyệt và có thể dùng cho chiến dịch.</p>`);

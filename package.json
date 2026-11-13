@@ -13,7 +13,9 @@
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
     "e2e:smoke": "pnpm --filter @ams/e2e smoke",
-    "e2e:ui": "pnpm --filter @ams/e2e-ui ui"
+    "e2e:ui": "pnpm --filter @ams/e2e-ui ui",
+    "test:contract": "pnpm --filter @ams/contract-tests test",
+    "test:chaos": "pnpm --filter @ams/chaos-tests test"
   },
   "devDependencies": {
     "@types/node": "22.18.0",

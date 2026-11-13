@@ -122,10 +122,10 @@ export class Dev {
     if (!red.ok) throw new Error('redeem that bai');
     await this.w.gw.devices.invalidate(this.id);
   }
-  async manifest(query = ''): Promise<{ res: Response; json: Manifest | null }> {
+  async manifest(query = ''): Promise<{ res: Response; json: Manifest | null; text: string }> {
     const res = await this.call('GET', '/v1/manifest' + query);
     const text = await res.text();
-    return { res, json: res.status === 200 ? (JSON.parse(text) as Manifest) : null };
+    return { res, json: res.status === 200 ? (JSON.parse(text) as Manifest) : null, text };
   }
   async events(events: unknown[], o: { nonce?: string } = {}): Promise<Response> {
     return this.call('POST', '/v1/events', { events }, o);
@@ -176,7 +176,7 @@ export async function snapshot(w: World): Promise<Snapshot> {
  * BAT BIEN sau khi he thong yen (da settle). `acked` = event_id (hop le, tinh tien) ma thiet bi da nhan 202.
  * Tra ve danh sach vi pham (rong = dung) de test in ra cung seed/tai hien.
  */
-export async function violations(w: World, acked: { byCampaign: Map<string, Set<string>>; flagged?: Set<string> }): Promise<string[]> {
+export async function violations(w: World, acked: { byCampaign: Map<string, Set<string>>; flagged?: Set<string> }, o: { allowUnderCharge?: boolean } = {}): Promise<string[]> {
   const v: string[] = [];
   const s = await snapshot(w);
   const allAcked = new Set<string>();
@@ -206,7 +206,7 @@ export async function violations(w: World, acked: { byCampaign: Map<string, Set<
     if (c.spent + c.reserved > w.budgetVnd) v.push(`chien dich ${c.id}: spent+reserved ${c.spent + c.reserved} > ngan sach`);
     const exhausted = c.state === 'ended' && c.reserved === 0;
     if (charged > expected) v.push(`TRU KEP chien dich ${c.id}: da tinh ${charged} micro > ${expected} (so su kien ${n})`);
-    if (!exhausted && charged < expected) v.push(`MAT TIEN chien dich ${c.id}: da tinh ${charged} micro < ${expected} (so su kien ${n})`);
+    if (!exhausted && !o.allowUnderCharge && charged < expected) v.push(`MAT TIEN chien dich ${c.id}: da tinh ${charged} micro < ${expected} (so su kien ${n})`);
   }
   return v;
 }

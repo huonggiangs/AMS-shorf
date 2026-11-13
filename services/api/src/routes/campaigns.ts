@@ -12,7 +12,8 @@ import { dayEnd, dayStart, isDate, todayVn } from '../lib/dates.js';
 import { ensureDefaultSlot } from '../lib/manifest.js';
 import { enqueueOutbox, type Db, type Runtime } from '@ams/runtime';
 import { CAMPAIGN_DELETABLE_STATES, CAMPAIGN_EDITABLE_STATES, InvalidTransitionError, assertTransition, transitionCampaign, type CampaignState } from '@ams/shared';
-import { TOPIC_CAMPAIGN_APPROVED, approvedKey, enqueueManifestBump, runOutbox } from '../outbox.js';
+import { TOPIC_CAMPAIGN_APPROVED, approvedKey, enqueueCampaignRelease, enqueueManifestBump, runOutbox } from '../outbox.js';
+import { allowUnscannedCreatives, assertScanOk } from './creatives-scan.js';
 import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv, AuthUser } from '../types.js';
 
@@ -195,14 +196,15 @@ async function attachMedia(c: Ctx, db: Db, campaignId: string, customerId: strin
   }
 }
 
-const releaseIfFunded = async (c: Ctx, row: CampRow, reason: string) => {
-  const rt = getRt(c);
-  if (row.funding_state === 'reserved' || num(row.reserved_vnd) > 0) {
-    const fin = await c.get('finance')();
-    return fin.releaseForCampaign(rt, { campaignId: row.id, actorId: c.get('user').id, reason });
-  }
-  return { released_vnd: 0 };
-};
+/** Con tien giu chua dung can hoan (viec hoan nam trong outbox cung giao dich voi doi trang thai, xem outbox.ts TOPIC_CAMPAIGN_RELEASE). */
+const isFunded = (row: CampRow): boolean => row.funding_state === 'reserved' || num(row.reserved_vnd) > 0;
+/** Giu 'reserved' cho toi khi handler hoan tien xong (releaseCampaign chi hoan khi funding_state='reserved'); cac trang thai khac ve 'released'. */
+const FUNDING_AFTER_CLOSE = { sql: "CASE WHEN funding_state IN ('none','reserved') THEN funding_state ELSE 'released' END" };
+/** So tien da hoan ghi vao so cai tu thoi diem sinh viec (0 neu viec chua chay xong). */
+async function releasedSince(rt: Runtime, campaignId: string, sinceIso: string): Promise<number> {
+  const r = await rt.db.query<{ s: unknown }>("SELECT COALESCE(SUM(amount_vnd), 0) AS s FROM wallet_entries WHERE kind = 'release' AND ref_type = 'campaign' AND ref_id = ? AND created_at >= ?", [campaignId, sinceIso]);
+  return num(r[0]?.s);
+}
 
 async function emailCampaignOwner(rt: Runtime, row: CampRow, subject: string, htmlBody: string): Promise<void> {
   const to = (await rt.db.query<{ email: string | null }>('SELECT email FROM customers WHERE id = ?', [row.customer_id]))[0]?.email;
@@ -360,6 +362,11 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     if (num(row.budget_cap_vnd) <= 0) throw unprocessable('Ngân sách phải lớn hơn 0.', 'budget_required');
     const creatives = await rt.db.query<{ id: string; review_state: string }>("SELECT id, review_state FROM creatives WHERE campaign_id = ? AND review_state NOT IN ('rejected','returned')", [row.id]);
     if (!creatives.length) throw unprocessable('Chiến dịch chưa có tệp creative hợp lệ. Hãy gắn tệp media trước khi duyệt.', 'no_creative');
+    // moi creative se duoc duyet theo chien dich (review_state 'pending') phai qua cua quet ma doc nhu duyet tung tep
+    const allowUnscanned = await allowUnscannedCreatives(rt);
+    for (const cr of await rt.db.query<{ id: string; scan_state: string; source: string }>("SELECT id, scan_state, source FROM creatives WHERE campaign_id = ? AND review_state = 'pending'", [row.id])) {
+      assertScanOk(cr, allowUnscanned, { creative_id: cr.id, scan_state: cr.scan_state });
+    }
     const nowIso = rt.clock.now().toISOString();
     // BUOC 1 (mot giao dich): danh dau da duyet nguyen tu (UPDATE co dieu kien: hai nguoi duyet cung luc chi mot thang, nguoi kia 409)
     // + GHI outbox "campaign.approved". Giu tien (buoc 2) va bao manifest (buoc 3) do handler outbox lam, idempotent, hoi tu sau su co.
@@ -408,13 +415,14 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     const b = await parseBody(c, z.object({ reason: z.string().trim().min(3, 'Nhập lý do (tối thiểu 3 ký tự)').max(500) }));
     assertTransition(row.state, 'rejected', 'Không thể trả lại chiến dịch ở trạng thái này.');
     const wasApproved = row.state !== 'pending_review';
-    if (wasApproved) await releaseIfFunded(c, row, 'thu hồi duyệt'); // hoan phan giu chua dung truoc khi doi trang thai
     const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
       await transitionCampaign(db, {
         id: row.id, from: row.state as CampaignState, to: 'rejected', nowIso,
-        set: { reject_reason: b.reason, approved_budget_vnd: 0, approved_by: null, approved_at: null, funding_state: { sql: "CASE WHEN funding_state = 'none' THEN 'none' ELSE 'released' END" } },
+        set: { reject_reason: b.reason, approved_budget_vnd: 0, approved_by: null, approved_at: null, funding_state: FUNDING_AFTER_CLOSE },
       });
+      // doi trang thai + viec hoan tien cung mot giao dich: hoi tu du co chet giua chung (outbox thu lai)
+      if (isFunded(row)) await enqueueCampaignRelease(db, rt, { campaignId: row.id, actorId: u.id, reason: 'thu hồi duyệt' });
       await auditCtx(c, db, { action: 'campaign.reject', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { state: { from: row.state, to: 'rejected' }, reason: b.reason, revoked: wasApproved } });
       await enqueueManifestBump(db, rt, 'campaign.reject', row.id);
     });
@@ -428,21 +436,33 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     const rt = getRt(c);
     const row = await loadCampaign(c, c.req.param('id'), true);
     assertTransition(row.state, 'ended', 'Không thể kết thúc chiến dịch ở trạng thái này.');
-    const rel = await releaseIfFunded(c, row, 'kết thúc chiến dịch');
+    const nowIso = rt.clock.now().toISOString();
+    const funded = isFunded(row);
     await rt.db.tx(async (db) => {
-      await transitionCampaign(db, { id: row.id, from: row.state as CampaignState, to: 'ended', nowIso: rt.clock.now().toISOString(), set: { funding_state: { sql: "CASE WHEN funding_state = 'none' THEN 'none' ELSE 'released' END" } } });
-      await auditCtx(c, db, { action: 'campaign.end', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { released_vnd: rel.released_vnd } });
+      await transitionCampaign(db, { id: row.id, from: row.state as CampaignState, to: 'ended', nowIso, set: { funding_state: FUNDING_AFTER_CLOSE } });
+      if (funded) await enqueueCampaignRelease(db, rt, { campaignId: row.id, actorId: c.get('user').id, reason: 'kết thúc chiến dịch' });
+      await auditCtx(c, db, { action: 'campaign.end', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { release_queued: funded, reserved_vnd: num(row.reserved_vnd) } });
       await enqueueManifestBump(db, rt, 'campaign.end', row.id);
     });
     await drainOutbox(c);
-    return c.json({ ...(await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0], released_vnd: rel.released_vnd });
+    const released = funded ? await releasedSince(rt, row.id, nowIso) : 0;
+    return c.json({ ...(await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0], released_vnd: released, ...(funded && released === 0 ? { release_pending: true } : {}) });
   });
 
   r.delete('/:id', requirePerm('campaigns', 'delete'), async (c) => {
     const rt = getRt(c);
     const row = await loadCampaign(c, c.req.param('id'), true);
     if (!CAMPAIGN_DELETABLE_STATES.includes(row.state as CampaignState)) throw conflict('Chỉ xóa được chiến dịch bản nháp, bị trả lại, chờ duyệt hoặc chờ nạp tiền. Chiến dịch đã chạy hãy kết thúc.', 'invalid_state');
-    await releaseIfFunded(c, row, 'xóa chiến dịch');
+    if (isFunded(row)) {
+      // con tien giu: hoan roi moi xoa, ca hai do outbox lam (xoa khi chua hoan xong se mat dau vet tien)
+      await rt.db.tx(async (db) => {
+        await enqueueCampaignRelease(db, rt, { campaignId: row.id, actorId: c.get('user').id, reason: 'xóa chiến dịch', deleteAfter: true });
+        await auditCtx(c, db, { action: 'campaign.delete_requested', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { name: row.name, state: row.state } });
+      });
+      await drainOutbox(c);
+      const gone = !(await rt.db.query('SELECT 1 FROM campaigns WHERE id = ?', [row.id]))[0];
+      return gone ? c.json({ ok: true }) : c.json({ ok: true, pending: true }, 202);
+    }
     await rt.db.tx(async (db) => {
       await db.run('DELETE FROM schedule_slots WHERE campaign_id = ?', [row.id]);
       await db.run('DELETE FROM campaign_grants WHERE campaign_id = ?', [row.id]);

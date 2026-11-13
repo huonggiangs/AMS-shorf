@@ -9,7 +9,8 @@ import { HttpError, forbidden, unauthorized, unprocessable, tooMany } from '../l
 import { clientIp, jsonParse, parseBody } from '../lib/http.js';
 import type { Ctx } from '../lib/http.js';
 import { writeAudit } from '../lib/audit.js';
-import { authenticate } from './middleware.js';
+import { authenticateAllowPasswordChange, csrfGuard } from './middleware.js';
+import { mustChangePassword, forcePasswordChangeKey, passwordPolicyError } from './password-policy.js';
 import {
   MFA_COOKIE, MFA_TTL_SEC, SESSION_COOKIE, clearSessionCookies, createSession, isHttps, loadSession, revokeSession, setSessionCookies,
 } from './session.js';
@@ -94,8 +95,9 @@ async function checkTotp(rt: Runtime, adminId: string, secret: string, code: str
   return true;
 }
 
-export function meBody(rt: Runtime, u: import('../types.js').AuthUser, scope: { code: string | null; name: string | null; grants?: string[] } | null) {
+export function meBody(rt: Runtime, u: import('../types.js').AuthUser, scope: { code: string | null; name: string | null; grants?: string[] } | null, mustChangePw = false) {
   return {
+    must_change_password: mustChangePw,
     user: {
       id: u.id, email: u.email, name: u.name, role: u.role, kind: u.kind, customer_id: u.customerId, mfa_enabled: u.hasTotp, last_login_at: u.lastLoginAt,
     },
@@ -157,7 +159,7 @@ export function authRoutes(): Hono<AppEnv> {
     const s = await createSession(rt, row.id, ip, c.req.header('user-agent'), false);
     setSessionCookies(c, rt, s.token, s.csrf);
     await writeAudit(rt.db, { rt, ip, actorId: row.id }, { action: 'auth.login', objectType: 'admin', objectId: row.id, customerId: row.customer_id, diff: { mfa: false } });
-    return c.json({ mfa_required: false, csrf_token: s.csrf });
+    return c.json({ mfa_required: false, csrf_token: s.csrf, must_change_password: await mustChangePassword(rt, row.id) });
   });
 
   r.post('/mfa/enroll', async (c) => {
@@ -232,7 +234,7 @@ export function authRoutes(): Hono<AppEnv> {
     setSessionCookies(c, rt, s.token, s.csrf);
     setCookie(c, MFA_COOKIE, '', { path: '/', maxAge: 0 });
     await writeAudit(rt.db, { rt, ip, actorId: a.id }, { action: 'auth.login', objectType: 'admin', objectId: a.id, customerId: a.customer_id, diff: { mfa: true } });
-    return c.json({ ok: true, csrf_token: s.csrf });
+    return c.json({ ok: true, csrf_token: s.csrf, must_change_password: await mustChangePassword(rt, a.id) });
   });
 
   r.post('/logout', async (c) => {
@@ -255,7 +257,7 @@ export function authRoutes(): Hono<AppEnv> {
     return c.json({ ok: true });
   });
 
-  r.get('/me', authenticate, async (c) => {
+  r.get('/me', authenticateAllowPasswordChange, async (c) => {
     const rt = c.get('rt');
     const u = c.get('user');
     let scope: { code: string | null; name: string | null; grants?: string[] } | null = null;
@@ -267,8 +269,48 @@ export function authRoutes(): Hono<AppEnv> {
         scope.grants = g.map((x) => x.campaign_id);
       }
     }
-    return c.json(meBody(rt, u, scope));
+    return c.json(meBody(rt, u, scope, await mustChangePassword(rt, u.id)));
   });
+
+  // Doi mat khau (bat buoc hoac tu nguyen). Dong thoi la loi thoat duy nhat cua co force_password_change.
+  const changePassword = async (c: Ctx) => {
+    const rt = c.get('rt');
+    const ip = c.get('ip');
+    const u = c.get('user');
+    const raw = await parseBody(
+      c,
+      z.object({
+        current_password: z.string().max(256).optional(),
+        current: z.string().max(256).optional(),
+        new_password: z.string().max(256).optional(),
+        new: z.string().max(256).optional(),
+      }),
+    );
+    const current = raw.current_password ?? raw.current;
+    const next = raw.new_password ?? raw.new;
+    if (!current) throw unprocessable('Nhập mật khẩu hiện tại.', 'current_password_required');
+    if (!next) throw unprocessable('Nhập mật khẩu mới.', 'new_password_required');
+    await rateLimit(rt, `rl:pwchange:${u.id}`, 8, 900);
+    const row = (await rt.db.query<{ password_hash: string | null; email: string; customer_id: string | null }>('SELECT password_hash, email, customer_id FROM admins WHERE id = ?', [u.id]))[0];
+    if (!row?.password_hash || !(await verifyPassword(current, row.password_hash))) {
+      await writeAudit(rt.db, { rt, ip, actorId: u.id }, { action: 'auth.password_change_failed', objectType: 'admin', objectId: u.id, customerId: row?.customer_id ?? null });
+      throw unprocessable('Mật khẩu hiện tại không đúng.', 'invalid_current_password');
+    }
+    const bad = passwordPolicyError(next, { current, email: row.email });
+    if (bad) throw unprocessable(bad, 'weak_password');
+    const hash = await hashPassword(next, scryptParams(rt));
+    const nowIso = rt.clock.now().toISOString();
+    let revoked = 0;
+    await rt.db.tx(async (db) => {
+      await db.run('UPDATE admins SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?', [hash, u.id]);
+      await db.run('DELETE FROM settings WHERE key = ?', [forcePasswordChangeKey(u.id)]);
+      revoked = (await db.run('UPDATE sessions SET revoked_at = ? WHERE admin_id = ? AND id <> ? AND revoked_at IS NULL', [nowIso, u.id, u.sessionId])).changes;
+      await writeAudit(db, { rt, ip, actorId: u.id }, { action: 'auth.password_changed', objectType: 'admin', objectId: u.id, customerId: row.customer_id, diff: { other_sessions_revoked: revoked } });
+    });
+    return c.json({ ok: true, must_change_password: false, other_sessions_revoked: revoked });
+  };
+  r.post('/change-password', authenticateAllowPasswordChange, csrfGuard, changePassword);
+  r.post('/password/change', authenticateAllowPasswordChange, csrfGuard, changePassword); // ten thay the (d1-seed-prod.requests.md)
 
   r.post('/invite/accept', async (c) => {
     const rt = c.get('rt');

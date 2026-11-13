@@ -26,6 +26,9 @@ importers:
       '@tanstack/react-query':
         specifier: 5.62.7
         version: 5.62.7(react@18.3.1)
+      qrcode-generator:
+        specifier: 1.4.4
+        version: 1.4.4
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -157,6 +160,9 @@ importers:
 
   packages/sdk-ts:
     devDependencies:
+      '@ams/shared':
+        specifier: workspace:*
+        version: link:../shared
       openapi-typescript:
         specifier: 7.13.0
         version: 7.13.0(typescript@5.9.3)
@@ -450,6 +456,9 @@ importers:
       '@ams/ingest-consumer':
         specifier: workspace:*
         version: link:../../services/ingest-consumer
+      '@ams/payments':
+        specifier: workspace:*
+        version: link:../../services/payments
       '@ams/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -2410,6 +2419,9 @@ packages:
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
+
+  qrcode-generator@1.4.4:
+    resolution: {integrity: sha512-HM7yY8O2ilqhmULxGMpcHSF1EhJJ9yBj8gvDEuZ6M+KGJ0YY2hKpnXvRD+hZPLrDVck3ExIGhmPtSdcjC+guuw==}
 
   react-dom@18.3.1:
     resolution: {integrity: sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==}
@@ -4994,6 +5006,8 @@ snapshots:
       react-is: 17.0.2
 
   punycode@2.3.1: {}
+
+  qrcode-generator@1.4.4: {}
 
   react-dom@18.3.1(react@18.3.1):
     dependencies:

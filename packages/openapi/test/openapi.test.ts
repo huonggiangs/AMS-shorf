@@ -34,6 +34,8 @@ describe('OpenAPI 3.1', () => {
 
   it('moi route ghi body (parseBody/jsonBody) deu co requestBody trong spec', async () => {
     const { coverage } = await buildAll();
+    // route moi them o noi khac ma chua khai bao tep nguon trong SRC (build.ts) => that bai o day, khong im lang
+    expect(coverage.withoutExtraction).toEqual(['GET /health']);
     expect(coverage.withBodyExtracted).toBeGreaterThanOrEqual(40);
     const doc = load('ams-admin-api');
     const body = doc.paths['/admin/v1/campaigns/{id}/reject'].post.requestBody.content['application/json'].schema;

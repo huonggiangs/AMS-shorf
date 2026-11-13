@@ -1,7 +1,7 @@
 ﻿<#
 AMS - bản PowerShell của Makefile (Windows + Docker Desktop/WSL2, không cần cài make).
 Dùng:  .\scripts\ams.ps1 <lệnh> [tham số]
-Lệnh : setup | up | up-events | up-obs | seed | test | loadtest | tunnel | down | reset | logs | ps | doctor | config | build | trust-ca | help
+Lệnh : setup | up | up-events | up-obs | seed | bootstrap | test | loadtest | tunnel | down | reset | logs | ps | doctor | config | build | trust-ca | help
 Ví dụ: .\scripts\ams.ps1 loadtest -N 20000      .\scripts\ams.ps1 logs -Service api      .\scripts\ams.ps1 reset -Yes
 Nếu PowerShell chặn script:  powershell -ExecutionPolicy Bypass -File .\scripts\ams.ps1 setup
 #>
@@ -31,7 +31,7 @@ Test-NodeInstalled
 switch ($Command) {
   'help' {
     Get-Help $PSCommandPath | Out-Host
-    "setup  up  up-events  up-obs  seed  test  loadtest  tunnel  down  reset  logs  ps  doctor  config  build  trust-ca" | Out-Host
+    "setup  up  up-events  up-obs  seed  bootstrap  test  loadtest  tunnel  down  reset  logs  ps  doctor  config  build  trust-ca" | Out-Host
   }
   'setup'     { Invoke-Node @('setup') }
   'doctor'    { Invoke-Node @('doctor') }
@@ -46,7 +46,16 @@ switch ($Command) {
     finally { Remove-Item Env:CLICKHOUSE_URL -ErrorAction SilentlyContinue }
   }
   'up-obs'    { Invoke-Node @('check-env'); Invoke-DC @('--profile', 'core', '--profile', 'obs', 'up', '-d') }
-  'seed'      { Invoke-Node @('check-env'); Invoke-DC @('--profile', 'core', 'run', '--rm', '-e', 'SEED=1', 'migrate-seed'); Invoke-Node @('creds') }
+  'seed' {
+    Invoke-Node @('check-env')
+    # seed-mode: demo (local) | bootstrap (khác local); mã thoát 3 = yêu cầu demo bị từ chối -> Invoke-Node dừng
+    $mode = (& node (Join-Path $Root 'scripts/setup.mjs') seed-mode | Select-Object -Last 1).ToString().Trim()
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    "seed mode: $mode"
+    Invoke-DC @('--profile', 'core', 'run', '--rm', '-e', 'SEED=1', '-e', "SEED_MODE=$mode", 'migrate-seed')
+    if ($mode -eq 'demo') { Invoke-Node @('creds') }
+  }
+  'bootstrap' { Invoke-Node @('check-env'); Invoke-DC @('--profile', 'core', 'run', '--rm', '-e', 'SEED=1', '-e', 'SEED_MODE=bootstrap', 'migrate-seed') }
   'test' {
     & pnpm -r typecheck; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & pnpm -r test; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -17,6 +17,8 @@ import { contractRoutes } from './routes/contracts.js';
 import { customerRoutes } from './routes/customers.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { deviceRoutes } from './routes/devices.js';
+import { historyRoutes, portalHistoryRoutes } from './routes/history.js';
+import { invoiceRoutes, payoutRoutes, portalInvoiceRoutes } from './routes/invoices.js';
 import { mediaRoutes } from './routes/media.js';
 import { partnerRoutes } from './routes/partners.js';
 import { portalRoutes } from './routes/portal.js';
@@ -24,6 +26,7 @@ import { revenueRoutes } from './routes/revenue.js';
 import { rtbFloorRoutes } from './routes/rtb-floors.js';
 import { scheduleRoutes } from './routes/schedule.js';
 import { screenRoutes } from './routes/screens.js';
+import { tvExperienceRoutes } from './routes/tv-experience.js';
 import { permissionRoutes, userRoutes } from './routes/users.js';
 import type { AppEnv } from './types.js';
 
@@ -83,7 +86,14 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
   admin.route('/revenue', revenueRoutes());
   admin.route('/partners', partnerRoutes());
   admin.route('/rtb-floors', rtbFloorRoutes());
+  // w2-notconnected: man hinh truoc day NotConnected
+  admin.route('/history', historyRoutes());
+  admin.route('/tv-experience', tvExperienceRoutes());
+  admin.route('/invoices', invoiceRoutes());
+  admin.route('/payouts', payoutRoutes());
   app.route('/admin/v1', admin);
+  app.route('/portal/v1/history', portalHistoryRoutes());
+  app.route('/portal/v1/invoices', portalInvoiceRoutes());
   app.route('/portal/v1', portalRoutes());
 
   if (opts.mountFinance) {

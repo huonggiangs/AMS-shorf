@@ -1,18 +1,19 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
-import { errMsg } from '../api/client';
+import { api, errMsg, setCsrfToken } from '../api/client';
+import { ChangePasswordForm } from './Profile';
 import { Icon } from '../components/Icon';
 import { Note } from '../components/ui';
 import { useT } from '../i18n';
 import { useUi } from '../state/ui';
 
-type Step = 'creds' | 'enroll' | 'mfa';
+type Step = 'creds' | 'enroll' | 'mfa' | 'change';
 
 export default function Login() {
   const t = useT();
   const ui = useUi();
-  const { status, expired, login, verifyMfa, enrollMfa } = useAuth();
+  const { status, expired, login, enrollMfa, reload } = useAuth();
   const loc = useLocation() as { state?: { from?: string } };
   const [step, setStep] = useState<Step>('creds');
   const [email, setEmail] = useState('');
@@ -22,8 +23,10 @@ export default function Login() {
   const [enroll, setEnroll] = useState<{ secret: string; otpauth_url?: string; qr_url?: string } | null>(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  // giu nguoi dung o trang dang nhap trong luc kiem tra co buoc doi mat khau bat buoc (tranh Navigate truoc khi biet ket qua)
+  const [hold, setHold] = useState(false);
 
-  if (status === 'authed') return <Navigate to={loc.state?.from && loc.state.from !== '/login' ? loc.state.from : '/'} replace />;
+  if (status === 'authed' && !hold && step !== 'change') return <Navigate to={loc.state?.from && loc.state.from !== '/login' ? loc.state.from : '/'} replace />;
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -31,6 +34,7 @@ export default function Login() {
     try {
       await fn();
     } catch (e) {
+      setHold(false);
       setErr(errMsg(e));
     } finally {
       setBusy(false);
@@ -40,7 +44,14 @@ export default function Login() {
   const submitCreds = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
+      setHold(true);
       const r = await login(email.trim(), password);
+      if (!r.mfa_required) {
+        if (r.must_change_password === true) setStep('change');
+        else setHold(false);
+        return;
+      }
+      setHold(false); // buoc MFA: chua co phien, khong can giu
       if (r.mfa_required) {
         setMfaToken(r.mfa_token ?? '');
         if (r.mfa_enroll_required) {
@@ -53,7 +64,16 @@ export default function Login() {
   const submitCode = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
-      await verifyMfa(mfaToken, code.replace(/\s/g, ''));
+      setHold(true);
+      // goi truc tiep de doc `must_change_password` (verifyMfa cua AuthProvider bo qua phan hoi)
+      const r = (await api.post('/auth/mfa/verify', { body: { mfa_token: mfaToken, code: code.replace(/\s/g, '') }, quiet401: true })) as { must_change_password?: boolean; csrf_token?: string };
+      if (r.csrf_token) setCsrfToken(r.csrf_token);
+      if (r.must_change_password === true) {
+        setStep('change');
+        return;
+      }
+      await reload();
+      setHold(false);
     });
   };
 
@@ -70,7 +90,12 @@ export default function Login() {
           <h1 style={{ margin: '0 0 4px', fontSize: 20 }}>{t('Đăng nhập')}</h1>
           <p className="sub" style={{ margin: '0 0 14px' }}>Bảng điều hành quảng cáo màn hình</p>
           {expired && step === 'creds' ? <Note warn>Phiên đã hết hạn hoặc tài khoản được đăng nhập ở nơi khác. Vui lòng đăng nhập lại.</Note> : null}
-          {step === 'creds' ? (
+          {step === 'change' ? (
+            <div>
+              <Note warn>Tài khoản này bắt buộc đổi mật khẩu trước khi sử dụng. Mật khẩu mới cần tối thiểu 12 ký tự, gồm chữ hoa, chữ thường và chữ số.</Note>
+              <ChangePasswordForm forced onDone={() => { void reload().finally(() => { setHold(false); setStep('creds'); }); }} />
+            </div>
+          ) : step === 'creds' ? (
             <form onSubmit={submitCreds}>
               <div className="fd">
                 <label htmlFor="lg-email">Email</label>

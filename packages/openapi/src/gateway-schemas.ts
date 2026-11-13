@@ -23,11 +23,13 @@ export const pairResponse = z.union([
   z.object({ paired: z.literal(false), code: z.string().regex(/^\d{6}$/), expires_at: z.string().datetime(), expires_in: z.number().int(), ttl_s: z.number().int() }),
 ]);
 
-export const deviceCommand = z.object({
-  id: z.string(),
-  type: z.string().regex(/^[a-z][a-z0-9_.-]{0,39}$/),
-  args: z.record(z.unknown()).optional(),
-});
+export const deviceCommand = z
+  .object({
+    id: z.string().describe('id dong trong bang device_commands'),
+    type: z.string().regex(/^[a-z][a-z0-9_.-]{0,39}$/).describe('Ban dau: refresh_manifest, reboot, set_monitor. Type la: bo qua nhung VAN ack.'),
+    args: z.record(z.unknown()).optional(),
+  })
+  .describe('Vong doi: pending -> delivered -> acked|failed, hoac expired (TTL 7 ngay). Giao lai sau 120s neu chua ack, toi da 10 lan giao. At-least-once: thiet bi phai idempotent theo id.');
 
 export const heartbeatResponse = z.object({
   ok: z.literal(true),

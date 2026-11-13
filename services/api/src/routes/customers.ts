@@ -242,7 +242,8 @@ export function customerRoutes(): Hono<AppEnv> {
       const to = CUSTOMER_STATE_FROM_API[b.status] ?? b.status;
       if (to !== row.state) {
         // kich hoat tu cho thanh toan hoac cham dut chi nguoi co quyen duyet (kich hoat tu dong do tai chinh phu trach)
-        if ((row.state === 'pending_payment' && to === 'active') || to === 'terminated') {
+        // R1-08: roi khoi pending_payment (sang bat ky trang thai nao) va moi thao tac vao/ra terminated deu can quyen duyet: chan cach di vong qua paused
+        if (row.state === 'pending_payment' || row.state === 'terminated' || to === 'terminated') {
           if (!hasPerm(c, 'customers', 'approve')) throw forbidden('Chỉ người có quyền duyệt khách hàng mới đổi sang trạng thái này.', 'forbidden', { module: 'customers', action: 'approve' });
         }
         put('state', 'state', to, row.state);

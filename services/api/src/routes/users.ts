@@ -101,6 +101,12 @@ export function overridesFrom(role: string, perms: Record<string, string[]>): { 
 function guardEscalation(actor: AuthUser, role: string, overrides: { module: Module; action: Action; allowed: boolean }[]): void {
   if (actor.role === 'super_admin') return;
   if (role === 'super_admin') throw forbidden('Chỉ Super Admin được cấp vai trò Super Admin.', 'escalation');
+  // quyen mac dinh cua vai tro dich cung phai nam trong tay nguoi cap (R1-07): khong "mint" quyen qua moi/doi vai tro
+  for (const m of isExternalRole(role) ? [] : MODULES) {
+    for (const a of ACTIONS) {
+      if (defaultAllows(role as Role, m, a) && !can(actor.perms as PermRow[], actor.role, m, a)) throw forbidden(`Bạn không thể cấp vai trò ${role} vì chính bạn không có quyền ${m}:${a}.`, 'escalation');
+    }
+  }
   for (const o of overrides) {
     if (o.allowed && !can(actor.perms as PermRow[], actor.role, o.module, o.action)) throw forbidden(`Bạn không thể cấp quyền ${o.module}:${o.action} vì chính bạn không có.`, 'escalation');
   }
@@ -171,7 +177,7 @@ export function userRoutes(): Hono<AppEnv> {
     await rt.db.tx(async (db) => {
       await db.run(
         `INSERT INTO admins (id, tenant_id, email, name, role, account_kind, customer_id, status, mfa_required, invited_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-        [id, actor.tenantId, b.email, b.name, b.role, external ? (b.role === 'partner' ? 'partner' : 'customer') : 'internal', b.customer_id ?? null, 'invited', external ? 1 : 0, actor.id, nowIso],
+        [id, actor.tenantId, b.email, b.name, b.role, external ? (b.role === 'partner' ? 'partner' : 'customer') : 'internal', b.customer_id ?? null, 'invited', 1, actor.id, nowIso],
       );
       for (const o of useOverrides) await db.run('INSERT INTO admin_permissions (admin_id, module, action, allowed, updated_by, updated_at) VALUES (?,?,?,?,?,?)', [id, o.module, o.action, o.allowed ? 1 : 0, actor.id, nowIso]);
       if (b.phone || b.expires_at) await saveProfile(db, rt, id, { phone: b.phone ?? null, expires_at: b.expires_at ? (b.expires_at.length === 10 ? `${b.expires_at}T23:59:59.999Z` : b.expires_at) : null }, actor.id);

@@ -13,6 +13,7 @@
     "@ams/db": "workspace:*",
     "@ams/edge-gateway": "workspace:*",
     "@ams/ingest-consumer": "workspace:*",
+    "@ams/payments": "workspace:*",
     "@ams/runtime": "workspace:*",
     "@ams/shared": "workspace:*"
   },

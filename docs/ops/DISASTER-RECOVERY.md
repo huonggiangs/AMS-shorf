@@ -89,6 +89,7 @@ Dữ liệu sao lưu vô dụng nếu mất khóa. Lưu **riêng, ngoại tuyế
 |---|---|
 | `FIELD_ENC_KEY` (mỗi môi trường) | **Mất vĩnh viễn** MST, số tài khoản ngân hàng, TOTP, bí mật SePay đã lưu mã hóa (không có bản mã hóa lại; xem RUNBOOK 4.5) |
 | `SESSION_SECRET`, `SEPAY_WEBHOOK_SECRET`, `SEPAY_API_KEY/TOKEN`, khóa R2 | Đặt lại được (có tác động: RUNBOOK 4.5), không mất dữ liệu |
+| Bản sao bí mật do `deploy-cloudflare.mjs --generate-secrets` ghi vào `backups/` | Thư mục `backups/` có thể chứa `SESSION_SECRET`/`FIELD_ENC_KEY` rõ: **hạn chế quyền truy cập, không đẩy lên Git/chia sẻ chung với bản sao lưu dữ liệu**; chuyển vào nơi lưu bí mật rồi xóa bản trong `backups/` |
 | `.env` (Docker), `infra/cloudflare/ids.<env>.json` (ID D1/KV; **bị .gitignore**) | Dựng lại được bằng `d1 list`/`kv namespace list` nhưng tốn thời gian; sao lưu cùng bí mật |
 | Mã nguồn, `wrangler.toml`, Terraform, migration | Có trong Git (đẩy lên kho từ xa) |
 | Tài khoản Cloudflare, domain `anio.vn`, my.sepay.vn | Cần hai người quản trị, bật 2FA, có quy trình lấy lại tài khoản |
@@ -124,7 +125,7 @@ Nguyên tắc: **dừng ghi trước, khôi phục, kiểm chứng, rồi mới 
 3. `pnpm --filter @ams/api migrate` (idempotent; áp migration mới hơn bản sao lưu nếu có).
 4. `$DC up -d`, kiểm tra RUNBOOK mục 3, kiểm chứng nghiệp vụ (mục 5).
 5. MinIO/Redis: khôi phục volume hoặc `mc mirror` ngược; nếu không có, media phải tải lên lại.
-Làm lại từ đầu bằng dữ liệu mẫu: `make reset` rồi `make up && make seed` (xóa sạch).
+Làm lại từ đầu bằng dữ liệu mẫu (chỉ local): `make reset` rồi `make up && make seed` (xóa sạch); ngoài local dùng `make bootstrap`.
 
 ## 4. Diễn tập khôi phục (thủ tục thử, bắt buộc mỗi quý)
 

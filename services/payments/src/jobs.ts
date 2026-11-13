@@ -2,7 +2,13 @@ import type { Runtime } from '@ams/runtime';
 import { transitionCampaign } from '@ams/shared';
 import { releaseCampaign } from './ledger.js';
 import { pruneSpendEvents, settleSpendRemainders } from './spend.js';
+import { repairLedgerDrift, type RepairOptions } from './reconcile-atomic.js';
+import { reconcileRevenue } from './reconcile-revenue.js';
 import { audit, bumpManifest, iso, n, notify } from './util.js';
+
+export * from './reconcile-revenue.js';
+export * from './reconcile-sepay.js';
+export { repairLedgerDrift, type RepairAction, type RepairOptions } from './reconcile-atomic.js';
 
 export interface LedgerMismatch {
   customer_id: string;
@@ -96,7 +102,23 @@ export async function lowBalanceAlerts(rt: Runtime): Promise<number> {
   return sent;
 }
 
-/** Gom cac job dinh ky (cron Cloudflare `15 2 * * *` / Docker scheduler). Doi soat bu SePay goi rieng: reconcileSepay(rt, fetch). */
+const guarded = async <T>(fn: () => Promise<T>): Promise<T | { error: string }> => {
+  try {
+    return await fn();
+  } catch (e) {
+    return { error: String((e as Error).message ?? e).slice(0, 300) }; // mot job doi soat hong khong duoc chan cac job con lai
+  }
+};
+
+/**
+ * Job tan suat cao (node: interval 10 phut qua `scheduled(rt, '*\/10 * * * *')`; CF: cron `*\/10`): sweeper sua lech so cai/cache (chi cac sua an toan).
+ * `scheduled()` cua routes.ts chua goi ham nay: xem docs/RECONCILIATION.md muc 5 (yeu cau thay doi cho chu routes.ts).
+ */
+export async function runFrequentFinanceJobs(rt: Runtime, repair: RepairOptions = {}) {
+  return { repair: await guarded(() => repairLedgerDrift(rt, repair)) };
+}
+
+/** Gom cac job dinh ky (cron Cloudflare `15 2 * * *` / Docker scheduler). Doi soat bu SePay goi rieng: reconcileSepayWindow(rt, createSepayPagedFetcher(env)). */
 export async function runDailyFinanceJobs(rt: Runtime) {
   const started = await startDueCampaigns(rt);
   const ended = await endDueCampaigns(rt);
@@ -104,5 +126,7 @@ export async function runDailyFinanceJobs(rt: Runtime) {
   const alerts = await lowBalanceAlerts(rt);
   const settled = await settleSpendRemainders(rt);
   const pruned = await pruneSpendEvents(rt);
-  return { started, ended, ledger, alerts, settled, pruned };
+  const repair = await guarded(() => repairLedgerDrift(rt));
+  const revenue = await guarded(() => reconcileRevenue(rt));
+  return { started, ended, ledger, alerts, settled, pruned, repair, revenue };
 }

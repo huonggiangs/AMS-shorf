@@ -6,6 +6,7 @@ import { useAct } from '../api/hooks';
 import { useAuth } from '../auth/AuthProvider';
 import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, Note, PageHead, StatusTag } from '../components/ui';
 import { Dialog } from '../components/Dialog';
+import { SepayConnectCard } from '../components/SepayConnect';
 import { useT } from '../i18n';
 
 const ini = (n: string) => n.split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
@@ -20,6 +21,7 @@ export default function Integrations() {
   return (
     <>
       <PageHead title="Tích hợp API quảng cáo" sub="Cấu hình đối tác tiếp nhận chiến dịch, RTB và đưa creative vào lịch phát." />
+      <SepayConnectCard />
       <Note>Chưa tìm thấy tài liệu API Publish công khai của các đối tác. Giao thức chỉ là đề xuất chưa xác minh; chưa gửi request thật.</Note>
       {q.isLoading ? <LoadingBlock /> : q.isError ? <ErrorBlock error={q.error} onRetry={() => void q.refetch()} /> : !q.data?.items.length ? <EmptyBlock /> : (
         <div className="g g3">

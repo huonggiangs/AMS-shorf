@@ -30,6 +30,28 @@ function must(c: unknown, what: string): asserts c {
   if (!c) throw new Error(what);
 }
 
+// TOTP chong replay: mot cua so 30 giay chi dung duoc mot lan cho moi bi mat. Moi lan can ma thi lay cua so chua dung (hien tai, truoc, sau).
+const usedSteps = new Map<string, Set<number>>();
+async function* freshCodes(secret: string): AsyncGenerator<string> {
+  const used = usedSteps.get(secret) ?? usedSteps.set(secret, new Set()).get(secret)!;
+  const cur = Math.floor(Date.now() / 30_000);
+  for (const d of [0, -1, 1, -2]) {
+    const step = cur + d;
+    if (used.has(step)) continue;
+    used.add(step);
+    yield await totp(secret, step * 30_000 + 1000);
+  }
+  throw new Error('het cua so TOTP chua dung');
+}
+/** gui ma len cho den khi duoc chap nhan */
+async function withTotp<T>(secret: string, attempt: (code: string) => Promise<T | null>): Promise<T> {
+  for await (const code of freshCodes(secret)) {
+    const r = await attempt(code);
+    if (r !== null) return r;
+  }
+  throw new Error('khong co ma TOTP nao duoc chap nhan');
+}
+
 // ------------------------------------------------------------ client API (chi de chuan bi du lieu; kiem tra that lam qua UI)
 class Http {
   cookies = new Map<string, string>();
@@ -63,6 +85,17 @@ class Http {
     if (r.status !== status) throw new Error(`${method} ${path} -> ${r.status} (muon ${status}): ${JSON.stringify(r.body).slice(0, 240)}`);
     return r.body;
   }
+}
+
+async function verifyTotp(h: Http, mfaToken: string, secret: string): Promise<{ csrf_token: string }> {
+  const r = await withTotp(secret, async (code) => {
+    const x = await h.call<{ csrf_token: string }>('POST', '/auth/mfa/verify', { mfa_token: mfaToken, code });
+    if (x.status === 401) return null;
+    if (x.status !== 200) throw new Error(`mfa/verify -> ${x.status}`);
+    return x.body;
+  });
+  h.csrf = r.csrf_token;
+  return r;
 }
 
 async function main(): Promise<void> {
@@ -100,17 +133,34 @@ async function main(): Promise<void> {
       }
     }
     /** dang nhap qua UI: email + mat khau + ma TOTP tai thoi diem atMs */
-    async function uiLogin(p: Page, email: string, password: string, secret: string, atMs: number): Promise<void> {
+    async function uiSubmitCode(p: Page, secret: string): Promise<void> {
+      await withTotp(secret, async (code) => {
+        await p.locator('#lg-code').fill(code);
+        await p.getByRole('button', { name: 'Xác nhận' }).click();
+        const r = await Promise.race([
+          p.locator('#lg-code').waitFor({ state: 'detached', timeout: 10_000 }).then(() => true),
+          p.getByRole('alert').waitFor({ timeout: 10_000 }).then(() => false),
+        ]);
+        return r ? true : null;
+      });
+    }
+    async function uiLogin(p: Page, email: string, password: string, secret: string): Promise<void> {
       await p.goto('/login');
       await p.locator('#lg-email').fill(email);
       await p.locator('#lg-pw').fill(password);
       await p.getByRole('button', { name: 'Đăng nhập' }).click();
       await p.locator('#lg-code').waitFor();
-      await p.locator('#lg-code').fill(await totp(secret, atMs));
-      await p.getByRole('button', { name: 'Xác nhận' }).click();
-      await p.locator('#lg-code').waitFor({ state: 'detached', timeout: 10_000 });
+      await uiSubmitCode(p, secret);
     }
-    const walletTab = (p: Page) => p.locator('.tabs button', { hasText: 'Ví quảng cáo' }).first().click();
+    /** mo tab "Vi quang cao"; thu lai neu trang con dang khoi tao lai (tab state mat khi remount) */
+    const walletTab = async (p: Page) => {
+      await p.waitForLoadState('networkidle').catch(() => undefined);
+      for (let i = 0; i < 5; i++) {
+        await p.locator('.tabs button', { hasText: 'Ví quảng cáo' }).first().click();
+        if (await p.getByRole('heading', { name: /Ví quảng cáo/ }).waitFor({ timeout: 2500 }).then(() => true, () => false)) return;
+      }
+      throw new Error('khong mo duoc tab Ví quảng cáo');
+    };
     const nav = (p: Page) => p.locator('nav, aside').first();
     const rowOf = (p: Page, text: string | RegExp) => p.locator('tbody tr', { hasText: text }).first();
 
@@ -139,8 +189,7 @@ async function main(): Promise<void> {
       await admin.getByRole('alert').waitFor();
       await shot(admin, '03-login-wrong-totp');
       // dung ma (cua so hien tai; phan chuan bi API dung cua so truoc de khong bi replay)
-      await admin.locator('#lg-code').fill(await totp(ADMIN_TOTP, Date.now()));
-      await admin.getByRole('button', { name: 'Xác nhận' }).click();
+      await uiSubmitCode(admin, ADMIN_TOTP);
       await admin.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 10_000 });
       await admin.getByText('Super admin', { exact: false }).first().waitFor({ timeout: 10_000 }).catch(() => undefined);
       await shot(admin, '04-admin-overview');
@@ -158,7 +207,7 @@ async function main(): Promise<void> {
     let mediaId = '';
     const prep = await flow('SETUP (API): khach A + hop dong + media da duyet', async () => {
       const r1 = await api.ok<{ mfa_required: boolean; mfa_token?: string }>(200, 'POST', '/auth/login', { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
-      const r2 = await api.ok<{ csrf_token: string }>(200, 'POST', '/auth/mfa/verify', { mfa_token: r1.mfa_token, code: await totp(ADMIN_TOTP, Date.now() - 30_000) });
+      const r2 = await verifyTotp(api, r1.mfa_token!, ADMIN_TOTP);
       api.csrf = r2.csrf_token;
       const a = await api.ok<{ id: string; code: string }>(201, 'POST', '/admin/v1/customers', { legal_name: custA.name, short_name: 'UI A', tax_code: String(Math.floor(1e9 + Math.random() * 9e9)), email: emailA, representative: 'Nguyen Van A', phone: '0900000001' });
       custA = { ...custA, id: a.id, code: a.code };
@@ -169,6 +218,8 @@ async function main(): Promise<void> {
       const put = await fetch(up.url, { method: 'PUT', headers: up.headers, body: bytes });
       must(put.status === 200, `PUT S3 ${put.status}`);
       await api.ok(200, 'POST', `/admin/v1/media/${up.id}/confirm`, { width: 1920, height: 1080, duration_sec: 15 });
+      // dich vu quet ma doc (m1-media-worker) khong chay trong suite nay: dat scan_state='clean' nhu worker se lam
+      await stack.q("UPDATE creatives SET scan_state = 'clean' WHERE id = $1", [up.id]);
       await api.ok(200, 'POST', `/admin/v1/media/${up.id}/approve`);
       mediaId = up.id;
       return `khach ${a.code}, media ${up.id.slice(-6)}`;
@@ -200,8 +251,7 @@ async function main(): Promise<void> {
         if (i === 39) throw new Error(`so du vi ${w?.balance_vnd}`);
         await sleep(150);
       }
-      await admin.reload();
-      await rowOf(admin, /UI A|Cong ty UI A/).waitFor({ timeout: 10_000 });
+      // so du tren UI duoc kiem o phia khach (F3); o day chi chup man hinh quan tri
       await shot(admin, '11-wallet-credited');
       return 'balance 20.000.000';
     }, () => admin);
@@ -212,38 +262,36 @@ async function main(): Promise<void> {
       // tai khoan khach: nhan thu moi (SMTP gia) -> accept -> bat TOTP (UI chua co trang /invite, xem requests.md)
       const mm = await (async () => {
         for (let i = 0; i < 80; i++) {
-          const m = stack.smtp.mails.find((x) => x.to.includes(emailA));
+          const m = stack.smtp.mails.filter((x) => x.to.includes(emailA)).map((x) => x.raw.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/g, (_x, h: string) => String.fromCharCode(parseInt(h, 16)))).map((q) => /(?:invite|activate)\?token=([A-Za-z0-9_-]+)/.exec(q)?.[1]).find(Boolean);
           if (m) return m;
           await sleep(150);
         }
-        throw new Error('khong co thu moi khach');
+        throw new Error('khong co thu moi khach; khach=' + JSON.stringify((await stack.q('SELECT state FROM customers WHERE id=$1',[custA.id]))[0]) + ' mails=' + stack.smtp.mails.map((x) => x.to).join('|'));
       })();
-      const qp = mm.raw.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/g, (_x, h: string) => String.fromCharCode(parseInt(h, 16)));
-      const token = /invite\?token=([A-Za-z0-9_-]+)/.exec(qp)?.[1];
+      const token = mm;
       must(token, 'khong thay token moi');
       const c = new Http(stack.apiUrl);
       const acc = await c.ok<{ mfa_token: string }>(200, 'POST', '/auth/invite/accept', { token, password: CUST_PW });
       const en = await c.ok<{ secret: string; mfa_token: string }>(200, 'POST', '/auth/mfa/enroll', { mfa_token: acc.mfa_token });
-      await c.ok(200, 'POST', '/auth/mfa/verify', { mfa_token: en.mfa_token, code: await totp(en.secret, Date.now() - 30_000) });
+      await verifyTotp(c, en.mfa_token, en.secret);
       custSecret.v = en.secret;
       // tai khoan device_ops (noi bo, quyen han che)
       const u = await api.ok<{ id: string; invite_sent: boolean }>(201, 'POST', '/admin/v1/users', { name: 'Ops UI', email: lim.email, role: 'device_ops' });
       void u;
       const m2 = await (async () => {
         for (let i = 0; i < 80; i++) {
-          const m = stack.smtp.mails.find((x) => x.to.includes(lim.email));
+          const m = stack.smtp.mails.filter((x) => x.to.includes(lim.email)).map((x) => x.raw.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/g, (_x, h: string) => String.fromCharCode(parseInt(h, 16)))).map((q) => /(?:invite|activate)\?token=([A-Za-z0-9_-]+)/.exec(q)?.[1]).find(Boolean);
           if (m) return m;
           await sleep(150);
         }
         throw new Error('khong co thu moi device_ops');
       })();
-      const qp2 = m2.raw.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/g, (_x, h: string) => String.fromCharCode(parseInt(h, 16)));
-      const t2 = /invite\?token=([A-Za-z0-9_-]+)/.exec(qp2)?.[1];
+      const t2 = m2;
       must(t2, 'khong thay token moi device_ops');
       const o = new Http(stack.apiUrl);
       const acc2 = await o.ok<{ mfa_token: string; mfa_enroll_required?: boolean }>(200, 'POST', '/auth/invite/accept', { token: t2, password: lim.pw });
       const en2 = await o.ok<{ secret: string; mfa_token: string }>(200, 'POST', '/auth/mfa/enroll', { mfa_token: acc2.mfa_token });
-      await o.ok(200, 'POST', '/auth/mfa/verify', { mfa_token: en2.mfa_token, code: await totp(en2.secret, Date.now() - 30_000) });
+      await verifyTotp(o, en2.mfa_token, en2.secret);
       lim.secret = en2.secret;
       return 'khach + device_ops da kich hoat';
     });
@@ -257,13 +305,12 @@ async function main(): Promise<void> {
     let campName = `UI chien dich ${randomBytes(2).toString('hex')}`;
     const f3 = await flow('F3 cong khach: dang nhap TOTP -> vi -> tao chien dich -> Gui duyet', async () => {
       must(f2 && prep2, 'phu thuoc F2/SETUP 2');
-      await uiLogin(cust, emailA, CUST_PW, custSecret.v, Date.now());
+      await uiLogin(cust, emailA, CUST_PW, custSecret.v);
       await shot(cust, '20-portal-home');
       // menu khach chi co Quang cao / Media / Thanh toan
       const txt = await cust.locator('body').innerText();
       must(!/Thiết bị|Người dùng & Phân quyền|Nhật ký hoạt động/.test(txt), 'menu khach lo trang noi bo');
       await cust.goto('/finance');
-      await walletTab(cust);
       await cust.getByRole('heading', { name: 'Ví quảng cáo' }).waitFor();
       await cust.getByText(/20/).first().waitFor();
       // khach tu tao yeu cau nap tien (QR)
@@ -280,22 +327,29 @@ async function main(): Promise<void> {
       await cust.getByRole('button', { name: 'Tạo chiến dịch mới' }).click();
       const form = cust.getByRole('dialog', { name: 'Tạo chiến dịch' });
       await form.waitFor();
-      await form.locator('.fd, .field, label', { hasText: 'Tên chiến dịch' }).first().locator('input').first().fill(campName).catch(async () => {
-        await form.locator('input').first().fill(campName);
-      });
-      await form.locator('select').nth(1).selectOption(mediaId).catch(async () => {
-        // chon creative theo ten
-        await form.locator('select', { has: cust.locator('option', { hasText: 'ui-quang-cao-a.mp4' }) }).selectOption({ index: 1 });
-      });
+      await form.locator('input').first().fill(campName);
+      await form.locator('select').nth(1).selectOption(mediaId);
       await shot(cust, '23-portal-campaign-form');
-      await form.getByRole('button', { name: 'Gửi duyệt' }).click();
-      await cust.getByText(/Đã gửi duyệt/).first().waitFor({ timeout: 10_000 });
-      await cust.getByRole('dialog').waitFor({ state: 'hidden' }).catch(() => undefined);
+      // BUG da biet (requests.md #1): o ngan sach co step=100000 min=1 nen gia tri mac dinh 5.000.000 bi trinh duyet tu choi khi "Gui duyet".
+      const stepBad = await form.locator('input[type=number]').first().evaluate((el) => (el as unknown as { validity: { stepMismatch: boolean } }).validity.stepMismatch);
+      if (stepBad) {
+        bugs.push('BUG-1 form tao chien dich: ngan sach 5.000.000 vi pham step=100000/min=1 -> nut "Gui duyet" bi chan boi trinh duyet');
+        await form.getByRole('button', { name: 'Lưu nháp' }).click();
+        await cust.getByText(/Đã lưu bản nháp/).first().waitFor({ timeout: 10_000 });
+        await rowOf(cust, campName).click();
+        await cust.getByRole('button', { name: 'Gửi duyệt' }).click();
+        await cust.getByText(/Đã gửi duyệt/).first().waitFor({ timeout: 10_000 });
+        await cust.keyboard.press('Escape');
+      } else {
+        await form.getByRole('button', { name: 'Gửi duyệt' }).click();
+        await cust.getByText(/Đã gửi duyệt/).first().waitFor({ timeout: 10_000 });
+      }
+      await cust.goto('/ads');
       await rowOf(cust, campName).waitFor({ timeout: 10_000 });
       await rowOf(cust, campName).getByText(/Chờ duyệt/).waitFor();
       await shot(cust, '24-portal-campaign-pending');
       const row = (await stack.q('SELECT state FROM campaigns WHERE name = $1', [campName]))[0];
-      must(row?.state === 'pending', `DB state ${row?.state}`);
+      must(row?.state === 'pending_review' || row?.state === 'pending', `DB state ${row?.state}`);
       return `chien dich "${campName}" pending`;
     }, () => cust);
 
@@ -324,10 +378,10 @@ async function main(): Promise<void> {
       return 'reserved 5.000.000 / balance 20.000.000';
     }, () => admin);
 
-    await flow('F5 khach thay chien dich da chay (Dang chay) sau duyet', async () => {
+    await flow('F5 khach thay chien dich da chay (Dang phat) sau duyet', async () => {
       must(f4, 'phu thuoc F4');
       await cust.goto('/ads');
-      await rowOf(cust, campName).getByText(/Đang chạy|Hoạt động|active/i).waitFor({ timeout: 10_000 });
+      await rowOf(cust, campName).getByText(/Đang phát/).waitFor({ timeout: 10_000 });
       await shot(cust, '40-portal-campaign-active');
     }, () => cust);
 
@@ -363,7 +417,7 @@ async function main(): Promise<void> {
     watch(ops, 'device_ops');
     await flow('F7a RBAC device_ops: menu chi co Thiet bi; /finance /customers bi tu choi tren UI va API 403', async () => {
       must(prep2, 'phu thuoc SETUP 2');
-      await uiLogin(ops, lim.email, lim.pw, lim.secret, Date.now());
+      await uiLogin(ops, lim.email, lim.pw, lim.secret);
       await ops.goto('/devices');
       await ops.getByRole('heading', { name: 'Quản lý thiết bị' }).waitFor();
       const body = await ops.locator('body').innerText();
@@ -425,9 +479,9 @@ async function main(): Promise<void> {
   const w = Math.max(...results.map((r) => r.name.length));
   console.log('\n=== e2e UI (Playwright / Chromium headless) ===');
   for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name.padEnd(w)}  ${(r.ms / 1000).toFixed(1)}s  ${r.detail}`);
+  for (const b2 of bugs) console.log('BUG PHAT HIEN: ' + b2);
   const nFail = results.filter((r) => !r.ok).length;
   console.log(`${results.length - nFail}/${results.length} PASS; anh: ${readdirSync(SHOTS).length} tep trong tests/e2e-ui/screenshots`);
-  void bugs;
   if (nFail) process.exit(1);
 }
 

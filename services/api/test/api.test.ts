@@ -179,6 +179,7 @@ describe('Chien dich: gui duyet, duyet (FinancePort), tra lai', () => {
     const m = await lan.json('POST', '/portal/v1/media/upload-url', { name: 'tv.png', content_type: 'image/png', size_bytes: 33, width: 1920, height: 1080 });
     await env.rt.objects.put(m.body.key, png(1920, 1080), 'image/png');
     expect((await lan.json('POST', `/portal/v1/media/${m.body.id}/confirm`, {})).status).toBe(200);
+    await env.rt.db.run("UPDATE creatives SET scan_state = 'clean' WHERE id = ?", [m.body.id]); // media-worker quet xong
     const c = await lan.json('POST', '/portal/v1/campaigns', { name: 'Vong doi', budget_vnd: 5_000_000, screen_type: 'tv', media_id: m.body.id, start_date: '2026-11-01', end_date: '2026-12-31' });
     expect(c.status).toBe(201);
     expect(c.body.status).toBe('draft');
@@ -455,6 +456,7 @@ describe('tai media: kiem tra kich thuoc va han muc', () => {
   it('noi bo: duyet / tra lai media co ly do', async () => {
     const m = (await admin.json('GET', '/admin/v1/media?filter=status:pending&page_size=5')).body.items[0];
     expect(m).toBeTruthy();
+    await env.rt.db.run("UPDATE creatives SET scan_state = 'clean' WHERE id = ?", [m.id]);
     expect((await admin.json('POST', `/admin/v1/media/${m.id}/approve`)).status).toBe(200);
     expect((await admin.json('POST', `/admin/v1/media/${m.id}/reject`, { reason: 'Sai quy cach' })).status).toBe(200);
     const row = await env.rt.db.query<{ review_state: string }>('SELECT review_state FROM creatives WHERE id = ?', [m.id]);

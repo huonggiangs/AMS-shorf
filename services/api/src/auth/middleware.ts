@@ -5,13 +5,28 @@ import { timingSafeEqualStr } from '@ams/shared';
 import { forbidden, unauthorized } from '../lib/errors.js';
 import type { Action, Module } from '@ams/config';
 import { SESSION_COOKIE, loadSession } from './session.js';
+import { mustChangePassword } from './password-policy.js';
 import type { AppEnv } from '../types.js';
 
-/** Nap phien tu cookie `ams_session`; nem 401 neu thieu/het han. */
-export const authenticate: MiddlewareHandler<AppEnv> = async (c, next) => {
+/** Nap phien tu cookie `ams_session`; nem 401 neu thieu/het han. KHONG chan tai khoan bi buoc doi mat khau (chi /auth/me, /auth/change-password dung). */
+export const authenticateAllowPasswordChange: MiddlewareHandler<AppEnv> = async (c, next) => {
   const token = getCookie(c, SESSION_COOKIE);
   if (!token) throw unauthorized();
   c.set('user', await loadSession(c.get('rt'), token));
+  await next();
+};
+
+/**
+ * Nhu tren, nhung neu co `force_password_change:<id>` thi moi route con lai tra 403 `password_change_required`
+ * cho toi khi POST /auth/change-password thanh cong (dang nhap van thanh cong de nguoi dung doi mat khau).
+ */
+export const authenticate: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const token = getCookie(c, SESSION_COOKIE);
+  if (!token) throw unauthorized();
+  const rt = c.get('rt');
+  const u = await loadSession(rt, token);
+  if (await mustChangePassword(rt, u.id)) throw forbidden('Bạn cần đổi mật khẩu trước khi tiếp tục sử dụng hệ thống.', 'password_change_required');
+  c.set('user', u);
   await next();
 };
 

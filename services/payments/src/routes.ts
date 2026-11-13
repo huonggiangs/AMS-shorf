@@ -11,6 +11,7 @@ import { audit, bumpManifest, iso, n, notify, startOfVnDayIso } from './util.js'
 import { endDueCampaigns, runDailyFinanceJobs, startDueCampaigns } from './jobs.js';
 import { settleSpendRemainders } from './spend.js';
 import { authenticateWebhook, createSepayFetcher, processIncoming, reconcileSepay, sepayPayload, storeRejected } from './webhook.js';
+import { CHANGE_PREFIX, alertFinance, changeExpired, requireStepUp } from './sepay-change.js';
 import { releaseCampaign, reserveCampaign, spendCampaign } from './ledger.js';
 
 /** Ham loi (khong phu thuoc hinh dang a1): (campaignId, budget). */
@@ -111,13 +112,17 @@ export interface MountResult {
   devSimulate: boolean;
 }
 
+/** true neu co it nhat mot bi mat webhook (env hoac DB). Production thieu -> /admin/v1/settings/sepay bao has_secret=false va webhook bi tu choi. */
+export async function financeSecretsConfigured(rt: Runtime): Promise<boolean> {
+  const s = await loadSecrets(rt);
+  return !!(s.hmacSecret || s.apiKey);
+}
+
 /** Kiem tra cau hinh luc khoi dong: dung de khong de endpoint dev/mo phong lot len production. */
 export function assertFinanceConfig(rt: Runtime): { mode: ReturnType<typeof sepayMode>; devSimulate: boolean } {
   const mode = sepayMode(rt); // nem loi neu gia tri la
-  const env = rt.config.env;
-  if (mode === 'production' && !env['SEPAY_WEBHOOK_SECRET'] && !env['SEPAY_API_KEY']) {
-    throw new Error('SEPAY_MODE=production nhưng thiếu SEPAY_WEBHOOK_SECRET hoặc SEPAY_API_KEY: từ chối khởi động');
-  }
+  // Bi mat co the nam trong env HOAC trong DB (settings, ma hoa), nen khong kiem dong bo luc khoi dong.
+  // An toan: thieu ca hai thi webhook bi tu choi (401 no_secret_configured); xem financeSecretsConfigured().
   const devSimulate = devSimulateAllowed(rt);
   if (devSimulate && (rt.config.runtime !== 'docker' || mode === 'production')) throw new Error('Cấu hình sai: /dev/sepay/simulate không được bật ngoài docker/non-production');
   return { mode, devSimulate };
@@ -507,25 +512,84 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
       api_key: z.union([z.literal(''), z.string().min(8, 'API Key tối thiểu 8 ký tự').max(200).regex(/^\S+$/, 'API Key không được chứa khoảng trắng')]).optional(),
       webhook_secret: z.union([z.literal(''), z.string().min(8, 'Khóa webhook tối thiểu 8 ký tự').max(200).regex(/^\S+$/, 'Khóa webhook không được chứa khoảng trắng')]).optional(),
       auth_mode: z.enum(['hmac', 'apikey']).optional(),
+      totp: z.string().optional(),
     }).passthrough());
+    const mask = (s: string | null) => (s ? `***${s.slice(-3)}` : null);
+    // R1-02: moi thay doi can nhap lai TOTP cua chinh nguoi thao tac
+    await requireStepUp(rt, a.id, b.totp);
     const before = await loadSepayConfig(rt);
     const secBefore = await secretStatus(rt);
-    await saveSepayConfig(rt, rt.db, {
+    // thay doi 'noi nhan tien' (ngan hang / so tai khoan / chu tai khoan / bat-tat) KHONG ap dung ngay: de xuat, nguoi KHAC duyet
+    const payee: Record<string, unknown> = {
       ...(b.enabled !== undefined ? { enabled: b.enabled } : {}), ...(b.bank ? { bank: b.bank } : {}), ...(b.account_number ? { account_number: b.account_number } : {}),
-      ...(b.account_holder ? { account_holder: b.account_holder.toUpperCase() } : {}), ...(b.prefix ? { prefix: b.prefix.toUpperCase() } : {}),
+      ...(b.account_holder ? { account_holder: b.account_holder.toUpperCase() } : {}),
+    };
+    await saveSepayConfig(rt, rt.db, {
+      ...(b.prefix ? { prefix: b.prefix.toUpperCase() } : {}),
       ...(b.min_activate_vnd !== undefined ? { min_amount_vnd: b.min_activate_vnd } : {}), ...(b.auto_activate !== undefined ? { auto_activate: b.auto_activate } : {}),
       ...(b.daily_limit_vnd !== undefined ? { daily_limit_vnd: b.daily_limit_vnd } : {}),
       ...(b.api_key !== undefined ? { api_key: b.api_key } : {}), ...(b.webhook_secret !== undefined ? { webhook_secret: b.webhook_secret } : {}),
       ...(b.auth_mode ? { auth_mode: b.auth_mode } : {}),
     }, a.id);
+    let changeId: string | null = null;
+    if (Object.keys(payee).length) {
+      changeId = rt.id();
+      await rt.db.run('INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?,?,?,?)', [`${CHANGE_PREFIX}${changeId}`, JSON.stringify({ changes: payee, requested_by: a.id, requested_at: iso(rt), status: 'pending' }), a.id, iso(rt)]);
+      await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.change_requested', type: 'settings', id: changeId, ip: a.ip, diff: { fields: Object.keys(payee), account: b.account_number ? mask(b.account_number) : undefined, bank: b.bank } });
+      await alertFinance(rt, { title: 'Đề xuất đổi tài khoản nhận tiền SePay', body: `Có đề xuất đổi thông tin nhận tiền (${Object.keys(payee).join(', ')}${b.account_number ? `, số tài khoản mới ${mask(b.account_number)}` : ''}). Cần một người khác duyệt trong 24 giờ.`, refId: changeId });
+    }
     const secAfter = await secretStatus(rt);
-    const mask = (s: string | null) => (s ? `***${s.slice(-3)}` : null);
-    await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.update', type: 'settings', id: 'sepay', ip: a.ip, diff: { bank: [before.bank, b.bank ?? before.bank], account: [mask(before.account_number), mask(b.account_number ?? before.account_number)], prefix: [before.prefix, b.prefix?.toUpperCase() ?? before.prefix],
+    await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.update', type: 'settings', id: 'sepay', ip: a.ip, diff: { pending_change: changeId, prefix: [before.prefix, b.prefix?.toUpperCase() ?? before.prefix],
       // chi ghi trang thai da che, khong bao gio ghi gia tri bi mat
       ...(b.api_key !== undefined ? { api_key: [secBefore.apikey_hint, secAfter.apikey_hint] } : {}),
       ...(b.webhook_secret !== undefined ? { webhook_secret: [secBefore.secret_hint, secAfter.secret_hint] } : {}),
       ...(b.auth_mode ? { auth_mode: [before.auth_mode, b.auth_mode] } : {}) } });
-    return c.json(await sepayView(rt.db));
+    if (secAfter.apikey_hint !== secBefore.apikey_hint || secAfter.secret_hint !== secBefore.secret_hint) {
+      await alertFinance(rt, { title: 'Khóa webhook SePay đã thay đổi', body: `Khóa webhook SePay vừa được đổi bởi ${a.id}.`, refId: 'sepay' });
+    }
+    return c.json({ ...(await sepayView(rt.db)), pending_change_id: changeId }, changeId ? 202 : 200);
+  }));
+
+  app.get('/admin/v1/settings/sepay/changes', wrap(async (c) => {
+    requirePerm(await actorOf(c), 'finance', 'view', 'internal');
+    const rows = await rt.db.query<{ key: string; value: string }>(`SELECT key, value FROM settings WHERE key LIKE 'sepay\\_change:%' ESCAPE '\\' ORDER BY updated_at DESC LIMIT 50`);
+    const items = rows.map((r) => {
+      const v = JSON.parse(r.value) as { changes: Record<string, unknown>; requested_by: string; requested_at: string; status: string };
+      const ch = { ...v.changes };
+      if (typeof ch['account_number'] === 'string') ch['account_number'] = `***${ch['account_number'].slice(-3)}`;
+      return { id: r.key.slice(CHANGE_PREFIX.length), status: v.status, requested_by: v.requested_by, requested_at: v.requested_at, changes: ch };
+    });
+    return c.json({ items });
+  }));
+
+  // nguoi THU HAI (khac nguoi de xuat) + TOTP moi duoc ap dung
+  app.post('/admin/v1/settings/sepay/changes/:id/approve', wrap(async (c) => {
+    const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
+    const b = await jsonBody(c, z.object({ totp: z.string().optional() }).passthrough());
+    await requireStepUp(rt, a.id, b.totp);
+    const id = c.req.param('id');
+    const row = (await rt.db.query<{ value: string }>('SELECT value FROM settings WHERE key = ?', [`${CHANGE_PREFIX}${id}`]))[0];
+    if (!row) throw new FinanceError('not_found', 'Không có đề xuất đang chờ', 404);
+    const p = JSON.parse(row.value) as { changes: Record<string, unknown>; requested_by: string; requested_at: string };
+    if (p.requested_by === a.id) throw new FinanceError('same_person', 'Đổi tài khoản nhận tiền cần hai người: người duyệt phải khác người đề xuất', 403);
+    if (changeExpired(rt, p.requested_at)) throw new FinanceError('expired', 'Đề xuất đã quá 24 giờ, hãy tạo lại', 409);
+    const claim = await rt.db.run('UPDATE settings SET key = ?, updated_by = ?, updated_at = ? WHERE key = ?', [`sepay_change_done:${id}`, a.id, iso(rt), `${CHANGE_PREFIX}${id}`]);
+    if (claim.changes !== 1) throw new FinanceError('already_processed', 'Đề xuất đã được xử lý', 409);
+    const ch = p.changes as { enabled?: boolean; bank?: string; account_number?: string; account_holder?: string };
+    await saveSepayConfig(rt, rt.db, { ...(ch.enabled !== undefined ? { enabled: ch.enabled } : {}), ...(ch.bank ? { bank: ch.bank } : {}), ...(ch.account_number ? { account_number: ch.account_number } : {}), ...(ch.account_holder ? { account_holder: ch.account_holder } : {}) }, a.id);
+    await rt.db.run('UPDATE settings SET value = ? WHERE key = ?', [JSON.stringify({ ...p, status: 'approved', approved_by: a.id, approved_at: iso(rt) }), `sepay_change_done:${id}`]);
+    await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.change_approved', type: 'settings', id, ip: a.ip, diff: { fields: Object.keys(p.changes), requested_by: p.requested_by, account: typeof ch.account_number === 'string' ? `***${ch.account_number.slice(-3)}` : undefined } });
+    await alertFinance(rt, { title: 'Tài khoản nhận tiền SePay đã được đổi', body: `Thay đổi (${Object.keys(p.changes).join(', ')}) do ${p.requested_by} đề xuất, ${a.id} duyệt.`, refId: id });
+    return c.json({ id, status: 'approved', ...(await sepayView(rt.db)) });
+  }));
+
+  app.post('/admin/v1/settings/sepay/changes/:id/reject', wrap(async (c) => {
+    const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
+    const id = c.req.param('id');
+    const claim = await rt.db.run('UPDATE settings SET key = ?, updated_by = ?, updated_at = ? WHERE key = ?', [`sepay_change_done:${id}`, a.id, iso(rt), `${CHANGE_PREFIX}${id}`]);
+    if (claim.changes !== 1) throw new FinanceError('not_found', 'Không có đề xuất đang chờ', 404);
+    await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.change_rejected', type: 'settings', id, ip: a.ip });
+    return c.json({ id, status: 'rejected' });
   }));
 
   // "Gui thu": tu kiem tra cau hinh + vong ky/xac thuc chu ky cuc bo (khong goi mang, khong cong tien)

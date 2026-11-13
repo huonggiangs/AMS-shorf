@@ -1,5 +1,5 @@
-STATUS: running
-UPDATED: 2026-11-12T14:30:00Z
-Đã đọc PLAN, README agent, DEPLOY-CLOUDFLARE. wrangler 4.161.0 cài ở thư mục tạm (ngoài repo); `deploy --dry-run` staging+production với ID giả đã chạy sạch (không cảnh báo cấu hình).
-Terraform/tofu: không tải được (proxy chặn hashicorp/registry; tofu bị từ chối) -> CHƯA validate, chỉ rà thủ công.
-Đang làm: (1) ci.yml, (2) terraform fix (ruleset http_ratelimit là duy nhất theo zone, staging+production đụng nhau), (3) viết lại deploy-cloudflare.mjs, (4) docs.
+STATUS: done
+UPDATED: 2026-11-12T15:10:00Z
+Đã làm: ci.yml viết lại (typecheck, unit, e2e-smoke+bundle-check, contract/chaos/playwright placeholder, compose-config + kiểm ma trận image khớp compose, images bỏ `payments`, cloudflare-config = wrangler dry-run + terraform validate, gate). deploy-cloudflare.yml dùng preflight + AMS_SECRET_*. Terraform: ruleset rate-limit là duy nhất theo zone -> biến manage_zone_rate_limit (chỉ workspace production), host set phủ cả stg; enable_webhook_rate_limit mặc định false (Free chỉ 1 luật). wrangler api: thêm R2_BUCKET_NAME, sửa chú thích cron/secret. scripts/deploy-cloudflare.mjs viết lại (8 bước, preflight, dry-run, --fake-ids, secrets qua stdin + redact). docs/DEPLOY-CLOUDFLARE.md: checklist chủ sở hữu, token, preflight, bí mật, bảng bước.
+Kiểm chứng thật: wrangler 4.161.0 deploy --dry-run x3 Worker x2 môi trường sạch; script chạy với mock API (ok / thiếu zone / thiếu quyền Routes); node --check; yaml parse.
+Chưa: mọi thao tác ghi lên Cloudflare; terraform validate (không tải được); GitHub Actions chưa chạy thật.

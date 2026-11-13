@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TestRuntime } from '@ams/runtime';
 import { applyBalance, createFinanceCore, createFinancePort, reconcileLedger, reconcileSepay, runDailyFinanceJobs, undoActivation, qrUrl, extractPaymentCode } from '../src/index.js';
+import { code, mkAdmin } from './stepup.js';
 import { actorHdr, campaign, customerActor, mkApp, mkCampaign, mkContract, mkCustomer, mkRt, sign, wallet, webhookBody } from './helpers.js';
 
 for (const dialect of ['postgres', 'sqlite'] as const) {
@@ -343,18 +344,24 @@ for (const dialect of ['postgres', 'sqlite'] as const) {
 
     it('cau hinh SePay: GET/PUT/test, ngan hang ngoai danh sach bi tu choi, so tai khoan duoc ma hoa trong DB', async () => {
       const f = actorHdr({ id: 'F1', role: 'finance' });
+      const f2 = actorHdr({ id: 'F2', role: 'finance' });
+      await mkAdmin(rt, 'F1'); await mkAdmin(rt, 'F2');
       const g = (await (await app.request('/admin/v1/settings/sepay', { headers: f })).json()) as Record<string, any>;
       expect(g).toMatchObject({ bank: 'MBBank', prefix: 'AMS', env: 'mock', dev_mode: false, has_secret: true, sample_account: true });
-      expect((await app.request('/admin/v1/settings/sepay', { method: 'PUT', headers: f, body: JSON.stringify({ bank: 'FakeBank' }) })).status).toBe(400);
-      const put = await app.request('/admin/v1/settings/sepay', { method: 'PUT', headers: f, body: JSON.stringify({ bank: 'Vietcombank', account_number: '9704123456', account_holder: 'cong ty abc', prefix: 'ams', min_activate_vnd: 5_000_000 }) });
-      expect(put.status).toBe(200);
+      expect((await app.request('/admin/v1/settings/sepay', { method: 'PUT', headers: f, body: JSON.stringify({ bank: 'FakeBank', totp: await code(rt, 'F1') }) })).status).toBe(400);
+      const put = await app.request('/admin/v1/settings/sepay', { method: 'PUT', headers: f, body: JSON.stringify({ bank: 'Vietcombank', account_number: '9704123456', account_holder: 'cong ty abc', prefix: 'ams', min_activate_vnd: 5_000_000, totp: await code(rt, 'F1') }) });
+      expect(put.status).toBe(202); // doi noi nhan tien: cho nguoi thu hai duyet
+      const cid = ((await put.json()) as { pending_change_id: string }).pending_change_id;
+      const ap = await app.request(`/admin/v1/settings/sepay/changes/${cid}/approve`, { method: 'POST', headers: f2, body: JSON.stringify({ totp: await code(rt, 'F2') }) });
+      expect(ap.status).toBe(200);
       const stored = (await rt.db.query<{ value: string }>("SELECT value FROM settings WHERE key = 'sepay'"))[0]!.value;
       expect(stored).not.toContain('9704123456');
       const t = (await (await app.request('/admin/v1/settings/sepay/test', { method: 'POST', headers: f, body: '{}' })).json()) as Record<string, any>;
       expect(t).toMatchObject({ ok: true, signature_ok: true });
       expect((await app.request('/admin/v1/settings/sepay', { method: 'PUT', headers: actorHdr({ id: 'CM', role: 'content_manager' }), body: '{}' })).status).toBe(403);
       // khoi phuc
-      await app.request('/admin/v1/settings/sepay', { method: 'PUT', headers: f, body: JSON.stringify({ bank: 'MBBank', account_number: '0123456789', account_holder: 'CONG TY MAU' }) });
+      const back = ((await (await app.request('/admin/v1/settings/sepay', { method: 'PUT', headers: f, body: JSON.stringify({ bank: 'MBBank', account_number: '0123456789', account_holder: 'CONG TY MAU', totp: await code(rt, 'F1') }) })).json()) as { pending_change_id: string }).pending_change_id;
+      await app.request(`/admin/v1/settings/sepay/changes/${back}/approve`, { method: 'POST', headers: f2, body: JSON.stringify({ totp: await code(rt, 'F2') }) });
     });
 
     it('cac ham thuan: QR + trich ma chuyen khoan', () => {
@@ -388,10 +395,13 @@ describe('dev simulate khong lot vao production', () => {
     await base.close();
   });
 
-  it('khoi dong that bai khi production thieu bi mat hoac SEPAY_MODE la', async () => {
+  it('production khong can bi mat trong env (fail-closed) va SEPAY_MODE la bi tu choi', async () => {
     const base = await mkRt('sqlite');
     const cfg = (env: Record<string, string | undefined>) => ({ ...base, config: { runtime: 'docker', env } }) as TestRuntime;
-    expect(() => mkApp(cfg({ SEPAY_MODE: 'production' }))).toThrow(/SEPAY_WEBHOOK_SECRET/);
+    // production khong co bi mat trong env van khoi dong duoc (bi mat co the nam trong DB), nhung webhook bi tu choi (fail-closed)
+    const noSecret = mkApp(cfg({ SEPAY_MODE: 'production', FIELD_ENC_KEY: base.config.env['FIELD_ENC_KEY'] }));
+    const wb = webhookBody({ id: 990001, amount: 1, content: 'AMS X' });
+    expect((await noSecret.app.request('/webhooks/payments/sepay', { method: 'POST', body: wb, headers: { authorization: 'Apikey whatever-123' } })).status).toBe(401);
     expect(() => mkApp(cfg({ SEPAY_MODE: 'prod' }))).toThrow(/SEPAY_MODE/);
     expect(() => mkApp(cfg({ SEPAY_MODE: 'production', SEPAY_WEBHOOK_SECRET: 'x' }))).not.toThrow();
     await base.close();

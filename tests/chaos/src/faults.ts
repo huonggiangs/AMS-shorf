@@ -38,6 +38,8 @@ export interface FaultConfig {
   delay?: number;
   /** 'before' = loi truoc khi thuc thi; 'after' = thuc thi roi moi bao loi (commit mat phan hoi); 'mixed' = ngau nhien */
   when?: 'before' | 'after' | 'mixed';
+  /** khong chen loi cho khoa kv.get bat dau bang cac tien to nay (tranh loi DA BIET: xem requests muc 1) */
+  kvSkipGet?: string[];
 }
 
 export interface Flaky {
@@ -79,7 +81,7 @@ export function flaky(base: TestRuntime, cfg: FaultConfig, rand: () => number): 
     }) as unknown as Db;
 
   const kv: Kv = {
-    get: (k) => guard('kv', cfg.kv, 'kv.get', () => base.kv.get(k), false),
+    get: (k) => guard('kv', cfg.kvSkipGet?.some((p) => k.startsWith(p)) ? 0 : cfg.kv, 'kv.get', () => base.kv.get(k), false),
     set: (k, v, ttl) => guard('kv', cfg.kv, 'kv.set', () => base.kv.set(k, v, ttl), true),
     del: (k) => guard('kv', cfg.kv, 'kv.del', () => base.kv.del(k), true),
     incr: (k, ttl) => guard('kv', cfg.kv, 'kv.incr', () => base.kv.incr(k, ttl), true),
@@ -95,10 +97,12 @@ export function flaky(base: TestRuntime, cfg: FaultConfig, rand: () => number): 
           throw new InjectedFault('queue.send');
         }
         if (cfg.queueHold && rand() < cfg.queueHold) {
+          f.injected.queue++;
           held.push({ topic, msg: structuredClone(msg) });
           return;
         }
         if (cfg.queueDup && rand() < cfg.queueDup) {
+          f.injected.queue++;
           await base.queue.send(topic, structuredClone(msg));
         }
       }

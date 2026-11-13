@@ -9,7 +9,7 @@ N ?= 1000
 S ?=
 
 .DEFAULT_GOAL := help
-.PHONY: help setup env-check up up-events up-obs seed test loadtest tunnel down reset logs ps doctor config build trust-ca
+.PHONY: help setup env-check up up-events up-obs seed bootstrap test loadtest tunnel down reset logs ps doctor config build trust-ca
 
 help: ## Liệt kê lệnh
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  make %-11s %s\n",$$1,$$2}'
@@ -26,7 +26,7 @@ config: env-check ## Kiểm cú pháp docker compose (mọi profile)
 build: env-check ## Build image các dịch vụ
 	@$(DC) --profile core build
 
-up: env-check ## Chạy profile core (postgres, redis, minio, mailpit, api, web-admin, edge-gateway, proxy)
+up: env-check ## Chạy profile core (postgres, redis, minio, mailpit, api, web-admin, edge-gateway, ingest-consumer, media-worker, clamav, proxy)
 	@$(DC) --profile core up -d --build
 	@node scripts/setup.mjs creds
 
@@ -36,9 +36,14 @@ up-events: env-check ## Thêm Redpanda + ClickHouse + ingest-consumer (cần ~32
 up-obs: env-check ## Thêm Grafana + OpenTelemetry Collector
 	@$(DC) --profile core --profile obs up -d
 
-seed: env-check ## Chạy lại migration + nạp dữ liệu mẫu, rồi in tài khoản Super admin
-	@$(DC) --profile core run --rm -e SEED=1 migrate-seed
-	@node scripts/setup.mjs creds
+seed: env-check ## Migration + seed theo AMS_ENV (local -> demo + in tài khoản; khác local -> bootstrap)
+	@mode=$$(node scripts/setup.mjs seed-mode) || { echo "seed bị từ chối (xem thông báo trên)"; exit 3; }; \
+	echo "seed mode: $$mode"; \
+	$(DC) --profile core run --rm -e SEED=1 -e SEED_MODE=$$mode migrate-seed || exit $$?; \
+	if [ "$$mode" = "demo" ]; then node scripts/setup.mjs creds; fi
+
+bootstrap: env-check ## Cài đặt tối thiểu cho staging/production: một Super admin, KHÔNG dữ liệu demo (cần BOOTSTRAP_ADMIN_EMAIL)
+	@$(DC) --profile core run --rm -e SEED=1 -e SEED_MODE=bootstrap migrate-seed
 
 test: ## Typecheck + unit/contract (pnpm), rồi e2e nếu có (cần `make up`)
 	pnpm -r typecheck

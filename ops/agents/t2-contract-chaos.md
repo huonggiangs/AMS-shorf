@@ -1,5 +1,6 @@
-STATUS: running
-UPDATED: 2026-11-12 UTC (dau)
+STATUS: done
+UPDATED: 2026-11-13 UTC
 
-- Dang lam: tests/contract (giao thuc gateway + gia dinh client TV) va tests/chaos (chen loi Db/Kv/Queue, bat bien vi/su kien/manifest).
-- Chi di qua API cong khai: createGateway/app.request, createIngestConsumer, createSpendFn, mountFinance (webhook), reconcileLedger.
+- tests/contract (38 test): giao thuc gateway, chu ky/replay/skew, vector tai lieu, manifest ETag/304/delta/CDN, events idempotent, lenh/ack, doi chieu AmsClient.java + overlay.
+- tests/chaos (85 test sqlite): su kien->chi tieu duoi chen loi, het ngan sach, manifest, webhook SePay, crash sweep moi ranh gioi ghi (tx that va D1), spend_events, outbox, device_commands.
+- Loi/rui ro: xem t2-contract-chaos.requests.md. Script goc: test:contract, test:chaos.

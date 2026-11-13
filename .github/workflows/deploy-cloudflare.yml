@@ -3,7 +3,8 @@ name: Deploy Cloudflare
 #   v1.2.3-rc.1  -> staging      v1.2.3 -> production
 # Secrets cần đặt trong GitHub (Settings > Secrets and variables > Actions, hoặc theo Environment):
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
-#   CF_IDS_STAGING, CF_IDS_PRODUCTION: nội dung JSON ID tài nguyên (đầu ra `terraform output -json` hoặc ids.<env>.json)
+#   AMS_SECRET_SESSION_SECRET, AMS_SECRET_FIELD_ENC_KEY, AMS_SECRET_SEPAY_WEBHOOK_SECRET (bắt buộc), AMS_SECRET_R2_*, AMS_SECRET_MAIL_* (tùy chọn)
+#   Nên đặt theo Environment (staging, production) để hai môi trường dùng giá trị khác nhau. ID tài nguyên do script tự tra qua API.
 # Environment "production" nên bật "Required reviewers" để có bước duyệt tay.
 on:
   workflow_dispatch:
@@ -43,16 +44,24 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r typecheck
       - run: pnpm -r test
-      - name: Ghi ID tài nguyên Cloudflare
-        env:
-          IDS_STAGING: ${{ secrets.CF_IDS_STAGING }}
-          IDS_PRODUCTION: ${{ secrets.CF_IDS_PRODUCTION }}
-        run: |
-          if [ "$TARGET" = "production" ]; then printf '%s' "$IDS_PRODUCTION" > infra/cloudflare/ids.production.json
-          else printf '%s' "$IDS_STAGING" > infra/cloudflare/ids.staging.json; fi
-      - name: Deploy
+      - name: Preflight (token, zone anio.vn, quyền) - chỉ đọc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/deploy-cloudflare.mjs --env "$TARGET" --preflight
+      - name: Deploy (tạo tài nguyên nếu thiếu, migration, bí mật, deploy, tên miền, smoke)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Bí mật Worker: script chỉ đặt cái còn thiếu trên Worker (không ghi đè). Đặt secret trong Environment tương ứng.
+          AMS_SECRET_SESSION_SECRET: ${{ secrets.AMS_SECRET_SESSION_SECRET }}
+          AMS_SECRET_FIELD_ENC_KEY: ${{ secrets.AMS_SECRET_FIELD_ENC_KEY }}
+          AMS_SECRET_SEPAY_WEBHOOK_SECRET: ${{ secrets.AMS_SECRET_SEPAY_WEBHOOK_SECRET }}
+          AMS_SECRET_R2_ACCOUNT_ID: ${{ secrets.AMS_SECRET_R2_ACCOUNT_ID }}
+          AMS_SECRET_R2_ACCESS_KEY_ID: ${{ secrets.AMS_SECRET_R2_ACCESS_KEY_ID }}
+          AMS_SECRET_R2_SECRET_ACCESS_KEY: ${{ secrets.AMS_SECRET_R2_SECRET_ACCESS_KEY }}
+          AMS_SECRET_MAIL_HTTP_URL: ${{ secrets.AMS_SECRET_MAIL_HTTP_URL }}
+          AMS_SECRET_MAIL_HTTP_KEY: ${{ secrets.AMS_SECRET_MAIL_HTTP_KEY }}
+          AMS_SECRET_MAIL_FROM: ${{ secrets.AMS_SECRET_MAIL_FROM }}
           DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
         run: node scripts/deploy-cloudflare.mjs --env "$TARGET" --yes $DRY

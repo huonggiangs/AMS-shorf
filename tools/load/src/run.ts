@@ -37,8 +37,10 @@ const REGISTER = Number(args['register'] ?? 0);
 const COLD = Number(args['cold-rps'] ?? 0);
 const OUT = args['out'] ?? join(HERE, '..', 'results', `run-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
 // ti le request/thiet bi/gio theo giao thuc that: heartbeat 300s (dang phat) = 12, manifest poll 900s = 4, lo su kien 600s = 6
+const QUIET_MAX_S = Number(args['quiet-max'] ?? 120);
 const MIX = { hb: 12, mf: 4, mfFull: 0, ev: 6 };
 
+const now0 = () => new Date().toISOString();
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -204,6 +206,21 @@ async function main(): Promise<void> {
   const fx = await seedAdFixture(setup, { campaigns: 3, creativesPerCampaign: 2, withObjects: false });
   for (const c of fx.campaigns) for (const cr of c.creatives) await setup.db.run('UPDATE creatives SET sha256 = ? WHERE id = ?', [cr.sha256, cr.id]);
   const fixture: Fixture = { items: fx.campaigns.map((c) => ({ campaign_id: c.id, creative_id: c.creatives[0]!.id, slot_id: c.slotId })) };
+  // vi tien: du lon de khong het ngan sach trong luc do (3 chien dich x 5e12 dong), de duong chi tieu that luon chay
+  await setup.db.run('UPDATE campaigns SET budget_cap_vnd = 5000000000000, approved_budget_vnd = 5000000000000, reserved_vnd = 5000000000000 WHERE customer_id = ?', [fx.customerId]);
+  await setup.db.run('INSERT INTO ad_wallets (customer_id, balance_vnd, reserved_vnd, spent_vnd, updated_at) VALUES (?, 15000000000000, 15000000000000, 0, ?)', [fx.customerId, now0()]);
+  {
+    // preflight: duong chi tieu cua consumer phai chay duoc tren fixture, neu khong consumer se giao lai vo han
+    const { createSpendFn } = await import('@ams/payments');
+    const c0 = fx.campaigns[0]!;
+    try {
+      await createSpendFn(setup)({ campaignId: c0.id, customerId: fx.customerId, amountMicroVnd: 20_000_000, impressions: 1, idempotencyKey: 'preflight', firstTs: now0(), lastTs: now0(), events: [{ id: 'preflight-ev', micro: 20_000_000 }] });
+      report['spendPreflight'] = 'ok';
+    } catch (e) {
+      report['spendPreflight'] = String((e as Error).message);
+      console.error('spend preflight loi:', (e as Error).message);
+    }
+  }
   const userId = setup.id();
   await setup.db.run('INSERT INTO end_users (id, created_at) VALUES (?, ?)', [userId, new Date().toISOString()]);
 
@@ -308,7 +325,23 @@ async function main(): Promise<void> {
       }
     });
     await readyP;
-    await sleep(500);
+    // cong 'yen tinh': cho den khi cac tien trinh KHAC (agent khac, build, test) dung <0,25 nhan trong 3 giay (toi da QUIET_MAX_S)
+    const qStart = performance.now();
+    let quiet = false;
+    for (;;) {
+      const a0 = sysCpu().sysBusy;
+      const p0 = scanProcs();
+      await sleep(3000);
+      const busy = (sysCpu().sysBusy - a0) / 3;
+      const mine = (p: Proc[]) => p.filter((x) => x.pid === process.pid || x.pid === redisProc.pid).reduce((t, x) => t + x.ticks, 0) / CLK;
+      const mineBusy = (mine(scanProcs()) - mine(p0)) / 3;
+      if (busy - mineBusy < 0.25) {
+        quiet = true;
+        break;
+      }
+      if ((performance.now() - qStart) / 1000 > QUIET_MAX_S) break;
+    }
+    const quietWaitS = +((performance.now() - qStart) / 1000).toFixed(0);
     const a = await mkSnap();
     child.stdin!.write('GO\n');
     await exited;
@@ -318,6 +351,8 @@ async function main(): Promise<void> {
     const wall = b.t - a.t;
     const total = result['types']['ALL'].count as number;
     result['server'] = {
+      quietAchieved: quiet,
+      quietWaitS,
       wallS: +wall.toFixed(2),
       gatewayCpuCores: +((b.hostCpu - a.hostCpu) / wall).toFixed(3),
       gatewayCpuMsPerReq: +(((b.hostCpu - a.hostCpu) * 1000) / total).toFixed(3),
@@ -406,7 +441,7 @@ async function main(): Promise<void> {
   const hbRows = Number((await q('SELECT COUNT(*) AS n FROM ev_heartbeat')).n);
   const impDistinct = Number((await q('SELECT COUNT(DISTINCT event_id) AS n FROM ev_ad_impression')).n);
   const hourly = Number((await q('SELECT COALESCE(SUM(impressions),0) AS n FROM impression_hourly')).n);
-  const spend = await q("SELECT COUNT(*) AS n, COALESCE(SUM(impressions),0) AS imps FROM spend_events").catch(() => null);
+  const spend = await q('SELECT COUNT(*) AS n FROM spend_events').catch(() => null);
   const consStats = await fetch(`http://127.0.0.1:${cons!.port}/health`).then((r) => r.json()).catch(() => null);
   report['durability'] = { consumerStats: consStats, eventsAcceptedByGateway: acceptedEv, ev_ad_impression_rows: imp, distinctEventIds: impDistinct, impression_hourly_sum: hourly, spend_events: spend, heartbeats200: hbOk, ev_heartbeat_rows: hbRows };
 

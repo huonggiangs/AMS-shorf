@@ -7,20 +7,22 @@ import { useAuth } from '../auth/AuthProvider';
 import { ServerTable } from '../components/ServerTable';
 import type { Col } from '../components/DataTable';
 import { TopupDialog, type BankInfo } from '../components/TopupDialog';
-import { Btn, CopyBtn, ErrorBlock, Field, Kpi, LoadingBlock, NameCell, Note, NotConnected, PageHead, StatusTag, Tabs, Tag } from '../components/ui';
+import { Btn, CopyBtn, EmptyBlock, ErrorBlock, Field, Kpi, LoadingBlock, NameCell, Note, PageHead, StatusTag, Tabs, Tag } from '../components/ui';
 import { Donut, LineChart } from '../components/charts';
 import { useT } from '../i18n';
 import { useUi } from '../state/ui';
 import { fmtDateTime, mil, vnd } from '../lib/format';
-import { BANKS, MIN_TOPUP_VND } from '../lib/sepay';
+import { MIN_TOPUP_VND } from '../lib/sepay';
 import { Icon } from '../components/Icon';
-import { Dialog } from '../components/Dialog';
+import { Link } from 'react-router-dom';
 import FinanceOps from './FinanceOps';
+import History from './History';
+import { HourlyRevenue, InvoicesPanel, PortalInvoices } from './FinanceInvoices';
 
 export default function Finance() {
-  const { isExternal } = useAuth();
+  const { isExternal, can } = useAuth();
   const [tab, setTab] = useState<'ov' | 'wallet' | 'ops'>('ov');
-  if (isExternal) return <WalletView />;
+  if (isExternal) return <><WalletView />{can('finance', 'view') ? <><PortalInvoices /><History /></> : null}</>;
   return (
     <>
       <Tabs value={tab} onChange={setTab} items={[{ id: 'ov', label: 'Tổng quan' }, { id: 'wallet', label: 'Ví quảng cáo' }, { id: 'ops', label: 'Vận hành' }]} />
@@ -49,10 +51,11 @@ function FinanceOverview() {
               </div>
               {last ? <div className="card cp"><div className="ch"><h2>Phân bổ kỳ {last.label}</h2></div><Donut parts={[{ n: 'Giữ lại', v: Math.round((last.revenue_vnd - last.reward_vnd) / 1e6), c: '#005BBF' }, { n: 'Thưởng', v: Math.round(last.reward_vnd / 1e6), c: '#D97706' }]} /></div> : null}
             </div>
-          ) : <NotConnected what="Doanh thu theo tháng" />}
+          ) : <EmptyBlock>Chưa có doanh thu trong 12 tháng gần đây.</EmptyBlock>}
         </>
       )}
-      <NotConnected what="Hóa đơn VAT & chi trả" />
+      <HourlyRevenue />
+      <InvoicesPanel />
     </>
   );
 }
@@ -131,7 +134,6 @@ function WalletView() {
 
 function SepayPanel({ s, loading, error, canEdit }: { s?: SepaySettings; loading: boolean; error: unknown; canEdit: boolean }) {
   const act = useAct();
-  const [edit, setEdit] = useState(false);
   const [test, setTest] = useState('');
   if (loading) return <LoadingBlock />;
   if (error || !s) return <ErrorBlock error={error ?? new Error('Không tải được cấu hình SePay.')} />;
@@ -152,18 +154,17 @@ function SepayPanel({ s, loading, error, canEdit }: { s?: SepaySettings; loading
         </dl>
         <div className="note" style={{ margin: '14px 0 0', flexWrap: 'wrap' }}>
           <Icon n="info" />
-          <span><b>3 bước cài đặt:</b> 1) Chọn ngân hàng và số tài khoản ở nút Cấu hình. 2) Vào my.sepay.vn &gt; Webhooks &gt; Thêm webhook: dán URL ở trên, sự kiện &quot;Có tiền vào&quot;, xác thực HMAC-SHA256, bật &quot;Tự động gửi lại khi server trả lỗi&quot;. 3) Bấm Gửi thử.</span>
+          <span><b>3 bước cài đặt:</b> 1) Cấu hình khóa, ngân hàng và số tài khoản ở Tích hợp API &gt; Kết nối SePay. 2) Vào my.sepay.vn &gt; Webhooks &gt; Thêm webhook: dán URL ở trên, sự kiện &quot;Có tiền vào&quot;, xác thực HMAC-SHA256, bật &quot;Tự động gửi lại khi server trả lỗi&quot;. 3) Bấm Gửi thử.</span>
         </div>
         {test ? <p role="status" style={{ margin: '10px 0 0' }}>{test}</p> : null}
         {canEdit ? (
           <div className="acts" style={{ marginTop: 14 }}>
-            <Btn tone="p" onClick={() => setEdit(true)}>Cấu hình</Btn>
+            <Link className="btn p" to="/integrations">Cấu hình ở Tích hợp API</Link>
             <Btn onClick={async () => { const r = await act(() => api.post('/admin/v1/settings/sepay/test', { schema: okSchema }), undefined, []); setTest(r ? ((r as { message?: string }).message ?? 'Đã gửi thử. Kiểm tra nhật ký webhook.') : 'Gửi thử thất bại, xem thông báo lỗi.'); }}>Gửi thử</Btn>
           </div>
         ) : null}
       </div>
       {s.dev_mode ? <SimulateTable s={s} /> : null}
-      <SepayConfig open={edit} onClose={() => setEdit(false)} s={s} />
     </>
   );
 }
@@ -194,25 +195,3 @@ function SimulateTable({ s }: { s: SepaySettings }) {
   );
 }
 
-function SepayConfig({ open, onClose, s }: { open: boolean; onClose: () => void; s: SepaySettings }) {
-  const t = useT();
-  const act = useAct();
-  const [f, setF] = useState({ bank: s.bank ?? BANKS[0], account_number: s.account_number ?? '', account_holder: s.account_holder ?? '', prefix: s.prefix, enabled: s.enabled, auto_activate: !!s.auto_activate, min: String(s.min_activate_vnd ?? MIN_TOPUP_VND) });
-  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((p) => ({ ...p, [k]: v }));
-  return (
-    <Dialog open={open} onClose={onClose} width="min(520px,96vw)" label="Cấu hình SePay">
-        <form onSubmit={async (e) => { e.preventDefault(); const r = await act(() => api.put('/admin/v1/settings/sepay', { body: { bank: f.bank, account_number: f.account_number.trim(), account_holder: f.account_holder.trim().toUpperCase(), prefix: f.prefix.trim().toUpperCase(), enabled: f.enabled, auto_activate: f.auto_activate, min_activate_vnd: Math.round(+f.min) } }), 'Đã lưu cấu hình SePay.', ['/admin/v1/settings']); if (r !== undefined) onClose(); }}>
-          <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Cấu hình SePay</h2>
-          <Field label="Ngân hàng"><select value={f.bank} onChange={(e) => set('bank', e.target.value)}>{BANKS.map((b) => <option key={b}>{b}</option>)}</select></Field>
-          <Field label="Số tài khoản"><input required inputMode="numeric" pattern="[0-9]{6,20}" value={f.account_number} onChange={(e) => set('account_number', e.target.value)} /></Field>
-          <Field label="Tên chủ tài khoản"><input required value={f.account_holder} onChange={(e) => set('account_holder', e.target.value)} /></Field>
-          <Field label="Tiền tố mã thanh toán"><input required pattern="[A-Za-z]{2,10}" value={f.prefix} onChange={(e) => set('prefix', e.target.value)} /></Field>
-          <Field label="Số tiền tối thiểu để tự kích hoạt (₫)"><input type="number" min={0} value={f.min} onChange={(e) => set('min', e.target.value)} /></Field>
-          <label style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0' }}>Bật tích hợp<input type="checkbox" className="tgl" checked={f.enabled} onChange={(e) => set('enabled', e.target.checked)} /></label>
-          <label style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0' }}>Tự kích hoạt khách hàng mới<input type="checkbox" className="tgl" checked={f.auto_activate} onChange={(e) => set('auto_activate', e.target.checked)} /></label>
-          <Note>Khóa bí mật webhook chỉ đặt ở máy chủ (biến môi trường), không nhập ở trình duyệt.</Note>
-          <div className="da" style={{ marginTop: 14 }}><button type="button" className="btn" onClick={onClose}>{t('Hủy')}</button><button className="btn p" type="submit">{t('Lưu')}</button></div>
-        </form>
-    </Dialog>
-  );
-}

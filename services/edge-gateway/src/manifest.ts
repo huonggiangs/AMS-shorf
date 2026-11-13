@@ -40,6 +40,8 @@ interface CreativeRow {
   sha256?: string | null;
   format?: string | null;
   overlay?: string | null;
+  customer_id?: string | null;
+  scan_state?: string | null;
 }
 interface SlotRow {
   campaign_id: string;
@@ -246,22 +248,42 @@ export class ManifestService {
     for (const r of creativeRows) {
       if (px && (r.px_w !== px.w || r.px_h !== px.h)) continue; // thang may/LED khong tu co gian: dung do phan giai
       if (!r.storage_key) continue;
-      const sha = await this.sha256Of(r);
+      // uu tien ban chuyen ma; tep goc chi duoc phat khi da quet sach (hoac quan tri cho phep tep chua quet)
+      const rend = await this.renditionOf(r);
+      let sha: string | null;
+      let key = r.storage_key;
+      let sizeBytes = r.size_bytes;
+      let isImage = r.kind === 'image' || /\.(png|jpe?g)$/i.test(r.storage_key);
+      if (rend) {
+        sha = rend.sha256;
+        key = rend.key;
+        sizeBytes = rend.size ?? r.size_bytes;
+        isImage = rend.content_type.startsWith('image/') || (!rend.content_type && isImage);
+      } else if (this.rt.config.env['MANIFEST_REQUIRE_RENDITION'] === '1') {
+        continue; // bucket chi mo prefix renditions/: tep goc khong tai duoc
+      } else {
+        try {
+          sha = await this.sha256Of(r);
+        } catch (e) {
+          console.error(`[manifest] bo qua creative ${r.id}: khong tinh duoc sha256: ${(e as Error).message}`);
+          sha = null;
+        }
+      }
       if (!sha) continue; // khong xac minh duoc tep => khong dua vao manifest
       const fmt = isAdFormat(r.format) ? r.format : isAdFormat(r.kind) ? r.kind : 'fullscreen';
       const ov = parseOverlayJson(r.overlay);
       creatives.push({
         id: r.id,
         campaign_id: r.campaign_id,
-        url: `${this.opts.mediaBaseUrl.replace(/\/+$/, '')}/${r.storage_key.split('/').map(encodeURIComponent).join('/')}`,
+        url: `${this.opts.mediaBaseUrl.replace(/\/+$/, '')}/${key.split('/').map(encodeURIComponent).join('/')}`,
         sha256: sha,
         duration_s: r.duration_s === null ? null : Number(r.duration_s),
         px_w: r.px_w === null ? null : Number(r.px_w),
         px_h: r.px_h === null ? null : Number(r.px_h),
         format: fmt,
         ...(ov ? { overlay: ov } : {}),
-        media_type: r.kind === 'image' || /\.(png|jpe?g)$/i.test(r.storage_key) ? 'image' : 'video',
-        size_bytes: r.size_bytes === null ? null : Number(r.size_bytes),
+        media_type: isImage ? 'image' : 'video',
+        size_bytes: sizeBytes === null ? null : Number(sizeBytes),
       });
     }
     creatives.sort((a, b) => (a.id < b.id ? -1 : 1));
@@ -288,12 +310,44 @@ export class ManifestService {
     return { version: PROTOCOL_VERSION, group: body.group, tz: MANIFEST_TZ, etag, generated_at: nowIso, ttl_s: this.opts.ttlS, creatives, schedule };
   }
 
+  /** Chi cho phat tep chua quet khi quan tri bat ro rang (settings.allow_unscanned_creatives = '1'/'true'). Mac dinh: chi `clean` (R1-03). */
+  private async allowUnscanned(): Promise<boolean> {
+    try {
+      const r = (await this.rt.db.query<{ value: string }>("SELECT value FROM settings WHERE key = 'allow_unscanned_creatives'"))[0];
+      const v = String(r?.value ?? '').trim().toLowerCase().replace(/^"|"$/g, '');
+      return v === '1' || v === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  /** Ban chuyen ma (media-worker ghi `renditions/<customer>/<id>/manifest.json`); null neu chua co. */
+  private async renditionOf(r: CreativeRow & { customer_id?: string | null }): Promise<{ key: string; sha256: string; size: number | null; content_type: string } | null> {
+    if (!r.customer_id) return null;
+    const k = `creative:rendition:${r.id}`;
+    let raw = await this.rt.kv.get(k);
+    if (raw === null) {
+      const obj = await this.rt.objects.get(`renditions/${r.customer_id}/${r.id}/manifest.json`).catch(() => null);
+      raw = obj ? new TextDecoder().decode(obj) : 'none';
+      await this.rt.kv.set(k, raw.length > 20_000 ? 'none' : raw, raw === 'none' ? 300 : 3600);
+    }
+    if (raw === 'none') return null;
+    try {
+      const m = JSON.parse(raw) as { renditions?: { key?: string; sha256?: string; size?: number; content_type?: string }[] };
+      const x = (m.renditions ?? []).find((e) => typeof e.key === 'string' && typeof e.sha256 === 'string' && e.key.startsWith(`renditions/${r.customer_id}/${r.id}/`));
+      return x ? { key: x.key!, sha256: x.sha256!, size: typeof x.size === 'number' ? x.size : null, content_type: x.content_type ?? '' } : null;
+    } catch {
+      return null;
+    }
+  }
+
   private async queryCreatives(type: string): Promise<CreativeRow[]> {
+    const allowUnscanned = await this.allowUnscanned();
     return this.rt.db.query<CreativeRow>(
-      `SELECT cr.id, cr.campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay
+      `SELECT cr.id, cr.campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay, cr.customer_id, cr.scan_state
          FROM creatives cr JOIN campaigns c ON c.id = cr.campaign_id
         WHERE c.state = 'active' AND cr.target_type = ? AND cr.review_state = 'approved' AND cr.state = 'ready'
-          AND cr.scan_state NOT IN ('infected','failed')`,
+          ${allowUnscanned ? "AND cr.scan_state NOT IN ('infected','failed')" : "AND cr.scan_state = 'clean'"}`,
       [type],
     );
   }

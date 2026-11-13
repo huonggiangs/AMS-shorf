@@ -6,4 +6,4 @@ export * from './webhook.js';
 export * from './jobs.js';
 export * from './spend.js';
 export * from './actor.js';
-export { mountFinance, createFinancePort, createFinanceCore, assertFinanceConfig, type MountOptions, type MountResult } from './routes.js';
+export { mountFinance, createFinancePort, createFinanceCore, assertFinanceConfig, financeSecretsConfigured, type MountOptions, type MountResult } from './routes.js';

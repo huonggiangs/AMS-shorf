@@ -15,7 +15,7 @@ info:
     Mã: `bad_request` (400), `invalid_signature` (401), `stale_timestamp` (401), `unknown_device` (401), `device_blocked` (403), `replay` (409), `payload_too_large` (413), `validation_failed` (422), `rate_limited` (429), `overloaded` (503), `not_found` (404), `internal` (500). 429/503 kèm `Retry-After` (đã jitter): thiết bị PHẢI chờ đúng giá trị đó.
 
     ## TODO (p0-domain): chưa có trong tài liệu này
-    Mở rộng lệnh thiết bị (loại lệnh mới, endpoint tải lệnh riêng nếu có) do p0-domain bổ sung. `/v1/commands/ack` và `commands[]` của heartbeat đã có và đã được sinh từ mã. Khi p0 thêm route, `check` báo lệch; chạy lại `generate`.
+    Endpoint admin để tạo/xem lệnh (hiện chỉ có hàm `enqueueCommand`, chưa có route HTTP) và loại lệnh mới do p0-domain bổ sung. `/v1/commands/ack` và `commands[]` của heartbeat (bảng `device_commands`) đã có và được sinh từ mã; xem docs/DEVICE-PROTOCOL.md mục 6. Khi p0 thêm route, `check` báo lệch; chạy lại `generate`.
 servers:
   - url: http://gw.ams.localhost
     description: Docker local (Caddy)
@@ -702,9 +702,11 @@ components:
             properties:
               id:
                 type: string
+                description: id dong trong bang device_commands
               type:
                 type: string
                 pattern: ^[a-z][a-z0-9_.-]{0,39}$
+                description: "Ban dau: refresh_manifest, reboot, set_monitor. Type la: bo qua nhung VAN ack."
               args:
                 type: object
                 additionalProperties: {}
@@ -712,6 +714,7 @@ components:
               - id
               - type
             additionalProperties: true
+            description: "Vong doi: pending -> delivered -> acked|failed, hoac expired (TTL 7 ngay). Giao lai sau 120s neu chua ack, toi da 10 lan giao. At-least-once: thiet bi phai idempotent theo id."
           description: lenh cho thiet bi, giao at-least-once; ack bang cmd_ack trong heartbeat ke tiep hoac POST /v1/commands/ack
         min_app_version:
           type: string

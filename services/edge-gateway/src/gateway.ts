@@ -110,6 +110,16 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     }
   }
 
+  // R1-13: ngoai local/test tu choi bi mat mac dinh va khong mount /v1/dev/*
+  const amsEnv = resolveAmsEnvLocal(env);
+  const isLocalEnv = (e: string) => e === 'local' || e === 'test';
+  if (!isLocalEnv(amsEnv)) {
+    for (const k of ['FIELD_ENC_KEY', 'SEPAY_WEBHOOK_SECRET', 'GATEWAY_SECRET']) {
+      const v = env[k];
+      if (v && /^change[-_]?me/i.test(v)) throw new Error(`[gateway] ${k} la gia tri mac dinh (change-me*) khi AMS_ENV=${amsEnv}: dat bi mat that.`);
+    }
+  }
+
   const app = new Hono();
 
   app.onError((err, c) => {
@@ -127,12 +137,33 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
 
   app.get('/health', (c) => c.json({ ok: true, service: 'edge-gateway', runtime: rt.config.runtime, time: rt.clock.now().toISOString() }));
 
+  /** Doc than yeu cau theo luong, dung ngay khi vuot `max` (khong dem vao bo nho toan bo, ke ca khi khong co content-length). */
   async function readBody(c: import('hono').Context, max: number): Promise<Uint8Array> {
-    const cl = Number(c.req.header('content-length') ?? 0);
-    if (cl > max) throw new HttpProblem('payload_too_large', `Than yeu cau qua ${max} byte.`);
-    const b = new Uint8Array(await c.req.arrayBuffer());
-    if (b.length > max) throw new HttpProblem('payload_too_large', `Than yeu cau qua ${max} byte.`);
-    return b;
+    const tooBig = () => new HttpProblem('payload_too_large', `Than yeu cau qua ${max} byte.`);
+    const cl = c.req.header('content-length');
+    if (cl !== undefined && (!/^\d+$/.test(cl) || Number(cl) > max)) throw tooBig();
+    const stream = c.req.raw.body;
+    if (!stream) return new Uint8Array(0);
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > max) {
+        await reader.cancel().catch(() => undefined);
+        throw tooBig();
+      }
+      chunks.push(value);
+    }
+    const out = new Uint8Array(total);
+    let off = 0;
+    for (const ch of chunks) {
+      out.set(ch, off);
+      off += ch.byteLength;
+    }
+    return out;
   }
   const parseJson = <T>(b: Uint8Array): unknown => JSON.parse(new TextDecoder().decode(b)) as T;
 
@@ -307,7 +338,13 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   app.get('/v1/manifest/g/:group', async (c) => {
     if (!publicManifest) throw new HttpProblem('not_found', 'Khong co.');
     await shedCheck('manifest');
-    const g = parseGroup(decodeURIComponent(c.req.param('group')));
+    let raw: string;
+    try {
+      raw = decodeURIComponent(c.req.param('group'));
+    } catch {
+      throw new HttpProblem('not_found', 'Nhom manifest khong ton tai.');
+    }
+    const g = parseGroup(raw);
     if (!g || !(await manifests.known(g))) throw new HttpProblem('not_found', 'Nhom manifest khong ton tai.');
     return serveManifest(c, g, true);
   });
@@ -328,7 +365,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   });
 
   // ---- chi de thu/gia lap: xac nhan ma ghep doi khong can ung dung (KHONG mount tren Cloudflare/production)
-  if (env['GATEWAY_DEV_ENDPOINTS'] === '1' && rt.config.runtime !== 'cloudflare') {
+  if (env['GATEWAY_DEV_ENDPOINTS'] === '1' && rt.config.runtime !== 'cloudflare' && isLocalEnv(amsEnv)) {
     app.post('/v1/dev/pair-confirm', async (c) => {
       const { code } = (await c.req.json()) as { code: string };
       const uid = rt.id();
@@ -344,3 +381,13 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
 }
 
 export type { DeviceRec };
+
+/** Cung quy tac voi packages/db seed-guard resolveAmsEnv (khong import de khong keo goi db vao Worker). */
+function resolveAmsEnvLocal(env: Record<string, string | undefined>): string {
+  const al: Record<string, string> = { local: 'local', dev: 'local', development: 'local', test: 'test', staging: 'staging', stg: 'staging', production: 'production', prod: 'production' };
+  const raw = (env['AMS_ENV'] ?? '').trim().toLowerCase();
+  if (raw) return al[raw] ?? 'production'; // gia tri la => coi nhu production (an toan truoc)
+  const rtn = (env['RUNTIME'] ?? '').trim().toLowerCase();
+  if (rtn === 'cloudflare' || rtn === 'k8s') return 'production';
+  return rtn === 'test' ? 'test' : 'local';
+}
