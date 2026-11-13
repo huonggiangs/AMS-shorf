@@ -6,7 +6,8 @@
   "description": "Playwright e2e UI tren stack that: Postgres 16 + Redis that + API + gateway + web-admin build tinh",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "ui": "tsx run.ts"
+    "ui": "tsx run.ts",
+    "invite": "tsx invite.ts"
   },
   "dependencies": {
     "@ams/api": "workspace:*",

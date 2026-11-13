@@ -82,7 +82,7 @@ export function flaky(base: TestRuntime, cfg: FaultConfig, rand: () => number): 
 
   const kv: Kv = {
     get: (k) => guard('kv', cfg.kvSkipGet?.some((p) => k.startsWith(p)) ? 0 : cfg.kv, 'kv.get', () => base.kv.get(k), false),
-    set: (k, v, ttl) => guard('kv', cfg.kv, 'kv.set', () => base.kv.set(k, v, ttl), true),
+    set: (k, v, ttl) => guard('kv', cfg.kvSkipGet?.some((p) => k.startsWith(p)) ? 0 : cfg.kv, 'kv.set', () => base.kv.set(k, v, ttl), true),
     del: (k) => guard('kv', cfg.kv, 'kv.del', () => base.kv.del(k), true),
     incr: (k, ttl) => guard('kv', cfg.kv, 'kv.incr', () => base.kv.incr(k, ttl), true),
   };
