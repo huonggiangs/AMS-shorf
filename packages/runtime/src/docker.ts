@@ -4,9 +4,10 @@ import { DbEventStore } from './events.js';
 import { PgDb, createPgPool } from './adapters-pg.js';
 import { RedisKv, RedisQueue } from './redis.js';
 import { S3ObjectStore } from './s3.js';
+import { FsObjectStore } from './fs.js';
 import { SmtpMailer } from './smtp.js';
 import { ClickHouseEventStore } from './clickhouse.js';
-import type { Config, EventStore, Mailer, Runtime } from './types.js';
+import type { Config, EventStore, Mailer, ObjectStore, Runtime } from './types.js';
 
 export type DockerEnv = Record<string, string | undefined>;
 
@@ -14,7 +15,7 @@ export interface DockerRuntime extends Runtime {
   db: PgDb;
   kv: RedisKv;
   queue: RedisQueue;
-  objects: S3ObjectStore;
+  objects: ObjectStore;
   close(): Promise<void>;
 }
 
@@ -27,6 +28,7 @@ function need(env: DockerEnv, k: string): string {
 /**
  * Docker/PC: Postgres (pg Pool), Redis (ioredis), MinIO (S3 presign), SMTP (Mailpit), EventStore -> ev_* hoac ClickHouse (CLICKHOUSE_URL).
  * Bien: DATABASE_URL, REDIS_URL, S3_ENDPOINT, S3_PUBLIC_ENDPOINT?, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION?,
+ *       Hoac OBJECT_STORE=fs + OBJECT_STORE_DIR (+ OBJECT_STORE_SIGNED_BASE_URL?, OBJECT_STORE_SIGNING_SECRET? mac dinh SESSION_SECRET): khong can S3.
  *       SMTP_HOST, SMTP_PORT, SMTP_USER?, SMTP_PASS?, MAIL_FROM?, CLICKHOUSE_URL?
  */
 export async function createDockerRuntime(
@@ -37,14 +39,21 @@ export async function createDockerRuntime(
   const db = new PgDb(pool);
   const kv = await RedisKv.connect(need(env, 'REDIS_URL'));
   const queue = new RedisQueue(kv.client, env['QUEUE_PREFIX'] ?? 'ams:q:');
-  const objects = new S3ObjectStore({
-    endpoint: need(env, 'S3_ENDPOINT'),
-    publicEndpoint: env['S3_PUBLIC_ENDPOINT'],
-    region: env['S3_REGION'] ?? 'us-east-1',
-    bucket: need(env, 'S3_BUCKET'),
-    accessKeyId: need(env, 'S3_ACCESS_KEY'),
-    secretAccessKey: need(env, 'S3_SECRET_KEY'),
-  });
+  const objects: ObjectStore =
+    (env['OBJECT_STORE'] ?? 's3') === 'fs'
+      ? new FsObjectStore({
+          dir: need(env, 'OBJECT_STORE_DIR'),
+          signedBaseUrl: env['OBJECT_STORE_SIGNED_BASE_URL'] || '/api/storage',
+          signingSecret: env['OBJECT_STORE_SIGNING_SECRET'] || need(env, 'SESSION_SECRET'),
+        })
+      : new S3ObjectStore({
+          endpoint: need(env, 'S3_ENDPOINT'),
+          publicEndpoint: env['S3_PUBLIC_ENDPOINT'],
+          region: env['S3_REGION'] ?? 'us-east-1',
+          bucket: need(env, 'S3_BUCKET'),
+          accessKeyId: need(env, 'S3_ACCESS_KEY'),
+          secretAccessKey: need(env, 'S3_SECRET_KEY'),
+        });
   const mail =
     overrides.mail ??
     new SmtpMailer({

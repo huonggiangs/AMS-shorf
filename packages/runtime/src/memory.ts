@@ -142,6 +142,12 @@ export class MemoryObjectStore implements ObjectStore {
     const e = this.m.get(key);
     return e ? { size: e.body.length, contentType: e.contentType } : null;
   }
+  async delete(key: string) {
+    this.m.delete(key);
+  }
+  async list(prefix = '', limit = 1000) {
+    return [...this.m.entries()].filter(([k]) => k.startsWith(prefix)).map(([key, e]) => ({ key, size: e.body.length })).sort((a, b) => (a.key < b.key ? -1 : 1)).slice(0, limit);
+  }
   keys(): string[] {
     return [...this.m.keys()];
   }

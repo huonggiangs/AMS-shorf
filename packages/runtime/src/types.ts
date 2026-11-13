@@ -24,11 +24,15 @@ export interface Queue<T = unknown> {
 } // memory/redis/redpanda/CF Queues
 
 export interface ObjectStore {
-  putSigned(key: string, contentType: string, ttlSec: number): Promise<{ url: string; headers: Record<string, string> }>;
+  /** `opts.maxBytes`: chi adapter fs dung (S3/R2 gioi han kich thuoc o buoc confirm). */
+  putSigned(key: string, contentType: string, ttlSec: number, opts?: { maxBytes?: number }): Promise<{ url: string; headers: Record<string, string> }>;
   getSigned(key: string, ttlSec: number): Promise<string>;
   put(key: string, body: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<Uint8Array | null>;
   head(key: string): Promise<{ size: number; contentType: string } | null>;
+  /** Tuy chon (adapter fs + bo nho): xoa khong loi neu khong co; liet ke theo tien to chuoi. */
+  delete?(key: string): Promise<void>;
+  list?(prefix?: string, limit?: number): Promise<{ key: string; size: number }[]>;
 }
 
 export interface Mailer {
