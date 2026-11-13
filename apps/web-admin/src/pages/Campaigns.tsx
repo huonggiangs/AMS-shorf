@@ -146,6 +146,17 @@ const SCREEN_OPTS: { id: ScreenType; label: string }[] = [
   { id: 'tv', label: 'Smart TV (16:9)' }, { id: 'elevator', label: 'Màn hình thang máy (dọc 9:16)' }, { id: 'led', label: 'Bảng LED P5' },
 ];
 
+export const BUDGET_MIN = 1000;
+export const BUDGET_STEP = 1000;
+/** Kiểm tra ngân sách (VND): số nguyên, >= tối thiểu, bội số của bước. */
+export function budgetError(v: string): string | null {
+  const n = Number(v);
+  if (v.trim() === '' || !Number.isFinite(n)) return 'Nhập ngân sách hợp lệ.';
+  if (n < BUDGET_MIN) return `Ngân sách tối thiểu ${vnd(BUDGET_MIN)}.`;
+  if (n % BUDGET_STEP !== 0) return `Ngân sách phải là bội số của ${vnd(BUDGET_STEP)}.`;
+  return null;
+}
+
 export function CampaignForm({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT();
   const base = useBase();
@@ -164,7 +175,8 @@ export function CampaignForm({ open, onClose }: { open: boolean; onClose: () => 
     setErr('');
     if (!f.name.trim()) return setErr('Nhập tên chiến dịch.');
     if (!base.isExternal && !f.customer_id) return setErr('Chọn khách hàng.');
-    if (!(+f.budget > 0)) return setErr('Ngân sách phải lớn hơn 0.');
+    const bErr = budgetError(f.budget);
+    if (bErr) return setErr(bErr);
     if (m && check && !check.ok) return setErr(check.message);
     const created = await act(() => api.post(base.campaigns, { body: { name: f.name.trim(), customer_id: f.customer_id || undefined, screen_type: f.screen_type, screen_id: f.screen_type === 'led' ? f.led || undefined : undefined, media_id: f.media_id || undefined, budget_vnd: Math.round(+f.budget), duration_sec: +f.duration, start_date: f.start || undefined, end_date: f.end || undefined }, schema: campaignSchema }), undefined, ['/admin/v1', '/portal/v1']);
     if (!created) return;
@@ -196,7 +208,7 @@ export function CampaignForm({ open, onClose }: { open: boolean; onClose: () => 
         </Field>
         {check ? <p role="status" style={{ margin: '6px 0 0', color: check.ok ? 'var(--ok)' : 'var(--bad)', fontSize: 13 }}>{check.message}</p> : null}
         <div className="g g2" style={{ margin: '0' }}>
-          <Field label="Ngân sách đề xuất (₫)"><input type="number" min={1} step={100000} value={f.budget} onChange={(e) => set('budget', e.target.value)} /></Field>
+          <Field label="Ngân sách đề xuất (₫)" hint={`Tối thiểu ${vnd(BUDGET_MIN)}, bội số của ${vnd(BUDGET_STEP)}.`}><input type="number" min={BUDGET_MIN} step={BUDGET_STEP} value={f.budget} onChange={(e) => set('budget', e.target.value)} /></Field>
           <Field label="Thời lượng"><select value={f.duration} onChange={(e) => set('duration', e.target.value)}>{['10', '15', '30', '60'].map((d) => <option key={d} value={d}>{d} giây</option>)}</select></Field>
           <Field label="Ngày bắt đầu"><input type="date" value={f.start} onChange={(e) => set('start', e.target.value)} /></Field>
           <Field label="Ngày kết thúc"><input type="date" value={f.end} min={f.start} onChange={(e) => set('end', e.target.value)} /></Field>
