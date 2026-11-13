@@ -22,6 +22,12 @@ export interface ImpressionSpendRequest {
 export type ImpressionSpendFn = (req: ImpressionSpendRequest) => Promise<void>;
 
 export const MICRO = 1_000_000;
+/** Chien dich da tra lai/ket thuc: KHONG chi tieu (khong tru tien, khong chiem event). No-op idempotent: giao lai chi lai no-op. */
+const CLOSED_STATES = ['rejected', 'ended'];
+async function isClosed(db: Db, campaignId: string): Promise<boolean> {
+  const row = (await db.query<{ state: string }>('SELECT state FROM campaigns WHERE id = ?', [campaignId]))[0];
+  return !!row && CLOSED_STATES.includes(row.state);
+}
 const CHUNK = 50;
 
 /**
@@ -46,6 +52,7 @@ export function createSpendFn(rt: Runtime): ImpressionSpendFn {
 }
 
 async function spendPerEvent(rt: Runtime, req: ImpressionSpendRequest, events: { id: string; micro: number }[]): Promise<void> {
+  if (await isClosed(rt.db, req.campaignId)) return;
   const now = iso(rt);
   const uniq = new Map<string, number>();
   for (const e of events) {
@@ -82,6 +89,7 @@ async function spendPerEvent(rt: Runtime, req: ImpressionSpendRequest, events: {
 /** Buoc B: quyet toan phan nguyen VND cua phan du. Idempotent, hoi tu: goi bao nhieu lan cung chi chuyen phan nguyen con lai. */
 export async function settleRemainder(rt: Runtime, campaignId: string, ref: string): Promise<{ charged: number; exhausted: boolean }> {
   return withTx(rt.db, async (db: Db) => {
+    if (await isClosed(db, campaignId)) return { charged: 0, exhausted: false };
     for (let attempt = 0; attempt < 5; attempt++) {
       const row = (await db.query<{ spend_remainder_micro: unknown }>('SELECT spend_remainder_micro FROM campaigns WHERE id = ?', [campaignId]))[0];
       if (!row) return { charged: 0, exhausted: false };
@@ -99,7 +107,7 @@ export async function settleRemainder(rt: Runtime, campaignId: string, ref: stri
 
 /** Job dinh ky: quyet toan cac phan du >= 1 VND con sot (vd. mat dien giua buoc A va B khi chien dich khong con phat sinh impression moi). */
 export async function settleSpendRemainders(rt: Runtime, limit = 200): Promise<number> {
-  const rows = await rt.db.query<{ id: string }>('SELECT id FROM campaigns WHERE spend_remainder_micro >= ? ORDER BY id LIMIT ?', [MICRO, limit]);
+  const rows = await rt.db.query<{ id: string }>('SELECT id FROM campaigns WHERE spend_remainder_micro >= ? AND state NOT IN ('rejected','ended') ORDER BY id LIMIT ?', [MICRO, limit]);
   let charged = 0;
   for (const c of rows) {
     const r = await settleRemainder(rt, c.id, `sweep:${iso(rt)}`);
@@ -119,6 +127,7 @@ export async function pruneSpendEvents(rt: Runtime, keepDays = 7): Promise<numbe
 async function spendLegacy(rt: Runtime, req: ImpressionSpendRequest): Promise<void> {
   const micro = Math.round(Number(req.amountMicroVnd));
   if (!Number.isSafeInteger(micro) || micro < 0) throw new Error('amountMicroVnd khong hop le');
+  if (await isClosed(rt.db, req.campaignId)) return;
   let exhausted = false;
   await withTx(rt.db, async (db) => {
     const ins = await db.run(
