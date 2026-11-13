@@ -8,6 +8,7 @@ import { DEFAULT_POLICY, INGEST_TOPIC, processEvents, type EventPolicy } from '.
 import { CtlCache, DEFAULT_INTERVALS, RpsLoad, computeInterval, retryAfter, type IntervalCfg, type LoadFn } from './load.js';
 import { ManifestService, groupOfDevice, groupString, parseGroup } from './manifest.js';
 import { issuePairingCode } from './pairing.js';
+import { ttlForConfig } from './heartbeat-ttl.js';
 import { KvPresence, type Presence } from './presence.js';
 import { ackCommands, hasCommandFlag, type Delivered, sweepCommands, takeDeliverable } from './commands.js';
 import { MAX_ACK_BODY_BYTES, MAX_BODY_BYTES, MAX_HEARTBEAT_BODY_BYTES, PAIR_CODE_TTL_S, PROTOCOL_VERSION, commandAckBody, heartbeatBody, registerBody } from './protocol.js';
@@ -54,19 +55,17 @@ interface HbRow {
   state: number;
 }
 
+/**
+ * Cong suat MAC DINH cua MOT instance gateway (req/s), chi dung de keo gian chu ky (tu 70%) va 503 (tu 100%).
+ * Do that (docs/LOAD-TEST-REPORT.md): 2 vCPU chia se, Node + consumer chung tien trinh, ~500 req/s giu p99 < 400 ms, ~1.000 req/s la diem gay.
+ * 700 = 70% diem gay: giam tai bat dau o ~490 req/s (muc da do p99 < 400 ms), shed o 700. Production PHAI dat GW_CAPACITY_RPS theo
+ * do tai tren phan cung that (~1.300-1.600 req/s/loi Node x 60% x so loi), khong dua vao mac dinh nay.
+ */
+export const DEFAULT_GW_CAPACITY_RPS = 700;
+
 export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   const env = rt.config.env;
   const rng = opts.rng ?? defaultRng;
-  const devices = new DeviceDirectory(rt, envInt(env, 'DEVICE_MEM_TTL_S', 30) * 1000);
-  const nonces = opts.nonces ?? new KvNonceStore(rt.kv);
-  const presence = opts.presence ?? new KvPresence(rt.kv);
-  const deps: AuthDeps = { rt, devices, nonces };
-  const mediaBase = env['MEDIA_PUBLIC_URL'] ?? (env['S3_PUBLIC_ENDPOINT'] && env['S3_BUCKET'] ? `${env['S3_PUBLIC_ENDPOINT']}/${env['S3_BUCKET']}` : 'https://media.ams.invalid');
-  const manifestTtl = envInt(env, 'MANIFEST_TTL_S', 900);
-  const manifests = new ManifestService(rt, { mediaBaseUrl: mediaBase, ttlS: manifestTtl, buildTtlS: envInt(env, 'MANIFEST_BUILD_TTL_S', 60), memTtlS: envInt(env, 'MANIFEST_MEM_TTL_S', 15) });
-  const rps = new RpsLoad(rt, envInt(env, 'GW_CAPACITY_RPS', 5000));
-  const loadFn: LoadFn = opts.load ?? rps.factor;
-  const ctl = new CtlCache(rt);
   const intervals: IntervalCfg = {
     playingS: envInt(env, 'HB_PLAYING_S', DEFAULT_INTERVALS.playingS),
     idleS: envInt(env, 'HB_IDLE_S', DEFAULT_INTERVALS.idleS),
@@ -74,6 +73,18 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     monitoredS: envInt(env, 'HB_MONITORED_S', DEFAULT_INTERVALS.monitoredS),
     ...opts.intervals,
   };
+  // TTL khoa theo thiet bi dan xuat tu chu ky toi da that (heartbeat-ttl.ts): song sot qua it nhat mot heartbeat bi tre
+  const stateTtlS = ttlForConfig(intervals);
+  const devices = new DeviceDirectory(rt, envInt(env, 'DEVICE_MEM_TTL_S', 30) * 1000, envInt(env, 'DEVICE_KV_TTL_S', stateTtlS));
+  const presence = opts.presence ?? new KvPresence(rt.kv, envInt(env, 'PRESENCE_TTL_S', stateTtlS));
+  const nonces = opts.nonces ?? new KvNonceStore(rt.kv);
+  const deps: AuthDeps = { rt, devices, nonces };
+  const mediaBase = env['MEDIA_PUBLIC_URL'] ?? (env['S3_PUBLIC_ENDPOINT'] && env['S3_BUCKET'] ? `${env['S3_PUBLIC_ENDPOINT']}/${env['S3_BUCKET']}` : 'https://media.ams.invalid');
+  const manifestTtl = envInt(env, 'MANIFEST_TTL_S', 900);
+  const manifests = new ManifestService(rt, { mediaBaseUrl: mediaBase, ttlS: manifestTtl, buildTtlS: envInt(env, 'MANIFEST_BUILD_TTL_S', 60), memTtlS: envInt(env, 'MANIFEST_MEM_TTL_S', 15) });
+  const rps = new RpsLoad(rt, envInt(env, 'GW_CAPACITY_RPS', DEFAULT_GW_CAPACITY_RPS));
+  const loadFn: LoadFn = opts.load ?? rps.factor;
+  const ctl = new CtlCache(rt);
   const policy: EventPolicy = {
     ...DEFAULT_POLICY,
     minVcrPct: envInt(env, 'IMPRESSION_MIN_VCR', DEFAULT_POLICY.minVcrPct),

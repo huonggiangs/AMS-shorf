@@ -25,7 +25,18 @@ export interface IngestOptions {
   spend?: SpendFn;
   dedupeTtlSec?: number;
   log?: (msg: string) => void;
+  /** so vong nhan (subscribe) song song tren hang doi that (Redis). Mac dinh 1: MemoryQueue gui moi tin cho MOI handler nen khong tang trong test. */
+  concurrency?: number;
+  /** so thong diep toi da gom thanh mot lo (mot lan chi tieu/ghi/danh dau cho ca lo). Mac dinh 64. */
+  maxBatch?: number;
+  /** so lenh kv song song toi da trong mot lo (get/set/incr/del; ioredis day ong tren mot ket noi). Mac dinh 32. */
+  ioConcurrency?: number;
+  /** so lan xu ly that bai cua CUNG mot thong diep truoc khi chuyen vao dead-letter va xac nhan (ack). Mac dinh 3 (bang MAX_ATTEMPTS cua RedisQueue). */
+  maxAttempts?: number;
 }
+
+/** Topic dead-letter: thong diep doc (that bai maxAttempts lan) duoc gui o day kem loi; gui lai vao INGEST_TOPIC de phat lai (moi buoc idempotent). */
+export const DEAD_LETTER_TOPIC = 'ingest.events.dead';
 
 export interface IngestStats {
   messages: number;
@@ -37,6 +48,8 @@ export interface IngestStats {
   spendSkippedNoFn: number;
   pops: number;
   errors: number;
+  batches: number;
+  deadLettered: number;
 }
 
 export interface IngestConsumer {
@@ -48,12 +61,26 @@ export interface IngestConsumer {
 }
 
 const DEDUPE_TTL = 7 * 24 * 3600;
+const ATTEMPT_TTL = 24 * 3600;
+/** map song song co gioi han (giu thu tu ket qua) */
+async function pmap<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (let i = next++; i < items.length; i = next++) out[i] = await fn(items[i]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
 const chunk = <T,>(a: T[], n: number): T[][] => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 
 export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): IngestConsumer {
   const sink: EventStore = opts.sink ?? (rt.config.runtime === 'cloudflare' ? new DbEventStore(rt.db) : rt.events);
   const ttl = opts.dedupeTtlSec ?? DEDUPE_TTL;
-  const stats: IngestStats = { messages: 0, received: 0, duplicates: 0, appended: 0, invalid: 0, spendCalls: 0, spendSkippedNoFn: 0, pops: 0, errors: 0 };
+  const ioN = Math.max(1, opts.ioConcurrency ?? 32);
+  const maxBatch = Math.max(1, opts.maxBatch ?? 64);
+  const maxAttempts = Math.max(1, opts.maxAttempts ?? 3);
+  const stats: IngestStats = { messages: 0, received: 0, duplicates: 0, appended: 0, invalid: 0, spendCalls: 0, spendSkippedNoFn: 0, pops: 0, errors: 0, batches: 0, deadLettered: 0 };
   const customerCache = new Map<string, { at: number; customerId: string | null }>();
 
   async function customerOf(campaignId: string): Promise<string | null> {
@@ -70,17 +97,18 @@ export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): Ing
   /** Giu cho event_id bang kv (nguyen tu tren Redis); tra ve cac id GIANH DUOC. */
   async function claim(prefix: string, ids: string[]): Promise<Set<string>> {
     const won = new Set<string>();
-    for (const id of ids) if ((await rt.kv.incr(`${prefix}${id}`, ttl)) === 1) won.add(id);
+    const res = await pmap(ids, ioN, async (id) => (await rt.kv.incr(`${prefix}${id}`, ttl)) === 1);
+    ids.forEach((id, i) => res[i] && won.add(id));
     return won;
   }
   async function release(prefix: string, ids: Iterable<string>): Promise<void> {
-    for (const id of ids) await rt.kv.del(`${prefix}${id}`).catch(() => undefined);
+    await pmap([...ids], ioN, (id) => rt.kv.del(`${prefix}${id}`).catch(() => undefined));
   }
 
   /** Tang 2: event_id da co trong bang (kv het han / mat) */
   async function existingIds(ids: string[]): Promise<Set<string>> {
     const out = new Set<string>();
-    for (const part of chunk(ids, 50)) {
+    for (const part of chunk(ids, 200)) {
       const rows = await rt.db.query<{ event_id: string }>(`SELECT event_id FROM ev_ad_impression WHERE event_id IN (${part.map(() => '?').join(',')})`, part);
       for (const r of rows) out.add(r.event_id);
     }
@@ -94,70 +122,155 @@ export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): Ing
     stats.duplicates += rows.length - byId.size;
     // Duong nhanh: cho "xong" (kv) chi duoc DAT SAU KHI chi tieu + ghi su kien deu thanh cong, nen mat dien/that bai
     // khong bao gio de lai dau "da xu ly" gia (khac cho chiem truoc, tung lam mat ca chi tieu lan su kien khi tien trinh chet giua chung).
-    const pending: ImpressionRow[] = [];
-    for (const r of byId.values()) {
-      if ((await rt.kv.get(`ingest:done:${r.event_id}`).catch(() => null)) === '1') stats.duplicates++;
-      else pending.push(r);
-    }
+    const all = [...byId.values()];
+    const done = await pmap(all, ioN, async (r) => (await rt.kv.get(`ingest:done:${r.event_id}`).catch(() => null)) === '1');
+    const pending = all.filter((_, i) => !done[i]);
+    stats.duplicates += all.length - pending.length;
     if (pending.length === 0) return;
-    try {
-      // THU TU BAT BIEN: (1) chi tieu, (2) ghi su kien, (3) danh dau xong.
-      // Chi tieu khu trung theo TUNG event_id o ben tai chinh nen (1) chay lai luon an toan; vi vay "su kien da co trong bang" => "chi tieu da ghi nhan",
-      // va ta KHONG loc theo su kien da ton tai truoc khi chi tieu (neu loc, mat dien giua (1) va (2) hoac (2) ghi do se tru kep / mat tien).
-      const billable = pending.filter((r) => r.valid === 1 && r.revenue_micro_vnd > 0);
-      const byCampaign = new Map<string, ImpressionRow[]>();
-      for (const r of billable) byCampaign.set(r.campaign_id, [...(byCampaign.get(r.campaign_id) ?? []), r]);
-      for (const [campaignId, list] of byCampaign) {
-        if (!opts.spend) {
-          stats.spendSkippedNoFn += list.length;
-          continue;
-        }
-        const customerId = await customerOf(campaignId);
-        if (!customerId) {
-          opts.log?.(`ingest: chien dich ${campaignId} khong ton tai, bo qua chi tieu cua ${list.length} impression`);
-          continue;
-        }
-        const sorted = list.map((r) => r.event_id).sort();
-        await opts.spend({
-          campaignId,
-          customerId,
-          amountMicroVnd: list.reduce((s, r) => s + Number(r.revenue_micro_vnd), 0),
-          impressions: list.length,
-          idempotencyKey: 'imp:' + (await sha256Hex(sorted.join(','))).slice(0, 32),
-          firstTs: list.reduce((m, r) => (r.ts < m ? r.ts : m), list[0]!.ts),
-          lastTs: list.reduce((m, r) => (r.ts > m ? r.ts : m), list[0]!.ts),
-          events: list.map((r) => ({ id: r.event_id, micro: Number(r.revenue_micro_vnd) })),
-        });
-        stats.spendCalls++;
-      }
-      const have = await existingIds(pending.map((r) => r.event_id)); // su kien da ghi o lan truoc (ghi do): khong ghi lai
-      const fresh = pending.filter((r) => !have.has(r.event_id));
-      stats.duplicates += pending.length - fresh.length;
-      if (fresh.length > 0) {
-        await sink.append('ad_impression', fresh as unknown as Record<string, unknown>[]); // DbEventStore: UNIQUE + impression_hourly
-        stats.appended += fresh.length;
-        stats.invalid += fresh.filter((r) => r.valid !== 1).length;
-      }
-      for (const r of pending) await rt.kv.set(`ingest:done:${r.event_id}`, '1', ttl).catch(() => undefined);
-    } catch (e) {
-      stats.errors++;
-      throw e; // queue giao lai: moi buoc tren idempotent
+    // THU TU BAT BIEN: (1) chi tieu, (2) ghi su kien, (3) danh dau xong.
+    // Chi tieu khu trung theo TUNG event_id o ben tai chinh nen (1) chay lai luon an toan; vi vay "su kien da co trong bang" => "chi tieu da ghi nhan",
+    // va ta KHONG loc theo su kien da ton tai truoc khi chi tieu (neu loc, mat dien giua (1) va (2) hoac (2) ghi do se tru kep / mat tien).
+    // Gom lo: mot lan chi tieu cho MOI chien dich trong ca lo (nhieu thong diep), mot lan existingIds/append/danh dau cho ca lo.
+    const billable = pending.filter((r) => r.valid === 1 && r.revenue_micro_vnd > 0);
+    const byCampaign = new Map<string, ImpressionRow[]>();
+    for (const r of billable) {
+      const l = byCampaign.get(r.campaign_id);
+      if (l) l.push(r);
+      else byCampaign.set(r.campaign_id, [r]);
     }
+    for (const [campaignId, list] of byCampaign) {
+      if (!opts.spend) {
+        stats.spendSkippedNoFn += list.length;
+        continue;
+      }
+      const customerId = await customerOf(campaignId);
+      if (!customerId) {
+        opts.log?.(`ingest: chien dich ${campaignId} khong ton tai, bo qua chi tieu cua ${list.length} impression`);
+        continue;
+      }
+      const sorted = list.map((r) => r.event_id).sort();
+      await opts.spend({
+        campaignId,
+        customerId,
+        amountMicroVnd: list.reduce((s, r) => s + Number(r.revenue_micro_vnd), 0),
+        impressions: list.length,
+        idempotencyKey: 'imp:' + (await sha256Hex(sorted.join(','))).slice(0, 32),
+        firstTs: list.reduce((m, r) => (r.ts < m ? r.ts : m), list[0]!.ts),
+        lastTs: list.reduce((m, r) => (r.ts > m ? r.ts : m), list[0]!.ts),
+        events: list.map((r) => ({ id: r.event_id, micro: Number(r.revenue_micro_vnd) })),
+      });
+      stats.spendCalls++;
+    }
+    const have = await existingIds(pending.map((r) => r.event_id)); // su kien da ghi o lan truoc (ghi do): khong ghi lai
+    const fresh = pending.filter((r) => !have.has(r.event_id));
+    stats.duplicates += pending.length - fresh.length;
+    if (fresh.length > 0) {
+      await sink.append('ad_impression', fresh as unknown as Record<string, unknown>[]); // DbEventStore: UNIQUE + impression_hourly
+      stats.appended += fresh.length;
+      stats.invalid += fresh.filter((r) => r.valid !== 1).length;
+    }
+    await pmap(pending, ioN, (r) => rt.kv.set(`ingest:done:${r.event_id}`, '1', ttl).catch(() => undefined));
   }
 
-  async function ingestPops(device: string, pops: IngestMessage['pops']): Promise<void> {
-    const ids = pops.map((p) => p.event_id);
-    const won = await claim('ingest:pop:', ids);
+  async function ingestPops(pops: { source: string; row: IngestMessage['pops'][number] }[]): Promise<void> {
+    const won = await claim('ingest:pop:', pops.map((p) => p.row.event_id));
     try {
-      const fresh = pops.filter((p) => won.has(p.event_id));
+      const fresh = pops.filter((p) => won.has(p.row.event_id));
       if (fresh.length === 0) return;
-      await sink.append('proof_of_play', fresh.map((p) => ({ ts: p.ts, screen_id: p.screen_id, creative_id: p.creative_id, duration_ms: p.duration_ms, source: p.source ?? device })));
+      await sink.append('proof_of_play', fresh.map(({ row: p, source }) => ({ ts: p.ts, screen_id: p.screen_id, creative_id: p.creative_id, duration_ms: p.duration_ms, source: p.source ?? source })));
       stats.pops += fresh.length;
     } catch (e) {
-      stats.errors++;
       await release('ingest:pop:', won);
       throw e;
     }
+  }
+
+  /** Xu ly mot lo thong diep: gop moi impression / pop roi chay tung tang MOT LAN. Moi buoc idempotent nen ca lo giao lai deu an toan. */
+  async function processMessages(msgs: IngestMessage[]): Promise<void> {
+    stats.batches++;
+    try {
+      const imps: ImpressionRow[] = [];
+      const pops: { source: string; row: IngestMessage['pops'][number] }[] = [];
+      for (const m of msgs) {
+        if (m.impressions?.length) imps.push(...m.impressions);
+        if (m.pops?.length) for (const row of m.pops) pops.push({ source: m.device_id, row });
+      }
+      if (imps.length) await ingestImpressions(imps);
+      if (pops.length) await ingestPops(pops);
+    } catch (e) {
+      stats.errors++;
+      throw e; // moi buoc tren idempotent
+    }
+  }
+
+  // ---- gom lo + thu lai co gioi han + dead-letter
+  interface Entry {
+    msg: IngestMessage;
+    resolve(): void;
+    reject(e: unknown): void;
+  }
+  const buf: Entry[] = [];
+  let running = false;
+  let scheduled = false;
+
+  async function fingerprint(msg: IngestMessage): Promise<string> {
+    return (await sha256Hex(JSON.stringify(msg))).slice(0, 32);
+  }
+  /** That bai: dem so lan cua CHINH thong diep nay (kv); du maxAttempts -> dead-letter + ack, nguoc lai nem loi de queue giao lai. */
+  async function fail(e: Entry, err: unknown): Promise<void> {
+    try {
+      const key = `ingest:try:${await fingerprint(e.msg)}`;
+      const n = await rt.kv.incr(key, ATTEMPT_TTL);
+      if (n >= maxAttempts) {
+        await rt.queue.send(DEAD_LETTER_TOPIC, { msg: e.msg, error: String((err as Error)?.message ?? err), attempts: n, at: rt.clock.now().toISOString() });
+        await rt.kv.del(key).catch(() => undefined);
+        stats.deadLettered++;
+        opts.log?.(`ingest: thong diep doc sau ${n} lan loi, chuyen dead-letter (${DEAD_LETTER_TOPIC}): ${String((err as Error)?.message ?? err)}`);
+        e.resolve();
+        return;
+      }
+    } catch {
+      /* kv/queue hong: khong dead-letter duoc, de queue giao lai */
+    }
+    e.reject(err);
+  }
+  async function runGroup(group: Entry[]): Promise<void> {
+    try {
+      await processMessages(group.map((e) => e.msg));
+      for (const e of group) e.resolve();
+      return;
+    } catch (err) {
+      if (group.length === 1) return fail(group[0]!, err);
+    }
+    // lo that bai: tach ra xu ly rieng de mot thong diep doc khong keo theo ca lo (idempotent nen chay lai an toan)
+    for (const e of group) {
+      try {
+        await processMessages([e.msg]);
+        e.resolve();
+      } catch (err) {
+        await fail(e, err);
+      }
+    }
+  }
+  async function pump(): Promise<void> {
+    scheduled = false;
+    if (running) return;
+    running = true;
+    try {
+      while (buf.length > 0) await runGroup(buf.splice(0, maxBatch));
+    } finally {
+      running = false;
+    }
+  }
+  /** Thong diep den dong thoi tu nhieu vong nhan se dung chung mot lo; khi dang xu ly, lo ke tiep tu lon dan theo tai (khong cong do tre co dinh). */
+  function enqueue(msg: IngestMessage): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      buf.push({ msg, resolve, reject });
+      if (!running && !scheduled) {
+        scheduled = true;
+        setImmediate(() => void pump());
+      }
+    });
   }
 
   const consumer: IngestConsumer = {
@@ -165,8 +278,8 @@ export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): Ing
     async handle(msg) {
       stats.messages++;
       if (!msg || msg.v !== 1) return; // phien ban la: bo (khong retry vo han)
-      if (msg.impressions?.length) await ingestImpressions(msg.impressions);
-      if (msg.pops?.length) await ingestPops(msg.device_id, msg.pops);
+      if (!msg.impressions?.length && !msg.pops?.length) return;
+      await enqueue(msg);
     },
     async handleRows(table, rows) {
       stats.messages++;
@@ -174,7 +287,8 @@ export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): Ing
       await sink.append(table, rows);
     },
     subscribe() {
-      rt.queue.subscribe(INGEST_TOPIC, (m) => consumer.handle(m as IngestMessage));
+      const n = Math.max(1, opts.concurrency ?? 1);
+      for (let i = 0; i < n; i++) rt.queue.subscribe(INGEST_TOPIC, (m) => consumer.handle(m as IngestMessage));
       // duong CfEventStore: events.<bang>
       rt.queue.subscribe('events.heartbeat', (m) => consumer.handleRows('heartbeat', m as Record<string, unknown>[]));
       rt.queue.subscribe('events.proof_of_play', (m) => consumer.handleRows('proof_of_play', m as Record<string, unknown>[]));

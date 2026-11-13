@@ -9,6 +9,6 @@ export { setSpendFn } from './spend-registry.js';
 
 export async function createConsumerForEnv(env: Record<string, string | undefined>): Promise<{ consumer: IngestConsumer; rt: Runtime }> {
   const rt = env['RUNTIME'] === 'test' ? await createTestRuntime({ dialect: 'sqlite' }) : await createDockerRuntime(env);
-  const consumer = createIngestConsumer(rt, { spend: spendFnFor(rt), log: (m) => console.log(m) });
+  const consumer = createIngestConsumer(rt, { spend: spendFnFor(rt), log: (m) => console.log(m), concurrency: env['RUNTIME'] === 'test' ? 1 : Number(env['INGEST_CONCURRENCY'] ?? 64) });
   return { consumer, rt };
 }

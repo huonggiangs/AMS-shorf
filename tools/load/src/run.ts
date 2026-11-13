@@ -35,6 +35,7 @@ const FLEET_SCALE = Number(args['fleet-scale'] ?? 0.025);
 const FLEET_S = Number(args['fleet-seconds'] ?? 90);
 const FLEET_CAP = args['fleet-capacity'] ? Number(args['fleet-capacity']) : 0; // 0 = khong gioi han (do thuan); >0 = GW_CAPACITY_RPS that
 const REGISTER = Number(args['register'] ?? 0);
+const BENCH_MSGS = Number(args['consumer-bench'] ?? 0); // >0: chi do toc do xa cua consumer voi N thong diep
 const COLD = Number(args['cold-rps'] ?? 0);
 const OUT = args['out'] ?? join(HERE, '..', 'results', `run-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
 // ti le request/thiet bi/gio theo giao thuc that: heartbeat 300s (dang phat) = 12, manifest poll 900s = 4, lo su kien 600s = 6
@@ -200,6 +201,7 @@ async function main(): Promise<void> {
     IMPRESSION_PRICE_MICRO_VND: '20000000',
     GATEWAY_DEV_ENDPOINTS: '0',
     API_SCHEDULER: '0',
+    ...(args['consumer-concurrency'] ? { INGEST_CONCURRENCY: args['consumer-concurrency'] } : {}),
     // HB_MIN_GAP_S, EVENTS_LIMIT_PER_MIN, TELEMETRY_SAMPLE_EVERY, MANIFEST_*_TTL: de MAC DINH cua gateway
   };
   await run('pnpm', ['--filter', '@ams/api', 'migrate'], env, ROOT);
@@ -298,6 +300,55 @@ async function main(): Promise<void> {
       ...sysCpu(),
     };
   };
+
+  // ---------- do rieng consumer (--consumer-bench N): day N thong diep (1,33 impression/thong diep, 3 chien dich) vao hang doi Redis that, do toc do xa
+  if (BENCH_MSGS > 0) {
+    const mq = setup; // runtime dung chung Redis that voi consumer
+    const total = BENCH_MSGS;
+    const msgs: unknown[] = [];
+    let impTotal = 0;
+    for (let i = 0; i < total; i++) {
+      const it = fixture.items[i % fixture.items.length]!;
+      const k = i % 3 === 2 ? 2 : 1; // 4 impression / 3 thong diep = 1,33
+      const t = Date.now() - 5000;
+      const impressions = Array.from({ length: k }, () => ({
+        ts: new Date(t).toISOString(), event_id: uuidv7(t), device_id: creds[i % creds.length]!.id, screen_id: null, campaign_id: it.campaign_id, creative_id: it.creative_id,
+        slot_id: it.slot_id, partner_id: null, region_id: creds[i % creds.length]!.region, vcr_pct: 100, valid: 1, reject_reason: null, revenue_micro_vnd: 20_000_000, reward_vnd: 0,
+      }));
+      impTotal += k;
+      msgs.push({ v: 1, device_id: creds[i % creds.length]!.id, impressions, pops: [] });
+    }
+    for (let i = 0; i < msgs.length; i += 500) await Promise.all(msgs.slice(i, i + 500).map((m) => mq.queue.send('ingest.events', m)));
+    const a = await mkSnap();
+    const w0 = performance.now();
+    cons = await startConsumer({ ...env, PORT: '0' });
+    const series: { tS: number; rows: number }[] = [];
+    let rows = 0;
+    while ((performance.now() - w0) / 1000 < Number(args['drain-wait'] ?? 300)) {
+      rows = Number((await pgc.query('SELECT COUNT(*) AS n FROM ev_ad_impression')).rows[0].n);
+      series.push({ tS: +((performance.now() - w0) / 1000).toFixed(1), rows });
+      if (rows >= impTotal) break;
+      await sleep(500);
+    }
+    const secs = (performance.now() - w0) / 1000;
+    const b = await mkSnap();
+    const st = await fetch(`http://127.0.0.1:${cons.port}/health`).then((r) => r.json()).catch(() => null);
+    const dead = Number(redisCli(['llen', 'ams:q:ingest.events:dead']).trim()) + Number(redisCli(['llen', 'ams:q:ingest.events.dead']).trim());
+    const chk = (await pgc.query('SELECT (SELECT COUNT(DISTINCT event_id) FROM ev_ad_impression) AS dist, (SELECT COALESCE(SUM(impressions),0) FROM impression_hourly) AS hourly, (SELECT COUNT(*) FROM spend_events) AS spend, (SELECT COALESCE(SUM(spent_vnd),0) FROM campaigns) AS spent')).rows[0];
+    report['consumerBench'] = {
+      messages: total, impressions: impTotal, seconds: +secs.toFixed(2), msgPerSec: +(total / secs).toFixed(1), impressionsPerSec: +(impTotal / secs).toFixed(1),
+      rowsInDb: rows, distinct: Number(chk.dist), hourlySum: Number(chk.hourly), spendEvents: Number(chk.spend), spentVndAll: Number(chk.spent), expectedSpentVnd: impTotal * 20 + 20 /* +20: preflight */,
+      deadLettered: dead, hostCpuCores: +((b.hostCpu - a.hostCpu) / secs).toFixed(2), pgCpuCores: +((b.pgCpu - a.pgCpu) / secs).toFixed(2), redisCpuCores: +((b.redisCpu - a.redisCpu) / secs).toFixed(2),
+      pgTxPerMsg: +((b.pgXact - a.pgXact) / total).toFixed(2), redisCmdPerMsg: +((b.redisCmds - a.redisCmds) / total).toFixed(2), consumerStats: st,
+      otherProcessesCores: +(((b.sysBusy - a.sysBusy) / secs) - (b.hostCpu - a.hostCpu) / secs - (b.pgCpu - a.pgCpu) / secs - (b.redisCpu - a.redisCpu) / secs).toFixed(2), drainSeries: series.filter((_, i) => i % 4 === 0),
+    };
+    report['finished'] = new Date().toISOString();
+    mkdirSync(join(OUT, '..'), { recursive: true });
+    writeFileSync(OUT, JSON.stringify(report, null, 1));
+    console.error(JSON.stringify(report['consumerBench']));
+    console.error(`ket qua: ${OUT}`);
+    return;
+  }
 
   const etags: Record<string, string> = {};
   const learnEtags = async (): Promise<void> => {

@@ -1,5 +1,5 @@
 import type { Runtime } from '@ams/runtime';
-import { PRESENCE_TTL_S } from './protocol.js';
+import { PRESENCE_TTL_S } from './heartbeat-ttl.js';
 
 export interface PresenceRec {
   ts: number; // epoch giay may chu
@@ -14,11 +14,14 @@ export interface Presence {
 }
 
 export class KvPresence implements Presence {
-  constructor(private kv: Runtime['kv']) {}
+  constructor(
+    private kv: Runtime['kv'],
+    private ttlS = PRESENCE_TTL_S,
+  ) {}
   async touch(deviceId: string, rec: PresenceRec): Promise<{ prevTs: number | null }> {
     const k = `presence:${deviceId}`;
     const prev = await this.kv.get(k);
-    await this.kv.set(k, JSON.stringify(rec), PRESENCE_TTL_S);
+    await this.kv.set(k, JSON.stringify(rec), this.ttlS);
     if (!prev) return { prevTs: null };
     try {
       return { prevTs: (JSON.parse(prev) as PresenceRec).ts };

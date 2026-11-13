@@ -18,7 +18,7 @@ export const MAX_EVENTS_PER_BATCH = 50;
 export const MAX_BODY_BYTES = 16 * 1024; // events toi da 50 x ~250B
 export const MAX_HEARTBEAT_BODY_BYTES = 2048; // muc tieu <512B (PLAN), tran cung 2 KB
 export const JITTER = 0.2;
-export const PRESENCE_TTL_S = 6 * 60;
+export { PRESENCE_TTL_S } from './heartbeat-ttl.js'; // dan xuat tu chu ky heartbeat toi da (khong con 6 phut)
 export const PAIR_CODE_TTL_S = 5 * 60;
 
 /** Bang ma loi (HTTP -> code). Than loi luon la { error: { code, message, details? } }. */

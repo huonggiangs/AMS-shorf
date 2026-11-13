@@ -1,0 +1,123 @@
+{
+ "started": "2026-11-13T01:41:22.726Z",
+ "host": {
+  "cpus": 2,
+  "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "memGb": 7.8,
+  "node": "v22.23.4"
+ },
+ "config": {
+  "N_DEV": 20,
+  "RAMP": [
+   1
+  ],
+  "STEP_S": 20,
+  "MIX": {
+   "hb": 12,
+   "mf": 4,
+   "mfFull": 0,
+   "ev": 6
+  },
+  "FLEET_DEV": 0,
+  "FLEET_SCALE": 0.025,
+  "FLEET_S": 90,
+  "FLEET_CAP": 0,
+  "REGISTER": 0,
+  "COLD": 0
+ },
+ "postgres": "16.15",
+ "postgresSettings": {
+  "fsync": "on",
+  "max_connections": "100",
+  "shared_buffers": "16384",
+  "synchronous_commit": "on",
+  "wal_level": "replica"
+ },
+ "redis": "7.0.15",
+ "spendPreflight": "ok",
+ "deviceSetupSeconds": 0,
+ "consumerBench": {
+  "messages": 4000,
+  "impressions": 5333,
+  "seconds": 20.52,
+  "msgPerSec": 194.9,
+  "impressionsPerSec": 259.9,
+  "rowsInDb": 5333,
+  "distinct": 5333,
+  "hourlySum": 5333,
+  "spendEvents": 5334,
+  "spentVndAll": 106680,
+  "expectedSpentVnd": 106680,
+  "deadLettered": 0,
+  "hostCpuCores": 0.31,
+  "pgCpuCores": 0.46,
+  "redisCpuCores": 0.02,
+  "pgTxPerMsg": 6.85,
+  "redisCmdPerMsg": 3.68,
+  "consumerStats": {
+   "ok": true,
+   "service": "ingest-consumer",
+   "stats": {
+    "messages": 4000,
+    "received": 5333,
+    "duplicates": 0,
+    "appended": 5333,
+    "invalid": 0,
+    "spendCalls": 4000,
+    "spendSkippedNoFn": 0,
+    "pops": 0,
+    "errors": 0,
+    "batches": 4000,
+    "deadLettered": 0
+   }
+  },
+  "otherProcessesCores": 0.05,
+  "drainSeries": [
+   {
+    "tS": 0,
+    "rows": 0
+   },
+   {
+    "tS": 2,
+    "rows": 448
+   },
+   {
+    "tS": 4,
+    "rows": 949
+   },
+   {
+    "tS": 6,
+    "rows": 1473
+   },
+   {
+    "tS": 8,
+    "rows": 2028
+   },
+   {
+    "tS": 10,
+    "rows": 2562
+   },
+   {
+    "tS": 12,
+    "rows": 3081
+   },
+   {
+    "tS": 14,
+    "rows": 3612
+   },
+   {
+    "tS": 16,
+    "rows": 4138
+   },
+   {
+    "tS": 18,
+    "rows": 4681
+   },
+   {
+    "tS": 20,
+    "rows": 5193
+   }
+  ]
+ },
+ "finished": "2026-11-13T01:41:45.556Z"
+}

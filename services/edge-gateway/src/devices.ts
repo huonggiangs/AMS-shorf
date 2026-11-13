@@ -1,4 +1,5 @@
 import type { Runtime } from '@ams/runtime';
+import { DEVICE_KV_TTL_S } from './heartbeat-ttl.js';
 
 export interface DeviceRec {
   id: string;
@@ -38,7 +39,7 @@ interface Row {
 }
 
 /**
- * Tra cuu thiet bi cho moi request da ky. Ba tang: bo nho (TTL ngan) -> kv `dev:<id>` (5 phut) -> DB.
+ * Tra cuu thiet bi cho moi request da ky. Ba tang: bo nho (TTL ngan) -> kv `dev:<id>` (DEVICE_KV_TTL_S, dan xuat tu chu ky heartbeat) -> DB.
  * Chan/doi trust: ben ghi goi `invalidate(id)` (xoa kv) — cac instance khac thay doi trong toi da `memTtlMs`.
  */
 export class DeviceDirectory {
@@ -46,7 +47,7 @@ export class DeviceDirectory {
   constructor(
     private rt: Runtime,
     private memTtlMs = 30_000,
-    private kvTtlSec = 300,
+    private kvTtlSec = DEVICE_KV_TTL_S,
     private maxEntries = 50_000,
   ) {}
 

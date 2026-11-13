@@ -150,8 +150,8 @@ describe('creative.overlay: lược đồ TV (zod, strict) và ví dụ VinFast'
       await w2.close();
     }
   });
-  // LOI DA BIET (a4-tv-bridge.requests.md muc 1): may chu bo cac truong mo rong. it.fails: khi a1 sua xong test nay se DO, hay doi thanh it().
-  it.fails('KNOWN GAP: manifest giu kid_safe/contexts/duration_s/safe_area (ung dung can de hien tren man khoa)', async () => {
+  // Da sua (x3): manifest giu cac truong overlay da duyet; contexts lock chi khi kid_safe.
+  it('manifest giu kid_safe/contexts/duration_s/safe_area (ung dung can de hien tren man khoa)', async () => {
     const w2 = await createWorld();
     try {
       const cr = w2.fixture.campaigns[0]!.creatives[0]!.id;
