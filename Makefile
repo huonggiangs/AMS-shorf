@@ -9,7 +9,7 @@ N ?= 1000
 S ?=
 
 .DEFAULT_GOAL := help
-.PHONY: help setup env-check up up-events up-obs seed bootstrap test loadtest tunnel down reset logs ps doctor config build trust-ca
+.PHONY: help setup env-check up up-events up-obs seed bootstrap test load loadtest tunnel down reset logs ps doctor config build trust-ca
 
 help: ## Liệt kê lệnh
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  make %-11s %s\n",$$1,$$2}'
@@ -53,6 +53,10 @@ test: ## Typecheck + unit/contract (pnpm), rồi e2e nếu có (cần `make up`)
 loadtest: ## Giả lập N thiết bị ảo: make loadtest N=20000
 	@echo "Giả lập $(N) thiết bị tới gateway cục bộ (máy PC chỉ đại diện ~10-50 nghìn thiết bị, xem đặc tả 11.5)"
 	pnpm --filter @ams/sim run loadtest -- --devices $(N) --gateway http://localhost:$${GATEWAY_PORT:-8788}
+
+load: ## Do tai that (Postgres 16 + Redis 7 that, khong can Docker): ramp 250-1000 rps + doi 10k thiet bi x10 + do consumer. Ket qua: tools/load/results/
+	nice -n -15 pnpm --filter @ams/load load -- --devices 50000 --ramp 250,500,1000 --fleet-devices 10000 --fleet-scale 0.1 --fleet-seconds 150 --out results/make-load.json
+	nice -n -15 pnpm --filter @ams/load load -- --devices 20 --ramp "" --consumer-bench 4000 --out results/make-load-consumer.json
 
 tunnel: env-check ## URL công khai tạm thời cho webhook SePay (Cloudflare quick tunnel)
 	@$(DC) --profile core --profile tunnel up -d tunnel

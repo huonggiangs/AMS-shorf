@@ -1,19 +1,45 @@
 # AMS: mô hình chi phí hạ tầng / tháng (100k, 1M, 10M, 50M thiết bị online)
 
-Mã tính: `docs/cost-model/cost.py` (tham số hóa; chạy `python3 docs/cost-model/cost.py --sens`). Kết quả chạy thật lưu ở `docs/cost-model/output.txt` (ngày chạy 2026-11-12). Mọi số trong tài liệu này lấy từ lần chạy đó. USD, chưa gồm VAT, chưa gồm chiết khấu Enterprise.
+Mã tính: `docs/cost-model/cost.py` (tham số hóa; chạy `python3 docs/cost-model/cost.py --sens`). Kết quả chạy lưu ở `docs/cost-model/output.txt` (hiệu chỉnh 2026-11-13, xem mục 0). Số ở mục 0 và mục 1 là **hiện hành**; các bảng ở mục 4, 5, 6 và bảng nhạy cảm là số **CŨ** của lần chạy 2026-11-12 (heartbeat 120 giây, gateway 8.000 req/s/luồng), giữ để đối chiếu và được đánh dấu "[CŨ]"; số hiện hành của chúng nằm ở `output.txt` (`python3 docs/cost-model/cost.py --sens`). USD, chưa gồm VAT, chưa gồm chiết khấu Enterprise.
 
 Quy ước nhãn: **[nguồn]** = lấy từ trang giá/tài liệu đã truy cập; **[ƯT]** = ước tính của tác giả, không có nguồn, phải đo ở giai đoạn 1 trước khi tin.
 
+## 0. Hiệu chỉnh 2026-11-13 theo số đo thật (đọc trước)
+
+Đặc tả dừng khi số đo lệch quá 30% so với giả định; `docs/LOAD-TEST-REPORT.md` mục 6 đã vượt ngưỡng đó. Ba hiệu chỉnh, mỗi cái nêu nguồn:
+
+1. **Chu kỳ heartbeat 120 giây thành 300 giây.** Gateway thật mặc định 300 giây khi đang phát (600 giây khi rảnh, `docs/SLO.md` mục 1; đo: trung bình 300,2 giây). Đây là sửa lại giả định cho khớp mã, không phải tối ưu mới. Mọi số Cloudflare giảm khoảng một nửa, và chính bảng nhạy cảm cũ "heartbeat 300 giây" đã có sẵn số này (A 82.877, D 23.165 ở 10M).
+2. **Thông lượng gateway: 8.000 req/s/luồng [ƯT, Go + TLS] thành 1.450 req/s/luồng [đo]** (Node, gồm consumer cùng tiến trình, không TLS, khoảng giữa của 1.300 đến 1.600 req/s/lõi, máy 2 vCPU chia sẻ). Lệch khoảng 5,5 lần. Kèm theo: Redis **7,5 lệnh/request** [đo, trước đây chỉ tính 1 lệnh/heartbeat], nên số primary Redis tăng. Số này chưa gồm TLS và chưa đo trên phần cứng riêng: Zen4 có thể nhanh hơn, TLS làm chậm hơn; đo lại trước khi tin các cột 10M, 50M.
+3. **Consumer ghi sự kiện: 170 msg/s thành khoảng 790 msg/s/tiến trình [đo]** sau khi gộp lô (`ops/agents/x4-perf-fix.md`, `tools/load --consumer-bench`). Mô hình bổ sung dòng số tiến trình consumer = (N/600)/790; CPU của consumer đã nằm trong con số 1.450 req/s/lõi (đo trước khi gộp lô) nên số máy là cận trên.
+
+Phần Cloudflare (A đến D) chỉ bị ảnh hưởng bởi hiệu chỉnh 1; hiệu chỉnh 2 và 3 chỉ ảnh hưởng hạ tầng riêng.
+
+Chênh lệch so với bản cũ (USD/tháng, online 8 giờ/ngày; VN gồm nhân sự và khấu hao):
+
+| Quy mô | Cloudflare A cũ -> mới | Cloudflare D cũ -> mới | VN riêng cũ -> mới | Số máy VN cũ -> mới (gateway, Redis) |
+|---|---|---|---|---|
+| 100k | 1.665 -> 914 (-45%) | 550 -> 317 (-42%) | 6.944 -> 6.936 (0%) | 5 -> 5 (1 -> 1, 2 -> 2) |
+| 1M | 15.917 -> 8.390 (-47%) | 4.762 -> 2.419 (-49%) | 12.846 -> 12.768 (-1%) | 6 -> 6 (1 -> 1, 2 -> 2) |
+| 10M | 158.151 -> 82.877 (-48%) | 46.599 -> 23.165 (-50%) | 24.363 -> 27.987 (+15%) | 19 -> 28 (2 -> 4, 4 -> 12) |
+| 50M | 794.772 -> 418.402 (-47%) | 237.013 -> 119.842 (-49%) | 54.874 -> 79.351 (+45%) | 52 -> 110 (7 -> 20, 12 -> 58) |
+
+Tóm tắt Cloudflare mới (USD/tháng): A: 914 / 8.390 / 82.877 / 418.402; B: 568 / 4.934 / 48.317 / 245.602; C: 396 / 3.206 / 31.037 / 159.202; D: 317 / 2.419 / 23.165 / 119.842 (100k / 1M / 10M / 50M).
+
+**Hệ quả quan trọng, nói thẳng:** (a) Cloudflare rẻ đi gần một nửa trong khi hạ tầng riêng đắt lên ở 10M và 50M, nên điểm giao nhau dịch mạnh về phía Cloudflare: A từ ~0,45M lên ~0,87M thiết bị; D từ ~3,3M lên ~13,8M. Kết luận cũ "giữ Cloudflare đến khoảng 3 triệu rồi chuyển" nay thành "đến khoảng 5 đến 14 triệu tùy phương án, và nhạy cảm với bậc nhân sự"; (b) ở 100k và 1M phần lớn chi phí riêng là nhân sự, nên gần như không đổi; (c) các con số riêng ở 10M, 50M vẫn dựa vào nhiều [ƯT] (broker, ClickHouse, Redis 80k lệnh/s) và vào số đo của MỘT máy 2 vCPU chia sẻ, không phải đo trên 10M thiết bị. Bảng nhạy cảm đầy đủ ở `output.txt`.
+
+Chi phí mỗi thiết bị/tháng mới: Cloudflare A $0,0083 đến $0,0091; D $0,0023 đến $0,0032; VN riêng $0,0694 / $0,0128 / $0,0028 / $0,0016 ở 100k / 1M / 10M / 50M.
+
 ## 1. Khối lượng tải
 
-Dùng đúng bảng mục 3 đặc tả: heartbeat 120 giây, gộp sự kiện 10 phút, poll manifest 15 phút, telemetry gộp vào heartbeat (không thêm request).
+Heartbeat **300 giây** (mặc định gateway, hiệu chỉnh mục 0; đặc tả mục 3 ghi 120 giây), gộp sự kiện 10 phút, poll manifest 15 phút, telemetry gộp vào heartbeat (không thêm request).
 
 | Thiết bị online | Heartbeat/s | Lô sự kiện/s | Manifest/s | Tổng đỉnh req/s | Request/tháng (online 8 giờ/ngày) [ƯT giờ online] |
 |---|---|---|---|---|---|
-| 100k | 833 | 167 | 111 | 1.111 | 1,0 tỷ |
-| 1M | 8.333 | 1.667 | 1.111 | 11.111 | 9,6 tỷ |
-| 10M | 83.333 | 16.667 | 11.111 | 111.111 | 96 tỷ |
-| 50M | 416.667 | 83.333 | 55.556 | 555.556 | 480 tỷ |
+| 100k | 333 | 167 | 111 | 611 | 0,5 tỷ |
+| 1M | 3.333 | 1.667 | 1.111 | 6.111 | 5,3 tỷ |
+| 10M | 33.333 | 16.667 | 11.111 | 61.111 | 52,8 tỷ |
+| 50M | 166.667 | 83.333 | 55.556 | 305.556 | 264,0 tỷ |
+(Bản cũ, heartbeat 120 giây: 1.111 / 11.111 / 111.111 / 555.556 req/s và 1,0 / 9,6 / 96 / 480 tỷ request/tháng.)
 
 - Đỉnh giả định toàn bộ N online (18:00 đến 21:30). Chi phí tháng cần thêm số giờ online/ngày của mỗi thiết bị: đặc tả không nêu; dùng **8 giờ [ƯT]**, nhạy cảm tuyến tính (mục 6).
 - Đặc tả ghi 140.000 req/s cho impression; với gộp 10 phút phép tính ra 83.333. Mô hình dùng 600 giây theo mô tả; gộp 300 giây (gần 140k/s) được tính ở mục 6.
@@ -46,7 +72,7 @@ DO duration tính 128 MB cố định/đối tượng, luôn thức trong giờ 
 
 Hạn chế của C và D (phải chấp nhận để đạt giá): mất Queue làm bộ đệm tin cậy trước ledger; tiền chỉ nên tính từ lô đã qua bước khử trùng, nên độ trễ đối soát tăng lên. Pipelines cần xác nhận trạng thái GA và SLA trước khi dùng cho dữ liệu tính tiền.
 
-## 4. Chi phí Cloudflare theo từng dòng (USD/tháng)
+## 4. Chi phí Cloudflare theo từng dòng (USD/tháng) [CŨ: heartbeat 120 giây; số hiện hành ở mục 0 và output.txt]
 
 Phương án A (đúng đặc tả):
 
@@ -92,9 +118,9 @@ Hai điều cần nhớ: (1) Queues chiếm 65% phương án A ở mọi quy mô
 
 Ngoài mô hình, ghi presence bằng KV (một lần ghi/heartbeat) sẽ tốn $36k, $360k và $1,8 triệu/tháng ở 1M, 10M, 50M: **cấm**. Analytics Engine ghi mỗi heartbeat sẽ tốn thêm khoảng $1,8k, $18k, $90k nếu Cloudflare bật tính phí: chỉ dùng cho số liệu đã gộp.
 
-## 5. Hạ tầng riêng (đường nóng; Cloudflare giữ CDN, WAF, DNS, media)
+## 5. Hạ tầng riêng (đường nóng; Cloudflare giữ CDN, WAF, DNS, media) [CŨ: heartbeat 120 giây; số hiện hành ở mục 0 và output.txt]
 
-Kích thước theo tải đỉnh (không theo tháng), nhân đôi dự phòng. Tất cả tham số hiệu năng là **[ƯT]**: 8.000 req/s/luồng cho gateway Go có TLS, 100 MB/s/broker Redpanda, 300.000 dòng/s/node ClickHouse, 80.000 op/s/primary Redis; tính nén 5 lần, nhân bản 2 lần. Phải đo bằng `tools/loadtest` trước khi tin.
+Kích thước theo tải đỉnh (không theo tháng), nhân đôi dự phòng. Tất cả tham số hiệu năng là **[ƯT]**: 8.000 req/s/luồng cho gateway Go có TLS (đã thay bằng số đo 1.450 req/s/luồng Node ở mục 0), 100 MB/s/broker Redpanda, 300.000 dòng/s/node ClickHouse, 80.000 op/s/primary Redis; tính nén 5 lần, nhân bản 2 lần. Công cụ đo thật là `tools/load` (`make load`).
 
 Giá tham chiếu máy chủ:
 
@@ -120,7 +146,7 @@ Kết quả (USD/tháng):
 
 Ở 50M, ClickHouse 26 node chủ yếu vì lưu 12 tháng impression thô trên đĩa; chuyển dữ liệu nguội sang S3 giảm mạnh số node (đề xuất P1 trong COMMERCIAL-RECOMMENDATIONS.md). Đặc tả gợi ý Redpanda 12 đến 24 broker, ClickHouse 12 đến 24 node, Redis 24 đến 48 node; mô hình này ra ít hơn ở Redpanda và Redis (băng thông bản tin chỉ khoảng 100 MB/s) và tương đương ở ClickHouse. Hai bên chênh lệch lớn nên cần đo thật.
 
-## 6. So sánh và điểm giao nhau
+## 6. So sánh và điểm giao nhau [CŨ: heartbeat 120 giây; số hiện hành ở mục 0 và output.txt]
 
 Chi phí trên mỗi thiết bị online/tháng và trên 1.000 impression (8 giờ/ngày, 8 impression/giờ):
 

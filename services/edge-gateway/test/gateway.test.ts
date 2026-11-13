@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { uuidv7 } from '@ams/shared';
 import { enqueueCommand } from '../src/gateway.js';
+import { PRESENCE_TTL_S } from '../src/heartbeat-ttl.js';
 import { TestDevice, harness, impression, type Harness } from './helpers.js';
 
 let h: Harness;
@@ -144,7 +145,7 @@ describe('pair', () => {
 });
 
 describe('heartbeat', () => {
-  it('tra next_interval, manifest_etag, group, commands; ghi presence TTL 6 phut', async () => {
+  it('tra next_interval, manifest_etag, group, commands; ghi presence TTL dan xuat tu chu ky toi da', async () => {
     const h2 = await harness({ env: { HB_MIN_GAP_S: '0' } });
     try {
       h2.rt.clock.set(Date.now());
@@ -157,7 +158,9 @@ describe('heartbeat', () => {
       expect(j.manifest_group).toBe('HN.all.tv');
       expect(j.commands).toEqual([]);
       expect(await h2.rt.kv.get(`presence:${d.id}`)).not.toBeNull();
-      h2.rt.clock.advance(6 * 60_000 + 1000);
+      h2.rt.clock.advance((PRESENCE_TTL_S - 5) * 1000);
+      expect(await h2.rt.kv.get(`presence:${d.id}`)).not.toBeNull(); // song sot qua chu ky ranh x4 gian
+      h2.rt.clock.advance(10_000);
       expect(await h2.rt.kv.get(`presence:${d.id}`)).toBeNull();
     } finally {
       await h2.close();

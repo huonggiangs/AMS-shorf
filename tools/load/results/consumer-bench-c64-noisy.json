@@ -1,0 +1,99 @@
+{
+ "started": "2026-11-13T01:40:55.469Z",
+ "host": {
+  "cpus": 2,
+  "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "memGb": 7.8,
+  "node": "v22.23.4"
+ },
+ "config": {
+  "N_DEV": 20,
+  "RAMP": [
+   1
+  ],
+  "STEP_S": 20,
+  "MIX": {
+   "hb": 12,
+   "mf": 4,
+   "mfFull": 0,
+   "ev": 6
+  },
+  "FLEET_DEV": 0,
+  "FLEET_SCALE": 0.025,
+  "FLEET_S": 90,
+  "FLEET_CAP": 0,
+  "REGISTER": 0,
+  "COLD": 0
+ },
+ "postgres": "16.15",
+ "postgresSettings": {
+  "fsync": "on",
+  "max_connections": "100",
+  "shared_buffers": "16384",
+  "synchronous_commit": "on",
+  "wal_level": "replica"
+ },
+ "redis": "7.0.15",
+ "spendPreflight": "ok",
+ "deviceSetupSeconds": 0,
+ "consumerBench": {
+  "messages": 6000,
+  "impressions": 8000,
+  "seconds": 8.03,
+  "msgPerSec": 746.9,
+  "impressionsPerSec": 995.9,
+  "rowsInDb": 8000,
+  "distinct": 8000,
+  "hourlySum": 8000,
+  "spendEvents": 8001,
+  "spentVndAll": 160020,
+  "expectedSpentVnd": 160020,
+  "deadLettered": 0,
+  "hostCpuCores": 0.36,
+  "pgCpuCores": 0.52,
+  "redisCpuCores": 0.02,
+  "pgTxPerMsg": 0.48,
+  "redisCmdPerMsg": 3.69,
+  "consumerStats": {
+   "ok": true,
+   "service": "ingest-consumer",
+   "stats": {
+    "messages": 6000,
+    "received": 8000,
+    "duplicates": 0,
+    "appended": 8000,
+    "invalid": 0,
+    "spendCalls": 564,
+    "spendSkippedNoFn": 0,
+    "pops": 0,
+    "errors": 0,
+    "batches": 188,
+    "deadLettered": 0
+   }
+  },
+  "otherProcessesCores": 0.07,
+  "drainSeries": [
+   {
+    "tS": 0,
+    "rows": 0
+   },
+   {
+    "tS": 2,
+    "rows": 1792
+   },
+   {
+    "tS": 4,
+    "rows": 3840
+   },
+   {
+    "tS": 6,
+    "rows": 6058
+   },
+   {
+    "tS": 8,
+    "rows": 8000
+   }
+  ]
+ },
+ "finished": "2026-11-13T01:41:05.762Z"
+}

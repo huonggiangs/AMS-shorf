@@ -127,4 +127,28 @@ describe.each(['sqlite', 'postgres'] as const)('ingest + chi tieu: mat dien va g
       await rt.close();
     }
   }, 300_000);
+
+  it('LO nhieu thong diep dong thoi (gom lo, chong lan id) + mat dien o moi ranh gioi ghi: giao lai tung thong diep hoi tu dung bang ket qua khong loi', async () => {
+    const all = ids(8);
+    const parts = [all.slice(0, 4), all.slice(2, 6), all.slice(5, 8)]; // chong lan 2,3 va 5
+    const gold = await setup(dialect);
+    const gc = crashable(gold);
+    await Promise.all(parts.map((p) => createIngestConsumer(gc.rt, { spend: createSpendFn(gc.rt), sink: new DbEventStore(gc.rt.db) }).handle(msg(p))));
+    const expected = await state(gold);
+    expect(expected).toMatchObject({ spent: 164, events: 8, hourly: 8, claimed: 8 }); // 8 x 20,5
+    const W = gc.ctl.writes;
+    await gold.close();
+    for (let k = 1; k <= W; k += 2) {
+      const rt = await setup(dialect);
+      const c = crashable(rt);
+      c.ctl.armAt(k);
+      const first = createIngestConsumer(c.rt, { spend: createSpendFn(c.rt), sink: new DbEventStore(c.rt.db) });
+      await Promise.allSettled(parts.map((p) => first.handle(msg(p))));
+      c.ctl.reset();
+      const redo = createIngestConsumer(rt, { spend: createSpendFn(rt) });
+      for (let i = 0; i < 2; i++) await Promise.all(parts.map((p) => redo.handle(msg(p))));
+      expect(await state(rt), `mat dien truoc lan ghi ${k}`).toEqual(expected);
+      await rt.close();
+    }
+  }, 300_000);
 });
