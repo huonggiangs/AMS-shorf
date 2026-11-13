@@ -10,6 +10,7 @@ ENV PNPM_HOME=/pnpm \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     CI=true
 RUN corepack enable \
+ && corepack prepare pnpm@10.28.0 --activate \
  && mkdir -p /repo /pnpm \
  && chown -R node:node /repo /pnpm
 WORKDIR /repo

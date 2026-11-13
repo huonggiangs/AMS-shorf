@@ -15,6 +15,7 @@ ENV PNPM_HOME=/pnpm \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     CI=true
 RUN corepack enable \
+ && corepack prepare pnpm@10.28.0 --activate \
  && mkdir -p /repo /pnpm /out \
  && chown -R node:node /repo /pnpm /out
 WORKDIR /repo
@@ -53,6 +54,7 @@ ENV NODE_ENV=production PORT=8787 AMS_API_START=1
 RUN apk add --no-cache tini
 WORKDIR /app
 COPY --from=build --chown=node:node /out/app/ ./
+RUN mkdir -p /data/objects && chown node:node /data/objects
 USER node
 EXPOSE 8787
 ENTRYPOINT ["/sbin/tini", "--"]
