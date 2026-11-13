@@ -66,7 +66,7 @@ Lưu ý: migration phải tương thích ngược để quay lui mã không hỏ
 Bucket: `ams-media-<env>` (media quảng cáo), `ams-reports-<env>`, `ams-audit-<env>` (bản sao audit; object lock là việc **Sẽ làm**, THREAT-MODEL mục 3). Repo **chưa có** cơ chế sao lưu R2. Đề xuất, chưa kiểm chứng:
 - Định kỳ sao chép sang một bucket/nhà cung cấp khác (rclone với endpoint S3 của R2, hoặc `wrangler r2 object get`); R2 bền vững nhưng không thay thế bản sao khi xóa nhầm hoặc mất tài khoản.
 - Media có thể phục hồi một phần từ khách (họ giữ bản gốc) và từ bảng `creatives`; báo cáo sinh lại được; **bản sao audit** là chứng cứ pháp lý (giữ ≥ 12 tháng), ưu tiên bản sao thứ hai.
-- Docker/MinIO: `docker run --rm --network ams_net -v "$PWD/backups/minio:/out" --entrypoint /bin/sh minio/mc:RELEASE.2025-04-16T18-13-26Z -c 'mc alias set l http://minio:9000 "$USER" "$PASS" && mc mirror l/ams-media /out/ams-media'` (điền khóa từ `.env`, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`; chưa chạy thật). Hoặc sao lưu cả volume `miniodata`.
+- Docker/MinIO: `docker run --rm --network ams_net -v "$PWD/backups/minio:/out" --entrypoint /bin/sh quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z -c 'mc alias set l http://minio:9000 "$USER" "$PASS" && mc mirror l/ams-media /out/ams-media'` (điền khóa từ `.env`, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`; chưa chạy thật). Hoặc sao lưu cả volume `miniodata`.
 
 ### 2.4 ClickHouse (profile `events`, chỉ Docker thử nghiệm)
 

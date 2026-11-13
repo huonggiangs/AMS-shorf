@@ -351,7 +351,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-ams}
     ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks: [ams]
@@ -385,7 +385,7 @@ services:
     logging: *default-logging
 
   minio:
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z}
     profiles: [core]
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9001"]
@@ -407,7 +407,7 @@ services:
 
   # Chạy một lần: tạo bucket media/reports (riêng tư).
   minio-init:
-    image: ${MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-04-16T18-13-26Z}
+    image: ${MINIO_MC_IMAGE:-quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z}
     profiles: [core]
     restart: "no"
     networks: [ams]
