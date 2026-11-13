@@ -26,7 +26,7 @@ function need(env: DockerEnv, k: string): string {
 }
 
 /**
- * Docker/PC: Postgres (pg Pool), Redis (ioredis), MinIO (S3 presign), SMTP (Mailpit), EventStore -> ev_* hoac ClickHouse (CLICKHOUSE_URL).
+ * Docker/PC: Postgres (pg Pool), Redis (ioredis), kho tep fs hoac S3 (presign), SMTP (Mailpit), EventStore -> ev_* hoac ClickHouse (CLICKHOUSE_URL).
  * Bien: DATABASE_URL, REDIS_URL, S3_ENDPOINT, S3_PUBLIC_ENDPOINT?, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION?,
  *       Hoac OBJECT_STORE=fs + OBJECT_STORE_DIR (+ OBJECT_STORE_SIGNED_BASE_URL?, OBJECT_STORE_SIGNING_SECRET? mac dinh SESSION_SECRET): khong can S3.
  *       SMTP_HOST, SMTP_PORT, SMTP_USER?, SMTP_PASS?, MAIL_FROM?, CLICKHOUSE_URL?

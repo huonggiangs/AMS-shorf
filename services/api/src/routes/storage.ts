@@ -76,7 +76,7 @@ export function storageRoutes(): Hono<AppEnv> {
     if (!chk.ok) throw new HttpError(403, 'bad_signature', 'Đường dẫn không hợp lệ hoặc đã hết hạn.');
     const [head, bytes] = [await rt.objects.head(key), await rt.objects.get(key)];
     if (!head || !bytes) throw notFound();
-    return c.body(bytes, 200, {
+    return c.body(bytes as Uint8Array<ArrayBuffer>, 200, {
       'Content-Type': head.contentType,
       'Content-Length': String(bytes.length),
       'Content-Security-Policy': "sandbox; default-src 'none'", // tep nguoi dung tai len: khong chay script neu mo truc tiep

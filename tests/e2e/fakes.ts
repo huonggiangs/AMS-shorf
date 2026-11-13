@@ -1,4 +1,4 @@
-// Dich vu gia cho e2e (khong co Docker/MinIO): S3 path-style toi gian + SMTP thu thu. Chay that qua TCP/HTTP,
+// Dich vu gia cho e2e (khong co Docker/S3 that): S3 path-style toi gian + SMTP thu thu. Chay that qua TCP/HTTP,
 // nen S3ObjectStore (presign SigV4 cua aws-sdk) va SmtpMailer (nodemailer) cua createDockerRuntime duoc dung nguyen ban.
 import { createServer as createHttp, type Server } from 'node:http';
 import { createServer as createTcp, type Server as TcpServer } from 'node:net';
@@ -38,7 +38,7 @@ export async function startFakeS3(bucket: string): Promise<FakeS3> {
       return;
     }
     const key = parts.slice(1).join('/');
-    // ghi can chu ky (presigned hoac Authorization); doc khong ky duoc (bucket media cong khai nhu MinIO policy download)
+    // ghi can chu ky (presigned hoac Authorization); doc khong ky duoc (bucket media cong khai nhu MinIO policy download (che do S3; Docker local dung OBJECT_STORE=fs, xem services/api/test/storage-fs.test.ts))
     const signed = u.searchParams.has('X-Amz-Signature') || !!req.headers['authorization'];
     if (!signed && req.method === 'PUT') {
       res.writeHead(403, { 'content-type': 'application/xml' }).end('<Error><Code>AccessDenied</Code></Error>');

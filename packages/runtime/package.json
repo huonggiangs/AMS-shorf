@@ -10,6 +10,7 @@
     ".": "./src/index.ts",
     "./test": "./src/test.ts",
     "./docker": "./src/docker.ts",
+    "./fs": "./src/fs.ts",
     "./cloudflare": "./src/cloudflare/index.ts",
     "./pg": "./src/pg.ts"
   },

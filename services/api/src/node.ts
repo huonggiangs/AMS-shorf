@@ -58,7 +58,7 @@ function startOutboxWorker(rt: Runtime, port: () => FinancePort | undefined, env
   };
 }
 
-/** Khoi dong tren Docker/PC: Postgres + Redis + MinIO + SMTP (xem createDockerRuntime). PORT=0 => cong ngau nhien (tra ve trong `port`). */
+/** Khoi dong tren Docker/PC: Postgres + Redis + kho tep (fs/S3) + SMTP (xem createDockerRuntime). PORT=0 => cong ngau nhien (tra ve trong `port`). */
 export async function startNode(env: Record<string, string | undefined> = process.env): Promise<{ close: () => Promise<void>; port: number; rt: Runtime }> {
   const rt = await createDockerRuntime(env);
   let finance: FinancePort | undefined;
