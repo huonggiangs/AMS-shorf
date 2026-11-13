@@ -63,10 +63,11 @@ function overlayOf(raw: string | null | undefined): CreativeOverlay | null {
 
 const overlayInput = z.any().optional().nullable();
 /** Kiem tra dinh dang + overlay (422 neu sai); tra ve JSON chuan hoa de luu. */
-function checkFormatOverlay(format: string | undefined, overlay: unknown): { format: string | undefined; overlay: string | null | undefined } {
+function checkFormatOverlay(format: string | undefined, overlay: unknown, external = false): { format: string | undefined; overlay: string | null | undefined } {
   if (format !== undefined && !isAdFormat(format)) throw unprocessable(`Định dạng phải là một trong: ${AD_FORMATS.join(', ')}.`, 'bad_format');
   if (overlay === undefined) return { format, overlay: undefined };
-  const r = parseOverlay(overlay);
+  // khach (tai khoan ngoai) khong tu dat kid_safe=true / ngu canh 'lock': 422 ro rang; noi bo giu che do 'strip' (route nguoi duyet: tv-experience)
+  const r = parseOverlay(overlay, { reviewerFields: external ? 'reject' : 'strip' });
   if (!r.ok) throw unprocessable(`Lớp phủ không hợp lệ: ${r.errors.map((e) => `${e.path || 'overlay'} ${e.message}`).join('; ')}`, 'bad_overlay', r.errors);
   return { format, overlay: r.value ? JSON.stringify(r.value) : null };
 }
@@ -238,7 +239,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       throw unprocessable(`Thời lượng phải từ ${dur[0]} đến ${dur[1]} giây cho loại màn này, tệp dài ${Math.round(b.duration_sec)} giây.`, 'duration_out_of_range');
     }
     await checkQuotas(rt, customerId, b.size_bytes, quota);
-    const fo = checkFormatOverlay(b.format, b.overlay);
+    const fo = checkFormatOverlay(b.format, b.overlay, external);
 
     const id = rt.id();
     const key = `media/${customerId}/${id}/${safeName(b.name)}`;
@@ -359,7 +360,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const b = await parseBody(c, z.object({ format: z.string().max(20).optional(), overlay: overlayInput }));
     if (b.format === undefined && b.overlay === undefined) throw unprocessable('Nhập định dạng hoặc lớp phủ cần đổi.', 'nothing_to_update');
     if (m.state === 'invalid') throw conflict('Tệp không hợp lệ.', 'invalid_state');
-    const fo = checkFormatOverlay(b.format, b.overlay);
+    const fo = checkFormatOverlay(b.format, b.overlay, external);
     const resetReview = u.kind !== 'internal' && m.review_state === 'approved';
     await rt.db.tx(async (db) => {
       await db.run(

@@ -52,11 +52,16 @@ describe('TvExperience: kid_safe + overlay', () => {
     expect((await db().query<{ duration_s: number }>('SELECT duration_s FROM creatives WHERE id = ?', [cid]))[0]!.duration_s).toBe(20); // dong bo sang creatives.duration_s
   });
 
-  it('khach khong tu dat kid_safe/lock qua media route (bi cat bo)', async () => {
-    const r = await lan.json('PUT', `/portal/v1/media/${cid}/overlay`, { overlay: { headline: 'Khuyen mai', kid_safe: true, contexts: ['lock', 'fullscreen'], duration_s: 15 } });
+  it('khach khong tu dat kid_safe/lock qua media route: 422 ro rang (reviewerFields reject), khong ghi gi', async () => {
+    const before = (await db().query<{ overlay: string | null }>('SELECT overlay FROM creatives WHERE id = ?', [cid]))[0]!.overlay;
+    const bad = await lan.json('PUT', `/portal/v1/media/${cid}/overlay`, { overlay: { headline: 'Khuyen mai', kid_safe: true, contexts: ['lock', 'fullscreen'], duration_s: 15 } });
+    expect(bad.status).toBe(422);
+    expect(bad.body.error.code).toBe('bad_overlay');
+    expect((await db().query<{ overlay: string | null }>('SELECT overlay FROM creatives WHERE id = ?', [cid]))[0]!.overlay).toBe(before);
+    const r = await lan.json('PUT', `/portal/v1/media/${cid}/overlay`, { overlay: { headline: 'Khuyen mai', contexts: ['fullscreen'], kid_safe: false, duration_s: 15 } });
     expect(r.status).toBe(200);
     const stored = JSON.parse((await db().query<{ overlay: string }>('SELECT overlay FROM creatives WHERE id = ?', [cid]))[0]!.overlay);
-    expect(stored.kid_safe).toBeUndefined();
+    expect(stored.kid_safe).toBe(false);
     expect(stored.contexts).toEqual(['fullscreen']);
     expect(stored.duration_s).toBe(15);
     await db().run("UPDATE creatives SET review_state = 'approved' WHERE id = ?", [cid]); // khach sua da dua ve cho duyet; duyet lai de test tiep
@@ -270,6 +275,19 @@ describe('Chi tra thuong (payouts)', () => {
     expect((await finance.json('POST', `/admin/v1/payouts/${p2.id}/reject`, { reason: 'sai tai khoan' })).body.status).toBe('rejected');
     expect((await db().query('SELECT 1 FROM wallet_ledger')).length).toBe(n);
     expect((await finance.req('POST', `/admin/v1/payouts/${p2.id}/reject`, { reason: 'lan hai' })).status).toBe(409);
+  });
+
+  it('hai lenh chi dong thoi cung nguoi dung, so du chi du cho mot: dung mot lenh thanh cong, so du khong am', async () => {
+    const t = '2026-11-12T00:00:00.000Z';
+    const u = 'RACE_U';
+    await db().run('INSERT INTO end_users (id, display_name, created_at) VALUES (?,?,?)', [u, 'Race', t]);
+    await db().run("INSERT INTO wallet_ledger (id, user_id, kind, amount_vnd, ref_type, ref_id, status, created_at) VALUES (?,?,?,?,?,?,?,?)", ['RL1', u, 'reward', 80_000, 'test', null, 'posted', t]);
+    for (const id of ['RP1', 'RP2', 'RP3']) await db().run("INSERT INTO payouts (id, user_id, amount_vnd, channel, status, requested_at) VALUES (?,?,?,?,?,?)", [id, u, 50_000, 'bank', 'pending', t]);
+    const rs = await Promise.all(['RP1', 'RP2', 'RP3'].map((id) => finance.req('POST', `/admin/v1/payouts/${id}/pay`, { external_ref: 'RACE-' + id })));
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409, 409]);
+    const sum = Number((await db().query<{ s: unknown }>("SELECT SUM(amount_vnd) AS s FROM wallet_ledger WHERE user_id = ? AND status = 'posted'", [u]))[0]!.s);
+    expect(sum).toBe(30_000);
+    expect((await db().query("SELECT 1 FROM payouts WHERE user_id = ? AND status = 'paid'", [u])).length).toBe(1);
   });
 });
 

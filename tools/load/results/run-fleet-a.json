@@ -1,0 +1,576 @@
+{
+ "started": "2026-11-13T01:23:20.474Z",
+ "host": {
+  "cpus": 2,
+  "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "memGb": 7.8,
+  "node": "v22.23.4"
+ },
+ "config": {
+  "N_DEV": 10000,
+  "RAMP": [
+   1
+  ],
+  "STEP_S": 5,
+  "MIX": {
+   "hb": 12,
+   "mf": 4,
+   "mfFull": 0,
+   "ev": 6
+  },
+  "FLEET_DEV": 10000,
+  "FLEET_SCALE": 0.1,
+  "FLEET_S": 150,
+  "FLEET_CAP": 0,
+  "REGISTER": 0,
+  "COLD": 0
+ },
+ "postgres": "16.15",
+ "postgresSettings": {
+  "fsync": "on",
+  "max_connections": "100",
+  "shared_buffers": "16384",
+  "synchronous_commit": "on",
+  "wal_level": "replica"
+ },
+ "redis": "7.0.15",
+ "spendPreflight": "ok",
+ "deviceSetupSeconds": 1.1,
+ "manifest_HN": {
+  "creatives": 6,
+  "slots": 3,
+  "bytes": 2975
+ },
+ "manifest_HCM": {
+  "creatives": 6,
+  "slots": 3,
+  "bytes": 2976
+ },
+ "warmup": {
+  "mode": "ramp",
+  "rpsTarget": 500,
+  "seconds": 10.053075374,
+  "achievedRps": 497.3602419147643,
+  "types": {
+   "heartbeat": {
+    "count": 2688,
+    "errors": 0,
+    "p50": 1109.548993406479,
+    "p95": 6415.756077571154,
+    "p99": 7200.661540223849,
+    "max": 7410.466168352141,
+    "statuses": {
+     "200": 2688
+    }
+   },
+   "manifest_304": {
+    "count": 917,
+    "errors": 0,
+    "p50": 1033.6493373796693,
+    "p95": 6493.390637439639,
+    "p99": 7127.261054465278,
+    "max": 7318.2851672182405,
+    "statuses": {
+     "304": 917
+    }
+   },
+   "events": {
+    "count": 1395,
+    "errors": 0,
+    "p50": 1095.8374514081297,
+    "p95": 6186.214379282854,
+    "p99": 6988.116569057689,
+    "max": 7414.1631167664455,
+    "statuses": {
+     "202": 1395
+    }
+   },
+   "ALL": {
+    "count": 5000,
+    "errors": 0,
+    "p50": 1086.2450716517924,
+    "p95": 6385.347332646885,
+    "p99": 7127.261054465278,
+    "max": 7414.1631167664455,
+    "statuses": {
+     "200": 2688,
+     "202": 1395,
+     "304": 917
+    }
+   }
+  },
+  "genCpuCores": 0.1452413262290139,
+  "loopDelayP99ms": 34.111487,
+  "loopDelayMaxMs": 167.510015,
+  "wall": 10.053075374,
+  "maxInflight": 1478,
+  "offered": 5000,
+  "ev": {
+   "sent": 1860,
+   "accepted": 1860,
+   "valid": 1860
+  },
+  "server": {
+   "quietAchieved": false,
+   "quietWaitS": 21,
+   "wallS": 10.37,
+   "gatewayCpuCores": 0.54,
+   "gatewayCpuMsPerReq": 1.12,
+   "pgCpuCores": 0.17,
+   "pgCpuMsPerReq": 0.352,
+   "redisCpuCores": 0.041,
+   "redisCpuMsPerReq": 0.086,
+   "redisOpsPerReq": 8.54,
+   "pgTxPerReq": 0.842,
+   "systemBusyCores": 1.98,
+   "otherProcessesCores": 1.09,
+   "stolenCores": 0.02,
+   "loadavg1": 7.14,
+   "hostRssMb": 266,
+   "pgRssMb": 362,
+   "redisRssMb": 17,
+   "redisKeys": 14831,
+   "redisUsedMb": 5.5
+  }
+ },
+ "ramp": [
+  {
+   "mode": "ramp",
+   "rpsTarget": 1,
+   "seconds": 3.571138929000001,
+   "achievedRps": 1.4001135490408132,
+   "types": {
+    "heartbeat": {
+     "count": 5,
+     "errors": 0,
+     "p50": 6.9720246064716775,
+     "p95": 11.469464915833669,
+     "p99": 11.469464915833669,
+     "max": 11.469464915833669,
+     "statuses": {
+      "200": 5
+     }
+    },
+    "ALL": {
+     "count": 5,
+     "errors": 0,
+     "p50": 6.9720246064716775,
+     "p95": 11.469464915833669,
+     "p99": 11.469464915833669,
+     "max": 11.469464915833669,
+     "statuses": {
+      "200": 5
+     }
+    }
+   },
+   "genCpuCores": 0.04838512402775243,
+   "loopDelayP99ms": 6.266879,
+   "loopDelayMaxMs": 12.271615,
+   "wall": 3.571138929000001,
+   "maxInflight": 1,
+   "offered": 5,
+   "ev": {
+    "sent": 0,
+    "accepted": 0,
+    "valid": 0
+   },
+   "server": {
+    "quietAchieved": false,
+    "quietWaitS": 21,
+    "wallS": 3.6,
+    "gatewayCpuCores": 0.006,
+    "gatewayCpuMsPerReq": 4,
+    "pgCpuCores": 0.003,
+    "pgCpuMsPerReq": 2,
+    "redisCpuCores": 0.003,
+    "redisCpuMsPerReq": 2,
+    "redisOpsPerReq": 15.4,
+    "pgTxPerReq": 2.4,
+    "systemBusyCores": 1.94,
+    "otherProcessesCores": 1.88,
+    "stolenCores": 0.04,
+    "loadavg1": 7.09,
+    "hostRssMb": 269,
+    "pgRssMb": 136,
+    "redisRssMb": 17,
+    "redisKeys": 16669,
+    "redisUsedMb": 5.1
+   }
+  }
+ ],
+ "fleet": {
+  "mode": "fleet",
+  "rpsTarget": null,
+  "seconds": 151.544360659,
+  "achievedRps": 612.1441906290473,
+  "types": {
+   "heartbeat": {
+    "count": 52713,
+    "errors": 0,
+    "p50": 5.464025000001129,
+    "p95": 2935.092596999999,
+    "p99": 4517.071350000002,
+    "max": 4609.352525,
+    "statuses": {
+     "200": 52713
+    }
+   },
+   "manifest_full": {
+    "count": 10000,
+    "errors": 0,
+    "p50": 1245.7631119999987,
+    "p95": 2658.468483999999,
+    "p99": 2759.3533469999984,
+    "max": 2784.543740000001,
+    "statuses": {
+     "200": 10000
+    }
+   },
+   "events": {
+    "count": 20012,
+    "errors": 0,
+    "p50": 4.734967999989749,
+    "p95": 26.218419999990147,
+    "p99": 102.68773800000781,
+    "max": 362.0151060000062,
+    "statuses": {
+     "202": 20012
+    }
+   },
+   "manifest_304": {
+    "count": 10042,
+    "errors": 0,
+    "p50": 2.0877800000016578,
+    "p95": 9.39952199999243,
+    "p99": 29.928370000008726,
+    "max": 125.94441999999981,
+    "statuses": {
+     "304": 10042
+    }
+   },
+   "ALL": {
+    "count": 92767,
+    "errors": 0,
+    "p50": 5.541338999988511,
+    "p95": 2465.5765470000006,
+    "p99": 3978.540187999999,
+    "max": 4609.352525,
+    "statuses": {
+     "200": 62713,
+     "202": 20012,
+     "304": 10042
+    }
+   }
+  },
+  "genCpuCores": 0.16841898892846877,
+  "loopDelayP99ms": 9.412607,
+  "loopDelayMaxMs": 580.386815,
+  "wall": 151.544360659,
+  "live": 10000,
+  "steadyFromS": 30,
+  "steadyTypes": {
+   "heartbeat": {
+    "count": 41318,
+    "errors": 0,
+    "p50": 4.053930999987642,
+    "p95": 21.788495999993756,
+    "p99": 65.28436999999394,
+    "max": 361.4140350000089,
+    "statuses": {
+     "200": 41318
+    }
+   },
+   "events": {
+    "count": 20012,
+    "errors": 0,
+    "p50": 4.734967999989749,
+    "p95": 26.218419999990147,
+    "p99": 102.68773800000781,
+    "max": 362.0151060000062,
+    "statuses": {
+     "202": 20012
+    }
+   },
+   "manifest_304": {
+    "count": 10042,
+    "errors": 0,
+    "p50": 2.0877800000016578,
+    "p95": 9.39952199999243,
+    "p99": 29.928370000008726,
+    "max": 125.94441999999981,
+    "statuses": {
+     "304": 10042
+    }
+   },
+   "ALL": {
+    "count": 71372,
+    "errors": 0,
+    "p50": 3.8377650000038557,
+    "p95": 22.014090999990003,
+    "p99": 69.39743199999793,
+    "max": 362.0151060000062,
+    "statuses": {
+     "200": 41318,
+     "202": 20012,
+     "304": 10042
+    }
+   }
+  },
+  "fleet": {
+   "hb": 52713,
+   "bases": [
+    300
+   ],
+   "mfFull": 10000,
+   "mf304": 10042,
+   "evSent": 32012,
+   "evValid": 32012,
+   "evAccepted": 32012,
+   "hb503": 0,
+   "hb429": 0,
+   "etagChanges": 10000,
+   "intervalMin": 240,
+   "intervalMax": 360,
+   "intervalMean": 300.20543319484756
+  },
+  "server": {
+   "quietAchieved": true,
+   "quietWaitS": 9,
+   "wallS": 151.64,
+   "gatewayCpuCores": 0.471,
+   "gatewayCpuMsPerReq": 0.77,
+   "pgCpuCores": 0.169,
+   "pgCpuMsPerReq": 0.276,
+   "redisCpuCores": 0.052,
+   "redisCpuMsPerReq": 0.084,
+   "redisOpsPerReq": 7.12,
+   "pgTxPerReq": 0.619,
+   "systemBusyCores": 1.78,
+   "otherProcessesCores": 0.92,
+   "stolenCores": 0.01,
+   "loadavg1": 4.09,
+   "hostRssMb": 332,
+   "pgRssMb": 170,
+   "redisRssMb": 51,
+   "redisKeys": 159336,
+   "redisUsedMb": 37.8
+  }
+ },
+ "drainSeries": [
+  {
+   "tS": 0,
+   "rows": 11245
+  },
+  {
+   "tS": 2,
+   "rows": 11662
+  },
+  {
+   "tS": 4,
+   "rows": 12126
+  },
+  {
+   "tS": 6,
+   "rows": 12580
+  },
+  {
+   "tS": 8,
+   "rows": 13062
+  },
+  {
+   "tS": 10,
+   "rows": 13543
+  },
+  {
+   "tS": 12,
+   "rows": 13992
+  },
+  {
+   "tS": 14,
+   "rows": 14468
+  },
+  {
+   "tS": 16,
+   "rows": 14937
+  },
+  {
+   "tS": 18,
+   "rows": 15423
+  },
+  {
+   "tS": 20,
+   "rows": 15930
+  },
+  {
+   "tS": 22,
+   "rows": 16437
+  },
+  {
+   "tS": 24,
+   "rows": 16934
+  },
+  {
+   "tS": 26,
+   "rows": 17420
+  },
+  {
+   "tS": 28,
+   "rows": 17871
+  },
+  {
+   "tS": 30,
+   "rows": 18307
+  },
+  {
+   "tS": 32,
+   "rows": 18800
+  },
+  {
+   "tS": 34,
+   "rows": 19274
+  },
+  {
+   "tS": 36,
+   "rows": 19530
+  },
+  {
+   "tS": 38,
+   "rows": 19887
+  },
+  {
+   "tS": 40,
+   "rows": 20389
+  },
+  {
+   "tS": 42,
+   "rows": 20880
+  },
+  {
+   "tS": 44,
+   "rows": 21379
+  },
+  {
+   "tS": 46.1,
+   "rows": 21874
+  },
+  {
+   "tS": 48.1,
+   "rows": 22339
+  },
+  {
+   "tS": 50.1,
+   "rows": 22792
+  },
+  {
+   "tS": 52.1,
+   "rows": 23297
+  },
+  {
+   "tS": 54.1,
+   "rows": 23763
+  },
+  {
+   "tS": 56.1,
+   "rows": 24206
+  },
+  {
+   "tS": 58.1,
+   "rows": 24691
+  },
+  {
+   "tS": 60.1,
+   "rows": 25191
+  },
+  {
+   "tS": 62.1,
+   "rows": 25630
+  },
+  {
+   "tS": 64.1,
+   "rows": 26025
+  },
+  {
+   "tS": 66.1,
+   "rows": 26196
+  },
+  {
+   "tS": 68.1,
+   "rows": 26673
+  },
+  {
+   "tS": 70.1,
+   "rows": 27132
+  },
+  {
+   "tS": 72.1,
+   "rows": 27592
+  },
+  {
+   "tS": 74.1,
+   "rows": 28080
+  },
+  {
+   "tS": 76.1,
+   "rows": 28513
+  },
+  {
+   "tS": 78.1,
+   "rows": 28952
+  },
+  {
+   "tS": 80.1,
+   "rows": 29460
+  },
+  {
+   "tS": 82.1,
+   "rows": 29909
+  },
+  {
+   "tS": 84.1,
+   "rows": 30419
+  },
+  {
+   "tS": 86.1,
+   "rows": 30837
+  },
+  {
+   "tS": 88.1,
+   "rows": 31319
+  }
+ ],
+ "durability": {
+  "consumerStats": {
+   "ok": true,
+   "service": "ingest-consumer",
+   "stats": {
+    "messages": 20696,
+    "received": 32767,
+    "duplicates": 0,
+    "appended": 32767,
+    "invalid": 0,
+    "spendCalls": 27550,
+    "spendSkippedNoFn": 0,
+    "pops": 0,
+    "errors": 0
+   }
+  },
+  "eventsAcceptedByGateway": 33872,
+  "ev_ad_impression_rows": 32766,
+  "distinctEventIds": 32766,
+  "impression_hourly_sum": 32766,
+  "spend_events": 32768,
+  "heartbeats200": 55406,
+  "ev_heartbeat_rows": 55406,
+  "backlogEvents": 1106
+ },
+ "dedupe": {
+  "statuses": [
+   202,
+   202,
+   202
+  ],
+  "rowsForThatEventId": 1
+ },
+ "presenceKeys": 10000,
+ "finished": "2026-11-13T01:28:59.647Z"
+}

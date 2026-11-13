@@ -67,7 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [qc]);
 
   // Any request answered 403 password_change_required (e.g. flag set by an admin while the session is open) locks navigation to Profile too.
-  useEffect(() => onPasswordChangeRequired(() => setPwForced(true)), []);
+  useEffect(() => {
+    const off = onPasswordChangeRequired(() => setPwForced(true));
+    return () => {
+      off();
+    };
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     const r = await api.post('/auth/login', { body: { email, password }, schema: loginSchema, quiet401: true });

@@ -377,6 +377,7 @@ async function main(): Promise<void> {
       redisUsedMb: +b.redisUsedMb.toFixed(1),
     };
     const t = result['types'] as Record<string, { count: number; p99: number; errors: number }>;
+    if (result['steadyTypes']) console.error(`  [steady sau ${result['steadyFromS']}s] ` + Object.entries(result['steadyTypes'] as Record<string, { count: number; p50: number; p95: number; p99: number }>).map(([k, v]) => `${k}:${v.count} p50=${v.p50.toFixed(0)} p95=${v.p95.toFixed(0)} p99=${v.p99.toFixed(0)}`).join(' | '));
     const brief = Object.entries(t).map(([k, v]) => `${k}:${v.count}/p99=${v.p99.toFixed(0)}ms/err=${v.errors}`).join(' ');
     console.error(`[${name}] ${result['achievedRps'].toFixed(0)} req/s  gwCPU=${result['server'].gatewayCpuCores} cores  pg=${result['server'].pgCpuCores}  redis=${result['server'].redisCpuCores}  gen=${result['genCpuCores'].toFixed(2)}  other=${result['server'].otherProcessesCores}  ${brief}`);
     return result;

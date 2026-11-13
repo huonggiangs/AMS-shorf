@@ -37,6 +37,7 @@ tags:
   - name: payments
   - name: payouts
   - name: permissions
+  - name: reconcile
   - name: refund-requests
   - name: revenue
   - name: rtb-floors
@@ -62,7 +63,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:451
+      x-ams-source: services/payments/src/routes.ts:458
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -96,7 +97,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:457
+      x-ams-source: services/payments/src/routes.ts:464
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1471,7 +1472,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:202
+      x-ams-source: services/api/src/routes/media.ts:203
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1499,7 +1500,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:329
+      x-ams-source: services/api/src/routes/media.ts:330
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1536,7 +1537,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:216
+      x-ams-source: services/api/src/routes/media.ts:217
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1576,7 +1577,7 @@ paths:
       x-ams-permission:
         module: media
         action: delete
-      x-ams-source: services/api/src/routes/media.ts:407
+      x-ams-source: services/api/src/routes/media.ts:408
       description: |-
         Quyền cần có: mô-đun `media`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1611,7 +1612,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:208
+      x-ams-source: services/api/src/routes/media.ts:209
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1644,7 +1645,7 @@ paths:
       x-ams-permission:
         module: media
         action: approve
-      x-ams-source: services/api/src/routes/media.ts:377
+      x-ams-source: services/api/src/routes/media.ts:378
       description: |-
         Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1680,7 +1681,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:258
+      x-ams-source: services/api/src/routes/media.ts:259
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1722,7 +1723,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:355
+      x-ams-source: services/api/src/routes/media.ts:356
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1764,7 +1765,7 @@ paths:
       x-ams-permission:
         module: media
         action: approve
-      x-ams-source: services/api/src/routes/media.ts:393
+      x-ams-source: services/api/src/routes/media.ts:394
       description: |-
         Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1935,7 +1936,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:303
+      x-ams-source: services/payments/src/routes.ts:310
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1969,7 +1970,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:316
+      x-ams-source: services/payments/src/routes.ts:323
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2123,7 +2124,7 @@ paths:
       x-ams-permission:
         module: finance
         action: approve
-      x-ams-source: services/api/src/routes/invoices.ts:268
+      x-ams-source: services/api/src/routes/invoices.ts:271
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2165,7 +2166,7 @@ paths:
       x-ams-permission:
         module: admin
         action: view
-      x-ams-source: services/api/src/routes/users.ts:277
+      x-ams-source: services/api/src/routes/users.ts:303
       description: |-
         Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2199,7 +2200,7 @@ paths:
       x-ams-permission:
         module: admin
         action: write
-      x-ams-source: services/api/src/routes/users.ts:289
+      x-ams-source: services/api/src/routes/users.ts:315
       description: |-
         Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2226,6 +2227,188 @@ paths:
       security:
         - cookieAuth: []
           csrfToken: []
+  /admin/v1/reconcile/repair:
+    post:
+      operationId: adminPostReconcileRepair
+      tags:
+        - reconcile
+      summary: POST /admin/v1/reconcile/repair
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:623
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostReconcileRepairRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/reconcile/revenue:
+    get:
+      operationId: adminGetReconcileRevenue
+      tags:
+        - reconcile
+      summary: GET /admin/v1/reconcile/revenue
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: view
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:599
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/reconcile/revenue/run:
+    post:
+      operationId: adminPostReconcileRevenueRun
+      tags:
+        - reconcile
+      summary: POST /admin/v1/reconcile/revenue/run
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:606
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostReconcileRevenueRunRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/reconcile/revenue/{id}/resolve:
+    post:
+      operationId: adminPostReconcileRevenueByIdResolve
+      tags:
+        - reconcile
+      summary: POST /admin/v1/reconcile/revenue/{id}/resolve
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:614
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostReconcileRevenueByIdResolveRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/reconcile/sepay:
+    post:
+      operationId: adminPostReconcileSepay
+      tags:
+        - reconcile
+      summary: POST /admin/v1/reconcile/sepay
+      parameters: []
+      x-ams-permission:
+        module: finance
+        action: approve
+        account: internal
+      x-ams-source: services/payments/src/routes.ts:633
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
   /admin/v1/refund-requests:
     get:
       operationId: adminGetRefundRequests
@@ -2237,7 +2420,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:404
+      x-ams-source: services/payments/src/routes.ts:411
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2271,7 +2454,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:412
+      x-ams-source: services/payments/src/routes.ts:419
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2314,7 +2497,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:440
+      x-ams-source: services/payments/src/routes.ts:447
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2357,7 +2540,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:430
+      x-ams-source: services/payments/src/routes.ts:437
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2873,7 +3056,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:490
+      x-ams-source: services/payments/src/routes.ts:497
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2901,7 +3084,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:495
+      x-ams-source: services/payments/src/routes.ts:502
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2937,7 +3120,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:549
+      x-ams-source: services/payments/src/routes.ts:556
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2973,7 +3156,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:562
+      x-ams-source: services/payments/src/routes.ts:569
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3016,7 +3199,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:582
+      x-ams-source: services/payments/src/routes.ts:589
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3048,7 +3231,7 @@ paths:
         module: finance
         action: write
         account: internal
-      x-ams-source: services/payments/src/routes.ts:592
+      x-ams-source: services/payments/src/routes.ts:643
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3080,7 +3263,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:261
+      x-ams-source: services/payments/src/routes.ts:268
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3108,7 +3291,7 @@ paths:
         module: finance
         action: write
         account: internal
-      x-ams-source: services/payments/src/routes.ts:277
+      x-ams-source: services/payments/src/routes.ts:284
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3143,7 +3326,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:297
+      x-ams-source: services/payments/src/routes.ts:304
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3357,7 +3540,7 @@ paths:
       x-ams-permission:
         module: admin
         action: view
-      x-ams-source: services/api/src/routes/users.ts:139
+      x-ams-source: services/api/src/routes/users.ts:142
       description: |-
         Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3384,7 +3567,7 @@ paths:
       x-ams-permission:
         module: admin
         action: write
-      x-ams-source: services/api/src/routes/users.ts:145
+      x-ams-source: services/api/src/routes/users.ts:148
       description: |-
         Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3424,7 +3607,7 @@ paths:
       x-ams-permission:
         module: admin
         action: view
-      x-ams-source: services/api/src/routes/users.ts:143
+      x-ams-source: services/api/src/routes/users.ts:146
       description: |-
         Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3456,7 +3639,7 @@ paths:
       x-ams-permission:
         module: admin
         action: write
-      x-ams-source: services/api/src/routes/users.ts:204
+      x-ams-source: services/api/src/routes/users.ts:230
       description: |-
         Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3496,13 +3679,55 @@ paths:
       x-ams-permission:
         module: admin
         action: write
-      x-ams-source: services/api/src/routes/users.ts:191
+      x-ams-source: services/api/src/routes/users.ts:194
       description: |-
         Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
         Chỉ tài khoản nội bộ.
 
         Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/users/{id}/reset-password:
+    post:
+      operationId: adminPostUsersByIdResetPassword
+      tags:
+        - users
+      summary: POST /admin/v1/users/{id}/reset-password
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: admin
+        action: write
+      x-ams-source: services/api/src/routes/users.ts:208
+      description: |-
+        Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostUsersByIdResetPasswordRequest"
       responses:
         "200":
           description: Thành công
@@ -3528,7 +3753,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:377
+      x-ams-source: services/payments/src/routes.ts:384
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3564,7 +3789,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:383
+      x-ams-source: services/payments/src/routes.ts:390
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3596,7 +3821,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:344
+      x-ams-source: services/payments/src/routes.ts:351
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3630,7 +3855,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:355
+      x-ams-source: services/payments/src/routes.ts:362
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3664,7 +3889,7 @@ paths:
         module: finance
         action: write
         account: internal
-      x-ams-source: services/payments/src/routes.ts:366
+      x-ams-source: services/payments/src/routes.ts:373
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3698,7 +3923,7 @@ paths:
         - auth
       summary: POST /auth/change-password
       parameters: []
-      x-ams-source: services/api/src/auth/routes.ts:312
+      x-ams-source: services/api/src/auth/routes.ts:306
       description: Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
       responses:
         "200":
@@ -3721,7 +3946,7 @@ paths:
         - auth
       summary: POST /auth/invite/accept
       parameters: []
-      x-ams-source: services/api/src/auth/routes.ts:315
+      x-ams-source: services/api/src/auth/routes.ts:327
       description: Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
       requestBody:
         required: true
@@ -3741,6 +3966,28 @@ paths:
         5XX:
           $ref: "#/components/responses/Error"
       security: []
+  /auth/invite/info:
+    get:
+      operationId: authGetInviteInfo
+      tags:
+        - auth
+      summary: GET /auth/invite/info
+      parameters: []
+      x-ams-source: services/api/src/auth/routes.ts:310
+      description: Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
   /auth/login:
     post:
       operationId: authPostLogin
@@ -3748,7 +3995,7 @@ paths:
         - auth
       summary: POST /auth/login
       parameters: []
-      x-ams-source: services/api/src/auth/routes.ts:114
+      x-ams-source: services/api/src/auth/routes.ts:108
       requestBody:
         required: true
         content:
@@ -3774,7 +4021,7 @@ paths:
         - auth
       summary: POST /auth/logout
       parameters: []
-      x-ams-source: services/api/src/auth/routes.ts:240
+      x-ams-source: services/api/src/auth/routes.ts:234
       description: Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
       responses:
         "200":
@@ -3797,7 +4044,7 @@ paths:
         - auth
       summary: GET /auth/me
       parameters: []
-      x-ams-source: services/api/src/auth/routes.ts:260
+      x-ams-source: services/api/src/auth/routes.ts:254
       responses:
         "200":
           description: Thành công
@@ -3818,7 +4065,7 @@ paths:
         - auth
       summary: POST /auth/mfa/enroll
       parameters: []
-      x-ams-source: services/api/src/auth/routes.ts:165
+      x-ams-source: services/api/src/auth/routes.ts:159
       requestBody:
         required: true
         content:
@@ -3846,7 +4093,7 @@ paths:
         - auth
       summary: POST /auth/mfa/verify
       parameters: []
-      x-ams-source: services/api/src/auth/routes.ts:196
+      x-ams-source: services/api/src/auth/routes.ts:190
       description: Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
       requestBody:
         required: true
@@ -3873,7 +4120,7 @@ paths:
         - auth
       summary: POST /auth/password/change
       parameters: []
-      x-ams-source: services/api/src/auth/routes.ts:313
+      x-ams-source: services/api/src/auth/routes.ts:307
       description: Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
       responses:
         "200":
@@ -4356,7 +4603,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:202
+      x-ams-source: services/api/src/routes/media.ts:203
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4384,7 +4631,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:329
+      x-ams-source: services/api/src/routes/media.ts:330
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4421,7 +4668,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:216
+      x-ams-source: services/api/src/routes/media.ts:217
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4461,7 +4708,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:208
+      x-ams-source: services/api/src/routes/media.ts:209
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4494,7 +4741,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:258
+      x-ams-source: services/api/src/routes/media.ts:259
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4536,7 +4783,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:355
+      x-ams-source: services/api/src/routes/media.ts:356
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4574,7 +4821,7 @@ paths:
         module: finance
         action: view
         account: external
-      x-ams-source: services/payments/src/routes.ts:232
+      x-ams-source: services/payments/src/routes.ts:239
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4602,7 +4849,7 @@ paths:
         module: finance
         action: write
         account: external
-      x-ams-source: services/payments/src/routes.ts:227
+      x-ams-source: services/payments/src/routes.ts:234
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4632,7 +4879,7 @@ paths:
         module: finance
         action: view
         account: external
-      x-ams-source: services/payments/src/routes.ts:181
+      x-ams-source: services/payments/src/routes.ts:188
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4661,7 +4908,7 @@ paths:
         module: finance
         action: view
         account: external
-      x-ams-source: services/payments/src/routes.ts:254
+      x-ams-source: services/payments/src/routes.ts:261
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4689,7 +4936,7 @@ paths:
         module: finance
         action: write
         account: external
-      x-ams-source: services/payments/src/routes.ts:241
+      x-ams-source: services/payments/src/routes.ts:248
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4723,7 +4970,7 @@ paths:
         - webhooks
       summary: POST /webhooks/payments/sepay
       parameters: []
-      x-ams-source: services/payments/src/routes.ts:136
+      x-ams-source: services/payments/src/routes.ts:143
       description: 'SePay gọi vào đây khi có giao dịch. Xác thực HMAC-SHA256 (`X-SePay-Signature: sha256=<hex>` + `X-SePay-Timestamp`, lệch >5 phút bị từ chối) hoặc `Authorization: Apikey <khóa>`. Trả `{"success":true}`; webhook trùng (cùng `id`) chỉ cộng tiền một lần.'
       responses:
         "200":
@@ -5245,6 +5492,44 @@ components:
       required:
         - reason
       additionalProperties: true
+    AdminPostReconcileRepairRequest:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+        fixCacheFromLedger:
+          type: boolean
+        totp:
+          type: string
+      additionalProperties: true
+    AdminPostReconcileRevenueByIdResolveRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - resolved
+            - ignored
+        note:
+          type: string
+          minLength: 3
+          maxLength: 500
+        totp:
+          type: string
+      required:
+        - status
+        - note
+      additionalProperties: true
+    AdminPostReconcileRevenueRunRequest:
+      type: object
+      properties:
+        days:
+          type: integer
+          minimum: 1
+          maximum: 7
+        campaign_id:
+          type: string
+      additionalProperties: true
     AdminPostRefundRequestsByIdApproveRequest:
       type: object
       properties:
@@ -5377,6 +5662,16 @@ components:
       properties:
         totp:
           type: string
+      additionalProperties: true
+    AdminPostUsersByIdResetPasswordRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+      required:
+        - password
       additionalProperties: true
     AdminPostUsersRequest:
       type: object
@@ -6047,7 +6342,7 @@ components:
           maxLength: 200
         password:
           type: string
-          minLength: 10
+          minLength: 1
           maxLength: 128
       required:
         - token
@@ -6559,6 +6854,8 @@ components:
           type: boolean
         csrf_token:
           type: string
+        must_change_password:
+          type: boolean
       required:
         - user
       additionalProperties: true

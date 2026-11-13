@@ -8,9 +8,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "generate": "tsx scripts/generate.ts",
-    "check": "tsx scripts/check-drift.ts",
-    "typecheck": "tsc -p tsconfig.json",
+    "generate": "node --max-old-space-size=3072 --import tsx scripts/generate.ts",
+    "check": "node --max-old-space-size=3072 --import tsx scripts/check-drift.ts",
+    "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/lib/tsc.js -p tsconfig.json",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

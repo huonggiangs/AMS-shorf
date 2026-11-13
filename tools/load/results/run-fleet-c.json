@@ -1,0 +1,412 @@
+{
+ "started": "2026-11-13T01:29:01.336Z",
+ "host": {
+  "cpus": 2,
+  "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "memGb": 7.8,
+  "node": "v22.23.4"
+ },
+ "config": {
+  "N_DEV": 10000,
+  "RAMP": [
+   1
+  ],
+  "STEP_S": 5,
+  "MIX": {
+   "hb": 12,
+   "mf": 4,
+   "mfFull": 0,
+   "ev": 6
+  },
+  "FLEET_DEV": 2000,
+  "FLEET_SCALE": 0.1,
+  "FLEET_S": 150,
+  "FLEET_CAP": 0,
+  "REGISTER": 0,
+  "COLD": 0
+ },
+ "postgres": "16.15",
+ "postgresSettings": {
+  "fsync": "on",
+  "max_connections": "100",
+  "shared_buffers": "16384",
+  "synchronous_commit": "on",
+  "wal_level": "replica"
+ },
+ "redis": "7.0.15",
+ "spendPreflight": "ok",
+ "deviceSetupSeconds": 0.8,
+ "manifest_HN": {
+  "creatives": 6,
+  "slots": 3,
+  "bytes": 2975
+ },
+ "manifest_HCM": {
+  "creatives": 6,
+  "slots": 3,
+  "bytes": 2976
+ },
+ "warmup": {
+  "mode": "ramp",
+  "rpsTarget": 500,
+  "seconds": 10.012286178000002,
+  "achievedRps": 499.3864449246867,
+  "types": {
+   "manifest_304": {
+    "count": 922,
+    "errors": 0,
+    "p50": 10.833883733084804,
+    "p95": 114.65711798943084,
+    "p99": 231.618872990799,
+    "max": 761.4128426331772,
+    "statuses": {
+     "304": 922
+    }
+   },
+   "heartbeat": {
+    "count": 2727,
+    "errors": 0,
+    "p50": 15.877279873380758,
+    "p95": 166.44847735049916,
+    "p99": 437.98220073474295,
+    "max": 795.7722567765086,
+    "statuses": {
+     "200": 2727
+    }
+   },
+   "events": {
+    "count": 1351,
+    "errors": 0,
+    "p50": 15.636527211558132,
+    "p95": 171.63158237587777,
+    "p99": 618.9637019155416,
+    "max": 782.9547994228851,
+    "statuses": {
+     "202": 1351
+    }
+   },
+   "ALL": {
+    "count": 5000,
+    "errors": 0,
+    "p50": 14.844912767697679,
+    "p95": 160.76010240668256,
+    "p99": 437.7345984015992,
+    "max": 795.7722567765086,
+    "statuses": {
+     "200": 2727,
+     "202": 1351,
+     "304": 922
+    }
+   }
+  },
+  "genCpuCores": 0.15235071919455476,
+  "loopDelayP99ms": 9.527295,
+  "loopDelayMaxMs": 93.388799,
+  "wall": 10.012286178000002,
+  "maxInflight": 157,
+  "offered": 5000,
+  "ev": {
+   "sent": 1828,
+   "accepted": 1828,
+   "valid": 1828
+  },
+  "server": {
+   "quietAchieved": false,
+   "quietWaitS": 21,
+   "wallS": 10.04,
+   "gatewayCpuCores": 0.606,
+   "gatewayCpuMsPerReq": 1.216,
+   "pgCpuCores": 0.309,
+   "pgCpuMsPerReq": 0.62,
+   "redisCpuCores": 0.056,
+   "redisCpuMsPerReq": 0.112,
+   "redisOpsPerReq": 8.65,
+   "pgTxPerReq": 1.201,
+   "systemBusyCores": 1.94,
+   "otherProcessesCores": 0.82,
+   "stolenCores": 0.02,
+   "loadavg1": 2.91,
+   "hostRssMb": 173,
+   "pgRssMb": 357,
+   "redisRssMb": 17,
+   "redisKeys": 15101,
+   "redisUsedMb": 5.3
+  }
+ },
+ "ramp": [
+  {
+   "mode": "ramp",
+   "rpsTarget": 1,
+   "seconds": 3.455689441999999,
+   "achievedRps": 1.4468892775000706,
+   "types": {
+    "heartbeat": {
+     "count": 4,
+     "errors": 0,
+     "p50": 3.565036380517995,
+     "p95": 13.11026892695736,
+     "p99": 13.11026892695736,
+     "max": 13.11026892695736,
+     "statuses": {
+      "200": 4
+     }
+    },
+    "events": {
+     "count": 1,
+     "errors": 0,
+     "p50": 13.931322853295569,
+     "p95": 13.931322853295569,
+     "p99": 13.931322853295569,
+     "max": 13.931322853295569,
+     "statuses": {
+      "202": 1
+     }
+    },
+    "ALL": {
+     "count": 5,
+     "errors": 0,
+     "p50": 6.2052138703693345,
+     "p95": 13.931322853295569,
+     "p99": 13.931322853295569,
+     "max": 13.931322853295569,
+     "statuses": {
+      "200": 4,
+      "202": 1
+     }
+    }
+   },
+   "genCpuCores": 0.05273564163061157,
+   "loopDelayP99ms": 6.205439,
+   "loopDelayMaxMs": 8.683519,
+   "wall": 3.455689441999999,
+   "maxInflight": 1,
+   "offered": 5,
+   "ev": {
+    "sent": 1,
+    "accepted": 1,
+    "valid": 1
+   },
+   "server": {
+    "quietAchieved": false,
+    "quietWaitS": 21,
+    "wallS": 3.48,
+    "gatewayCpuCores": 0.011,
+    "gatewayCpuMsPerReq": 8,
+    "pgCpuCores": 0.003,
+    "pgCpuMsPerReq": 2,
+    "redisCpuCores": 0.003,
+    "redisCpuMsPerReq": 2,
+    "redisOpsPerReq": 14.6,
+    "pgTxPerReq": 2.2,
+    "systemBusyCores": 1.7,
+    "otherProcessesCores": 1.63,
+    "stolenCores": 0.02,
+    "loadavg1": 2.26,
+    "hostRssMb": 174,
+    "pgRssMb": 130,
+    "redisRssMb": 17,
+    "redisKeys": 16556,
+    "redisUsedMb": 5.1
+   }
+  }
+ ],
+ "fleet": {
+  "mode": "fleet",
+  "rpsTarget": null,
+  "seconds": 151.512710536,
+  "achievedRps": 123.63979189421846,
+  "types": {
+   "heartbeat": {
+    "count": 10720,
+    "errors": 0,
+    "p50": 1.7284829999844078,
+    "p95": 10.377200000002631,
+    "p99": 21.997576999998273,
+    "max": 88.82806500000152,
+    "statuses": {
+     "200": 10720
+    }
+   },
+   "manifest_full": {
+    "count": 2000,
+    "errors": 0,
+    "p50": 2.533787000000302,
+    "p95": 9.283943999998883,
+    "p99": 13.758992999999464,
+    "max": 39.837892999999895,
+    "statuses": {
+     "200": 2000
+    }
+   },
+   "events": {
+    "count": 4001,
+    "errors": 0,
+    "p50": 1.8119999999762513,
+    "p95": 5.393113000012818,
+    "p99": 8.33664699998917,
+    "max": 66.032984999998,
+    "statuses": {
+     "202": 4001
+    }
+   },
+   "manifest_304": {
+    "count": 2012,
+    "errors": 0,
+    "p50": 1.0414750000054482,
+    "p95": 2.6190480000077514,
+    "p99": 5.390977999995812,
+    "max": 21.207370999996783,
+    "statuses": {
+     "304": 2012
+    }
+   },
+   "ALL": {
+    "count": 18733,
+    "errors": 0,
+    "p50": 1.6887830000050599,
+    "p95": 8.025642000000516,
+    "p99": 18.253241000002163,
+    "max": 88.82806500000152,
+    "statuses": {
+     "200": 12720,
+     "202": 4001,
+     "304": 2012
+    }
+   }
+  },
+  "genCpuCores": 0.0626389559425445,
+  "loopDelayP99ms": 8.691711,
+  "loopDelayMaxMs": 125.960191,
+  "wall": 151.512710536,
+  "live": 2000,
+  "steadyFromS": 30,
+  "steadyTypes": {
+   "heartbeat": {
+    "count": 8165,
+    "errors": 0,
+    "p50": 1.5627389999935986,
+    "p95": 4.717848000000231,
+    "p99": 7.63488199999847,
+    "max": 48.95450900000287,
+    "statuses": {
+     "200": 8165
+    }
+   },
+   "events": {
+    "count": 4001,
+    "errors": 0,
+    "p50": 1.8119999999762513,
+    "p95": 5.393113000012818,
+    "p99": 8.33664699998917,
+    "max": 66.032984999998,
+    "statuses": {
+     "202": 4001
+    }
+   },
+   "manifest_304": {
+    "count": 2012,
+    "errors": 0,
+    "p50": 1.0414750000054482,
+    "p95": 2.6190480000077514,
+    "p99": 5.390977999995812,
+    "max": 21.207370999996783,
+    "statuses": {
+     "304": 2012
+    }
+   },
+   "ALL": {
+    "count": 14178,
+    "errors": 0,
+    "p50": 1.5289359999878798,
+    "p95": 4.793594999995548,
+    "p99": 7.615704999989248,
+    "max": 66.032984999998,
+    "statuses": {
+     "200": 8165,
+     "202": 4001,
+     "304": 2012
+    }
+   }
+  },
+  "fleet": {
+   "hb": 10720,
+   "bases": [
+    300
+   ],
+   "mfFull": 2000,
+   "mf304": 2012,
+   "evSent": 6344,
+   "evValid": 6344,
+   "evAccepted": 6344,
+   "hb503": 0,
+   "hb429": 0,
+   "etagChanges": 2000,
+   "intervalMin": 240,
+   "intervalMax": 360,
+   "intervalMean": 299.5568097014925
+  },
+  "server": {
+   "quietAchieved": false,
+   "quietWaitS": 21,
+   "wallS": 151.56,
+   "gatewayCpuCores": 0.163,
+   "gatewayCpuMsPerReq": 1.322,
+   "pgCpuCores": 0.057,
+   "pgCpuMsPerReq": 0.461,
+   "redisCpuCores": 0.022,
+   "redisCpuMsPerReq": 0.179,
+   "redisOpsPerReq": 7.76,
+   "pgTxPerReq": 1.922,
+   "systemBusyCores": 1.47,
+   "otherProcessesCores": 1.16,
+   "stolenCores": 0.01,
+   "loadavg1": 3.85,
+   "hostRssMb": 158,
+   "pgRssMb": 126,
+   "redisRssMb": 16,
+   "redisKeys": 48662,
+   "redisUsedMb": 9.8
+  }
+ },
+ "drainSeries": [
+  {
+   "tS": 0,
+   "rows": 8173
+  }
+ ],
+ "durability": {
+  "consumerStats": {
+   "ok": true,
+   "service": "ingest-consumer",
+   "stats": {
+    "messages": 5353,
+    "received": 8173,
+    "duplicates": 0,
+    "appended": 8173,
+    "invalid": 0,
+    "spendCalls": 6973,
+    "spendSkippedNoFn": 0,
+    "pops": 0,
+    "errors": 0
+   }
+  },
+  "eventsAcceptedByGateway": 8173,
+  "ev_ad_impression_rows": 8173,
+  "distinctEventIds": 8173,
+  "impression_hourly_sum": 8173,
+  "spend_events": 8174,
+  "heartbeats200": 13451,
+  "ev_heartbeat_rows": 13451,
+  "backlogEvents": 0
+ },
+ "dedupe": {
+  "statuses": [
+   202,
+   202,
+   202
+  ],
+  "rowsForThatEventId": 1
+ },
+ "presenceKeys": 4222,
+ "finished": "2026-11-13T01:33:14.999Z"
+}

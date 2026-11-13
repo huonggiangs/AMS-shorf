@@ -195,7 +195,13 @@ async function runFleet(): Promise<void> {
   const after = (ms: number, f: () => void) => {
     if (performance.now() + ms < endAt) timers.push(setTimeout(f, ms));
   };
-  const record = (type: string, t1: number, status: number) => rec.add(type, performance.now() - t1, status);
+  const steadyFrom = Math.min(30_000, cfg.seconds * 400); // bo qua khoi dong (bao ket noi) va ~30 giay dau
+  const recSteady = new Rec();
+  const record = (type: string, t1: number, status: number) => {
+    const ms = performance.now() - t1;
+    rec.add(type, ms, status);
+    if (t1 - t0 > steadyFrom) recSteady.add(type, ms, status);
+  };
 
   const startDevice = (i: number) => {
     const d = devs[i]!;
@@ -274,7 +280,7 @@ async function runFleet(): Promise<void> {
   await sleep(1500);
   const wall = (performance.now() - t0) / 1000;
   const iv = Float64Array.from(stats.intervals).sort();
-  finish({ wall, cpu: process.cpuUsage(cpu0), live, fleet: { ...stats, bases: [...stats.bases], intervals: undefined, intervalMin: iv[0], intervalMax: iv[iv.length - 1], intervalMean: iv.reduce((a, b) => a + b, 0) / (iv.length || 1) } });
+  finish({ wall, cpu: process.cpuUsage(cpu0), live, steadyFromS: steadyFrom / 1000, steadyTypes: recSteady.summary(), fleet: { ...stats, bases: [...stats.bases], intervals: undefined, intervalMin: iv[0], intervalMax: iv[iv.length - 1], intervalMean: iv.reduce((a, b) => a + b, 0) / (iv.length || 1) } });
 }
 
 // -------------------------------------------------------------------------- register

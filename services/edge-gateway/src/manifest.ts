@@ -419,8 +419,18 @@ export class ManifestService {
 function parseOverlayJson(raw: string | null | undefined): import('@ams/shared').CreativeOverlay | null {
   if (!raw) return null;
   try {
-    const r = parseOverlay(JSON.parse(raw));
-    return r.ok ? r.value : null;
+    // du lieu DB la dang tin cay (khach chi ghi qua route 'reject'/'strip'): giu kid_safe/ngu canh 'lock' do nguoi duyet dat
+    const r = parseOverlay(JSON.parse(raw), { reviewerFields: 'keep' });
+    if (!r.ok || !r.value) return null;
+    const v = r.value;
+    // fail-safe: chi creative duoc xac nhan kid_safe === true moi co ngu canh 'lock' (man khoa); con lai bo 'lock'
+    if (v.contexts?.includes('lock') && v.kid_safe !== true) {
+      const rest = v.contexts.filter((x) => x !== 'lock');
+      const { contexts: _drop, ...others } = v;
+      void _drop;
+      return rest.length ? { ...others, contexts: rest } : Object.keys(others).length ? others : null;
+    }
+    return v;
   } catch {
     return null;
   }

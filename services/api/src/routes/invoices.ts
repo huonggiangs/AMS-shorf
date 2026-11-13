@@ -251,6 +251,9 @@ export function payoutRoutes(): Hono<AppEnv> {
     const b = await parseBody(c, z.object({ external_ref: z.string().trim().min(1, 'Nhập mã giao dịch ngân hàng/ví').max(80) }));
     const now = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
+      // Khoa hang nguoi dung bang UPDATE (khong FOR UPDATE): hai lenh dong thoi cung nguoi dung xep hang tai day; lenh sau chay cau INSERT co dieu kien
+      // SAU KHI lenh truoc commit (READ COMMITTED lay snapshot moi moi cau lenh) => so du luon duoc doc lai, khong the chi vuot.
+      await db.run('UPDATE end_users SET created_at = created_at WHERE id = ?', [p.user_id]);
       const u = await db.run("UPDATE payouts SET status = 'paid', paid_at = ?, external_ref = ? WHERE id = ? AND status = 'pending'", [now, b.external_ref, p.id]);
       if (u.changes !== 1) throw conflict('Lệnh chi trả không còn chờ xử lý.', 'invalid_state');
       const l = await db.run(

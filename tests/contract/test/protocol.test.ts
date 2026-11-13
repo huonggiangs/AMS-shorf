@@ -325,6 +325,25 @@ describe('manifest', () => {
       await w2.close();
     }
   });
+  it('overlay do nguoi duyet dat (kid_safe/lock/duration_s/safe_area/qr.hint) duoc manifest mang nguyen ven; kid_safe!=true thi KHONG co ngu canh lock', async () => {
+    const w2 = await createWorld({ campaigns: 1, creativesPerCampaign: 3 });
+    try {
+      const [c1, c2, c3] = w2.fixture.campaigns[0]!.creatives;
+      const reviewed = { v: 1, headline: 'Xin chao', duration_s: 12, kid_safe: true, contexts: ['lock', 'fullscreen'], safe_area: { top: 5, right: 5, bottom: 5, left: 5 }, qr: { url: 'https://ams.example/q', hint: 'Quet de nhan uu dai' } };
+      await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify(reviewed), c1!.id]);
+      await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify({ ...reviewed, kid_safe: false }), c2!.id]);
+      await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify({ headline: 'Khong ro', contexts: ['lock'] }), c3!.id]);
+      const d = await Dev.create(w2);
+      const m = (await d.manifest()).json! as any;
+      const ov = (id: string) => m.creatives.find((c: any) => c.id === id).overlay;
+      expect(ov(c1!.id)).toMatchObject({ kid_safe: true, contexts: ['lock', 'fullscreen'], duration_s: 12, safe_area: { top: 5 }, qr: { hint: 'Quet de nhan uu dai' } });
+      expect(ov(c2!.id).kid_safe).toBe(false);
+      expect(ov(c2!.id).contexts).toEqual(['fullscreen']);
+      expect(ov(c3!.id).contexts ?? []).not.toContain('lock');
+    } finally {
+      await w2.close();
+    }
+  });
 });
 
 describe('events', () => {

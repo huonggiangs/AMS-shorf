@@ -1,2 +1,10 @@
 import { defineConfig } from 'vitest/config';
-export default defineConfig({ test: { testTimeout: 60_000, hookTimeout: 60_000 } });
+// Tai len mot lan (buildAll duoc memo) va cho worker them heap: may tai nang truoc day bi OOM (Killed 137).
+export default defineConfig({
+  test: {
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
+    pool: 'forks',
+    poolOptions: { forks: { singleFork: true, execArgv: ['--max-old-space-size=3072'] } },
+  },
+});

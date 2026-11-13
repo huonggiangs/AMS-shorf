@@ -23,8 +23,15 @@ export interface RouteKey {
 }
 
 /* ------------------------------------------------------------------ route that */
-export async function liveRoutes(): Promise<{ api: RouteKey[]; gateway: RouteKey[] }> {
-  const rt = await createTestRuntime();
+type Live = { api: RouteKey[]; gateway: RouteKey[] };
+let liveMemo: Promise<Live> | null = null;
+/** Memo: moi tien trinh chi dung runtime thu + app mot lan (truoc day moi lan goi buildAll/liveRoutes lai nap lai toan bo => OOM tren may tai nang). */
+export function liveRoutes(): Promise<Live> {
+  return (liveMemo ??= liveRoutesUncached());
+}
+async function liveRoutesUncached(): Promise<Live> {
+  // chi liet ke route (khong cham DB): sqlite nhe hon pglite (WASM ~vai tram MB)
+  const rt = await createTestRuntime({ dialect: 'sqlite' });
   try {
     const app = createApp(rt, { mountFinance: (a, r) => mountFinanceRoutes(a, r) });
     const gw = createGateway(rt);
@@ -101,39 +108,44 @@ class Components {
     return { $ref: `#/components/schemas/${name}` };
   }
 }
+/**
+ * web-admin dung zod 3.24.1, goi nay dung 3.25.76: gan truc tiep schema cua web vao ZodTypeAny buoc tsc so sanh cau truc hai ban zod (hang chuc schema lon)
+ * => bo nho tang vot (OOM/Killed 137 tren may tai nang). Ep kieu qua `unknown` bo qua phep so sanh do; luc chay hai ban tuong thich.
+ */
+const asZ = (s: unknown): ZodTypeAny => s as ZodTypeAny;
 const ref = (n: string): Json => ({ $ref: `#/components/schemas/${n}` });
 
 /* ------------------------------------------------------------------ phan hoi admin */
 const ITEM: Record<string, [string, ZodTypeAny]> = {
-  devices: ['Device', W.deviceSchema],
-  campaigns: ['Campaign', W.campaignSchema],
-  customers: ['Customer', W.customerSchema],
-  contracts: ['Contract', W.contractSchema],
-  media: ['Media', W.mediaSchema],
-  screens: ['Screen', W.screenSchema],
-  schedule: ['ScheduleSlot', W.slotSchema],
-  users: ['AdminUser', W.userSchema],
-  'audit-log': ['AuditEntry', W.auditSchema],
-  partners: ['Partner', W.partnerSchema],
-  'rtb-floors': ['RtbFloor', W.floorSchema],
-  topups: ['Topup', W.topupSchema],
-  wallets: ['Wallet', W.walletSchema],
+  devices: ['Device', asZ(W.deviceSchema)],
+  campaigns: ['Campaign', asZ(W.campaignSchema)],
+  customers: ['Customer', asZ(W.customerSchema)],
+  contracts: ['Contract', asZ(W.contractSchema)],
+  media: ['Media', asZ(W.mediaSchema)],
+  screens: ['Screen', asZ(W.screenSchema)],
+  schedule: ['ScheduleSlot', asZ(W.slotSchema)],
+  users: ['AdminUser', asZ(W.userSchema)],
+  'audit-log': ['AuditEntry', asZ(W.auditSchema)],
+  partners: ['Partner', asZ(W.partnerSchema)],
+  'rtb-floors': ['RtbFloor', asZ(W.floorSchema)],
+  topups: ['Topup', asZ(W.topupSchema)],
+  wallets: ['Wallet', asZ(W.walletSchema)],
 };
 const SPECIAL: [RegExp, string, ZodTypeAny][] = [
-  [/^POST \/auth\/login$/, 'LoginResult', W.loginSchema],
-  [/^GET \/auth\/me$/, 'Me', W.meSchema],
-  [/^POST \/auth\/mfa\/enroll$/, 'MfaEnroll', W.enrollSchema],
-  [/^POST \/admin\/v1\/campaigns\/:id\/approve$/, 'ApproveResult', W.approveResultSchema],
-  [/^POST \/admin\/v1\/contracts\/:id\/render$/, 'ContractRender', W.contractRenderSchema],
-  [/^POST \/(admin|portal)\/v1\/media\/upload-url$/, 'UploadUrl', W.uploadUrlSchema],
-  [/^(GET|PUT) \/admin\/v1\/settings\/sepay$/, 'SepaySettings', W.sepaySettingsSchema],
-  [/^GET \/admin\/v1\/dashboard\/overview$/, 'Overview', W.overviewSchema],
-  [/^GET \/admin\/v1\/revenue$/, 'Revenue', W.revenueSchema],
-  [/^GET \/portal\/v1\/wallet$/, 'PortalWallet', W.portalWalletSchema],
-  [/^POST \/portal\/v1\/topups$/, 'TopupCreated', W.topupCreateSchema],
-  [/^GET \/admin\/v1\/payments\/manual-queue$/, 'ManualQueue', W.manualQueueSchema],
-  [/^GET \/(admin|portal)\/v1\/(wallet\/)?refund-requests$/, 'RefundRequests', W.refundRequestsSchema],
-  [/^GET \/admin\/v1\/activation-log$/, 'ActivationLog', W.activationLogSchema],
+  [/^POST \/auth\/login$/, 'LoginResult', asZ(W.loginSchema)],
+  [/^GET \/auth\/me$/, 'Me', asZ(W.meSchema)],
+  [/^POST \/auth\/mfa\/enroll$/, 'MfaEnroll', asZ(W.enrollSchema)],
+  [/^POST \/admin\/v1\/campaigns\/:id\/approve$/, 'ApproveResult', asZ(W.approveResultSchema)],
+  [/^POST \/admin\/v1\/contracts\/:id\/render$/, 'ContractRender', asZ(W.contractRenderSchema)],
+  [/^POST \/(admin|portal)\/v1\/media\/upload-url$/, 'UploadUrl', asZ(W.uploadUrlSchema)],
+  [/^(GET|PUT) \/admin\/v1\/settings\/sepay$/, 'SepaySettings', asZ(W.sepaySettingsSchema)],
+  [/^GET \/admin\/v1\/dashboard\/overview$/, 'Overview', asZ(W.overviewSchema)],
+  [/^GET \/admin\/v1\/revenue$/, 'Revenue', asZ(W.revenueSchema)],
+  [/^GET \/portal\/v1\/wallet$/, 'PortalWallet', asZ(W.portalWalletSchema)],
+  [/^POST \/portal\/v1\/topups$/, 'TopupCreated', asZ(W.topupCreateSchema)],
+  [/^GET \/admin\/v1\/payments\/manual-queue$/, 'ManualQueue', asZ(W.manualQueueSchema)],
+  [/^GET \/(admin|portal)\/v1\/(wallet\/)?refund-requests$/, 'RefundRequests', asZ(W.refundRequestsSchema)],
+  [/^GET \/admin\/v1\/activation-log$/, 'ActivationLog', asZ(W.activationLogSchema)],
 ];
 
 function adminResponse(c: Components, method: string, path: string, list: boolean): { schema: Json; note?: string } {
@@ -408,7 +420,13 @@ export function buildGatewayDoc(routes: RouteKey[]): Json {
   };
 }
 
-export async function buildAll(): Promise<{ admin: Json; gateway: Json; coverage: Coverage }> {
+type Built = { admin: Json; gateway: Json; coverage: Coverage };
+let builtMemo: Promise<Built> | null = null;
+/** Memo trong tien trinh: ket qua chi doc (render/so sanh), khong sua. */
+export function buildAll(): Promise<Built> {
+  return (builtMemo ??= buildAllUncached());
+}
+async function buildAllUncached(): Promise<Built> {
   const live = await liveRoutes();
   const ex = await extractAll();
   const coverage: Coverage = { routes: 0, withBodyExtracted: 0, withoutExtraction: [], unresolved: [] };
