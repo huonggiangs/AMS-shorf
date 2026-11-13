@@ -8,7 +8,7 @@ import { BANKS, DEFAULT_MIN_TOPUP_VND, SAMPLE_ACCOUNT, devSimulateAllowed, loadS
 import { applyBalance, creditTopup, getWallet } from './ledger.js';
 import { FinanceError, type FinanceCore, type FinancePort } from './port.js';
 import { audit, bumpManifest, iso, n, notify, startOfVnDayIso } from './util.js';
-import { endDueCampaigns, runDailyFinanceJobs, startDueCampaigns } from './jobs.js';
+import { createSepayPagedFetcher, endDueCampaigns, listRevenueDiscrepancies, reconcileRevenue, reconcileSepayWindow, repairLedgerDrift, resolveRevenueDiscrepancy, runDailyFinanceJobs, runFrequentFinanceJobs, startDueCampaigns } from './jobs.js';
 import { settleSpendRemainders } from './spend.js';
 import { authenticateWebhook, createSepayFetcher, processIncoming, reconcileSepay, sepayPayload, storeRejected } from './webhook.js';
 import { CHANGE_PREFIX, alertFinance, changeExpired, requireStepUp } from './sepay-change.js';
@@ -53,7 +53,8 @@ export function createFinancePort(): FinancePort {
         await endDueCampaigns(rt);
         await settleSpendRemainders(rt); // hoan tat quyet toan chi tieu bi dut giua chung
         // doi soat bu SePay moi 10 phut (chi khi co token API va khong phai mock)
-        if (rt.config.env['SEPAY_API_TOKEN'] && (rt.config.env['SEPAY_MODE'] ?? 'production') !== 'mock') await reconcileSepay(rt, createSepayFetcher(rt.config.env));
+        await runFrequentFinanceJobs(rt); // quet lech so cai/cache (repairLedgerDrift)
+        if (rt.config.env['SEPAY_API_TOKEN'] && (rt.config.env['SEPAY_MODE'] ?? 'production') !== 'mock') await reconcileSepayWindow(rt, createSepayPagedFetcher(rt.config.env));
       } else {
         await runDailyFinanceJobs(rt);
       }
@@ -105,6 +106,8 @@ function paging(c: Context): { page: number; size: number; offset: number } {
 
 export interface MountOptions {
   resolveActor?: ActorResolver;
+  /** chi de test: thay ham lay giao dich SePay co phan trang */
+  fetchPage?: import('./reconcile-sepay.js').FetchSepayPage;
 }
 
 export interface MountResult {
@@ -590,6 +593,50 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
     if (claim.changes !== 1) throw new FinanceError('not_found', 'Không có đề xuất đang chờ', 404);
     await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.change_rejected', type: 'settings', id, ip: a.ip });
     return c.json({ id, status: 'rejected' });
+  }));
+
+  // ================= doi soat (w4): route mong =================
+  app.get('/admin/v1/reconcile/revenue', wrap(async (c) => {
+    requirePerm(await actorOf(c), 'finance', 'view', 'internal');
+    const st = c.req.query('status');
+    const items = await listRevenueDiscrepancies(rt, { ...(st === 'open' || st === 'resolved' || st === 'ignored' ? { status: st } : {}), ...(c.req.query('campaign_id') ? { campaignId: c.req.query('campaign_id')! } : {}), limit: Math.min(Number(c.req.query('limit') ?? 100) || 100, 500) });
+    return c.json({ items });
+  }));
+
+  app.post('/admin/v1/reconcile/revenue/run', wrap(async (c) => {
+    const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
+    const b = await jsonBody(c, z.object({ days: z.number().int().min(1).max(7).optional(), campaign_id: z.string().optional() }).passthrough());
+    const r = await reconcileRevenue(rt, { actor: a.id, ...(b.days ? { days: b.days } : {}), ...(b.campaign_id ? { campaignId: b.campaign_id } : {}) });
+    await audit(rt.db, rt, { actor: a.id, action: 'finance.reconcile.revenue_run', type: 'reconcile', id: 'revenue', ip: a.ip, diff: { days: b.days ?? null, campaign_id: b.campaign_id ?? null } });
+    return c.json(r);
+  }));
+
+  app.post('/admin/v1/reconcile/revenue/:id/resolve', wrap(async (c) => {
+    const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
+    const b = await jsonBody(c, z.object({ status: z.enum(['resolved', 'ignored']), note: z.string().min(3).max(500), totp: z.string().optional() }).passthrough());
+    await requireStepUp(rt, a.id, b.totp);
+    const ok = await resolveRevenueDiscrepancy(rt, c.req.param('id'), { status: b.status, note: b.note, actor: a.id });
+    if (!ok) throw new FinanceError('not_found', 'Không có chênh lệch đang mở với mã này', 404);
+    return c.json({ id: c.req.param('id'), status: b.status });
+  }));
+
+  app.post('/admin/v1/reconcile/repair', wrap(async (c) => {
+    const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
+    const b = await jsonBody(c, z.object({ dryRun: z.boolean().optional(), fixCacheFromLedger: z.boolean().optional(), totp: z.string().optional() }).passthrough());
+    const dry = b.dryRun !== false; // mac dinh chay thu (an toan)
+    if (!dry) await requireStepUp(rt, a.id, b.totp);
+    const r = await repairLedgerDrift(rt, { dryRun: dry, ...(b.fixCacheFromLedger ? { fixCacheFromLedger: true } : {}) });
+    await audit(rt.db, rt, { actor: a.id, action: 'finance.reconcile.repair', type: 'reconcile', id: 'ledger', ip: a.ip, diff: { dryRun: dry, fixCacheFromLedger: !!b.fixCacheFromLedger, actions: r.actions.length } });
+    return c.json({ dry_run: dry, ...r });
+  }));
+
+  app.post('/admin/v1/reconcile/sepay', wrap(async (c) => {
+    const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
+    if (!rt.config.env['SEPAY_API_TOKEN']) throw new FinanceError('no_api_token', 'Chưa cấu hình SEPAY_API_TOKEN nên không đối soát được với SePay', 409);
+    if (sepayMode(rt) === 'mock') throw new FinanceError('mock_mode', 'Chế độ mock không gọi SePay thật', 409);
+    const r = await reconcileSepayWindow(rt, (opts.fetchPage ?? createSepayPagedFetcher(rt.config.env)));
+    await audit(rt.db, rt, { actor: a.id, action: 'finance.reconcile.sepay', type: 'reconcile', id: 'sepay', ip: a.ip, diff: r });
+    return c.json(r);
   }));
 
   // "Gui thu": tu kiem tra cau hinh + vong ky/xac thuc chu ky cuc bo (khong goi mang, khong cong tien)

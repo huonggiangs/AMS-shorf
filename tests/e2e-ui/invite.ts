@@ -90,7 +90,7 @@ async function main(): Promise<void> {
     }
     must(entered, 'khong vao duoc he thong sau khi nhap TOTP');
     await p.waitForLoadState('networkidle').catch(() => undefined);
-    const me = await p.evaluate(async () => (await fetch('/api/auth/me', { credentials: 'include' })).json());
+    const me = (await p.evaluate(async () => (await fetch('/api/auth/me', { credentials: 'include' })).json())) as { user?: { email?: string; role?: string } };
     must(me.user?.email === email && me.user?.role === 'device_ops', 'auth/me khong khop nguoi duoc moi');
     await p.screenshot({ path: join(SHOTS, 'invite-3-home.png') });
     // lien ket da dung: mo lai phai bao loi khi dat mat khau

@@ -222,7 +222,13 @@ async function decide(rt: Runtime, db: Db, p: SepayPayload, eventId: string, sou
   }
 
   const c = await creditTopup(rt, db, topup.id, null);
-  if (c === 'already') return { ...withCust, topup_id: topup.id, result: 'duplicate', duplicate: true };
+  if (c === 'already') {
+    // w4: co the la GIU (nghi cong kep voi khoan da xac nhan tay) hoac bi dong 'duplicate_txn': dua vao hang cho thu cong thay vi coi la gui lai
+    const t = (await db.query<{ status: string; matched_by: string | null }>('SELECT status, matched_by FROM topups WHERE id = ?', [topup.id]))[0];
+    if (t?.matched_by === 'manual:possible_double_credit') return { ...withCust, topup_id: topup.id, result: 'manual:possible_double_credit' };
+    if (t?.matched_by === 'duplicate_txn' || t?.status === 'rejected') return { ...withCust, topup_id: topup.id, result: 'manual:duplicate_txn' };
+    return { ...withCust, topup_id: topup.id, result: 'duplicate', duplicate: true };
+  }
   await notify(db, rt, { customer: cust.id, kind: 'topup_credited', title: 'Nạp tiền thành công', body: `Đã cộng ${amount} ₫ vào ví.`, refType: 'topup', refId: topup.id });
   await runActivation(rt, db, cust.id, topup.id);
   return { ...withCust, topup_id: topup.id, result: 'credited', credited: true };
