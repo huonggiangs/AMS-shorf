@@ -180,7 +180,7 @@ describe('w1: media.uploaded + cua quet ma doc', () => {
     await lan.json('POST', `/portal/v1/media/${id}/confirm`, {});
     const c = await lan.json('POST', '/portal/v1/campaigns', { name: 'Quet', budget_vnd: 1_000_000, screen_type: 'tv', media_id: id, start_date: '2026-11-01', end_date: '2026-12-31' });
     expect(c.status).toBe(201);
-    await lan.json('POST', `/portal/v1/campaigns/${c.body.id}/submit`);
+    await lan.json('POST', `/portal/v1/campaigns/${c.body.id}/submit`, { content_rights_confirmed: true });
     const cid = (await env.rt.db.query<{ campaign_id: string }>('SELECT campaign_id FROM creatives WHERE customer_id = (SELECT customer_id FROM creatives WHERE id = ?) AND campaign_id IS NOT NULL AND name = ? ORDER BY created_at DESC', [id, 'd.png']))[0]!.campaign_id;
     let r = await admin.json('POST', `/admin/v1/campaigns/${c.body.id}/approve`);
     expect([r.status, r.body.error.code]).toEqual([409, 'creative_scan_pending']);
@@ -199,7 +199,7 @@ describe('w1: hoan tien (reject/end/delete) qua outbox', () => {
     const cu = (await env.rt.db.query<{ customer_id: string }>('SELECT customer_id FROM creatives WHERE id = ?', [m.body.id]))[0]!.customer_id;
     await env.rt.db.run('UPDATE ad_wallets SET balance_vnd = balance_vnd + 100000000 WHERE customer_id = ?', [cu]);
     const c = await lan.json('POST', '/portal/v1/campaigns', { name, budget_vnd: 3_000_000, screen_type: 'tv', media_id: m.body.id, start_date: '2026-11-01', end_date: '2026-12-31' });
-    await lan.json('POST', `/portal/v1/campaigns/${c.body.id}/submit`);
+    await lan.json('POST', `/portal/v1/campaigns/${c.body.id}/submit`, { content_rights_confirmed: true });
     const ap = await admin.json('POST', `/admin/v1/campaigns/${c.body.id}/approve`);
     expect(ap.body.status).toBe('active');
     return { id: c.body.id as string, cu };
@@ -273,7 +273,7 @@ describe('w1: hoan tien (reject/end/delete) qua outbox', () => {
     expect(Number((await wallet(env, cu)).reserved_vnd)).toBe(before - 3_000_000);
     // viec huy cua mot campaign da duoc duyet lai: handler bo qua
     const handlers = (await import('../src/outbox.js')).createOutboxHandlers(() => Promise.resolve(createFinancePort()));
-    await lan.json('POST', `/portal/v1/campaigns/${id}/submit`);
+    await lan.json('POST', `/portal/v1/campaigns/${id}/submit`, { content_rights_confirmed: true });
     await admin.json('POST', `/admin/v1/campaigns/${id}/approve`);
     const reserved = Number((await state(env, id)).reserved_vnd);
     await handlers[TOPIC_CAMPAIGN_RELEASE]!({ id: 'x', topic: TOPIC_CAMPAIGN_RELEASE, payload: { campaignId: id, actorId: null, reason: 'cu' }, attempts: 1 } as any, env.rt);

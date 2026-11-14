@@ -1,5 +1,5 @@
 import type { Db, Runtime } from '@ams/runtime';
-import { hmacSha256Hex, timingSafeEqualStr } from '@ams/shared';
+import { encryptField, hmacSha256Hex, timingSafeEqualStr } from '@ams/shared';
 import { z } from 'zod';
 import { runActivation } from './activation.js';
 import { PENDING_TOPUP_TTL_MS, extractPaymentCode, loadSecrets, loadSepayConfig } from './config.js';
@@ -74,14 +74,75 @@ export async function authenticateWebhook(rt: Runtime, headers: Headers, rawBody
   return { ok: true, via: 'hmac' };
 }
 
-/** Luu nguyen van webhook bi tu choi (event_id duy nhat rieng de ke gia mao khong the 'dau doc' id that). */
+/** Gioi han ghi DB cho webhook bi tu choi (R1-16): toi da N dong/phut/IP va M dong/phut toan he thong; phan con lai chi tang bo dem. */
+export const REJECTED_PER_IP_PER_MIN = 10;
+export const REJECTED_GLOBAL_PER_MIN = 60;
+const REJECTED_BODY_MAX = 2_000;
+
+/**
+ * Luu webhook bi tu choi (event_id duy nhat rieng de ke gia mao khong the 'dau doc' id that).
+ * R1-16: (1) gioi han tan suat truoc khi ghi DB (bo dem KV theo phut; vuot => chi tang bo dem tong hop, khong ghi dong moi),
+ * (2) cat noi dung con 2 KB, (3) che so tai khoan, (4) pruneRejectedWebhooks xoa dong cu.
+ */
 export async function storeRejected(rt: Runtime, rawBody: string, reason: string, headers?: Headers): Promise<void> {
-  const claimed = headers?.get('x-forwarded-for') ?? '';
-  const body = rawBody.length > 100_000 ? rawBody.slice(0, 100_000) : rawBody;
+  const claimed = (headers?.get('x-forwarded-for') ?? '').slice(0, 64);
+  const minute = Math.floor(rt.clock.now().getTime() / 60_000);
+  try {
+    const perIp = await rt.kv.incr(`wh:rej:ip:${claimed || 'unknown'}:${minute}`, 120);
+    const global = await rt.kv.incr(`wh:rej:all:${minute}`, 120);
+    if (perIp > REJECTED_PER_IP_PER_MIN || global > REJECTED_GLOBAL_PER_MIN) {
+      await rt.kv.incr(`wh:rej:dropped:${reason}:${minute}`, 86_400);
+      return;
+    }
+  } catch {
+    /* KV loi: van ghi (khong mat dau vet), con nho 100 KB cua cu da duoc cat xuong 2 KB */
+  }
+  const body = redactAccountNumbers(rawBody.slice(0, REJECTED_BODY_MAX));
   await rt.db.run(
     'INSERT INTO payment_webhooks (id, provider, event_id, payload, signature_ok, result, received_at, processed_at, retry_count) VALUES (?,?,?,?,0,?,?,?,0)',
     [rt.id(), 'sepay', `rejected:${rt.id()}`, JSON.stringify({ raw: body, from: claimed }), `rejected:${reason}`, iso(rt), iso(rt)],
   );
+}
+
+/** Xoa webhook bi tu choi cu hon `days` ngay (mac dinh 14). Goi tu job hang ngay. */
+export async function pruneRejectedWebhooks(rt: Runtime, days = 14): Promise<number> {
+  const cutoff = new Date(rt.clock.now().getTime() - days * 86_400_000).toISOString();
+  const r = await rt.db.run("DELETE FROM payment_webhooks WHERE event_id LIKE 'rejected:%' AND received_at < ?", [cutoff]);
+  return r.changes;
+}
+
+function maskAcct(a: string): string {
+  return a.length > 4 ? `${'*'.repeat(a.length - 4)}${a.slice(-4)}` : '****';
+}
+
+/** Che chuoi so dai (>= 8 chu so) trong van ban tu do (dung cho noi dung bi tu choi, khong parse duoc). */
+function redactAccountNumbers(text: string): string {
+  return text.replace(/\d{8,}/g, (m) => maskAcct(m));
+}
+
+/**
+ * R1-16: khong luu so tai khoan ngan hang dang ro trong `payment_webhooks.payload`. Neu co FIELD_ENC_KEY: giu `accountNumber` che
+ * (4 so cuoi) + `accountNumber_enc` (AES-GCM, AAD gan voi truong). Khong co khoa: chi giu ban che. `decide` doi chieu tren payload da parse
+ * (khong doc lai tu DB), nen khong anh huong.
+ */
+export async function redactStoredPayload(rt: Runtime, raw: string): Promise<string> {
+  let obj: Record<string, unknown>;
+  try {
+    const j = JSON.parse(raw) as unknown;
+    if (!j || typeof j !== 'object' || Array.isArray(j)) return raw;
+    obj = j as Record<string, unknown>;
+  } catch {
+    return redactAccountNumbers(raw);
+  }
+  const acct = obj['accountNumber'];
+  if (typeof acct === 'string' && acct) {
+    const key = rt.config.env['FIELD_ENC_KEY'];
+    if (key) {
+      try { obj['accountNumber_enc'] = await encryptField(key, acct, 'payment_webhooks.accountNumber'); } catch { /* chi giu ban che */ }
+    }
+    obj['accountNumber'] = maskAcct(acct);
+  }
+  return JSON.stringify(obj);
 }
 
 export type ProcessResult = {
@@ -106,10 +167,11 @@ export async function processIncoming(
   const p = o.payload;
   const eventId = `${o.eventPrefix ?? ''}${String(p.id)}`;
 
+  const storedRaw = await redactStoredPayload(rt, o.raw); // R1-16: khong luu so tai khoan dang ro
   // 1) khu trung: dong dau tien cho event_id thang
   const ins = await db.run(
     'INSERT INTO payment_webhooks (id, provider, event_id, payload, signature_ok, result, received_at, retry_count) VALUES (?,?,?,?,?,NULL,?,0) ON CONFLICT (event_id) DO NOTHING',
-    [rt.id(), 'sepay', eventId, o.raw, o.source === 'simulate' ? 0 : 1, iso(rt)],
+    [rt.id(), 'sepay', eventId, storedRaw, o.source === 'simulate' ? 0 : 1, iso(rt)],
   );
   if (ins.changes === 0) {
     const ex = (await db.query<{ result: string | null; processed_at: string | null; matched_customer_id: string | null; topup_id: string | null }>(
@@ -118,7 +180,7 @@ export async function processIncoming(
       // giu nguyen van ban gui lai nhung khong xu ly
       await db.run(
         'INSERT INTO payment_webhooks (id, provider, event_id, payload, signature_ok, result, matched_customer_id, topup_id, received_at, processed_at, retry_count) VALUES (?,?,?,?,?,?,?,?,?,?,0)',
-        [rt.id(), 'sepay', `dup:${eventId}:${rt.id()}`, o.raw, o.source === 'simulate' ? 0 : 1, 'duplicate', ex.matched_customer_id, ex.topup_id, iso(rt), iso(rt)],
+        [rt.id(), 'sepay', `dup:${eventId}:${rt.id()}`, storedRaw, o.source === 'simulate' ? 0 : 1, 'duplicate', ex.matched_customer_id, ex.topup_id, iso(rt), iso(rt)],
       );
       return { result: 'duplicate', customer_id: ex.matched_customer_id, topup_id: ex.topup_id, duplicate: true, credited: false };
     }
@@ -142,7 +204,7 @@ export async function processIncoming(
   if (!wrote) {
     await db.run(
       'INSERT INTO payment_webhooks (id, provider, event_id, payload, signature_ok, result, matched_customer_id, topup_id, received_at, processed_at, retry_count) VALUES (?,?,?,?,?,?,?,?,?,?,0)',
-      [rt.id(), 'sepay', `dup:${eventId}:${rt.id()}`, o.raw, o.source === 'simulate' ? 0 : 1, 'duplicate', res.customer_id, res.topup_id, iso(rt), iso(rt)],
+      [rt.id(), 'sepay', `dup:${eventId}:${rt.id()}`, storedRaw, o.source === 'simulate' ? 0 : 1, 'duplicate', res.customer_id, res.topup_id, iso(rt), iso(rt)],
     );
     return { ...res, result: 'duplicate', duplicate: true, credited: false };
   }

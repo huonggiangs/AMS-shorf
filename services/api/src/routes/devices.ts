@@ -2,12 +2,12 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { REGIONS } from '@ams/shared';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
-import { conflict, notFound, tooMany, unprocessable } from '../lib/errors.js';
+import { conflict, forbidden, notFound, tooMany, unprocessable } from '../lib/errors.js';
 import { redeemPairingCode } from '@ams/edge-gateway/pairing';
 import { dropDeviceCache } from '../lib/manifest.js';
 import { getRt, num, parseBody, placeholders, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
-import { requirePerm } from '../auth/middleware.js';
+import { hasPerm, requirePerm } from '../auth/middleware.js';
 import type { AppEnv } from '../types.js';
 
 const D_SELECT = `d.id, d.name, d.kind, d.model, d.os, d.app_version, d.region_id, d.status, d.last_seen_at, d.views_30d, d.blocked, d.trust_level, d.paired_at, d.created_at, eu.display_name AS owner_name`;
@@ -101,6 +101,8 @@ export function deviceRoutes(): Hono<AppEnv> {
   r.post('/bulk', requirePerm('devices', 'write'), async (c) => {
     const rt = getRt(c);
     const b = await parseBody(c, z.object({ action: z.enum(['verify', 'block', 'unblock']), ids: z.array(z.string().min(1).max(64)).min(1, 'Chọn ít nhất một thiết bị').max(500, 'Tối đa 500 thiết bị mỗi lần') }));
+    // R1-26: dat trust_level=2 lam thiet bi tinh tien => can quyen devices:approve (tach nhiem vu voi device_ops), khong chi devices:write
+    if (b.action === 'verify' && !hasPerm(c, 'devices', 'approve')) throw forbidden('Xác minh thiết bị (cho phép tính tiền) cần quyền duyệt thiết bị.', 'forbidden', { module: 'devices', action: 'approve' });
     const ids = [...new Set(b.ids)];
     const sql =
       b.action === 'verify'

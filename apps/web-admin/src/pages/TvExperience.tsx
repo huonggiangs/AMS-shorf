@@ -184,7 +184,12 @@ function TvSettings() {
       </Field>
       {canWrite ? (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-          <Btn tone="p" disabled={!draft} onClick={async () => { if (draft && (await act(() => api.put(`${KEY}/settings`, { body: draft }), 'Đã lưu cài đặt TV.', [KEY]))) { setDraft(null); void q.refetch(); } }}>Lưu cài đặt</Btn>
+          <Btn tone="p" disabled={!draft} onClick={async () => {
+            if (!draft) return;
+            const turningOn = draft.lock_ads_enabled && !q.data.settings.lock_ads_enabled;
+            if (turningOn && !window.confirm('Bật quảng cáo ở màn khóa là hiển thị quảng cáo cho trẻ em. Chỉ bật khi pháp lý và phụ huynh đã chấp thuận. Tiếp tục?')) return;
+            if (await act(() => api.put(`${KEY}/settings`, { body: turningOn ? { ...draft, confirm_children_policy: true } : draft }), 'Đã lưu cài đặt TV.', [KEY])) { setDraft(null); void q.refetch(); }
+          }}>Lưu cài đặt</Btn>
         </div>
       ) : null}
     </div>

@@ -84,8 +84,10 @@ describe('dang nhap + TOTP', () => {
     for (let i = 0; i < 6; i++) last = (await post('/auth/login', { email, password: 'sai-mat-khau-1' })).status;
     expect([401, 429]).toContain(last);
     const locked = await post('/auth/login', { email, password });
-    expect(locked.status).toBe(429);
-    expect(locked.headers.get('retry-after')).toBeTruthy();
+    // R1-19: tai khoan dang khoa khong tra 429/Retry-After rieng (khong lo email ton tai, khong cho ke khac biet duoc da khoa) ma tra 401 nhu sai mat khau
+    expect(locked.status).toBe(401);
+    expect(((await locked.json()) as { error: { code: string } }).error.code).toBe('invalid_credentials');
+    expect(locked.headers.get('retry-after')).toBeNull();
     const n = await env.rt.db.query<{ n: number }>("SELECT COUNT(*) AS n FROM audit_log WHERE action IN ('auth.login_failed','auth.account_locked')");
     expect(Number(n[0]!.n)).toBeGreaterThanOrEqual(5);
     // het thoi gian khoa -> dang nhap lai duoc

@@ -185,7 +185,7 @@ describe('Chien dich: gui duyet, duyet (FinancePort), tra lai', () => {
     expect(c.body.status).toBe('draft');
     const id = c.body.id;
     expect((await lan.req('POST', `/portal/v1/campaigns/${id}/approve`)).status).toBeGreaterThanOrEqual(403); // khach khong duyet
-    const sub = await lan.json('POST', `/portal/v1/campaigns/${id}/submit`);
+    const sub = await lan.json('POST', `/portal/v1/campaigns/${id}/submit`, { content_rights_confirmed: true });
     expect(sub.status).toBe(200);
     expect(sub.body.status).toBe('pending');
     const q = await admin.json('GET', '/admin/v1/approvals?page_size=200');

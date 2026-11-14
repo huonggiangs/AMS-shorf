@@ -11,6 +11,7 @@ import { forbidden, notFound, unprocessable } from '../lib/errors.js';
 import { getRt, jsonParse, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { bumpManifest } from '../lib/manifest.js';
+import { assertLockPolicy, bumpContentVersion, recordApproval, syncKidFlags } from '../lib/creative-security.js';
 import { hasPerm, requirePerm } from '../auth/middleware.js';
 import type { AppEnv } from '../types.js';
 
@@ -43,6 +44,8 @@ const settingsBody = z.object({
   }),
   banned_industries: z.array(z.string().trim().min(1).max(40)).max(50),
 });
+/** Bat quang cao man khoa/tre em: phai gui kem xac nhan ro rang (ghi audit). */
+const putSettingsBody = settingsBody.extend({ confirm_children_policy: z.boolean().optional() });
 
 export async function loadTvSettings(rt: { db: import('@ams/runtime').Db }): Promise<TvSettings> {
   const raw = (await rt.db.query<{ value: string }>('SELECT value FROM settings WHERE key = ?', [TV_SETTINGS_KEY]))[0]?.value;
@@ -76,7 +79,7 @@ interface CRow {
 }
 const C_SELECT = `m.id, m.campaign_id, m.customer_id, m.name, m.kind, m.format, m.px_w, m.px_h, m.size_bytes, m.duration_s, m.review_state, m.state, m.overlay,
   cu.short_name AS owner_name, cu.industry, ca.name AS campaign_name`;
-const C_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN campaigns ca ON ca.id = m.campaign_id';
+const C_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN campaigns ca ON ca.id = m.campaign_id LEFT JOIN creative_security sec ON sec.creative_id = m.id';
 
 const overlayOf = (raw: string | null): CreativeOverlay => {
   if (!raw) return {};
@@ -126,7 +129,8 @@ const spec: ListSpec = {
   filters: {
     review_state: (v) => ({ sql: 'm.review_state = ?', params: [v] }),
     customer_id: (v) => ({ sql: 'm.customer_id = ?', params: [v] }),
-    kid_safe: (v) => ({ sql: `COALESCE(m.overlay, '') ${v === 'true' || v === '1' ? '' : 'NOT '}LIKE '%"kid_safe":true%'`, params: [] }),
+    // N5: cot co cau truc (creative_security.kid_safe), khong con LIKE tren overlay JSON
+    kid_safe: (v) => ({ sql: v === 'true' || v === '1' ? 'COALESCE(sec.kid_safe, 0) = 1' : 'COALESCE(sec.kid_safe, 0) = 0', params: [] }),
   },
 };
 
@@ -167,16 +171,16 @@ export function tvExperienceRoutes(): Hono<AppEnv> {
   r.get('/', requirePerm('tv_experience', 'view'), async (c) => {
     const rt = getRt(c);
     const settings = await loadTvSettings(rt);
-    // dem trong SQL; chi keo ve cac dong co overlay nhac toi kid_safe (tap thuc su bi tien loc, khong keo ca bang creatives)
-    const total = num((await rt.db.query<{ n: number }>("SELECT COUNT(*) AS n FROM creatives WHERE COALESCE(format, 'fullscreen') = 'fullscreen'"))[0]?.n);
-    const rows = await rt.db.query<{ overlay: string | null; review_state: string }>("SELECT overlay, review_state FROM creatives WHERE COALESCE(format, 'fullscreen') = 'fullscreen' AND overlay LIKE '%kid_safe%'");
-    let kid = 0;
-    let lock = 0;
-    for (const x of rows) {
-      const o = overlayOf(x.overlay);
-      if (o.kid_safe) kid++;
-      if (o.kid_safe && o.contexts?.includes('lock') && x.review_state === 'approved') lock++;
-    }
+    // N5: dem bang SQL tren cot co cau truc (creative_security), khong keo ve / khong LIKE tren overlay JSON
+    const counts = (await rt.db.query<{ total: unknown; kid: unknown; lock: unknown }>(
+      `SELECT COUNT(*) AS total,
+              COALESCE(SUM(CASE WHEN COALESCE(sec.kid_safe, 0) = 1 THEN 1 ELSE 0 END), 0) AS kid,
+              COALESCE(SUM(CASE WHEN COALESCE(sec.kid_safe, 0) = 1 AND COALESCE(sec.lock_context, 0) = 1 AND m.review_state = 'approved' THEN 1 ELSE 0 END), 0) AS lock
+         FROM creatives m LEFT JOIN creative_security sec ON sec.creative_id = m.id WHERE COALESCE(m.format, 'fullscreen') = 'fullscreen'`,
+    ))[0];
+    const total = num(counts?.total);
+    const kid = num(counts?.kid);
+    const lock = settings.lock_ads_enabled ? num(counts?.lock) : 0; // man khoa tat => khong creative nao du dieu kien
     return c.json({
       settings,
       summary: { creatives: total, kid_safe: kid, lock_eligible: lock },
@@ -186,10 +190,11 @@ export function tvExperienceRoutes(): Hono<AppEnv> {
 
   r.put('/settings', requirePerm('tv_experience', 'write'), async (c) => {
     const rt = getRt(c);
-    const b = await parseBody(c, settingsBody);
+    const { confirm_children_policy: ack, ...b } = await parseBody(c, putSettingsBody);
     // bat quang cao man khoa la quyet dinh rui ro (tre em): can quyen duyet
     const before = await loadTvSettings(rt);
     if (b.lock_ads_enabled && !before.lock_ads_enabled && !hasPerm(c, 'tv_experience', 'approve')) throw forbidden('Chỉ người có quyền duyệt mới được bật quảng cáo ở màn khóa.', 'forbidden', { module: 'tv_experience', action: 'approve' });
+    if (b.lock_ads_enabled && !before.lock_ads_enabled && ack !== true) throw unprocessable('Bật quảng cáo ở màn khóa/màn hình trẻ em là quyết định rủi ro pháp lý (trẻ em). Gửi confirm_children_policy=true để xác nhận đã có chấp thuận của pháp lý/phụ huynh.', 'children_policy_confirmation_required');
     const next: TvSettings = { ...b, banned_industries: [...new Set(b.banned_industries.map((x) => x.trim()))] };
     const now = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
@@ -197,8 +202,9 @@ export function tvExperienceRoutes(): Hono<AppEnv> {
         'INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?,?,?,?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at',
         [TV_SETTINGS_KEY, JSON.stringify(next), c.get('user').id, now],
       );
-      await auditCtx(c, db, { action: 'tv.settings.update', objectType: 'settings', objectId: TV_SETTINGS_KEY, diff: diffObjects(before as unknown as Record<string, unknown>, next as unknown as Record<string, unknown>) });
+      await auditCtx(c, db, { action: 'tv.settings.update', objectType: 'settings', objectId: TV_SETTINGS_KEY, diff: { ...diffObjects(before as unknown as Record<string, unknown>, next as unknown as Record<string, unknown>), ...(b.lock_ads_enabled !== before.lock_ads_enabled ? { children_policy_confirmed: ack === true } : {}) } });
     });
+    if (b.lock_ads_enabled !== before.lock_ads_enabled || b.fullscreen_ads_enabled !== before.fullscreen_ads_enabled) await bumpManifest(rt); // gateway doc lai chinh sach
     return c.json({ settings: next });
   });
 
@@ -248,9 +254,18 @@ export function tvExperienceRoutes(): Hono<AppEnv> {
     const check = parseOverlay(next, { reviewerFields: 'keep' });
     if (!check.ok) throw unprocessable('Lớp phủ không hợp lệ.', 'bad_overlay', check.errors);
     const json = check.value ? JSON.stringify(check.value) : null;
+    // chinh sach tre em: man khoa tat (mac dinh) => khong cho dat ngu canh 'lock' (cung bi chan luc duyet va luc xay manifest)
+    if (contexts?.includes('lock') && !(cur.contexts ?? []).includes('lock')) await assertLockPolicy(rt.db, json, { creative_id: m.id });
+    const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
       // duration_s dong bo sang creatives.duration_s de manifest co thoi luong (TV-APP-INTEGRATION request 1.4)
       await db.run('UPDATE creatives SET overlay = ?, duration_s = COALESCE(?, duration_s) WHERE id = ?', [json, b.duration_s ?? null, m.id]);
+      await bumpContentVersion(db, m.id, nowIso); // R1-14
+      await syncKidFlags(db, m.id, json, nowIso); // N5: cot kid_safe/lock_context
+      if (m.review_state === 'approved') {
+        const cur2 = (await db.query<{ sha256: string | null; storage_key: string | null; size_bytes: unknown; source_url: string | null; format: string | null; overlay: string | null }>('SELECT sha256, storage_key, size_bytes, source_url, format, overlay FROM creatives WHERE id = ?', [m.id]))[0]!;
+        await recordApproval(db, { id: m.id, ...cur2 }, nowIso); // nguoi duyet tu sua: duyet lai co kiem toan, giu phien ban khop
+      }
       await auditCtx(c, db, {
         action: b.kid_safe !== undefined ? (b.kid_safe ? 'tv.kid_safe.approve' : 'tv.kid_safe.revoke') : 'tv.creative.update',
         objectType: 'creative',

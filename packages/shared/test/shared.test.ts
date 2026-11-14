@@ -27,7 +27,7 @@ describe('id', () => {
 describe('password', () => {
   it('scrypt dung/sai', async () => {
     const h = await hashPassword('Mat-khau-1', { N: 1024 });
-    expect(h.startsWith('scrypt$1024$8$1$')).toBe(true);
+    expect(h.startsWith('scrypt$1024$8$2$')).toBe(true); // p=2 mac dinh (R1-21)
     expect(await verifyPassword('Mat-khau-1', h)).toBe(true);
     expect(await verifyPassword('mat-khau-1', h)).toBe(false);
     expect(await verifyPassword('x', 'rac')).toBe(false);

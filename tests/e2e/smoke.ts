@@ -425,7 +425,7 @@ async function main(): Promise<void> {
     const b = await admin.expect<{ id: string }>(201, 'POST', '/admin/v1/campaigns', { name: 'E2E chien dich B', customer_id: custB.id, screen_type: 'tv', media_id: mediaB, budget_vnd: 1_000_000 });
     campB = b.id;
     eq(a.status, 'draft', 'trang thai draft');
-    const s = await admin.expect<{ status: string }>(200, 'POST', `/admin/v1/campaigns/${a.id}/submit`);
+    const s = await admin.expect<{ status: string }>(200, 'POST', `/admin/v1/campaigns/${a.id}/submit`, { content_rights_confirmed: true });
     eq(s.status, 'pending', 'sau submit');
     const row = await one('SELECT format, overlay, sha256 FROM creatives WHERE campaign_id = $1', [campA]);
     eq(row.format, 'l_banner', 'creative gan vao chien dich mang format');
@@ -732,7 +732,7 @@ async function main(): Promise<void> {
 
   await step('het ngan sach: chien dich C (30 d) nhan 2 impression -> chi dung 30 d, ended, manifest bo creative, khong am vi', async () => {
     const c = await admin.expect<{ id: string }>(201, 'POST', '/admin/v1/campaigns', { name: 'E2E chien dich C nho', customer_id: custA.id, screen_type: 'tv', media_id: mediaA2, budget_vnd: 30 });
-    await admin.expect(200, 'POST', `/admin/v1/campaigns/${c.id}/submit`);
+    await admin.expect(200, 'POST', `/admin/v1/campaigns/${c.id}/submit`, { content_rights_confirmed: true });
     const ap = await admin.expect<{ status: string; reserved_vnd: number }>(200, 'POST', `/admin/v1/campaigns/${c.id}/approve`);
     eq([ap.status, ap.reserved_vnd], ['active', 30], 'duyet C');
     let creative = '';
@@ -817,7 +817,7 @@ async function main(): Promise<void> {
     eq((await one('SELECT state FROM campaigns WHERE id = $1', [campA])).state, 'active', 'A khong doi');
     const d = await admin.expect<{ id: string }>(201, 'POST', '/admin/v1/campaigns', { name: 'E2E chien dich D (dua duyet)', customer_id: custA.id, screen_type: 'tv', media_id: mediaA2, budget_vnd: 100_000 });
     campD = d.id;
-    await admin.expect(200, 'POST', `/admin/v1/campaigns/${campD}/submit`);
+    await admin.expect(200, 'POST', `/admin/v1/campaigns/${campD}/submit`, { content_rights_confirmed: true });
     const rs = await Promise.all([admin.call('POST', `/admin/v1/campaigns/${campD}/approve`), admin.call('POST', `/admin/v1/campaigns/${campD}/approve`)]);
     eq(rs.map((x) => x.status).sort(), [200, 409], 'hai lan duyet dong thoi');
     const row = await one('SELECT state, funding_state, reserved_vnd FROM campaigns WHERE id = $1', [campD]);
@@ -830,7 +830,7 @@ async function main(): Promise<void> {
 
   await step('P0-2 sau su co (mat dien giua cap nhat trang thai duyet va ghi outbox): worker tu dong ghi bu, giu tien, tang epoch manifest', async () => {
     const c = await admin.expect<{ id: string }>(201, 'POST', '/admin/v1/campaigns', { name: 'E2E chien dich E (mat dien)', customer_id: custA.id, screen_type: 'tv', media_id: mediaA2, budget_vnd: 50_000 });
-    await admin.expect(200, 'POST', `/admin/v1/campaigns/${c.id}/submit`);
+    await admin.expect(200, 'POST', `/admin/v1/campaigns/${c.id}/submit`, { content_rights_confirmed: true });
     const before = epochNow();
     // mo phong tien trinh API chet NGAY SAU khi danh dau duyet (buoc 1) va TRUOC khi ghi outbox: chi co UPDATE trang thai, khong co dong outbox
     await pgc.query(

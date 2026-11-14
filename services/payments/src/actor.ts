@@ -16,7 +16,9 @@ export interface FinanceActor {
 
 export type ActorResolver = (c: Context, rt: Runtime) => Promise<FinanceActor | null>;
 
-function clientIp(c: Context): string | null {
+/** R1-20: TRUST_PROXY=0 => khong tin header proxy (cong mo truc tiep). */
+function clientIp(c: Context, rt?: Runtime): string | null {
+  if (rt?.config.env['TRUST_PROXY'] === '0') return null;
   const h = c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for');
   return h ? h.split(',')[0]!.trim() : null;
 }
@@ -28,13 +30,13 @@ function clientIp(c: Context): string | null {
 export const defaultResolveActor: ActorResolver = async (c, rt) => {
   const pre = (c as unknown as { get(k: string): unknown }).get('actor') as Partial<FinanceActor> | undefined;
   if (pre && pre.id && pre.role) {
-    return { id: pre.id, role: pre.role, account_kind: (pre.account_kind ?? 'internal') as FinanceActor['account_kind'], customer_id: pre.customer_id ?? null, perms: pre.perms ?? [], ip: pre.ip ?? clientIp(c) };
+    return { id: pre.id, role: pre.role, account_kind: (pre.account_kind ?? 'internal') as FinanceActor['account_kind'], customer_id: pre.customer_id ?? null, perms: pre.perms ?? [], ip: pre.ip ?? clientIp(c, rt) };
   }
   // middleware auth cua a1 (services/api/src/auth/middleware.ts): c.get('user') = AuthUser
   const u = (c as unknown as { get(k: string): unknown }).get('user') as { id?: string; role?: string; kind?: string; customerId?: string | null; perms?: PermRow[] } | undefined;
   if (u && u.id && u.role) {
     const ip = (c as unknown as { get(k: string): unknown }).get('ip');
-    return { id: u.id, role: u.role, account_kind: (u.kind ?? 'internal') as FinanceActor['account_kind'], customer_id: u.customerId ?? null, perms: u.perms ?? [], ip: typeof ip === 'string' ? ip : clientIp(c) };
+    return { id: u.id, role: u.role, account_kind: (u.kind ?? 'internal') as FinanceActor['account_kind'], customer_id: u.customerId ?? null, perms: u.perms ?? [], ip: typeof ip === 'string' ? ip : clientIp(c, rt) };
   }
   const token = getCookie(c, 'ams_session');
   if (!token) return null;
@@ -52,7 +54,7 @@ export const defaultResolveActor: ActorResolver = async (c, rt) => {
     'SELECT id, role, account_kind, customer_id, status FROM admins WHERE id = ?', [s.admin_id]))[0];
   if (!a || a.status !== 'active') return null;
   const perms = await rt.db.query<{ module: string; action: string; allowed: number }>('SELECT module, action, allowed FROM admin_permissions WHERE admin_id = ?', [a.id]);
-  return { id: a.id, role: a.role, account_kind: a.account_kind as FinanceActor['account_kind'], customer_id: a.customer_id, perms, ip: clientIp(c) };
+  return { id: a.id, role: a.role, account_kind: a.account_kind as FinanceActor['account_kind'], customer_id: a.customer_id, perms, ip: clientIp(c, rt) };
 };
 
 export function requirePerm(a: FinanceActor | null, module: string, action: string, scope: 'internal' | 'external'): FinanceActor {

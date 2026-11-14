@@ -13,6 +13,7 @@ import {
 import { todayVn } from '../lib/dates.js';
 import { bumpManifest } from '../lib/manifest.js';
 import { enqueueMediaUploaded, runOutbox } from '../outbox.js';
+import { assertContentVersion, assertLockPolicy, bumpContentVersion, recordApproval, syncKidFlags } from '../lib/creative-security.js';
 import { mediaScanReviewRoutes } from './media-scan-review.js';
 import { UNSCANNED_STATES, allowUnscannedCreatives, assertScanOk } from './creatives-scan.js';
 import { requirePerm } from '../auth/middleware.js';
@@ -20,8 +21,8 @@ import { AD_FORMATS, isAdFormat, parseOverlay, sha256Hex, type CreativeOverlay }
 import type { AppEnv, AuthUser } from '../types.js';
 
 const M_SELECT = `m.id, m.campaign_id, m.customer_id, m.name, m.target_type, m.px_w, m.px_h, m.kind, m.source, m.source_url, m.storage_key, m.mime, m.size_bytes, m.duration_s,
-  m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code`;
-const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id';
+  m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code, COALESCE(sec.content_version, 1) AS content_version`;
+const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id';
 
 interface MediaRow {
   id: string;
@@ -50,6 +51,7 @@ interface MediaRow {
   overlay: string | null;
   owner_name: string;
   customer_code: string;
+  content_version: number;
 }
 
 function overlayOf(raw: string | null | undefined): CreativeOverlay | null {
@@ -102,6 +104,7 @@ export const present = (m: MediaRow): Record<string, unknown> => ({
   format: isAdFormat(m.format) ? m.format : 'fullscreen',
   overlay: overlayOf(m.overlay),
   sha256: m.sha256,
+  content_version: num(m.content_version ?? 1), // R1-14: gui kem khi duyet; doi noi dung => 409
   created_at: m.created_at,
 });
 
@@ -271,6 +274,8 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
         await db.run("UPDATE creatives SET review_state = 'rejected', review_note = ?, state = 'invalid' WHERE id = ? AND state = 'uploading'", [message, m.id]);
         await auditCtx(c, db, { action: 'media.rejected_on_confirm', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { code, size: head.size } });
       });
+      // R1-10: khong de lai tep bi tu choi (chi phi luu tru, tai su dung URL ky)
+      try { await rt.objects.delete?.(m.storage_key!); } catch { /* khong chan phan hoi loi */ }
       throw unprocessable(message, code);
     };
 
@@ -306,15 +311,24 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     }
 
     let sha: string | null = null;
+    let finalKey: string = m.storage_key;
     if (head.size <= SHA_MAX_BYTES) {
       const bytes = await rt.objects.get(m.storage_key);
       if (!bytes) throw conflict('Chưa đọc được tệp trên kho lưu trữ để xác minh. Thử xác nhận lại.', 'upload_missing');
       sha = await sha256Hex(bytes);
+      // R1-10: URL tai len con hieu luc 900 s va dung lai duoc => sau khi bam xong, chep sang khoa MOI (khong ai co URL ky) va xoa khoa cu;
+      // tep da bam khong the bi doi tu duoi sau khi duyet. Tep > 128 MB giu khoa cu (khong doc het vao bo nho), thiet bi van doi chieu sha256 khi tai.
+      const frozenKey = `media/${m.customer_id}/${m.id}/v1-${safeName(m.name ?? 'file')}`;
+      if (frozenKey !== m.storage_key) {
+        await rt.objects.put(frozenKey, bytes, m.mime ?? head.contentType);
+        try { await rt.objects.delete?.(m.storage_key); } catch { /* khoa cu mo coi: khong anh huong noi dung da duyet */ }
+        finalKey = frozenKey;
+      }
     }
     await rt.db.tx(async (db) => {
       const res = await db.run(
-        `UPDATE creatives SET px_w = ?, px_h = ?, orientation = ?, target_type = ?, size_bytes = ?, duration_s = ?, sha256 = ?, state = 'pending_review' WHERE id = ? AND state = 'uploading'`,
-        [w, h, w >= h ? 'landscape' : 'portrait', target, head.size, durationSec === undefined ? null : Math.round(durationSec), sha, m.id],
+        `UPDATE creatives SET px_w = ?, px_h = ?, orientation = ?, target_type = ?, size_bytes = ?, duration_s = ?, sha256 = ?, storage_key = ?, state = 'pending_review' WHERE id = ? AND state = 'uploading'`,
+        [w, h, w >= h ? 'landscape' : 'portrait', target, head.size, durationSec === undefined ? null : Math.round(durationSec), sha, finalKey, m.id],
       );
       if (res.changes === 0) throw conflict('Tệp vừa được xác nhận ở nơi khác.', 'invalid_state');
       await enqueueMediaUploaded(db, rt, m.id); // cung giao dich: xac nhan xong thi chac chan co viec quet (media-worker)
@@ -363,29 +377,46 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     if (m.state === 'invalid') throw conflict('Tệp không hợp lệ.', 'invalid_state');
     const fo = checkFormatOverlay(b.format, b.overlay, external);
     const resetReview = u.kind !== 'internal' && m.review_state === 'approved';
+    const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
       await db.run(
         `UPDATE creatives SET format = COALESCE(?, format), overlay = CASE WHEN ? = 1 THEN ? ELSE overlay END${resetReview ? ", review_state = 'pending', state = 'pending_review'" : ''} WHERE id = ?`,
         [fo.format ?? null, fo.overlay === undefined ? 0 : 1, fo.overlay ?? null, m.id],
       );
-      await auditCtx(c, db, { action: 'media.overlay', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { format: fo.format ?? null, overlay: fo.overlay === undefined ? 'unchanged' : fo.overlay, review_reset: resetReview } });
+      // R1-14: moi lan doi noi dung tang phien ban (hang cho duyet phai gui kem phien ban da xem); kid_safe/lock dong bo thanh cot
+      const ver = await bumpContentVersion(db, m.id, nowIso);
+      const after = (await db.query<{ overlay: string | null; format: string | null; sha256: string | null; storage_key: string | null; size_bytes: unknown; source_url: string | null }>('SELECT overlay, format, sha256, storage_key, size_bytes, source_url FROM creatives WHERE id = ?', [m.id]))[0]!;
+      await syncKidFlags(db, m.id, after.overlay, nowIso);
+      // noi bo sua tep da duyet: coi la duyet lai co kiem toan (giu approved); khach sua: da quay ve cho duyet o tren
+      if (!resetReview && m.review_state === 'approved') await recordApproval(db, { id: m.id, ...after }, nowIso);
+      await auditCtx(c, db, { action: 'media.overlay', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { content_version: ver, format: fo.format ?? null, overlay: fo.overlay === undefined ? 'unchanged' : fo.overlay, review_reset: resetReview } });
     });
     if (m.campaign_id) await bumpManifest(rt);
     return c.json(present(await loadMedia(c, m.id)));
   });
 
   if (external) return r;
+  r.route('/', mediaScanReviewRoutes()); // creative 'needs_manual_review' (duong Cloudflare)
 
   r.post('/:id/approve', requirePerm('media', 'approve'), async (c) => {
     const rt = getRt(c);
     const m = await loadMedia(c, c.req.param('id'));
+    const body = await parseBody(c, z.object({ content_version: z.coerce.number().int().min(1).optional() }));
     if (m.state === 'uploading' || m.state === 'invalid') throw conflict('Tệp chưa tải xong hoặc không hợp lệ.', 'invalid_state');
     if (m.review_state === 'approved') return c.json(present(m));
     assertScanOk(m, await allowUnscannedCreatives(rt), { creative_id: m.id, scan_state: m.scan_state });
+    await assertContentVersion(rt.db, m.id, body.content_version); // R1-14: nguoi duyet phai duyet dung phien ban da xem
+    await assertLockPolicy(rt.db, m.overlay, { creative_id: m.id }); // chinh sach tre em: man khoa tat thi khong duyet creative co ngu canh 'lock'
+    const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
+      // buoc phien ban + noi dung nam TRONG giao dich: doi noi dung giua luc kiem va luc duyet lam UPDATE khong khop
+      const cur = (await db.query<{ sha256: string | null; storage_key: string | null; size_bytes: unknown; source_url: string | null; format: string | null; overlay: string | null }>('SELECT sha256, storage_key, size_bytes, source_url, format, overlay FROM creatives WHERE id = ?', [m.id]))[0];
+      if (!cur || cur.overlay !== m.overlay || cur.format !== m.format || cur.sha256 !== m.sha256) throw conflict('Nội dung tệp vừa thay đổi, hãy tải lại và xem lại trước khi duyệt.', 'content_changed');
+      await assertContentVersion(db, m.id, body.content_version);
       const res = await db.run("UPDATE creatives SET review_state = 'approved', review_note = NULL, state = 'ready' WHERE id = ? AND state NOT IN ('uploading','invalid') AND scan_state = ?", [m.id, m.scan_state]);
       if (res.changes === 0) throw conflict('Tệp vừa đổi trạng thái.', 'invalid_state');
-      await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'approved' }, scan_state: m.scan_state } });
+      const ap = await recordApproval(db, { id: m.id, ...cur }, nowIso);
+      await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'approved' }, scan_state: m.scan_state, content_version: ap.version, content_hash: ap.hash, version_bound: body.content_version !== undefined } });
     });
     await bumpManifest(rt);
     await emailOwner(rt, m.customer_id, `Tệp "${m.name ?? ''}" đã được duyệt`, `<p>Tệp <b>${esc(m.name)}</b> đã được duyệt và có thể dùng cho chiến dịch.</p>`);
@@ -396,7 +427,6 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const rt = getRt(c);
     const m = await loadMedia(c, c.req.param('id'));
     const b = await parseBody(c, z.object({ reason: z.string().trim().min(3, 'Nhập lý do (tối thiểu 3 ký tự)').max(500) }));
-  r.route('/', mediaScanReviewRoutes()); // creative 'needs_manual_review' (duong Cloudflare)
     if (m.state === 'uploading') throw conflict('Tệp chưa tải xong.', 'invalid_state');
     await rt.db.tx(async (db) => {
       await db.run("UPDATE creatives SET review_state = 'rejected', review_note = ?, state = 'rejected' WHERE id = ?", [b.reason, m.id]);

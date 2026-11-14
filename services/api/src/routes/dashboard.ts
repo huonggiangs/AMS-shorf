@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getRt, num } from '../lib/http.js';
-import { requirePerm } from '../auth/middleware.js';
+import { hasPerm, requirePerm } from '../auth/middleware.js';
 import { campaignSpec, presentCampaigns } from './campaigns.js';
 import type { CampRow } from './campaigns.js';
 import type { AppEnv } from '../types.js';
@@ -46,18 +46,19 @@ export function dashboardRoutes(): Hono<AppEnv> {
     if (media) alerts.push({ level: 'warn', title: `${media} media chờ kiểm duyệt` });
     if (!alerts.length) alerts.push({ level: 'ok', title: 'Hệ thống hoạt động bình thường' });
 
+    const showMoney = hasPerm(c, 'finance', 'view'); // R1-17: doanh thu/chi phi tra thuong chi cho nguoi co quyen tai chinh
     return c.json({
       range,
       kpi: {
         active_tvs: num(dev?.online),
         total_tvs: num(dev?.total),
         impressions: num(tot?.imps),
-        revenue_vnd: Math.round(num(tot?.rev) / 1e6),
-        reward_cost_vnd: num(tot?.reward),
+        revenue_vnd: showMoney ? Math.round(num(tot?.rev) / 1e6) : null,
+        reward_cost_vnd: showMoney ? num(tot?.reward) : null,
         pending_approvals: pending,
       },
-      trend: days.map((d) => ({ label: d.d.slice(5).replace('-', '/'), views: num(d.imps), revenue_vnd: Math.round(num(d.rev) / 1e6) })),
-      revenue_split: split.map((s) => ({ name: s.name ?? 'Trực tiếp', value: Math.round(num(s.rev) / 1e6) })).filter((s) => s.value > 0),
+      trend: days.map((d) => ({ label: d.d.slice(5).replace('-', '/'), views: num(d.imps), revenue_vnd: showMoney ? Math.round(num(d.rev) / 1e6) : 0 })),
+      revenue_split: (showMoney ? split : []).map((s) => ({ name: s.name ?? 'Trực tiếp', value: Math.round(num(s.rev) / 1e6) })).filter((s) => s.value > 0),
       slot_fill: [],
       alerts,
       top_campaigns: await topCampaigns(c),

@@ -122,10 +122,11 @@ export function CampaignDrawer({ id, onClose, onReject }: { id: string | null; o
             <dt>Thời gian</dt><dd>{fmtDate(c.start_date)} → {fmtDate(c.end_date)}</dd>
             <dt>Lượt xem</dt><dd>{num(c.impressions)}</dd>
             {c.reject_reason ? (<><dt>Lý do trả lại</dt><dd>{c.reject_reason}</dd></>) : null}
+            {!base.isExternal ? (<><dt>Ngành</dt><dd>{c.customer_industry ?? '—'}{c.restricted_industry ? ' · HẠN CHẾ' : ''}</dd><dt>Quyền nội dung</dt><dd>{c.content_rights_confirmed ? `Đã xác nhận ${fmtDate(c.content_rights_confirmed_at)}` : 'Chưa xác nhận'}</dd></>) : null}
           </dl>
           {msg ? <div className="note"><Icon n="info" /><span>{msg}</span></div> : null}
           <div className="acts">
-            {c.status === 'draft' && can('campaigns', 'write') ? <Btn tone="p" onClick={() => void run('submit', 'Đã gửi duyệt.')}>{t('Gửi duyệt')}</Btn> : null}
+            {c.status === 'draft' && can('campaigns', 'write') ? <Btn tone="p" onClick={() => { if (window.confirm('Xác nhận bạn có đủ quyền sử dụng hình ảnh, âm nhạc, thương hiệu và nội dung trong quảng cáo, và nội dung tuân thủ pháp luật quảng cáo?')) void act(() => api.post(ep('submit'), { body: { content_rights_confirmed: true } }), 'Đã gửi duyệt.', ['/admin/v1', '/portal/v1']); }}>{t('Gửi duyệt')}</Btn> : null}
             {c.status === 'pending' && can('campaigns', 'approve') && !base.isExternal ? (
               <>
                 <Btn tone="p" onClick={async () => { const r = await act(() => api.post(ep('approve'), { schema: approveResultSchema }), undefined, ['/admin/v1']); if (r) setMsg(r.message ?? (r.status === 'awaiting_funds' ? `Đã duyệt nhưng ví thiếu ${vnd(r.shortfall_vnd)}. Quảng cáo tự chạy sau khi nạp đủ.` : `Đã duyệt${r.reserved_vnd ? `, đã giữ ${vnd(r.reserved_vnd)} từ ví` : ''}.`)); }}>{t('Duyệt')}</Btn>
@@ -162,6 +163,8 @@ export function CampaignForm({ open, onClose }: { open: boolean; onClose: () => 
   const base = useBase();
   const act = useAct();
   const [f, setF] = useState({ name: '', customer_id: '', screen_type: 'tv' as ScreenType, elev: '21.5', led: '', media_id: '', budget: '5000000', duration: '15', start: '', end: '' });
+  const [rights, setRights] = useState(false);
+  const [restricted, setRestricted] = useState(false);
   const [err, setErr] = useState('');
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((p) => ({ ...p, [k]: v }));
   const custs = useQuery({ queryKey: ['/admin/v1/customers', 'pick'], enabled: open && !base.isExternal, queryFn: () => api.get('/admin/v1/customers', { query: { page_size: 200 }, schema: listOf(customerSchema) }) });
@@ -177,10 +180,11 @@ export function CampaignForm({ open, onClose }: { open: boolean; onClose: () => 
     if (!base.isExternal && !f.customer_id) return setErr('Chọn khách hàng.');
     const bErr = budgetError(f.budget);
     if (bErr) return setErr(bErr);
+    if (send && !rights) return setErr('Cần tích xác nhận quyền sử dụng nội dung trước khi gửi duyệt.');
     if (m && check && !check.ok) return setErr(check.message);
     const created = await act(() => api.post(base.campaigns, { body: { name: f.name.trim(), customer_id: f.customer_id || undefined, screen_type: f.screen_type, screen_id: f.screen_type === 'led' ? f.led || undefined : undefined, media_id: f.media_id || undefined, budget_vnd: Math.round(+f.budget), duration_sec: +f.duration, start_date: f.start || undefined, end_date: f.end || undefined }, schema: campaignSchema }), undefined, ['/admin/v1', '/portal/v1']);
     if (!created) return;
-    if (send) await act(() => api.post(`${base.campaigns}/${created.id}/submit`), 'Đã gửi duyệt. Gửi được cả khi ví chưa đủ.', ['/admin/v1', '/portal/v1']);
+    if (send) await act(() => api.post(`${base.campaigns}/${created.id}/submit`, { body: { content_rights_confirmed: rights, restricted_industry: restricted } }), 'Đã gửi duyệt. Gửi được cả khi ví chưa đủ.', ['/admin/v1', '/portal/v1']);
     else await act(async () => undefined, 'Đã lưu bản nháp.');
     onClose();
   };
@@ -213,6 +217,14 @@ export function CampaignForm({ open, onClose }: { open: boolean; onClose: () => 
           <Field label="Ngày bắt đầu"><input type="date" value={f.start} onChange={(e) => set('start', e.target.value)} /></Field>
           <Field label="Ngày kết thúc"><input type="date" value={f.end} min={f.start} onChange={(e) => set('end', e.target.value)} /></Field>
         </div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', margin: '10px 0 0', fontSize: 13 }}>
+          <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} style={{ marginTop: 3 }} />
+          <span>Tôi xác nhận có đủ quyền sử dụng hình ảnh, âm nhạc, thương hiệu và nội dung trong quảng cáo, và nội dung tuân thủ pháp luật quảng cáo. (bắt buộc khi gửi duyệt)</span>
+        </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', margin: '6px 0 0', fontSize: 13 }}>
+          <input type="checkbox" checked={restricted} onChange={(e) => setRestricted(e.target.checked)} style={{ marginTop: 3 }} />
+          <span>Quảng cáo thuộc ngành hạn chế (rượu bia, thuốc lá, cá cược, vay tiêu dùng, thực phẩm chức năng, thuốc, nội dung người lớn)</span>
+        </label>
         {err ? <p role="alert" style={{ color: 'var(--bad)', margin: '8px 0 0' }}>{err}</p> : null}
         <div className="da" style={{ marginTop: 14 }}>
           <button type="button" className="btn" onClick={onClose}>{t('Hủy')}</button>

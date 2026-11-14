@@ -7,7 +7,7 @@ import { useAct } from '../api/hooks';
 import { useAuth } from '../auth/AuthProvider';
 import { ServerTable } from '../components/ServerTable';
 import type { Col } from '../components/DataTable';
-import { Btn, Kpi, Note, NameCell, PageHead } from '../components/ui';
+import { Btn, Kpi, Note, NameCell, PageHead, Tag } from '../components/ui';
 import { PromptDialog } from '../components/Prompt';
 import { CampaignDrawer } from './Campaigns';
 import { useT } from '../i18n';
@@ -36,6 +36,8 @@ export default function Approvals() {
     { key: 'creator', label: 'Người gửi', text: (r) => r.creator ?? '' },
     { key: 'file', label: 'Tệp', text: (r) => r.media_name ?? '—' },
     { key: 'budget', label: 'Ngân sách', sortKey: 'budget_vnd', num: true, text: (r) => r.budget_vnd, cell: (r) => vnd(r.budget_vnd) },
+    { key: 'comp', label: 'Tuân thủ', text: (r) => `${r.restricted_industry ? 'ngành hạn chế ' : ''}${r.content_rights_confirmed ? 'đã xác nhận quyền nội dung' : 'chưa xác nhận quyền'}`, cell: (r) => (
+      <>{r.restricted_industry ? <Tag tone="bad">Ngành hạn chế</Tag> : null}{' '}{r.content_rights_confirmed ? <Tag tone="ok">Đã xác nhận quyền nội dung</Tag> : <Tag tone="warn">Chưa xác nhận quyền</Tag>}</>) },
     { key: 'dec', label: 'Quyết định', cell: (r) => canApprove ? (
       <><Btn tone="p" className="sm" onClick={() => void approve(r.id)}>{t('Duyệt')}</Btn>{' '}<Btn className="sm" onClick={() => setReject([r.id])}>{t('Trả lại')}</Btn></>) : <span style={{ color: 'var(--mut)' }}>{t('Chỉ đọc')}</span> },
   ];

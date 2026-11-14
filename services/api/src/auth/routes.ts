@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { effectivePermissions } from '@ams/config';
-import { generateTotpSecret, hashPassword, otpauthUri, sha256Hex, timingSafeEqualStr, verifyPassword, verifyTotp } from '@ams/shared';
+import { generateTotpSecret, hashPassword, otpauthUri, passwordNeedsRehash, sha256Hex, timingSafeEqualStr, verifyPassword, verifyTotp } from '@ams/shared';
 import type { Runtime } from '@ams/runtime';
 import { AAD, decField, encField, hashToken, newToken } from '../lib/crypto.js';
 import { HttpError, forbidden, notFound, unauthorized, unprocessable, tooMany } from '../lib/errors.js';
@@ -59,7 +59,7 @@ async function issueMfa(c: Ctx, rt: Runtime, adminId: string, kind: 'challenge' 
   await rt.db.run('INSERT INTO mfa (id, admin_id, kind, token_hash, attempts, expires_at, created_at) VALUES (?,?,?,?,0,?,?)', [
     rt.id(), adminId, kind, hash, new Date(now.getTime() + MFA_TTL_SEC * 1000).toISOString(), now.toISOString(),
   ]);
-  setCookie(c, MFA_COOKIE, token, { httpOnly: true, sameSite: 'Lax', path: '/', secure: isHttps(rt), maxAge: MFA_TTL_SEC });
+  setCookie(c, MFA_COOKIE, token, { httpOnly: true, sameSite: 'Strict', path: '/', secure: isHttps(rt), maxAge: MFA_TTL_SEC });
   return token;
 }
 
@@ -108,7 +108,9 @@ export function authRoutes(): Hono<AppEnv> {
     const ip = c.get('ip');
     const body = await parseBody(c, z.object({ email: z.string().trim().toLowerCase().max(254), password: z.string().min(1).max(256) }));
     await rateLimit(rt, `rl:login:ip:${ip}`, 40, 900);
-    await rateLimit(rt, `rl:login:em:${await sha256Hex(body.email)}`, 12, 900);
+    // R1-19: bo dem theo (email, IP): ke tan cong khong the can kiet bo dem cua nan nhan tu IP khac
+    const emKey = `rl:login:em:${await sha256Hex(`${body.email}|${ip}`)}`;
+    await rateLimit(rt, emKey, 12, 900);
 
     const row = (
       await rt.db.query<LoginRow>(
@@ -126,11 +128,15 @@ export function authRoutes(): Hono<AppEnv> {
       await verifyPassword(body.password, await getDummy(rt));
       throw invalid();
     }
-    if (row.locked_until && row.locked_until > nowIso) {
-      const left = Math.ceil((new Date(row.locked_until).getTime() - now.getTime()) / 1000);
-      throw new HttpError(429, 'account_locked', 'Tài khoản tạm khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau ít phút.', { retry_after_sec: left }, { 'Retry-After': String(left) });
+    // R1-19: luon bam mat khau truoc (thoi gian dong nhat) va KHONG tra 429 rieng cho tai khoan bi khoa (khong lo email ton tai).
+    // Dang khoa => 401 giong het sai mat khau, khong cong don so lan sai (ke tan cong khong keo dai khoa vo han).
+    const lockedNow = !!(row.locked_until && row.locked_until > nowIso);
+    const pwOk = await verifyPassword(body.password, row.password_hash);
+    if (lockedNow) {
+      if (pwOk) await writeAudit(rt.db, { rt, ip, actorId: row.id }, { action: 'auth.login_while_locked', objectType: 'admin', objectId: row.id, customerId: row.customer_id });
+      throw invalid();
     }
-    if (!(await verifyPassword(body.password, row.password_hash))) {
+    if (!pwOk) {
       const fails = row.failed_logins + 1;
       const lock = fails >= MAX_FAILS;
       await rt.db.run('UPDATE admins SET failed_logins = ?, locked_until = ? WHERE id = ?', [lock ? 0 : fails, lock ? new Date(now.getTime() + LOCK_SEC * 1000).toISOString() : null, row.id]);
@@ -141,7 +147,15 @@ export function authRoutes(): Hono<AppEnv> {
     if (row.acct_expires_at && row.acct_expires_at <= nowIso) throw unauthorized('Tài khoản đã hết hạn sử dụng.', 'account_expired');
     if (row.account_kind !== 'internal' && row.customer_state === 'terminated') throw forbidden('Hợp đồng của khách hàng đã chấm dứt, tài khoản không còn truy cập.', 'customer_terminated');
 
-    await rt.kv.del(`rl:login:em:${await sha256Hex(body.email)}`);
+    // R1-21: nang cap bam mat khau cu len tham so hien hanh (loi khong chan dang nhap)
+    if (passwordNeedsRehash(row.password_hash, scryptParams(rt))) {
+      try {
+        await rt.db.run('UPDATE admins SET password_hash = ? WHERE id = ?', [await hashPassword(body.password, scryptParams(rt)), row.id]);
+      } catch (e) {
+        console.error('[auth] rehash mat khau loi:', (e as Error).name);
+      }
+    }
+    await rt.kv.del(emKey);
     const needMfa = row.account_kind !== 'internal' || row.mfa_required === 1 || !!row.totp_secret_enc;
     if (needMfa) {
       const enrolled = !!row.totp_secret_enc;

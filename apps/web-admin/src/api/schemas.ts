@@ -112,6 +112,12 @@ export const campaignSchema = z
     pacing_pct: z.coerce.number().nullish(),
     reward_per_view: z.coerce.number().nullish(),
     reject_reason: z.string().nullish(),
+    restricted_industry: z.boolean().optional(),
+    restricted_reason: z.string().nullish(),
+    customer_industry: z.string().nullish(),
+    content_rights_confirmed: z.boolean().optional(),
+    content_rights_confirmed_at: z.string().nullish(),
+    content_rights_confirmed_by: z.string().nullish(),
   })
   .passthrough();
 export type Campaign = z.infer<typeof campaignSchema>;

@@ -131,6 +131,9 @@ export function assertFinanceConfig(rt: Runtime): { mode: ReturnType<typeof sepa
   return { mode, devSimulate };
 }
 
+/** hono >= 4.13 kieu tra ve `string | undefined` cho Context khong gan duong dan: route da khop thi luon co gia tri. */
+const param = (c: Context, k: string): string => c.req.param(k) ?? '';
+
 const statusOut = (s: string, admin: boolean): string => (admin && s === 'pending' ? 'awaiting_confirm' : s);
 
 export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {}): MountResult {
@@ -303,7 +306,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
 
   app.post('/admin/v1/topups/:id/confirm', wrap(async (c) => {
     const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
-    return c.json(await confirmTopup(c.req.param('id'), a));
+    return c.json(await confirmTopup(param(c, 'id'), a));
   }));
 
   // hang doi xu ly thu cong
@@ -323,7 +326,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
   app.post('/admin/v1/payments/manual-queue/:id/resolve', wrap(async (c) => {
     const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
     const b = await jsonBody(c, z.object({ customer_id: z.string().optional() }));
-    const w = (await rt.db.query<{ id: string; event_id: string; payload: string; topup_id: string | null; result: string }>('SELECT id, event_id, payload, topup_id, result FROM payment_webhooks WHERE id = ?', [c.req.param('id')]))[0];
+    const w = (await rt.db.query<{ id: string; event_id: string; payload: string; topup_id: string | null; result: string }>('SELECT id, event_id, payload, topup_id, result FROM payment_webhooks WHERE id = ?', [param(c, 'id')]))[0];
     if (!w || !w.result.startsWith('manual:')) throw new FinanceError('not_found', 'Không có trong hàng đợi', 404);
     if (w.topup_id) return c.json(await confirmTopup(w.topup_id, a));
     if (!b.customer_id) throw new FinanceError('validation_error', 'Cần chọn khách hàng', 400);
@@ -361,7 +364,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
 
   app.get('/admin/v1/wallets/:customerId', wrap(async (c) => {
     requirePerm(await actorOf(c), 'finance', 'view', 'internal');
-    const cid = c.req.param('customerId');
+    const cid = param(c, 'customerId');
     const w = await getWallet(rt.db, cid);
     if (!w) throw new FinanceError('not_found', 'Không tìm thấy ví', 404);
     const entries = await rt.db.query<Record<string, unknown>>('SELECT id, kind, amount_vnd, balance_after, reserved_after, ref_type, ref_id, note, created_at FROM wallet_entries WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT 200', [cid]);
@@ -373,7 +376,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
   app.post('/admin/v1/wallets/:customerId/adjustments', wrap(async (c) => {
     const a = requirePerm(await actorOf(c), 'finance', 'write', 'internal');
     const b = await jsonBody(c, z.object({ amount_vnd: z.number().int().refine((x) => x !== 0, 'Số tiền khác 0'), reason: z.string().min(5).max(500) }));
-    const cid = c.req.param('customerId');
+    const cid = param(c, 'customerId');
     if (!(await rt.db.query('SELECT 1 AS x FROM customers WHERE id = ?', [cid]))[0]) throw new FinanceError('not_found', 'Không tìm thấy khách hàng', 404);
     const id = rt.id();
     await rt.db.run('INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?,?,?,?)', [`wallet_adjust:${id}`, JSON.stringify({ customer_id: cid, amount_vnd: b.amount_vnd, reason: b.reason, requested_by: a.id, requested_at: iso(rt), status: 'pending' }), a.id, iso(rt)]);
@@ -389,7 +392,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
 
   app.post('/admin/v1/wallet-adjustments/:id/approve', wrap(async (c) => {
     const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
-    const id = c.req.param('id');
+    const id = param(c, 'id');
     const row = (await rt.db.query<{ value: string }>('SELECT value FROM settings WHERE key = ?', [`wallet_adjust:${id}`]))[0];
     if (!row) throw new FinanceError('not_found', 'Không có đề xuất đang chờ', 404);
     const p = JSON.parse(row.value) as { customer_id: string; amount_vnd: number; reason: string; requested_by: string };
@@ -418,7 +421,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
 
   app.post('/admin/v1/refund-requests/:id/approve', wrap(async (c) => {
     const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
-    const id = c.req.param('id');
+    const id = param(c, 'id');
     const b = await jsonBody(c, z.object({ note: z.string().max(500).optional() }));
     const r = (await rt.db.query<{ customer_id: string; amount_vnd: unknown }>('SELECT customer_id, amount_vnd FROM refund_requests WHERE id = ?', [id]))[0];
     if (!r) throw new FinanceError('not_found', 'Không tìm thấy yêu cầu hoàn', 404);
@@ -436,7 +439,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
 
   app.post('/admin/v1/refund-requests/:id/reject', wrap(async (c) => {
     const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
-    const id = c.req.param('id');
+    const id = param(c, 'id');
     const b = await jsonBody(c, z.object({ note: z.string().min(3).max(500) }));
     const claim = await rt.db.run("UPDATE refund_requests SET status = 'rejected', decided_by = ?, decision_note = ?, decided_at = ? WHERE id = ? AND status = 'pending'", [a.id, b.note, iso(rt), id]);
     if (claim.changes !== 1) throw new FinanceError('already_processed', 'Yêu cầu đã được xử lý hoặc không tồn tại', 409);
@@ -446,7 +449,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
 
   app.post('/admin/v1/refund-requests/:id/paid', wrap(async (c) => {
     const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
-    const id = c.req.param('id');
+    const id = param(c, 'id');
     const b = await jsonBody(c, z.object({ voucher_ref: z.string().min(3).max(100) })); // chung tu bat buoc
     const claim = await rt.db.run("UPDATE refund_requests SET status = 'paid', decision_note = COALESCE(decision_note,'') || ? WHERE id = ? AND status = 'approved'", [` [chứng từ: ${b.voucher_ref}]`, id]);
     if (claim.changes !== 1) throw new FinanceError('not_approved', 'Chỉ đánh dấu đã chi khi yêu cầu đã duyệt', 409);
@@ -464,7 +467,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
   app.post('/admin/v1/activation-log/:id/undo', wrap(async (c) => {
     const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
     try {
-      return c.json(await undoActivation(rt, rt.db, c.req.param('id'), a.id));
+      return c.json(await undoActivation(rt, rt.db, param(c, 'id'), a.id));
     } catch (e) {
       const code = (e as { code?: string }).code;
       if (code === 'not_found') throw new FinanceError('not_found', 'Không tìm thấy bản ghi kích hoạt', 404);
@@ -570,7 +573,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
     const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
     const b = await jsonBody(c, z.object({ totp: z.string().optional() }).passthrough());
     await requireStepUp(rt, a.id, b.totp);
-    const id = c.req.param('id');
+    const id = param(c, 'id');
     const row = (await rt.db.query<{ value: string }>('SELECT value FROM settings WHERE key = ?', [`${CHANGE_PREFIX}${id}`]))[0];
     if (!row) throw new FinanceError('not_found', 'Không có đề xuất đang chờ', 404);
     const p = JSON.parse(row.value) as { changes: Record<string, unknown>; requested_by: string; requested_at: string };
@@ -588,7 +591,7 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
 
   app.post('/admin/v1/settings/sepay/changes/:id/reject', wrap(async (c) => {
     const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
-    const id = c.req.param('id');
+    const id = param(c, 'id');
     const claim = await rt.db.run('UPDATE settings SET key = ?, updated_by = ?, updated_at = ? WHERE key = ?', [`sepay_change_done:${id}`, a.id, iso(rt), `${CHANGE_PREFIX}${id}`]);
     if (claim.changes !== 1) throw new FinanceError('not_found', 'Không có đề xuất đang chờ', 404);
     await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.change_rejected', type: 'settings', id, ip: a.ip });
@@ -615,9 +618,9 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
     const a = requirePerm(await actorOf(c), 'finance', 'approve', 'internal');
     const b = await jsonBody(c, z.object({ status: z.enum(['resolved', 'ignored']), note: z.string().min(3).max(500), totp: z.string().optional() }).passthrough());
     await requireStepUp(rt, a.id, b.totp);
-    const ok = await resolveRevenueDiscrepancy(rt, c.req.param('id'), { status: b.status, note: b.note, actor: a.id });
+    const ok = await resolveRevenueDiscrepancy(rt, param(c, 'id'), { status: b.status, note: b.note, actor: a.id });
     if (!ok) throw new FinanceError('not_found', 'Không có chênh lệch đang mở với mã này', 404);
-    return c.json({ id: c.req.param('id'), status: b.status });
+    return c.json({ id: param(c, 'id'), status: b.status });
   }));
 
   app.post('/admin/v1/reconcile/repair', wrap(async (c) => {

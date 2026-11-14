@@ -2,6 +2,7 @@ import type { Runtime } from '@ams/runtime';
 import { transitionCampaign } from '@ams/shared';
 import { sweepActivations } from './activation.js';
 import { releaseCampaign } from './ledger.js';
+import { pruneRejectedWebhooks } from './webhook.js';
 import { pruneSpendEvents, settleSpendRemainders } from './spend.js';
 import { repairLedgerDrift, type RepairOptions } from './reconcile-atomic.js';
 import { reconcileRevenue } from './reconcile-revenue.js';
@@ -127,7 +128,8 @@ export async function runDailyFinanceJobs(rt: Runtime) {
   const alerts = await lowBalanceAlerts(rt);
   const settled = await settleSpendRemainders(rt);
   const pruned = await pruneSpendEvents(rt);
+  const prunedWebhooks = await guarded(() => pruneRejectedWebhooks(rt));
   const repair = await guarded(() => repairLedgerDrift(rt));
   const revenue = await guarded(() => reconcileRevenue(rt));
-  return { started, ended, ledger, alerts, settled, pruned, repair, revenue };
+  return { started, ended, ledger, alerts, settled, pruned, prunedWebhooks, repair, revenue };
 }

@@ -21,6 +21,14 @@
     "@types/node": "22.18.0",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
-    "vitest": "3.2.4"
+    "vitest": "3.2.6"
+  },
+  "pnpm": {
+    "overrides": {
+      "fast-xml-parser": "5.12.1",
+      "hono": "4.13.18",
+      "@hono/node-server": "1.19.19",
+      "nodemailer": "7.0.13"
+    }
   }
 }

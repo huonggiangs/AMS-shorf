@@ -14,7 +14,14 @@ export const SESSION_TTL_SEC = 12 * 3600; // tuyet doi 12 gio
 export const SESSION_IDLE_SEC = 2 * 3600; // khong hoat dong 2 gio
 export const MFA_TTL_SEC = 300;
 
-export const isHttps = (rt: Runtime): boolean => /^https:/i.test(rt.config.env['PUBLIC_ADMIN_URL'] ?? rt.config.env['APP_PUBLIC_URL'] ?? '');
+/** R1-24: cookie `Secure` khi URL cong khai la https HOAC moi truong la staging/production (khong tin rieng PUBLIC_ADMIN_URL), tru khi dat COOKIE_SECURE=0 (chi dev). */
+export const isHttps = (rt: Runtime): boolean => {
+  const env = rt.config.env;
+  if (env['COOKIE_SECURE'] === '0') return false;
+  if (/^https:/i.test(env['PUBLIC_ADMIN_URL'] ?? env['APP_PUBLIC_URL'] ?? '')) return true;
+  const e = (env['AMS_ENV'] ?? '').trim().toLowerCase();
+  return e === 'production' || e === 'staging';
+};
 
 export function setSessionCookies(c: Ctx, rt: Runtime, token: string, csrf: string): void {
   const secure = isHttps(rt);

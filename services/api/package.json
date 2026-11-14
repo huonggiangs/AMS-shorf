@@ -26,8 +26,8 @@
     "@ams/config": "workspace:*",
     "@ams/db": "workspace:*",
     "@ams/runtime": "workspace:*",
-    "hono": "4.9.9",
-    "@hono/node-server": "1.19.5",
+    "hono": "4.13.18",
+    "@hono/node-server": "1.19.19",
     "zod": "3.25.76",
     "@ams/edge-gateway": "workspace:*",
     "@ams/payments": "workspace:*"

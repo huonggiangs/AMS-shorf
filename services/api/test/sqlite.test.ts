@@ -31,7 +31,7 @@ describe('sqlite dialect', () => {
   it('tao + gui duyet chien dich, hop dong render', async () => {
     const c = await lan.json('POST', '/portal/v1/campaigns', { name: 'Sqlite', budget_vnd: 1_000_000 });
     expect(c.status).toBe(201);
-    expect((await lan.json('POST', `/portal/v1/campaigns/${c.body.id}/submit`)).status).toBeLessThan(500);
+    expect((await lan.json('POST', `/portal/v1/campaigns/${c.body.id}/submit`, { content_rights_confirmed: true })).status).toBeLessThan(500);
     const k = await admin.json('POST', '/admin/v1/contracts', { customer_id: env.seed.customers['K001'], value_vnd: 100_000_000 });
     expect(k.status).toBe(201);
     expect((await admin.json('POST', `/admin/v1/contracts/${k.body.id}/render`, {})).body.amount_in_words).toMatch(/triệu/);

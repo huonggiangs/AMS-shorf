@@ -14,14 +14,17 @@ import { enqueueOutbox, type Db, type Runtime } from '@ams/runtime';
 import { CAMPAIGN_DELETABLE_STATES, CAMPAIGN_EDITABLE_STATES, InvalidTransitionError, assertTransition, transitionCampaign, type CampaignState } from '@ams/shared';
 import { TOPIC_CAMPAIGN_APPROVED, approvedKey, enqueueCampaignRelease, enqueueManifestBump, runOutbox } from '../outbox.js';
 import { allowUnscannedCreatives, assertScanOk } from './creatives-scan.js';
+import { assertLockPolicy, recordApproval } from '../lib/creative-security.js';
+import { isBannedIndustry, loadTvSettings } from './tv-experience.js';
 import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv, AuthUser } from '../types.js';
 
 const CAMP_SELECT = `c.id, c.name, c.customer_id, c.state, c.budget_cap_vnd, c.approved_budget_vnd, c.reserved_vnd, c.spent_vnd, c.funding_state, c.target_types, c.duration_s,
-  c.start_at, c.end_at, c.reject_reason, c.created_at, c.approved_at, cu.payment_code AS customer_code, cu.short_name AS customer_short, adv.name AS advertiser_name, ua.name AS creator_name,
+  c.start_at, c.end_at, c.reject_reason, c.created_at, c.approved_at, cu.payment_code AS customer_code, cu.industry AS customer_industry,
+  COALESCE(g.restricted_industry, 0) AS restricted_industry, g.restricted_reason, g.rights_confirmed_at, g.rights_confirmed_by, cu.short_name AS customer_short, adv.name AS advertiser_name, ua.name AS creator_name,
   (SELECT cr.id FROM creatives cr WHERE cr.campaign_id = c.id ORDER BY cr.created_at, cr.id LIMIT 1) AS media_id,
   (SELECT cr.name FROM creatives cr WHERE cr.campaign_id = c.id ORDER BY cr.created_at, cr.id LIMIT 1) AS media_name`;
-const CAMP_FROM = `FROM campaigns c JOIN customers cu ON cu.id = c.customer_id LEFT JOIN advertisers adv ON adv.id = c.advertiser_id LEFT JOIN admins ua ON ua.id = c.created_by`;
+const CAMP_FROM = `FROM campaigns c JOIN customers cu ON cu.id = c.customer_id LEFT JOIN campaign_gate g ON g.campaign_id = c.id LEFT JOIN advertisers adv ON adv.id = c.advertiser_id LEFT JOIN admins ua ON ua.id = c.created_by`;
 const PACING = `CASE WHEN c.budget_cap_vnd > 0 THEN (c.spent_vnd * 100) / c.budget_cap_vnd ELSE 0 END`;
 
 export const STATE_TO_API: Record<string, string> = { pending_review: 'pending' };
@@ -51,6 +54,11 @@ export interface CampRow {
   creator_name: string | null;
   media_id: string | null;
   media_name: string | null;
+  customer_industry: string | null;
+  restricted_industry: number;
+  restricted_reason: string | null;
+  rights_confirmed_at: string | null;
+  rights_confirmed_by: string | null;
 }
 
 export function campaignSpec(u: AuthUser, nowIso: string, forceState?: string): ListSpec {
@@ -116,6 +124,13 @@ export async function presentCampaigns(rt: Runtime, rows: CampRow[], external: b
       reject_reason: r.reject_reason,
       created_at: r.created_at,
       approved_at: r.approved_at,
+      // cong tuan thu noi dung (hang cho duyet hien cac truong nay)
+      restricted_industry: num(r.restricted_industry) === 1,
+      restricted_reason: r.restricted_reason,
+      customer_industry: r.customer_industry,
+      content_rights_confirmed: !!r.rights_confirmed_at,
+      content_rights_confirmed_at: r.rights_confirmed_at,
+      content_rights_confirmed_by: r.rights_confirmed_by,
     };
     if (!external) out['source'] = srcMap.get(r.id) ?? 'Trực tiếp';
     return out;
@@ -148,6 +163,9 @@ const createBody = z.object({
   end_date: dateStr.optional().nullable(),
 });
 const updateBody = createBody.partial();
+export const RIGHTS_STATEMENT_VERSION = 'rights-v1-2026-11';
+const submitBody = z.object({ content_rights_confirmed: z.boolean().optional(), restricted_industry: z.boolean().optional() });
+export const ALLOW_RESTRICTED_KEY = 'allow_restricted_industries';
 
 async function ledPxOf(db: Db, screenId: string | null | undefined): Promise<{ w: number; h: number } | null> {
   if (!screenId) return null;
@@ -187,11 +205,19 @@ async function attachMedia(c: Ctx, db: Db, campaignId: string, customerId: strin
   if (m.campaign_id === null) {
     await db.run('UPDATE creatives SET campaign_id = ?, target_type = ? WHERE id = ? AND campaign_id IS NULL', [campaignId, target, m.id]);
   } else {
+    const newId = rt.id();
     await db.run(
       `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, codec, uploaded_by, uploader_kind, scan_state, review_state, review_note, state, sha256, format, overlay, created_at)
        SELECT ?, ?, customer_id, name, ?, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, codec, uploaded_by, uploader_kind, scan_state, review_state, review_note, state, sha256, format, overlay, ?
          FROM creatives WHERE id = ?`,
-      [rt.id(), campaignId, target, nowIso, m.id],
+      [newId, campaignId, target, nowIso, m.id],
+    );
+    // ban sao giu nguyen phien ban/kid_safe/dau van tay duyet cua ban goc (R1-14)
+    await db.run(
+      `INSERT INTO creative_security (creative_id, content_version, approved_version, approved_hash, kid_safe, lock_context, updated_at)
+       SELECT ?, content_version, approved_version, approved_hash, kid_safe, lock_context, ? FROM creative_security WHERE creative_id = ?
+       ON CONFLICT (creative_id) DO NOTHING`,
+      [newId, nowIso, m.id],
     );
   }
 }
@@ -300,9 +326,27 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     if (num(row.budget_cap_vnd) <= 0) throw unprocessable('Ngân sách phải lớn hơn 0.', 'budget_required');
     const cust = (await rt.db.query<{ state: string }>('SELECT state FROM customers WHERE id = ?', [row.customer_id]))[0];
     if (cust?.state === 'terminated') throw conflict('Khách hàng đã chấm dứt hợp tác.', 'customer_inactive');
+    // Cong tuan thu noi dung (P0-6/R1): BAT BUOC xac nhan quyen su dung noi dung + khai bao nganh han che; ghi vao audit.
+    const gate = await parseBody(c, submitBody);
+    if (gate.content_rights_confirmed !== true) throw unprocessable('Cần xác nhận bạn có đủ quyền sử dụng hình ảnh, âm nhạc, thương hiệu và nội dung trong quảng cáo (không vi phạm bản quyền, pháp luật quảng cáo) trước khi gửi duyệt.', 'rights_confirmation_required');
+    const tvSettings = await loadTvSettings(rt);
+    const custIndustry = (await rt.db.query<{ industry: string | null }>('SELECT industry FROM customers WHERE id = ?', [row.customer_id]))[0]?.industry ?? null;
+    const byIndustry = isBannedIndustry(custIndustry, tvSettings.banned_industries);
+    const restricted = gate.restricted_industry === true || byIndustry;
+    const reason = gate.restricted_industry === true ? 'declared' : byIndustry ? `customer_industry:${custIndustry}` : null;
+    const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
-      await transitionCampaign(db, { id: row.id, from: row.state as CampaignState, to: 'pending_review', nowIso: rt.clock.now().toISOString(), set: { reject_reason: null } });
-      await auditCtx(c, db, { action: 'campaign.submit', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { state: { from: row.state, to: 'pending_review' } } });
+      await transitionCampaign(db, { id: row.id, from: row.state as CampaignState, to: 'pending_review', nowIso, set: { reject_reason: null } });
+      await db.run(
+        `INSERT INTO campaign_gate (campaign_id, restricted_industry, restricted_reason, rights_confirmed_at, rights_confirmed_by, rights_statement, updated_at) VALUES (?,?,?,?,?,?,?)
+         ON CONFLICT (campaign_id) DO UPDATE SET restricted_industry = excluded.restricted_industry, restricted_reason = excluded.restricted_reason, rights_confirmed_at = excluded.rights_confirmed_at,
+           rights_confirmed_by = excluded.rights_confirmed_by, rights_statement = excluded.rights_statement, updated_at = excluded.updated_at`,
+        [row.id, restricted ? 1 : 0, reason, nowIso, c.get('user').id, RIGHTS_STATEMENT_VERSION, nowIso],
+      );
+      await auditCtx(c, db, {
+        action: 'campaign.submit', objectType: 'campaign', objectId: row.id, customerId: row.customer_id,
+        diff: { state: { from: row.state, to: 'pending_review' }, content_rights_confirmed: true, rights_statement: RIGHTS_STATEMENT_VERSION, restricted_industry: restricted, restricted_reason: reason },
+      });
     });
     return c.json((await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0]);
   });
@@ -364,8 +408,16 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     if (!creatives.length) throw unprocessable('Chiến dịch chưa có tệp creative hợp lệ. Hãy gắn tệp media trước khi duyệt.', 'no_creative');
     // moi creative se duoc duyet theo chien dich (review_state 'pending') phai qua cua quet ma doc nhu duyet tung tep
     const allowUnscanned = await allowUnscannedCreatives(rt);
-    for (const cr of await rt.db.query<{ id: string; scan_state: string; source: string }>("SELECT id, scan_state, source FROM creatives WHERE campaign_id = ? AND review_state = 'pending'", [row.id])) {
+    const pendingCreatives = await rt.db.query<{ id: string; scan_state: string; source: string; sha256: string | null; storage_key: string | null; size_bytes: unknown; source_url: string | null; format: string | null; overlay: string | null }>(
+      "SELECT id, scan_state, source, sha256, storage_key, size_bytes, source_url, format, overlay FROM creatives WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
+    for (const cr of pendingCreatives) {
       assertScanOk(cr, allowUnscanned, { creative_id: cr.id, scan_state: cr.scan_state });
+      await assertLockPolicy(rt.db, cr.overlay, { creative_id: cr.id }); // man khoa/tre em tat mac dinh
+    }
+    // nganh han che: chan duyet tru khi quan tri bat ro rang (settings.allow_restricted_industries)
+    if (num(row.restricted_industry) === 1) {
+      const allow = (await rt.db.query<{ value: string }>('SELECT value FROM settings WHERE key = ?', [ALLOW_RESTRICTED_KEY]))[0]?.value;
+      if (!(allow === '1' || allow?.toLowerCase() === 'true')) throw unprocessable('Chiến dịch thuộc ngành hạn chế. Hiện chưa nhận ngành này (bật cài đặt allow_restricted_industries sau khi pháp lý duyệt quy trình).', 'restricted_industry_blocked', { reason: row.restricted_reason });
     }
     const nowIso = rt.clock.now().toISOString();
     // BUOC 1 (mot giao dich): danh dau da duyet nguyen tu (UPDATE co dieu kien: hai nguoi duyet cung luc chi mot thang, nguoi kia 409)
@@ -375,7 +427,14 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
         id: row.id, from: 'pending_review', to: 'awaiting_funds', nowIso, staleMessage: 'Chiến dịch vừa được người khác xử lý.',
         set: { funding_state: 'awaiting_funds', approved_budget_vnd: { sql: 'budget_cap_vnd' }, approved_by: u.id, approved_at: nowIso, reject_reason: null },
       });
+      // R1-14: noi dung doi giua luc kiem va luc duyet (khach sua overlay) => khong duyet, 409
+      const nowCr = await db.query<{ id: string; sha256: string | null; format: string | null; overlay: string | null }>("SELECT id, sha256, format, overlay FROM creatives WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
+      const seen = new Map(pendingCreatives.map((x) => [x.id, x]));
+      if (nowCr.length !== pendingCreatives.length || nowCr.some((x) => { const o = seen.get(x.id); return !o || o.overlay !== x.overlay || o.format !== x.format || o.sha256 !== x.sha256; })) {
+        throw conflict('Nội dung creative vừa thay đổi, hãy tải lại và xem lại trước khi duyệt.', 'content_changed');
+      }
       const ap = await db.run("UPDATE creatives SET review_state = 'approved', state = CASE WHEN state = 'uploading' THEN state ELSE 'ready' END, review_note = NULL WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
+      for (const cr of pendingCreatives) await recordApproval(db, cr, nowIso); // R1-14: gan duyet voi phien ban/dau van tay noi dung
       // manifest chi phat chien dich co lich: tao lich ca ngay mac dinh neu admin chua xep lich rieng
       await ensureDefaultSlot(rt, db, row.id, jsonParse<string[]>(row.target_types, ['tv'])[0] ?? 'tv');
       await auditCtx(c, db, {
