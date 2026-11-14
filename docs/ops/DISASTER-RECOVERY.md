@@ -3,6 +3,8 @@
 Liên quan: `docs/ops/RUNBOOK.md` (sự cố thường ngày), `docs/DEPLOY-CLOUDFLARE.md` mục 8 (quay lui), `docs/COMMERCIAL-RECOMMENDATIONS.md` #14, đặc tả mục 3 và 13 (RPO ≤ 5 phút, RTO ≤ 30 phút ở giai đoạn 3).
 
 > **Trạng thái kiểm chứng (đọc trước).** Đây là kế hoạch và mục tiêu, **chưa phải năng lực đã được chứng minh**. Đã chạy thật trong lần soạn tài liệu (2026-11-12, PostgreSQL 16 nhúng, không Docker): `scripts/backup-postgres.sh` ở chế độ `--direct` gồm `backup`, `verify`, `restore` (vào DB mới và ghi đè tại chỗ sau khi cố ý làm hỏng dữ liệu) và kiểm chứng giữ nguyên trigger bất biến cùng bất biến ví. Chế độ Docker của script chỉ được thử với một lớp giả lập `docker`, không phải Docker thật. **Chưa chạy thật:** D1 Time Travel/export, R2, ClickHouse `BACKUP`, WAL/PITR Postgres, mọi thứ trên Cloudflare. Con số RPO/RTO ở mục 1 là **mục tiêu thiết kế** cho tới khi diễn tập (mục 4) ghi lại số đo thật.
+>
+> **Bổ sung (p3-ops, 2026-11-14).** Có thêm bộ công cụ `tools/ops` (sao lưu **mã hóa** Postgres/D1, khôi phục, **diễn tập tự động** vào DB tạm và so số dòng + checksum sổ cái, chuyển D1 sang Postgres) và sidecar sao lưu cho VPS (`infra/vps/backup`). Đã diễn tập thật trên **container phát triển** (Postgres 16 nhúng, dữ liệu sinh từ SQLite, tới 300 nghìn dòng): số đo ở mục 7, **không phải số production**. Vẫn chưa chạy: D1 Time Travel/export thật, Docker thật, rclone tới B2/S3 thật, WAL/PITR.
 
 ## 1. Mục tiêu RPO/RTO theo môi trường
 
@@ -48,6 +50,16 @@ scripts/backup-postgres.sh restore backups/<tệp>.dump                         
 ```
 Khôi phục tại chỗ dùng `pg_restore --clean --if-exists`: xóa bảng cũ rồi tạo lại (DROP TABLE không bị trigger bất biến chặn; đã kiểm chứng). Trước khi ghi đè: dừng `api`, `edge-gateway`, `ingest-consumer` và chạy `backup` để có đường lui.
 
+**Sao lưu mã hóa + diễn tập (`tools/ops`, khuyến nghị cho production):**
+```
+export BACKUP_ENC_KEY=<khóa >=16 ký tự, cất RIÊNG với bản sao lưu, >= 2 người giữ>
+scripts/ops.sh backup-pg --out /var/backups/ams --keep 14 --copy-to /mnt/khac-may      # pg_dump -Fc -> AES-256-CBC (PBKDF2-SHA256, định dạng openssl "Salted__") + .sha256
+scripts/ops.sh restore /var/backups/ams/<tệp>.dump.enc --kind postgres --target-url postgres://... --create-db
+scripts/ops.sh drill-pg --source-url postgres://...     # khôi phục vào DB tạm, so số dòng từng bảng + checksum wallet_entries + tổng ví + trigger bất biến, rồi xóa DB tạm
+scripts\OPS-BACKUP-PG.bat | OPS-RESTORE.bat | OPS-DRILL.bat | OPS-BACKUP-D1.bat | OPS-D1-TO-PG.bat   # Windows (ops.ps1 chưa chạy thử: không có PowerShell)
+```
+Giải mã tay bằng openssl: `openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 -iter 200000 -pass env:BACKUP_ENC_KEY -in X.dump.enc -out X.dump`. CBC không tự xác thực: toàn vẹn dựa vào `.sha256` trên bản mã hóa và `pg_restore --list` khi khôi phục. Mỗi bản sao lưu báo về API (`POST /ops/backup-report`, cần `OPS_REPORT_TOKEN`) để trang **Cảnh báo** biết "bản sao lưu cũ/lỗi" (quy tắc `backup:stale`, `backup:failed`). Trên VPS, sidecar `backup` (compose `infra/vps/`) làm tự động theo `BACKUP_CRON` và sao chép ra ngoài bằng rclone (`BACKUP_RCLONE`).
+
 **Nhược điểm của sao lưu logic:** RPO bằng khoảng cách giữa hai lần chạy. Muốn RPO ≤ 5 phút trên Postgres cần lưu trữ WAL liên tục (PITR: `archive_mode`, `archive_command` hoặc pgBackRest/WAL-G) và `pg_basebackup`. **Compose hiện không bật WAL archiving**; đây là việc cho giai đoạn hạ tầng riêng.
 
 ### 2.2 Cloudflare D1 (`ams-core-<env>`)
@@ -59,6 +71,7 @@ Thay `<env>` bằng `staging`/`production`; cấu hình sinh ra: `infra/cloudfla
 | **Khôi phục tại chỗ** | `npx wrangler d1 time-travel restore ams-core-<env> --timestamp=<ISO-8601 ngay trước sự cố> --env <env> -c <cfg>` | Ghi đè DB; lệnh in bookmark trước khi khôi phục: **ghi lại** để hoàn tác nếu chọn sai thời điểm (xác nhận khi chạy thật) |
 | Xuất bản sao | `npx wrangler d1 export ams-core-<env> --remote --output backups/<env>-<UTC>/core.sql --env <env> -c <cfg>` | `deploy-cloudflare.mjs` tự làm trước migration. Nên chạy định kỳ (GitHub Actions `schedule`, chưa có) và **lưu ngoài Cloudflare** |
 | Nạp lại từ tệp | tạo DB mới `npx wrangler d1 create ams-core-<env>-restore`, rồi `npx wrangler d1 execute ams-core-<env>-restore --remote --file backups/<...>/core.sql` | Dùng cho mất toàn bộ DB hoặc tài khoản; sau đó trỏ `database_id` mới vào `ids.<env>.json` và deploy lại |
+Bản sao mã hóa tự động: `scripts/ops.sh backup-d1 production --out <thư mục> --keep 14` (gọi `wrangler d1 export --remote` rồi mã hóa như 2.1; **chưa chạy với D1 thật**). Khôi phục: `scripts/ops.sh restore <tệp>.sql.enc --kind d1 ...` (chạy `wrangler d1 execute`, chưa chạy thật) hoặc `--kind sqlite` để kiểm thử cục bộ. Chuyển D1 sang Postgres: `docs/ops/MIGRATE-CF-TO-VPS.md`.
 Lưu ý: migration phải tương thích ngược để quay lui mã không hỏng dữ liệu (DEPLOY-CLOUDFLARE mục 8.2). Bản export chứa dữ liệu cá nhân và số liệu tài chính: lưu mã hóa, hạn chế truy cập.
 
 ### 2.3 Cloudflare R2 và volume media Docker (media, báo cáo, bản sao audit)
@@ -159,11 +172,13 @@ Phần kiểm chứng nghiệp vụ nên làm sau mỗi lần diễn tập: dùn
 
 ## 6. Rủi ro tồn đọng (cần chốt trước go-live)
 
-1. Chưa có bản sao D1/R2 **ngoài Cloudflare** và chưa có lịch sao lưu tự động (Actions `schedule`).
+1. Đã có công cụ sao lưu mã hóa D1 và sidecar VPS nhưng **chưa chạy với D1/R2/rclone thật**; chưa có lịch tự động ở Cloudflare (Actions `schedule`); sao chép R2 vẫn chưa có.
 2. Chưa có WAL/PITR cho Postgres; RPO Docker/hạ tầng riêng bằng chu kỳ sao lưu.
 3. Chưa có cách khôi phục Analytics Engine; chứng cứ impression cần kho cuối cùng bền vững.
 4. `FIELD_ENC_KEY` không có phiên bản/xoay vòng (RUNBOOK 4.5): lộ khóa là sự cố nghiêm trọng khó xử lý.
-5. RPO/RTO chưa có số đo. Hoàn thành ít nhất một lần diễn tập trên staging Cloudflare trước go-live.
+5. Đã có số đo trên container phát triển (mục 7) nhưng **chưa có số đo production/staging thật**. Hoàn thành ít nhất một lần diễn tập trên staging Cloudflare hoặc VPS thật trước go-live.
+7. Mất `BACKUP_ENC_KEY` = mọi bản sao lưu mã hóa vô dụng; khóa phải cất riêng, có bản dự phòng do người thứ hai giữ.
+8. Quay lui VPS về Cloudflare không có công cụ ngược (Postgres sang D1): xem `MIGRATE-CF-TO-VPS.md` mục 6.
 6. Bản sao audit có object lock: chưa làm.
 
 ## 7. Kết quả diễn tập
@@ -171,4 +186,7 @@ Phần kiểm chứng nghiệp vụ nên làm sau mỗi lần diễn tập: dùn
 | Ngày | Môi trường | Người làm | Kịch bản | RPO đo được | RTO đo được | Đạt/không | Việc phát sinh |
 |---|---|---|---|---|---|---|---|
 | 2026-11-12 | Postgres 16 nhúng (không Docker), dữ liệu seed | Tác nhân soạn tài liệu (o1-runbook) | `backup` + `verify` + `restore` vào DB mới và tại chỗ sau khi làm hỏng `customers.short_name`, `devices.blocked` | Không đo (chạy tay) | Vài giây cho DB ~13 MB (chưa đại diện) | Đạt ở mức script; ví lệch 0, trigger 3/3, SHA-256 phát hiện tệp hỏng | Chưa thử Docker thật, PowerShell, Cloudflare |
-| | | | | | | | |
+| 2026-11-14 | **Container phát triển, KHÔNG phải production** (Postgres 16 nhúng, 1 máy, đĩa cục bộ, không mạng) | Tác nhân p3-ops | `drill dev` quy mô nhỏ: 20.460 dòng, bản xuất 3,4 MB. Postgres: sao lưu mã hóa, khôi phục vào DB tạm, so khớp | RPO 425 ms (khoảng từ lúc chụp bản sao lưu tới lúc giả lập sự cố; phần ghi trong khoảng này bị mất, đúng kỳ vọng) | RTO 1,6 s (khôi phục 1,5 s). Kịch bản d1-sql (nạp SQL xuất D1 vào SQLite): 2,8 s | Đạt: số dòng, checksum sổ cái, tổng ví, trigger bất biến khớp | Chuyển D1 sang Postgres: 2,7 s |
+| 2026-11-14 | **Container phát triển, KHÔNG phải production** (như trên) | Tác nhân p3-ops | `drill dev` quy mô lớn: **300.480 dòng, 75 bảng, bản xuất 49,2 MB**, sổ cái 107 dòng. Postgres: dump 2.591 KB mã hóa, khôi phục vào DB tạm | RPO 576 ms (cùng định nghĩa; đánh dấu ghi "trước" sao lưu có mặt, "sau" vắng mặt đúng kỳ vọng) | **RTO 3,3 s** (khôi phục 3,2 s + kiểm 98 ms); d1-sql: 2,8 s (kiểm 9 ms). Tổng thời gian chạy 31 s | Đạt: checksum `wallet_entries` khớp, trigger bất biến còn nguyên | Chuyển D1 sang Postgres 300k dòng: **13,9 s**, COMMIT sau khi mọi so khớp đạt |
+
+> **Cách đọc các số trên.** Đo trên máy phát triển, đĩa cục bộ, **không có độ trễ mạng, không có tải đồng thời, không mã hóa đĩa của nhà cung cấp, không rclone/B2.** RPO ở đây là độ trễ kỹ thuật của một lần sao lưu, **không phải** RPO vận hành (RPO vận hành = chu kỳ sao lưu, mặc định 6 giờ trên VPS, trừ khi có PITR). RTO ở đây chỉ gồm giải mã + `pg_restore` + kiểm, **không** gồm: phát hiện sự cố, tải bản sao từ nơi lưu ngoài, dựng hạ tầng, trỏ lại DNS, thao tác của con người. Ước lượng RTO production phải đo lại bằng `scripts/ops.sh drill-pg` trên VPS thật với dữ liệu thật. Dữ liệu 300k dòng nhỏ hơn nhiều so với production (hàng chục triệu dòng `ev_*`).

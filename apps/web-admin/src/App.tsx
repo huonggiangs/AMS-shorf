@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
 import { Shell } from './components/Shell';
+import { TermsGate } from './components/TermsGate';
 import Login from './pages/Login';
 import { PAGE_BY_ID, visiblePages } from './nav';
 import { useUi } from './state/ui';
@@ -29,6 +30,10 @@ const pages = {
   access: lazy(() => import('./pages/Access')),
   audit: lazy(() => import('./pages/Audit')),
   alerts: lazy(() => import('./pages/Alerts')),
+  legal: lazy(() => import('./pages/Legal')),
+  billing: lazy(() => import('./pages/Billing')),
+  compliance: lazy(() => import('./pages/Compliance')),
+  kyc: lazy(() => import('./pages/Kyc')),
   profile: lazy(() => import('./pages/Profile')),
 } as const;
 
@@ -45,7 +50,7 @@ function Guard() {
   void can; void isExternal;
   // surviving session with a forced password change (page reload): lock everything except Profile (change-password form)
   if (mustChangePassword && !loc.pathname.startsWith('/profile')) return <Navigate to="/profile" replace />;
-  return <Shell />;
+  return <TermsGate><Shell /></TermsGate>;
 }
 
 function Home() {

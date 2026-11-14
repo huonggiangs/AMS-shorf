@@ -63,6 +63,8 @@ Dừng **an toàn khi cần bảo trì DB**: dừng nơi ghi trước, giữ DB:
 | Outbox | SQL ở mục 4.1 | cùng SQL qua `wrangler d1 execute` | `pending` nhỏ, `dead` = 0 |
 | Đối soát ví | Thông báo "Đối soát ví lệch sổ cái" (`reconcileLedger`, chạy hằng ngày 02:15 UTC) | như Docker | Không có thông báo |
 
+**Cảnh báo tự động và trang trạng thái (p3-ops):** API tự chạy kiểm tra mỗi 5 phút (Cloudflare: cron `*/10`; Docker/VPS: bộ lập lịch trong api) cho webhook SePay, lệch ví/sổ cái, hàng đợi/dead-letter, 5xx gateway/api, độ cũ sao lưu và tỉ lệ thiết bị offline. Xem **web admin > Cảnh báo** (`/alerts`): sự cố đang mở, xác nhận (ack), gửi thử, cài kênh email/webhook. Công khai: `GET /status` (JSON; Cloudflare `https://ams.anio.vn/api/status`) và trang `/status`, chỉ hiện mức thành phần, không lộ nội bộ. Quy trình trực và 10 runbook ngắn: `docs/ops/ONCALL.md`. Kiểm tra bằng tay dưới đây vẫn dùng khi trang Cảnh báo không vào được.
+
 `/health` chỉ cho biết tiến trình sống; **không** kiểm tra DB, Redis hay hàng đợi. Vì vậy phải xem thêm backlog hàng đợi và outbox (dưới đây).
 Thiết bị online: web admin > Thiết bị (online nếu `last_seen < 2,5 × chu kỳ`, xem ARCHITECTURE 2.1).
 Chạy kiểm thử nhanh sau deploy: `pnpm e2e:smoke` (`tests/e2e/smoke.ts`); mục 7 của DEPLOY-CLOUDFLARE là danh sách kiểm tra tay.
@@ -207,7 +209,7 @@ Lưu ý: VNPay/MoMo chưa có (PLAN mục 1), nên chưa có đường nạp ti�
 
 | Tần suất | Việc | Người |
 |---|---|---|
-| Hằng ngày | Xem thông báo `reconcile_mismatch`, backlog hàng đợi, `payment_webhooks` có `manual:`/`rejected:`; sao lưu Postgres (Docker) | Vận hành |
+| Hằng ngày | Xem trang Cảnh báo (không có S1/S2 mở), thông báo `reconcile_mismatch`, backlog hàng đợi, `payment_webhooks` có `manual:`/`rejected:`; sao lưu Postgres (Docker) | Vận hành |
 | Hằng tuần | Kiểm bản sao lưu gần nhất bằng `scripts/backup-postgres.sh verify <tệp>`; xem dung lượng DB (4.2) | Vận hành |
 | Hằng quý | Diễn tập khôi phục đầy đủ (DR mục 4); rà soát tài khoản quản trị, `campaign_grants` hết hạn; pen-test nhẹ theo PENTEST-PLAN | Kỹ sư + CTO |
 | Khi lộ/nhân sự nghỉ | Xoay vòng khóa (4.5), thu hồi tài khoản (`users`) | Super admin |
@@ -218,6 +220,7 @@ Chỉ dùng thử trên Docker (`make up-events`; cần nhiều RAM). **Mã khô
 
 ## 7. Liên hệ và leo thang
 
+Lịch trực 2 người, mức độ S1/S2/S3, 10 runbook sự cố ngắn và mẫu nhật ký: **`docs/ops/ONCALL.md`** (liên hệ để `<ĐIỀN>`). Chuyển sang VPS: `docs/ops/MIGRATE-CF-TO-VPS.md`. Email: `docs/ops/EMAIL-SETUP.md`.
 Điền khi bàn giao (không có trong repo): trực chính, CTO, liên hệ SePay (hỗ trợ my.sepay.vn), liên hệ Cloudflare (gói hỗ trợ), nhà cung cấp tên miền `anio.vn`.
 Mức độ: **P1** (không nạp/không phát được toàn hệ thống, nghi mất tiền/dữ liệu) báo CTO ngay và dừng nhận tiền nếu liên quan ví; **P2** (một chức năng/một khách hỏng) xử lý trong ngày; **P3** còn lại trong tuần.
 
@@ -225,7 +228,7 @@ Mức độ: **P1** (không nạp/không phát được toàn hệ thống, nghi
 
 - `/health` không kiểm DB/Redis/hàng đợi (mục 3).
 - Chưa có chính sách giữ dữ liệu tự động cho `ev_*` (4.2); chưa có script phát lại DLQ Cloudflare (4.1); chưa có cơ chế xoay `FIELD_ENC_KEY` (4.5).
-- Chưa có cảnh báo tự động (Sentry/Grafana alert) nối sẵn: `make up-obs` chỉ dựng Grafana/OTel khung (`SENTRY_DSN` để trống). Người trực phải xem tay các chỉ số ở mục 3 cho tới khi cấu hình cảnh báo.
+- Cảnh báo tự động nay có (trang Cảnh báo, email + webhook), nhưng **chưa có giám sát ngoài (uptime từ bên thứ ba)** và Sentry vẫn chưa nối; nếu cả API sập thì không có ai gửi cảnh báo, nên bắt buộc đặt 2 điểm uptime ngoài (ONCALL mục 6). Cũ: `make up-obs` chỉ dựng Grafana/OTel khung (`SENTRY_DSN` để trống). Người trực phải xem tay các chỉ số ở mục 3 cho tới khi cấu hình cảnh báo.
 - D1 `ams-finance-*` và `ams-audit-*` được tạo nhưng migration hiện chỉ áp lên `ams-core-*` (scripts/deploy-cloudflare.mjs); toàn bộ dữ liệu nằm trong `ams-core`.
 
 ## 9. Mẫu nhật ký sự cố

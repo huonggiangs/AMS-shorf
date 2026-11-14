@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type ButtonHTMLAttributes } from 'react';
+import { cloneElement, isValidElement, useId, useState, type ReactElement, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import { Icon } from './Icon';
 import { useT } from '../i18n';
 import { useUi } from '../state/ui';
@@ -148,13 +148,19 @@ export function CopyBtn({ text, label = 'Sao chép', small = true }: { text: str
   );
 }
 
-export const Field = ({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) => (
-  <div className="fd">
-    <label>{label}</label>
-    {children}
-    {hint ? <small style={{ color: 'var(--mut)', fontSize: 12.5 }}>{hint}</small> : null}
-  </div>
-);
+export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+  const id = useId();
+  // gan nhan voi o nhap (truy cap + kiem thu): chi khi con la mot phan tu chua co id
+  const child = isValidElement(children) && !(children.props as { id?: string }).id ? cloneElement(children as ReactElement<{ id?: string }>, { id }) : children;
+  const linked = isValidElement(children) ? ((children.props as { id?: string }).id ?? id) : undefined;
+  return (
+    <div className="fd">
+      <label htmlFor={linked}>{label}</label>
+      {child}
+      {hint ? <small style={{ color: 'var(--mut)', fontSize: 12.5 }}>{hint}</small> : null}
+    </div>
+  );
+}
 
 /** Segmented tab strip (prototype `.tabs`). */
 export function Tabs<T extends string>({ value, items, onChange, label }: { value: T; items: { id: T; label: string }[]; onChange: (v: T) => void; label?: string }) {

@@ -42,10 +42,10 @@ export interface AppOptions {
   mountFinance?: MountFinance;
   /** Ghi de FinancePort (kiem thu). */
   finance?: FinancePort;
-}
-
   /** Kiem thu: thay fetch that cua nha cung cap hoa don dien tu (p4). */
   einvoiceHooks?: import('./billing/einvoice.js').ProviderHooks;
+}
+
 /** Ung dung Hono khong phu thuoc runtime: Docker, Workers va kiem thu deu dung chung. */
 export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -80,9 +80,9 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
   app.route('/', publicOpsRoutes()); // GET /status (cong khai), POST /ops/backup-report (Bearer OPS_REPORT_TOKEN)
   app.route('/storage', storageRoutes());
   app.route('/auth', authRoutes());
+  app.route('/legal', publicLegalRoutes());
 
   // Chuoi middleware phai dang ky TRUOC khi mountFinance gan route /admin/v1/* va /portal/v1/* cua a2.
-  app.route('/legal', publicLegalRoutes());
   app.use('/admin/v1/*', authenticate, requireInternal, csrfGuard);
   app.use('/portal/v1/*', authenticate, requireExternal, csrfGuard, termsGate); // p4: cong chap nhan dieu khoan (chi chan khi co van ban da phat hanh chua chap nhan)
 
@@ -110,20 +110,20 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
   admin.route('/invoices', invoiceRoutes());
   admin.route('/payouts', payoutRoutes());
   admin.route('/ops', opsRoutes());
-  app.route('/admin/v1', admin);
-  app.route('/portal/v1/history', portalHistoryRoutes());
-  app.route('/portal/v1/invoices', portalInvoiceRoutes());
-  app.route('/portal/v1', portalRoutes());
   admin.route('/legal', adminLegalRoutes());
   admin.route('/einvoices', einvoiceRoutes(opts.einvoiceHooks));
   admin.route('/billing', dunningRoutes());
   admin.route('/compliance', adminComplianceRoutes());
-
-  if (opts.mountFinance) {
-    const p = opts.mountFinance(app, rt);
+  app.route('/admin/v1', admin);
+  app.route('/portal/v1/history', portalHistoryRoutes());
+  app.route('/portal/v1/invoices', portalInvoiceRoutes());
   app.route('/portal/v1/einvoices', portalEinvoiceRoutes());
   app.route('/portal/v1/legal', portalLegalRoutes());
   app.route('/portal/v1/kyc', portalKycRoutes());
+  app.route('/portal/v1', portalRoutes());
+
+  if (opts.mountFinance) {
+    const p = opts.mountFinance(app, rt);
     financePort = Promise.resolve(p);
   }
 

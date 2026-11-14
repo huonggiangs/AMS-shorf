@@ -18,12 +18,12 @@ import { Link } from 'react-router-dom';
 import FinanceOps from './FinanceOps';
 import PriceBook from './PriceBook';
 import History from './History';
-import { HourlyRevenue, InvoicesPanel, PortalInvoices } from './FinanceInvoices';
+import { HourlyRevenue, InvoicesPanel, PortalEinvoices, PortalInvoices } from './FinanceInvoices';
 
 export default function Finance() {
   const { isExternal, can } = useAuth();
   const [tab, setTab] = useState<'ov' | 'wallet' | 'ops' | 'price'>('ov');
-  if (isExternal) return <><WalletView />{can('finance', 'view') ? <><PortalInvoices /><History /></> : null}</>;
+  if (isExternal) return <><WalletView />{can('finance', 'view') ? <><PortalInvoices /><PortalEinvoices /><History /></> : null}</>;
   return (
     <>
       <Tabs value={tab} onChange={setTab} items={[{ id: 'ov', label: 'Tổng quan' }, { id: 'wallet', label: 'Ví quảng cáo' }, { id: 'ops', label: 'Vận hành' }, { id: 'price', label: 'Bảng giá' }]} />

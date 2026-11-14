@@ -43,6 +43,13 @@ export const onPasswordChangeRequired = (fn: Listener) => {
   return () => pwRequiredListeners.delete(fn);
 };
 
+const termsListeners = new Set<Listener>();
+/** Subscribe to 403 `terms_acceptance_required` (p4: co van ban phap ly moi can chap nhan). */
+export const onTermsRequired = (fn: Listener) => {
+  termsListeners.add(fn);
+  return () => termsListeners.delete(fn);
+};
+
 export type Query = Record<string, string | number | boolean | undefined | null>;
 
 export interface ReqOpts<S extends z.ZodTypeAny | undefined> {
@@ -103,6 +110,7 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
     const err = (json as { error?: { code?: string; message?: string; details?: unknown } } | undefined)?.error;
     if (res.status === 401 && !opts.quiet401) unauthorizedListeners.forEach((l) => l());
     if (res.status === 403 && err?.code === 'password_change_required') pwRequiredListeners.forEach((l) => l());
+    if (res.status === 403 && err?.code === 'terms_acceptance_required') termsListeners.forEach((l) => l());
     throw new ApiError(
       res.status,
       err?.code ?? `http_${res.status}`,

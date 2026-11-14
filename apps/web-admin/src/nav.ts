@@ -20,6 +20,10 @@ export const PAGE_DEFS: PageDef[] = [
   { id: 'access', path: '/access', label: 'Người dùng & Phân quyền', module: 'admin' },
   { id: 'audit', path: '/audit', label: 'Nhật ký hoạt động', module: 'admin' },
   { id: 'alerts', path: '/alerts', label: 'Cảnh báo', module: 'admin' },
+  { id: 'legal', path: '/legal', label: 'Văn bản pháp lý', module: 'admin' },
+  { id: 'billing', path: '/billing', label: 'Công nợ & Hóa đơn điện tử', module: 'finance' },
+  { id: 'compliance', path: '/compliance', label: 'Dữ liệu cá nhân & Lưu giữ', module: 'admin' },
+  { id: 'kyc', path: '/kyc', label: 'Hồ sơ pháp lý khách hàng', module: 'customers' },
   { id: 'profile', path: '/profile', label: 'Hồ sơ của tôi', module: null },
 ];
 export const PAGE_BY_ID = Object.fromEntries(PAGE_DEFS.map((p) => [p.id, p])) as Record<string, PageDef>;
@@ -27,10 +31,10 @@ export const PAGE_BY_ID = Object.fromEntries(PAGE_DEFS.map((p) => [p.id, p])) as
 export interface GroupDef { id: string; label: string; icon: string; pages: string[] }
 export const GROUPS: GroupDef[] = [
   { id: 'g1', label: 'Tổng quan', icon: 'home', pages: ['overview', 'devices', 'tvexp'] },
-  { id: 'g2', label: 'Quảng cáo', icon: 'ads', pages: ['ads', 'customers', 'approvals', 'media', 'screens', 'formats', 'schedule'] },
-  { id: 'g3', label: 'Doanh thu', icon: 'coin', pages: ['finance', 'integrity', 'history'] },
+  { id: 'g2', label: 'Quảng cáo', icon: 'ads', pages: ['ads', 'customers', 'approvals', 'media', 'screens', 'formats', 'schedule', 'kyc'] },
+  { id: 'g3', label: 'Doanh thu', icon: 'coin', pages: ['finance', 'billing', 'integrity', 'history'] },
   { id: 'g4', label: 'Đối tác', icon: 'link', pages: ['partners', 'integrations'] },
-  { id: 'g5', label: 'Quản trị', icon: 'users', pages: ['access', 'audit', 'alerts', 'profile'] },
+  { id: 'g5', label: 'Quản trị', icon: 'users', pages: ['access', 'audit', 'alerts', 'legal', 'compliance', 'profile'] },
 ];
 /** Pages an external (customer/partner) account may ever see: ads, media, wallet. */
 export const EXTERNAL_PAGES = ['ads', 'media', 'finance'];

@@ -214,3 +214,15 @@ export function PortalInvoices() {
   ];
   return <ServerTable id="portal-invoices" endpoint="/portal/v1/invoices" itemSchema={portalInvSchema} cols={cols} title="Hóa đơn VAT" pageSize={8} emptyText="Chưa có hóa đơn." />;
 }
+
+/** Hóa đơn điện tử đã phát hành (khách hàng): số hóa đơn, mã tra cứu, loại (gốc/điều chỉnh/hủy). */
+export function PortalEinvoices() {
+  const cols: Col<Record<string, unknown>>[] = [
+    { key: 'kind', label: 'Loại', text: (r) => ({ original: 'Hóa đơn gốc', adjustment: 'Hóa đơn điều chỉnh', cancellation: 'Chứng từ hủy' } as Record<string, string>)[String(r.kind)] ?? String(r.kind) },
+    { key: 'no', label: 'Số hóa đơn', text: (r) => String(r.einvoice_no ?? '') },
+    { key: 'series', label: 'Ký hiệu', text: (r) => String(r.series ?? '') },
+    { key: 'lookup', label: 'Mã tra cứu', text: (r) => String(r.lookup_code ?? '') },
+    { key: 'total', label: 'Tổng', num: true, cell: (r) => vnd(Number(r.total_vnd ?? 0)), text: (r) => Number(r.total_vnd ?? 0) },
+  ];
+  return <ServerTable id="portal-einvoices" endpoint="/portal/v1/einvoices" itemSchema={z.object({}).passthrough()} cols={cols} rowKey={(r) => String(r.id)} title="Hóa đơn điện tử" pageSize={8} emptyText="Chưa có hóa đơn điện tử." />;
+}

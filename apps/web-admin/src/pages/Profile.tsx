@@ -5,6 +5,7 @@ import { useT } from '../i18n';
 import { useUi } from '../state/ui';
 import { ROLE_LABEL } from '../lib/status';
 import { fmtDateTime } from '../lib/format';
+import { KycPanel } from '../components/KycPanel';
 
 export { ChangePasswordForm, pwHint } from '../components/ChangePasswordForm';
 
@@ -48,6 +49,12 @@ export default function Profile() {
           <ChangePasswordForm onDone={() => { void reload(); }} />
         </div>
       </div>
+      {isExternal && u.role === 'customer' ? (
+        <div className="card cp" style={{ marginTop: 16 }}>
+          <div className="ch"><h2>Hồ sơ pháp lý doanh nghiệp</h2></div>
+          <KycPanel base="/portal/v1/kyc" canWrite />
+        </div>
+      ) : null}
     </>
   );
 }

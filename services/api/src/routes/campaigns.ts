@@ -18,9 +18,9 @@ import { assertLockPolicy, recordApproval } from '../lib/creative-security.js';
 import { assertPriced, loadSnapshot, planCampaignPrices, quoteFromRows, unavailableQuote, writeCampaignPrices } from '../lib/pricing.js';
 import { isBannedIndustry, loadTvSettings } from './tv-experience.js';
 import { requirePerm } from '../auth/middleware.js';
-import type { AppEnv, AuthUser } from '../types.js';
 import { assertComplianceForApproval } from '../compliance/approval.js';
 import { assertCreditForApproval } from '../billing/dunning.js';
+import type { AppEnv, AuthUser } from '../types.js';
 
 const CAMP_SELECT = `c.id, c.name, c.customer_id, c.state, c.budget_cap_vnd, c.approved_budget_vnd, c.reserved_vnd, c.spent_vnd, c.funding_state, c.target_types, c.duration_s,
   c.start_at, c.end_at, c.reject_reason, c.created_at, c.approved_at, cu.payment_code AS customer_code, cu.industry AS customer_industry,
@@ -460,6 +460,9 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       const allow = (await rt.db.query<{ value: string }>('SELECT value FROM settings WHERE key = ?', [ALLOW_RESTRICTED_KEY]))[0]?.value;
       if (!(allow === '1' || allow?.toLowerCase() === 'true')) throw unprocessable('Chiến dịch thuộc ngành hạn chế. Hiện chưa nhận ngành này (bật cài đặt allow_restricted_industries sau khi pháp lý duyệt quy trình).', 'restricted_industry_blocked', { reason: row.restricted_reason });
     }
+    // p4: cong tuan thu + cong no: KYC, duyet lan hai nganh han che, khach no qua han/vuot han muc
+    await assertComplianceForApproval(rt.db, { id: row.id, customer_id: row.customer_id }, u.id);
+    await assertCreditForApproval(rt.db, row.customer_id);
     const nowIso = rt.clock.now().toISOString();
     // BUOC 1 (mot giao dich): danh dau da duyet nguyen tu (UPDATE co dieu kien: hai nguoi duyet cung luc chi mot thang, nguoi kia 409)
     // + GHI outbox "campaign.approved". Giu tien (buoc 2) va bao manifest (buoc 3) do handler outbox lam, idempotent, hoi tu sau su co.
@@ -474,13 +477,13 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       if (nowCr.length !== pendingCreatives.length || nowCr.some((x) => { const o = seen.get(x.id); return !o || o.overlay !== x.overlay || o.format !== x.format || o.sha256 !== x.sha256; })) {
         throw conflict('Nội dung creative vừa thay đổi, hãy tải lại và xem lại trước khi duyệt.', 'content_changed');
       }
-      const ap = await db.run("UPDATE creatives SET review_state = 'approved', state = CASE WHEN state = 'uploading' THEN state ELSE 'ready' END, review_note = NULL WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
-      for (const cr of pendingCreatives) await recordApproval(db, cr, nowIso); // R1-14: gan duyet voi phien ban/dau van tay noi dung
-      // manifest chi phat chien dich co lich: tao lich ca ngay mac dinh neu admin chua xep lich rieng
       // CHOT GIA luc duyet (P0-2): gia nay la gia tru tien cua chien dich, doi bang gia sau do KHONG doi no. Thieu bang gia => 422 va khong duyet.
       const plan = await planCampaignPrices(rt, db, await priceInput(rt, row.id, db), nowIso);
       assertPriced(plan);
       await writeCampaignPrices(db, row.id, plan.rows, u.id, nowIso);
+      const ap = await db.run("UPDATE creatives SET review_state = 'approved', state = CASE WHEN state = 'uploading' THEN state ELSE 'ready' END, review_note = NULL WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
+      for (const cr of pendingCreatives) await recordApproval(db, cr, nowIso); // R1-14: gan duyet voi phien ban/dau van tay noi dung
+      // manifest chi phat chien dich co lich: tao lich ca ngay mac dinh neu admin chua xep lich rieng
       await ensureDefaultSlot(rt, db, row.id, jsonParse<string[]>(row.target_types, ['tv'])[0] ?? 'tv');
       await auditCtx(c, db, {
         action: 'campaign.approve', objectType: 'campaign', objectId: row.id, customerId: row.customer_id,
@@ -503,9 +506,6 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       warning = 'Đã duyệt nhưng chưa giữ được tiền từ ví (lỗi tạm thời); hệ thống sẽ tự thử lại khi ví đủ.';
     } else if (!funded) {
       const w = (await rt.db.query<{ balance_vnd: unknown; reserved_vnd: unknown }>('SELECT balance_vnd, reserved_vnd FROM ad_wallets WHERE customer_id = ?', [row.customer_id]))[0];
-    // p4: cong tuan thu + cong no: KYC, duyet lan hai nganh han che, khach no qua han/vuot han muc
-    await assertComplianceForApproval(rt.db, { id: row.id, customer_id: row.customer_id }, u.id);
-    await assertCreditForApproval(rt.db, row.customer_id);
       // khong giu duoc (thieu tien, hoac FinancePort rong): neu so du du ma van chua giu thi bao ca ngan sach nhu cu
       const short = Math.max(0, num(after.approved_budget_vnd) - (w ? num(w.balance_vnd) - num(w.reserved_vnd) : 0));
       shortfall = short > 0 ? short : num(after.approved_budget_vnd);
