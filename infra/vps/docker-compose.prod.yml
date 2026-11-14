@@ -1,0 +1,429 @@
+# AMS - Docker Compose cho VPS production (thay Cloudflare Workers/D1): Postgres 16, Redis, api, edge-gateway,
+# ingest-consumer, media-worker + ClamAV, web-admin, Caddy (HTTPS tu dong Let's Encrypt), sao luu ma hoa theo lich.
+# Huong dan: docs/ops/MIGRATE-CF-TO-VPS.md. Mau bien moi truong: infra/vps/.env.example (KHONG chua bi mat that).
+#
+#   cd /opt/ams && docker compose --env-file infra/vps/.env -f infra/vps/docker-compose.prod.yml up -d --build
+#   docker compose --env-file infra/vps/.env -f infra/vps/docker-compose.prod.yml ps
+#
+# Khac voi infra/docker/docker-compose.yml (local):
+#  - KHONG co Mailpit/Grafana/tunnel; thu that di qua MAIL_HTTP_* hoac SMTP that (docs/ops/EMAIL-SETUP.md).
+#  - Chi Caddy mo cong ra Internet (80/443). Postgres chi lang nghe 127.0.0.1 tren may chu (cho dong bo/khoi phuc qua SSH), Redis khong mo.
+#  - Bien bat buoc dung ${VAR:?...}: thieu la compose tu choi chay (khong co gia tri mac dinh "change-me").
+#  - Tai chinh (SePay, vi, hoan tien) nam TRONG tien trinh api (services/payments duoc mount vao API): khong co container `payments` rieng.
+#  - Kiem cu phap khong can Docker: python3 -c "import yaml;yaml.safe_load(open('infra/vps/docker-compose.prod.yml'))"
+#    (tren may co Docker: docker compose --env-file infra/vps/.env.example -f infra/vps/docker-compose.prod.yml config -q).
+
+name: ams
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-node-service: &node-service
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  networks: [ams]
+  logging: *logging
+
+x-app-env: &app-env
+  RUNTIME: docker
+  AMS_ENV: ${AMS_ENV:-production}
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://${POSTGRES_USER:-ams}:${POSTGRES_PASSWORD:?dat POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ams}
+  REDIS_URL: redis://:${REDIS_PASSWORD:?dat REDIS_PASSWORD}@redis:6379
+  OBJECT_STORE: fs
+  OBJECT_STORE_DIR: /data/objects
+  OBJECT_STORE_SIGNED_BASE_URL: /api/storage
+  OBJECT_STORE_MAX_UPLOAD_MB: ${OBJECT_STORE_MAX_UPLOAD_MB:-600}
+  PUBLIC_MEDIA_BASE_URL: https://${DOMAIN_APP:?dat DOMAIN_APP}/media-public
+  MEDIA_PUBLIC_PREFIXES: renditions
+  # Thu giao dich: MAIL_HTTP_URL + MAIL_HTTP_KEY (Resend/Postmark/generic) HOAC SMTP_HOST... (docs/ops/EMAIL-SETUP.md)
+  MAIL_TRANSPORT: ${MAIL_TRANSPORT:-http}
+  MAIL_HTTP_URL: ${MAIL_HTTP_URL:-}
+  MAIL_HTTP_KEY: ${MAIL_HTTP_KEY:-}
+  MAIL_PROVIDER: ${MAIL_PROVIDER:-}
+  MAIL_HTTP_AUTH_HEADER: ${MAIL_HTTP_AUTH_HEADER:-}
+  MAIL_FROM: ${MAIL_FROM:-AMS <no-reply@anio.vn>}
+  MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-1}
+  SESSION_SECRET: ${SESSION_SECRET:?dat SESSION_SECRET}
+  # PHAI dung dung khoa FIELD_ENC_KEY dang chay tren Cloudflare (mat/doi khoa = mat MST, so tai khoan, TOTP da ma hoa)
+  FIELD_ENC_KEY: ${FIELD_ENC_KEY:?dat FIELD_ENC_KEY}
+  SEPAY_MODE: ${SEPAY_MODE:-production}
+  SEPAY_WEBHOOK_SECRET: ${SEPAY_WEBHOOK_SECRET:?dat SEPAY_WEBHOOK_SECRET}
+  SEPAY_API_KEY: ${SEPAY_API_KEY:-}
+  SEPAY_API_TOKEN: ${SEPAY_API_TOKEN:-}
+  TRUST_PROXY: "1"
+  CLICKHOUSE_URL: ""
+  APP_PUBLIC_URL: https://${DOMAIN_APP}
+  PUBLIC_ADMIN_URL: https://${DOMAIN_APP}
+  PORTAL_PUBLIC_URL: https://${DOMAIN_APP}
+  API_PUBLIC_URL: https://${DOMAIN_APP}/api
+  # Van hanh (p3-ops): canh bao + trang trang thai + bao cao sao luu
+  OPS_ALERT_EMAILS: ${OPS_ALERT_EMAILS:-}
+  OPS_ALERT_WEBHOOK_URL: ${OPS_ALERT_WEBHOOK_URL:-}
+  OPS_ALERT_WEBHOOK_CHAT_ID: ${OPS_ALERT_WEBHOOK_CHAT_ID:-}
+  OPS_REPORT_TOKEN: ${OPS_REPORT_TOKEN:-}
+  OPS_BACKUP_KINDS: postgres
+
+services:
+  # ---------------------------------------------------------------- bien/khoa mau: tu choi khoi dong
+  env-guard:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    restart: "no"
+    networks: [ams]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      AMS_ENV: ${AMS_ENV:-production}
+      GATEWAY_DEV_ENDPOINTS: "0"
+      G_SESSION_SECRET: ${SESSION_SECRET:?dat SESSION_SECRET}
+      G_FIELD_ENC_KEY: ${FIELD_ENC_KEY:?dat FIELD_ENC_KEY}
+      G_SEPAY_WEBHOOK_SECRET: ${SEPAY_WEBHOOK_SECRET:?dat SEPAY_WEBHOOK_SECRET}
+      G_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?dat POSTGRES_PASSWORD}
+      G_REDIS_PASSWORD: ${REDIS_PASSWORD:?dat REDIS_PASSWORD}
+      G_BACKUP_ENC_KEY: ${BACKUP_ENC_KEY:?dat BACKUP_ENC_KEY}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        bad=""
+        for v in G_SESSION_SECRET G_FIELD_ENC_KEY G_SEPAY_WEBHOOK_SECRET G_POSTGRES_PASSWORD G_REDIS_PASSWORD G_BACKUP_ENC_KEY; do
+          eval "val=\$$$$v"
+          case "$$val" in change-me*|CHANGE_ME*|"") bad="$$bad $${v#G_}";; esac
+        done
+        if [ -n "$$bad" ]; then echo "env-guard: thieu/mau:$$bad. Dien infra/vps/.env that (khong de CHANGE_ME)." >&2; exit 1; fi
+        if [ "$$AMS_ENV" = "local" ]; then echo "env-guard: AMS_ENV=local khong hop le tren VPS production." >&2; exit 1; fi
+        echo "env-guard: ok"
+    logging: *logging
+
+  # ---------------------------------------------------------------- du lieu
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ams}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?dat POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ams}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-1536MB}
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-150}
+      - -c
+      - log_min_duration_statement=1000
+      - -c
+      - log_checkpoints=on
+      - -c
+      - wal_compression=on
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [ams]
+    shm_size: 256mb
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    logging: *logging
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    restart: unless-stopped
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --appendfsync everysec --maxmemory ${REDIS_MAXMEMORY:-512mb} --maxmemory-policy noeviction"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?dat REDIS_PASSWORD}
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    volumes:
+      - redisdata:/data
+    networks: [ams]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
+  # ---------------------------------------------------------------- migration (chay mot lan moi lan trien khai)
+  # SEED=0 mac dinh: khi chuyen tu Cloudflare, du lieu den tu tools/ops (d1-to-pg), khong seed. Cai moi hoan toan: SEED=1 SEED_MODE=bootstrap + BOOTSTRAP_ADMIN_EMAIL.
+  migrate:
+    build:
+      context: ../..
+      dockerfile: services/api/Dockerfile
+      target: migrate
+    image: ${AMS_REGISTRY:-ams}/migrate:${AMS_TAG:-prod}
+    restart: "no"
+    networks: [ams]
+    environment:
+      <<: *app-env
+      SEED: ${SEED:-0}
+      SEED_MODE: ${SEED_MODE:-bootstrap}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD_FILE: ${BOOTSTRAP_ADMIN_PASSWORD_FILE:-}
+    depends_on:
+      env-guard: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+    logging: *logging
+
+  # ---------------------------------------------------------------- ung dung
+  api:
+    <<: *node-service
+    build:
+      context: ../..
+      dockerfile: services/api/Dockerfile
+      target: runtime
+    image: ${AMS_REGISTRY:-ams}/api:${AMS_TAG:-prod}
+    volumes:
+      - mediadata:/data/objects
+    environment:
+      <<: *app-env
+      PORT: "8787"
+      SERVICE_NAME: api
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { memory: 768M }
+
+  edge-gateway:
+    <<: *node-service
+    build:
+      context: ../..
+      dockerfile: services/edge-gateway/Dockerfile
+    image: ${AMS_REGISTRY:-ams}/edge-gateway:${AMS_TAG:-prod}
+    volumes:
+      - mediadata:/data/objects:ro
+    environment:
+      <<: *app-env
+      PORT: "8788"
+      SERVICE_NAME: edge-gateway
+      GATEWAY_DEV_ENDPOINTS: "0"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8788/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { memory: 768M }
+
+  # Doc hang doi Redis cua gateway -> ghi ev_*/impression_hourly + tru tien. Thieu service nay thi luot hien thi KHONG tinh tien.
+  ingest-consumer:
+    <<: *node-service
+    build:
+      context: ../..
+      dockerfile: services/ingest-consumer/Dockerfile
+    image: ${AMS_REGISTRY:-ams}/ingest-consumer:${AMS_TAG:-prod}
+    environment:
+      <<: *app-env
+      SERVICE_NAME: ingest-consumer
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8789/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 512M }
+
+  media-worker:
+    <<: *node-service
+    build:
+      context: ../..
+      dockerfile: services/media-worker/Dockerfile
+    image: ${AMS_REGISTRY:-ams}/media-worker:${AMS_TAG:-prod}
+    volumes:
+      - mediadata:/data/objects
+    environment:
+      <<: *app-env
+      SERVICE_NAME: media-worker
+      PORT: "8790"
+      CLAMD_HOST: clamav
+      CLAMD_PORT: "3310"
+      # Production: khong quet duoc = khong duyet
+      CLAMAV_REQUIRED: "1"
+      MEDIA_TRANSCODE: "1"
+      MEDIA_FFMPEG_THREADS: ${MEDIA_FFMPEG_THREADS:-2}
+      MEDIA_MAX_BYTES: ${MEDIA_MAX_BYTES:-536870912}
+      MEDIA_SWEEP_S: "60"
+    tmpfs:
+      - /tmp:size=1g
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+      clamav: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1280M }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8790/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+
+  clamav:
+    image: ${CLAMAV_IMAGE:-clamav/clamav:1.4}
+    restart: unless-stopped
+    environment:
+      CLAMAV_NO_FRESHCLAMD: "false"
+      CLAMD_CONF_StreamMaxLength: ${CLAMAV_STREAM_MAX:-512M}
+      CLAMD_CONF_MaxFileSize: ${CLAMAV_STREAM_MAX:-512M}
+    volumes:
+      - clamavdata:/var/lib/clamav
+    networks: [ams]
+    deploy:
+      resources:
+        limits: { memory: 2g }
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    logging: *logging
+
+  web-admin:
+    <<: *node-service
+    build:
+      context: ../..
+      dockerfile: apps/web-admin/Dockerfile
+      args:
+        VITE_API_BASE: /api
+    image: ${AMS_REGISTRY:-ams}/web-admin:${AMS_TAG:-prod}
+    environment:
+      API_UPSTREAM: http://api:8787
+    tmpfs:
+      - /tmp:uid=101,gid=101
+      - /var/cache/nginx:uid=101,gid=101
+      - /etc/nginx/conf.d:uid=101,gid=101,mode=755
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  # ---------------------------------------------------------------- vao tu Internet: HTTPS tu dong
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN_APP: ${DOMAIN_APP:?dat DOMAIN_APP}
+      DOMAIN_GW: ${DOMAIN_GW:?dat DOMAIN_GW}
+      ACME_EMAIL: ${ACME_EMAIL:?dat ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - mediadata:/srv/objects:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    networks: [ams]
+    depends_on:
+      web-admin: { condition: service_healthy }
+      api: { condition: service_healthy }
+      edge-gateway: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    logging: *logging
+
+  # ---------------------------------------------------------------- sao luu ma hoa theo lich (cron) + bao cao cho API
+  backup:
+    build:
+      context: ./backup
+    image: ${AMS_REGISTRY:-ams}/backup:${AMS_TAG:-prod}
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-ams}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?dat POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-ams}
+      BACKUP_ENC_KEY: ${BACKUP_ENC_KEY:?dat BACKUP_ENC_KEY}
+      BACKUP_CRON: ${BACKUP_CRON:-17 */6 * * *}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      BACKUP_MEDIA: ${BACKUP_MEDIA:-1}
+      BACKUP_MEDIA_CRON: ${BACKUP_MEDIA_CRON:-40 3 * * 0}
+      BACKUP_RCLONE: ${BACKUP_RCLONE:-}
+      RCLONE_CONFIG_OFFSITE_TYPE: ${RCLONE_CONFIG_OFFSITE_TYPE:-}
+      RCLONE_CONFIG_OFFSITE_PROVIDER: ${RCLONE_CONFIG_OFFSITE_PROVIDER:-}
+      RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID: ${RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID:-}
+      RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY: ${RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY:-}
+      RCLONE_CONFIG_OFFSITE_ENDPOINT: ${RCLONE_CONFIG_OFFSITE_ENDPOINT:-}
+      OPS_REPORT_URL: http://api:8787/ops/backup-report
+      OPS_REPORT_TOKEN: ${OPS_REPORT_TOKEN:-}
+      AMS_ENV: ${AMS_ENV:-production}
+    volumes:
+      - backups:/backups
+      - mediadata:/data/objects:ro
+    networks: [ams]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      # co it nhat mot ban Postgres trong 30 gio qua
+      test: ["CMD-SHELL", "find /backups -name 'postgres-*.enc' -mmin -1800 | grep -q ."]
+      interval: 1h
+      timeout: 10s
+      retries: 1
+      start_period: 26h
+    logging: *logging
+
+networks:
+  ams:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
+  mediadata:
+  clamavdata:
+  caddy_data:
+  caddy_config:
+  backups:

@@ -1,0 +1,57 @@
+# Caddy cho VPS production: HTTPS tu dong (Let's Encrypt) cho {$DOMAIN_APP} va {$DOMAIN_GW}.
+# Can: DNS cua hai ten mien tro ve IP VPS (Cloudflare: de "DNS only" (may xam), KHONG "Proxied" cho den khi on dinh; xem MIGRATE-CF-TO-VPS.md),
+# cong 80/443 mo. Cung URL nhu Cloudflare: web+API o {$DOMAIN_APP} (/api/*), thiet bi o {$DOMAIN_GW}, webhook SePay giu nguyen URL.
+{
+	email {$ACME_EMAIL}
+}
+
+# GHI DE header IP khach: API/gateway tin X-Forwarded-For/X-Real-IP (TRUST_PROXY=1) cho rate-limit va audit.
+(client_ip) {
+	header_up X-Forwarded-For {remote_host}
+	header_up X-Real-IP {remote_host}
+	header_up -CF-Connecting-IP
+}
+(security_headers) {
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}
+
+{$DOMAIN_APP} {
+	import security_headers
+	encode zstd gzip
+	# Media cong khai cho TV (CHI renditions/*, ban da quet): phat tinh tu volume mediadata (doc-chi)
+	@mpub path /media-public/renditions/*
+	handle @mpub {
+		@mbad not method GET HEAD OPTIONS
+		respond @mbad 405
+		header Cache-Control "public, max-age=300"
+		header Access-Control-Allow-Origin *
+		uri strip_prefix /media-public
+		root * /srv/objects
+		file_server {
+			hide .*
+		}
+	}
+	handle /media-public/* {
+		respond 404
+	}
+	handle {
+		reverse_proxy web-admin:8080 {
+			import client_ip
+		}
+	}
+}
+
+{$DOMAIN_GW} {
+	import security_headers
+	reverse_proxy edge-gateway:8788 {
+		import client_ip
+		health_uri /health
+		health_interval 15s
+	}
+}
