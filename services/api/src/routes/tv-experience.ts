@@ -167,7 +167,9 @@ export function tvExperienceRoutes(): Hono<AppEnv> {
   r.get('/', requirePerm('tv_experience', 'view'), async (c) => {
     const rt = getRt(c);
     const settings = await loadTvSettings(rt);
-    const rows = await rt.db.query<{ overlay: string | null; review_state: string }>("SELECT overlay, review_state FROM creatives WHERE COALESCE(format, 'fullscreen') = 'fullscreen'");
+    // dem trong SQL; chi keo ve cac dong co overlay nhac toi kid_safe (tap thuc su bi tien loc, khong keo ca bang creatives)
+    const total = num((await rt.db.query<{ n: number }>("SELECT COUNT(*) AS n FROM creatives WHERE COALESCE(format, 'fullscreen') = 'fullscreen'"))[0]?.n);
+    const rows = await rt.db.query<{ overlay: string | null; review_state: string }>("SELECT overlay, review_state FROM creatives WHERE COALESCE(format, 'fullscreen') = 'fullscreen' AND overlay LIKE '%kid_safe%'");
     let kid = 0;
     let lock = 0;
     for (const x of rows) {
@@ -177,7 +179,7 @@ export function tvExperienceRoutes(): Hono<AppEnv> {
     }
     return c.json({
       settings,
-      summary: { creatives: rows.length, kid_safe: kid, lock_eligible: lock },
+      summary: { creatives: total, kid_safe: kid, lock_eligible: lock },
       can_approve: hasPerm(c, 'tv_experience', 'approve'),
     });
   });

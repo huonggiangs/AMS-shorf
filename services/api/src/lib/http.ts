@@ -113,7 +113,7 @@ export function parseFilters(c: Ctx, spec: ListSpec): Map<string, string> {
     }
   }
   for (const [k, v] of Object.entries(c.req.query())) {
-    if (!RESERVED.has(k) && spec.filters[k] && v) out.set(k, v);
+    if (!RESERVED.has(k) && Object.hasOwn(spec.filters, k) && v) out.set(k, v);
   }
   return out;
 }
@@ -126,7 +126,7 @@ export async function runList<T extends object>(c: Ctx, spec: ListSpec, extra: S
   const where: SqlFrag[] = [...(spec.where ?? []), ...extra];
 
   for (const [k, v] of parseFilters(c, spec)) {
-    const def = spec.filters[k];
+    const def = Object.hasOwn(spec.filters, k) ? spec.filters[k] : undefined;
     const frag = def ? def(v) : null;
     if (frag) where.push(frag);
   }
@@ -145,7 +145,7 @@ export async function runList<T extends object>(c: Ctx, spec: ListSpec, extra: S
 
   const sortRaw = c.req.query('sort') || spec.defaultSort;
   const [sf, sd] = sortRaw.split(':');
-  const field = sf && spec.sorts[sf] ? sf : spec.defaultSort.split(':')[0]!;
+  const field = sf && Object.hasOwn(spec.sorts, sf) ? sf : spec.defaultSort.split(':')[0]!;
   const dir = (sd ?? spec.defaultSort.split(':')[1] ?? 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
   const orderBy = `${spec.sorts[field]} ${dir}, ${spec.tiebreak} ${dir}`;
 

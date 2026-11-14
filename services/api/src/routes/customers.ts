@@ -126,7 +126,8 @@ const body = z.object({
 });
 
 async function nextPaymentCode(db: Db): Promise<string> {
-  const rows = await db.query<{ payment_code: string }>("SELECT payment_code FROM customers WHERE payment_code LIKE 'K%'");
+  // chi lay vai ma dai nhat/lon nhat (K999 < K1000 theo do dai truoc): khong keo ca bang khach hang ve de tim max
+  const rows = await db.query<{ payment_code: string }>("SELECT payment_code FROM customers WHERE payment_code LIKE 'K%' ORDER BY LENGTH(payment_code) DESC, payment_code DESC LIMIT 20");
   let max = 0;
   for (const r of rows) {
     const n = Number(r.payment_code.slice(1));

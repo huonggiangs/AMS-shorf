@@ -167,7 +167,7 @@ export async function renderContract(rt: Runtime, row: ContractRow, over: { adva
 }
 
 async function nextContractNo(rt: Runtime, db: { query: Runtime['db']['query'] }, year: string): Promise<string> {
-  const rows = await db.query<{ no: string }>('SELECT no FROM contracts WHERE no LIKE ?', [`HD-${year}-%`]);
+  const rows = await db.query<{ no: string }>('SELECT no FROM contracts WHERE no LIKE ? ORDER BY LENGTH(no) DESC, no DESC LIMIT 20', [`HD-${year}-%`]);
   let max = 0;
   for (const r of rows) {
     const n = Number(r.no.split('-').pop());
