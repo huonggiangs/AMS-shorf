@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { ZodError } from 'zod';
 import { bumpOpsCounter, type Runtime } from '@ams/runtime';
-import { randomBytes, shardOf, toBase64Url } from '@ams/shared';
+import { PLACEHOLDER_PRICE_MICRO_VND, explicitEnvPrice, placeholderAllowed, randomBytes, shardOf, toBase64Url } from '@ams/shared';
 import { KvNonceStore, authenticateDevice, readEnvelope, verifyEnvelope, type AuthDeps, type NonceStore } from './auth.js';
 import { DeviceDirectory, type DeviceRec } from './devices.js';
 import { DEFAULT_POLICY, INGEST_TOPIC, processEvents, type EventPolicy } from './events.js';
@@ -90,7 +90,8 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     ...DEFAULT_POLICY,
     minVcrPct: envInt(env, 'IMPRESSION_MIN_VCR', DEFAULT_POLICY.minVcrPct),
     maxPerDeviceHour: envInt(env, 'IMPRESSION_MAX_PER_DEVICE_HOUR', DEFAULT_POLICY.maxPerDeviceHour),
-    priceMicroVnd: envInt(env, 'IMPRESSION_PRICE_MICRO_VND', DEFAULT_POLICY.priceMicroVnd),
+    // gia du phong cho chien dich chua co gia chot: CHI local/test (bien moi truong neu dat, nguoc lai 20 d); production = 0 (no_price). Gia that: campaign_prices.
+    priceMicroVnd: placeholderAllowed(env) ? (explicitEnvPrice(env) ?? PLACEHOLDER_PRICE_MICRO_VND) : DEFAULT_POLICY.priceMicroVnd,
     rewardPointToVnd: envInt(env, 'REWARD_POINT_VND', DEFAULT_POLICY.rewardPointToVnd),
     ...opts.policy,
   };

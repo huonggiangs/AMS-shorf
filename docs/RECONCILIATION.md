@@ -14,6 +14,8 @@ So sánh theo (chiến dịch, ngày giờ Việt Nam), chỉ các ngày ĐÃ K�
 | `claim_vs_impression` | micro đã chiếm trong `spend_events` và doanh thu impression hợp lệ trong `impression_hourly` | Phải khớp tuyệt đối khi hết độ trễ (consumer chiếm spend trước, append sau). `diff` dương = thu thừa (trừ tiền không có impression), âm = thu thiếu (có impression chưa trừ) |
 | `ledger_vs_claim` | `spend_dedupe.charged_vnd` * 1e6 và micro đã chiếm | Chỉ báo thu THỪA sổ cái. Không báo thu thiếu vì phần dư dưới 1 VND được dồn sang lô sau, chiến dịch hết ngân sách bị từ chối hợp lệ, và `settleSpendRemainders` không cộng vào `spend_dedupe` |
 
+Giá (p1): cả hai vế cùng lấy từ `revenue_micro_vnd` của impression, mà gateway tính theo giá CHỐT của chiến dịch lúc duyệt (`campaign_prices`, xem `docs/PRICING.md`), nên đổi bảng giá không làm lệch đối soát; đơn giá mỗi lượt đọc được ở `spend_events.amount_micro_vnd`.
+
 Chia ngày: claim được gán ngày theo `ts` của impression (join `spend_events.event_id = ev_ad_impression.event_id`); claim chưa có impression gán theo `created_at`; nếu bảng `ev_ad_impression` không có trong DB (ClickHouse) thì mọi claim chia theo `created_at` (có thể báo oan quanh nửa đêm: ghi ở đây, chưa kiểm chứng).
 
 Dung sai: `max(toleranceAbsMicro, floor(doanh_thu * tolerancePct))`, mặc định 1 VND và 0,5% (env `REVENUE_RECONCILE_TOLERANCE_MICRO`, `REVENUE_RECONCILE_TOLERANCE_PCT`, `REVENUE_RECONCILE_DAYS`, `REVENUE_RECONCILE_GRACE_MIN`).

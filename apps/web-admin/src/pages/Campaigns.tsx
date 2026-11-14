@@ -11,6 +11,7 @@ import { Btn, Field, Kpi, NameCell, PageHead, StatusTag, Tabs, LoadingBlock } fr
 import { PaceBar } from '../components/charts';
 import { Drawer } from '../components/Drawer';
 import { Dialog } from '../components/Dialog';
+import { PriceQuote } from '../components/PriceQuote';
 import { PromptDialog } from '../components/Prompt';
 import { Icon } from '../components/Icon';
 import { useT } from '../i18n';
@@ -124,6 +125,7 @@ export function CampaignDrawer({ id, onClose, onReject }: { id: string | null; o
             {c.reject_reason ? (<><dt>Lý do trả lại</dt><dd>{c.reject_reason}</dd></>) : null}
             {!base.isExternal ? (<><dt>Ngành</dt><dd>{c.customer_industry ?? '—'}{c.restricted_industry ? ' · HẠN CHẾ' : ''}</dd><dt>Quyền nội dung</dt><dd>{c.content_rights_confirmed ? `Đã xác nhận ${fmtDate(c.content_rights_confirmed_at)}` : 'Chưa xác nhận'}</dd></>) : null}
           </dl>
+          {['draft', 'pending', 'rejected', 'awaiting_funds', 'scheduled', 'active', 'paused'].includes(c.status) ? <PriceQuote path={ep('quote')} /> : null}
           {msg ? <div className="note"><Icon n="info" /><span>{msg}</span></div> : null}
           <div className="acts">
             {c.status === 'draft' && can('campaigns', 'write') ? <Btn tone="p" onClick={() => { if (window.confirm('Xác nhận bạn có đủ quyền sử dụng hình ảnh, âm nhạc, thương hiệu và nội dung trong quảng cáo, và nội dung tuân thủ pháp luật quảng cáo?')) void act(() => api.post(ep('submit'), { body: { content_rights_confirmed: true } }), 'Đã gửi duyệt.', ['/admin/v1', '/portal/v1']); }}>{t('Gửi duyệt')}</Btn> : null}
@@ -217,6 +219,11 @@ export function CampaignForm({ open, onClose }: { open: boolean; onClose: () => 
           <Field label="Ngày bắt đầu"><input type="date" value={f.start} onChange={(e) => set('start', e.target.value)} /></Field>
           <Field label="Ngày kết thúc"><input type="date" value={f.end} min={f.start} onChange={(e) => set('end', e.target.value)} /></Field>
         </div>
+        <PriceQuote
+          path={base.isExternal ? '/portal/v1/pricing/quote' : '/admin/v1/pricing/quote'}
+          query={{ screen_type: f.screen_type === 'led' ? 'led_p5' : f.screen_type, budget_vnd: Number.isFinite(+f.budget) && +f.budget > 0 ? Math.round(+f.budget) : undefined, customer_id: base.isExternal ? undefined : f.customer_id || undefined }}
+          enabled={open && (base.isExternal || !!f.customer_id)}
+        />
         <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', margin: '10px 0 0', fontSize: 13 }}>
           <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} style={{ marginTop: 3 }} />
           <span>Tôi xác nhận có đủ quyền sử dụng hình ảnh, âm nhạc, thương hiệu và nội dung trong quảng cáo, và nội dung tuân thủ pháp luật quảng cáo. (bắt buộc khi gửi duyệt)</span>

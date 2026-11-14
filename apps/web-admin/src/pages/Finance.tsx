@@ -16,17 +16,18 @@ import { MIN_TOPUP_VND } from '../lib/sepay';
 import { Icon } from '../components/Icon';
 import { Link } from 'react-router-dom';
 import FinanceOps from './FinanceOps';
+import PriceBook from './PriceBook';
 import History from './History';
 import { HourlyRevenue, InvoicesPanel, PortalInvoices } from './FinanceInvoices';
 
 export default function Finance() {
   const { isExternal, can } = useAuth();
-  const [tab, setTab] = useState<'ov' | 'wallet' | 'ops'>('ov');
+  const [tab, setTab] = useState<'ov' | 'wallet' | 'ops' | 'price'>('ov');
   if (isExternal) return <><WalletView />{can('finance', 'view') ? <><PortalInvoices /><History /></> : null}</>;
   return (
     <>
-      <Tabs value={tab} onChange={setTab} items={[{ id: 'ov', label: 'Tổng quan' }, { id: 'wallet', label: 'Ví quảng cáo' }, { id: 'ops', label: 'Vận hành' }]} />
-      {tab === 'ov' ? <FinanceOverview /> : tab === 'wallet' ? <WalletView /> : <FinanceOps />}
+      <Tabs value={tab} onChange={setTab} items={[{ id: 'ov', label: 'Tổng quan' }, { id: 'wallet', label: 'Ví quảng cáo' }, { id: 'ops', label: 'Vận hành' }, { id: 'price', label: 'Bảng giá' }]} />
+      {tab === 'ov' ? <FinanceOverview /> : tab === 'wallet' ? <WalletView /> : tab === 'price' ? <PriceBook /> : <FinanceOps />}
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { formatVnd, vndToWordsVi } from '@ams/shared';
+import { formatVnd, microToVndString, vndToWordsVi } from '@ams/shared';
 import type { Runtime } from '@ams/runtime';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { diffObjects } from '../lib/audit.js';
@@ -188,7 +188,12 @@ export function contractRoutes(): Hono<AppEnv> {
   r.get('/:id', requirePerm('customers', 'view'), async (c) => {
     const rt = getRt(c);
     const row = await loadContract(c, c.req.param('id'));
-    const lines = await rt.db.query('SELECT id, screen_type, region_id, daypart, frequency, duration_s, unit_price_vnd, qty FROM contract_lines WHERE contract_id = ? ORDER BY id', [row.id]);
+    const raw = await rt.db.query<{ id: string; screen_type: string | null; region_id: string | null; daypart: string | null; frequency: number | null; duration_s: number | null; unit_price_vnd: number; qty: number; impression_price_micro_vnd: unknown }>(
+      'SELECT cl.id, cl.screen_type, cl.region_id, cl.daypart, cl.frequency, cl.duration_s, cl.unit_price_vnd, cl.qty, p.impression_price_micro_vnd FROM contract_lines cl LEFT JOIN contract_line_prices p ON p.contract_line_id = cl.id WHERE cl.contract_id = ? ORDER BY cl.id',
+      [row.id],
+    );
+    // gia thoa thuan moi luot (micro-VND nguyen): ghi de bang gia khi chien dich gan hop dong nay
+    const lines = raw.map((l) => ({ ...l, impression_price_micro_vnd: l.impression_price_micro_vnd === null ? null : num(l.impression_price_micro_vnd), impression_price_vnd: l.impression_price_micro_vnd === null ? null : microToVndString(num(l.impression_price_micro_vnd)) }));
     return c.json({ ...present(row), lines });
   });
 
@@ -276,6 +281,31 @@ export function contractRoutes(): Hono<AppEnv> {
       await auditCtx(c, db, { action: 'contract.update', objectType: 'contract', objectId: row.id, customerId: row.customer_id, diff: diffObjects(before, after) });
     });
     return c.json(present(await loadContract(c, row.id)));
+  });
+
+  // Them dong hop dong co gia thoa thuan moi luot (ghi de bang gia; van bi nang len gia san). Dat gia = finance:approve.
+  r.post('/:id/lines', requirePerm('customers', 'write'), async (c) => {
+    const rt = getRt(c);
+    const row = await loadContract(c, c.req.param('id'));
+    if (!hasPerm(c, 'finance', 'approve')) throw forbidden('Chỉ người có quyền tài chính (duyệt) mới đặt giá thỏa thuận.', 'forbidden', { module: 'finance', action: 'approve' });
+    if (!['draft', 'pending_sign', 'active'].includes(row.state)) throw conflict('Không thêm dòng giá cho hợp đồng ở trạng thái này.', 'invalid_state');
+    const b = await parseBody(c, z.object({
+      screen_type: z.enum(['tv', 'elevator', 'led_p5']).optional().nullable(),
+      region_id: z.string().max(16).optional().nullable(),
+      daypart: z.enum(['peak', 'off_peak']).optional().nullable(),
+      frequency: z.coerce.number().int().min(0).max(100000).optional().nullable(),
+      duration_s: z.coerce.number().int().min(1).max(600).optional().nullable(),
+      qty: z.coerce.number().int().min(1).max(1_000_000).default(1),
+      impression_price_micro_vnd: z.coerce.number().int().min(1).max(1_000_000_000_000),
+    }));
+    const id = rt.id();
+    const nowIso = rt.clock.now().toISOString();
+    await rt.db.tx(async (db) => {
+      await db.run('INSERT INTO contract_lines (id, contract_id, screen_type, region_id, daypart, frequency, duration_s, unit_price_vnd, qty) VALUES (?,?,?,?,?,?,?,0,?)', [id, row.id, b.screen_type ?? null, b.region_id ?? null, b.daypart ?? null, b.frequency ?? null, b.duration_s ?? null, b.qty]);
+      await db.run('INSERT INTO contract_line_prices (contract_line_id, contract_id, impression_price_micro_vnd, updated_by, updated_at) VALUES (?,?,?,?,?)', [id, row.id, b.impression_price_micro_vnd, c.get('user').id, nowIso]);
+      await auditCtx(c, db, { action: 'contract.line_price', objectType: 'contract', objectId: row.id, customerId: row.customer_id, diff: { line_id: id, screen_type: b.screen_type ?? null, region_id: b.region_id ?? null, daypart: b.daypart ?? null, impression_price_micro_vnd: b.impression_price_micro_vnd } });
+    });
+    return c.json({ id, contract_id: row.id, impression_price_micro_vnd: b.impression_price_micro_vnd, impression_price_vnd: microToVndString(b.impression_price_micro_vnd) }, 201);
   });
 
   r.post('/:id/render', requirePerm('customers', 'view'), async (c) => {

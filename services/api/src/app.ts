@@ -27,6 +27,8 @@ import { opsRoutes, publicOpsRoutes } from './routes/ops.js';
 import { storageRoutes, STORAGE_UPLOAD_PATH } from './routes/storage.js';
 import { partnerRoutes } from './routes/partners.js';
 import { portalRoutes } from './routes/portal.js';
+import { rateCardRoutes } from './routes/pricing.js';
+import { quoteRoutes } from './routes/pricing-quote.js';
 import { revenueRoutes } from './routes/revenue.js';
 import { rtbFloorRoutes } from './routes/rtb-floors.js';
 import { scheduleRoutes } from './routes/schedule.js';
@@ -100,6 +102,8 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
   admin.route('/revenue', revenueRoutes());
   admin.route('/partners', partnerRoutes());
   admin.route('/rtb-floors', rtbFloorRoutes());
+  admin.route('/rate-cards', rateCardRoutes());
+  admin.route('/pricing', quoteRoutes(false));
   // w2-notconnected: man hinh truoc day NotConnected
   admin.route('/history', historyRoutes());
   admin.route('/tv-experience', tvExperienceRoutes());

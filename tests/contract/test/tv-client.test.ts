@@ -156,6 +156,7 @@ describe('creative.overlay: lược đồ TV (zod, strict) và ví dụ VinFast'
     try {
       const cr = w2.fixture.campaigns[0]!.creatives[0]!.id;
       await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify({ headline: 'X', kid_safe: true, contexts: ['lock'], duration_s: 20, safe_area: { top: 5, right: 5, bottom: 5, left: 5 } }), cr]);
+      await w2.rt.db.run("INSERT INTO settings (key, value, updated_by, updated_at) VALUES ('tv_experience', ?, NULL, ?)", [JSON.stringify({ lock_ads_enabled: true }), '2026-11-12T03:00:00.000Z']); // man khoa bat ro rang (mac dinh TAT)
       const d = await Dev.create(w2);
       const o = ((await d.manifest()).json!.creatives[0] as any).overlay;
       expect(o).toMatchObject({ kid_safe: true, contexts: ['lock'], duration_s: 20 });

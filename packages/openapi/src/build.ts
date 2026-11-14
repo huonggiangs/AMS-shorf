@@ -70,6 +70,8 @@ const SRC: { file: string; prefixes: string[] }[] = [
   { file: 'services/api/src/routes/revenue.ts', prefixes: ['/admin/v1/revenue'] },
   { file: 'services/api/src/routes/partners.ts', prefixes: ['/admin/v1/partners'] },
   { file: 'services/api/src/routes/rtb-floors.ts', prefixes: ['/admin/v1/rtb-floors'] },
+  { file: 'services/api/src/routes/pricing.ts', prefixes: ['/admin/v1/rate-cards'] },
+  { file: 'services/api/src/routes/pricing-quote.ts', prefixes: ['/admin/v1/pricing', '/portal/v1/pricing'] },
   { file: 'services/api/src/routes/portal.ts', prefixes: ['/portal/v1'] },
   { file: 'services/api/src/routes/history.ts', prefixes: ['/admin/v1/history', '/portal/v1/history'] },
   { file: 'services/api/src/routes/invoices.ts', prefixes: ['/admin/v1/invoices', '/admin/v1/payouts', '/portal/v1/invoices'] },
@@ -128,6 +130,7 @@ const ITEM: Record<string, [string, ZodTypeAny]> = {
   'audit-log': ['AuditEntry', asZ(W.auditSchema)],
   partners: ['Partner', asZ(W.partnerSchema)],
   'rtb-floors': ['RtbFloor', asZ(W.floorSchema)],
+  'rate-cards': ['RateCard', asZ(W.rateCardSchema)],
   topups: ['Topup', asZ(W.topupSchema)],
   wallets: ['Wallet', asZ(W.walletSchema)],
 };
@@ -146,6 +149,7 @@ const SPECIAL: [RegExp, string, ZodTypeAny][] = [
   [/^GET \/admin\/v1\/payments\/manual-queue$/, 'ManualQueue', asZ(W.manualQueueSchema)],
   [/^GET \/(admin|portal)\/v1\/(wallet\/)?refund-requests$/, 'RefundRequests', asZ(W.refundRequestsSchema)],
   [/^GET \/admin\/v1\/activation-log$/, 'ActivationLog', asZ(W.activationLogSchema)],
+  [/^GET \/(admin|portal)\/v1\/(pricing|campaigns\/:id)\/quote$/, 'Quote', asZ(W.quoteSchema)],
 ];
 
 function adminResponse(c: Components, method: string, path: string, list: boolean): { schema: Json; note?: string } {

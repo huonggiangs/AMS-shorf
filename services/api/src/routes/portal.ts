@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { getRt } from '../lib/http.js';
 import { campaignRoutes } from './campaigns.js';
 import { mediaRoutes } from './media.js';
+import { quoteRoutes } from './pricing-quote.js';
 import { meBody } from '../auth/routes.js';
 import type { AppEnv } from '../types.js';
 
@@ -10,6 +11,7 @@ export function portalRoutes(): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
   r.route('/campaigns', campaignRoutes(true));
   r.route('/media', mediaRoutes(true));
+  r.route('/pricing', quoteRoutes(true));
   r.get('/me', async (c) => {
     const rt = getRt(c);
     const u = c.get('user');

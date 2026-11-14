@@ -17,7 +17,7 @@ for (const dialect of ['postgres', 'sqlite'] as const) {
       const r = await bootstrap(rt, { passwordParams: P, adminEmail: 'Owner@congty.vn', adminPassword: STRONG });
       expect(r.skipped).toBe(false);
       expect(r.generatedPassword).toBeNull(); // mat khau do nguoi van hanh cung cap, khong tra lai
-      for (const t of ['customers', 'campaigns', 'devices', 'contracts', 'ad_wallets', 'wallet_entries', 'topups', 'creatives', 'venues', 'screens', 'end_users', 'payouts', 'partners', 'invoices'])
+      for (const t of ['customers', 'campaigns', 'devices', 'contracts', 'ad_wallets', 'wallet_entries', 'topups', 'creatives', 'venues', 'screens', 'end_users', 'payouts', 'partners', 'invoices', 'rate_cards', 'campaign_prices', 'contract_line_prices'])
         expect(N(await rt.db.query(`SELECT COUNT(*) AS n FROM ${t}`)), t).toBe(0);
       expect(N(await rt.db.query('SELECT COUNT(*) AS n FROM tenants'))).toBe(1);
       const admins = await rt.db.query<{ email: string; role: string; password_hash: string; totp_secret_enc: string | null; mfa_required: number; status: string }>('SELECT * FROM admins');

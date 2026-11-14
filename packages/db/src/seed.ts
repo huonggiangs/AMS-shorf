@@ -1,4 +1,5 @@
 import {
+  buildSnapshot, MICRO_PER_VND, type RateCardRow,
   blindIndex, encryptField, generateTotpSecret, hashPassword, randomBytes, randomPassword, sha256Hex, shardOf, toBase64Url, toHex,
 } from '@ams/shared';
 import { PROTOTYPE as P } from './seed-data.gen.js';
@@ -43,6 +44,22 @@ export interface SeedResult {
 }
 
 const SEED_BY = 'seed';
+const vnd = (n: number): number => n * MICRO_PER_VND;
+/**
+ * Bang gia MAU cho demo (CHI seed demo; bootstrap production bat dau RONG va chien dich khong gui duyet duoc cho toi khi quan tri tao bang gia, xem docs/PRICING.md).
+ * Don vi: d/luot (per_impression) hoac d/1.000 luot (cpm). Gia san la gia moi luot.
+ */
+const DEMO_RATE_CARDS: { screen: string; region: string; daypart: string; model: 'per_impression' | 'cpm'; price: number; floor: number; note: string }[] = [
+  { screen: '*', region: '*', daypart: '*', model: 'per_impression', price: vnd(30), floor: vnd(15), note: 'Gia mac dinh (demo)' },
+  { screen: 'tv', region: '*', daypart: 'off_peak', model: 'per_impression', price: vnd(25), floor: vnd(15), note: 'TV gio thuong (demo)' },
+  { screen: 'tv', region: '*', daypart: 'peak', model: 'per_impression', price: vnd(40), floor: vnd(20), note: 'TV gio cao diem 17:00-22:00 (demo)' },
+  { screen: 'tv', region: 'HN', daypart: 'peak', model: 'per_impression', price: vnd(48), floor: vnd(25), note: 'TV Ha Noi gio cao diem (demo)' },
+  { screen: 'tv', region: 'HCM', daypart: 'peak', model: 'per_impression', price: vnd(48), floor: vnd(25), note: 'TV TP.HCM gio cao diem (demo)' },
+  { screen: 'elevator', region: '*', daypart: 'off_peak', model: 'per_impression', price: vnd(60), floor: vnd(40), note: 'Thang may gio thuong (demo)' },
+  { screen: 'elevator', region: '*', daypart: 'peak', model: 'per_impression', price: vnd(90), floor: vnd(50), note: 'Thang may gio cao diem (demo)' },
+  { screen: 'led_p5', region: '*', daypart: 'off_peak', model: 'cpm', price: vnd(120_000), floor: vnd(80), note: 'LED CPM 120.000 d (demo)' },
+  { screen: 'led_p5', region: '*', daypart: 'peak', model: 'cpm', price: vnd(180_000), floor: vnd(100), note: 'LED CPM 180.000 d (demo)' },
+];
 const REGION_CODE: Record<string, string> = { 'Hà Nội': 'HN', 'TP.HCM': 'HCM', 'Đà Nẵng': 'DN', 'Cần Thơ': 'CT', 'Hải Phòng': 'HP' };
 const DEVICE_STATUS: Record<string, string> = { 'Hoạt động': 'active', 'Đã ghép đôi': 'paired', 'Cần cập nhật': 'needs_update', 'Đang kiểm tra': 'checking', 'Ngoại tuyến': 'offline' };
 const CAMPAIGN_STATE: Record<string, string> = { 'Đang phát': 'active', 'Đã lên lịch': 'scheduled', 'Chờ duyệt': 'pending_review', 'Bản nháp': 'draft', 'Tạm dừng': 'paused' };
@@ -297,6 +314,14 @@ export async function seedDemo(rt: SeedRuntime, opts: SeedOptions = {}): Promise
     // chien dich bo sung: da duyet nhung vi thieu tien (de thu tu kich hoat khi nap)
     camps.push({ id: id(), cus: cusByShort['Unilever']!, name: 'Omo Tết 2027', brand: 'Unilever', state: 'awaiting_funds', budget: 50_000_000, spent: 0, start: '2026-12-01T00:00:00.000Z', end: '2027-01-15T00:00:00.000Z', file: '', creator: 'Ngọc Mai', approved: false });
 
+    // bang gia mau (hieu luc tu 2026-01-01; chien dich seed duoc chot gia theo day)
+    const demoCards: RateCardRow[] = [];
+    for (const k of DEMO_RATE_CARDS) {
+      const row = { id: id(), customer_id: '*', screen_type: k.screen, region_id: k.region, daypart: k.daypart, model: k.model, price_micro_vnd: k.price, floor_micro_vnd: k.floor, effective_from: '2026-01-01T00:00:00.000Z', effective_to: null, active: 1 };
+      await ins(db, 'rate_cards', { ...row, note: k.note, created_by: adminIds[adminEmail] ?? null, created_at: nowIso });
+      bump('rate_cards');
+      demoCards.push(row);
+    }
     for (const c of camps) {
       const live = c.approved;
       const awaiting = c.state === 'awaiting_funds';
@@ -309,6 +334,14 @@ export async function seedDemo(rt: SeedRuntime, opts: SeedOptions = {}): Promise
         approved_at: live || awaiting ? addDays(created, 3) : null, created_at: created, updated_at: nowIso,
       });
       bump('campaigns');
+      if (live || awaiting) {
+        // gia chot luc duyet (nhu API): chien dich seed da duyet cung co gia chot, de gateway tinh tien dung bang gia mau
+        const snap = buildSnapshot({ customerId: c.cus.id, screenTypes: ['tv'], at: addDays(created, 3), rateCards: demoCards, contractLines: null, fallback: { placeholderMicro: null } });
+        for (const r of snap.rows) {
+          await ins(db, 'campaign_prices', { campaign_id: c.id, screen_type: r.screen_type, region_id: r.region_id, daypart: r.daypart, unit_price_micro_vnd: r.unit_price_micro_vnd, floor_micro_vnd: r.floor_micro_vnd, list_price_micro_vnd: r.list_price_micro_vnd, model: r.model, cpm_micro_vnd: r.cpm_micro_vnd, source: r.source, source_ref: r.source_ref, floored: r.floored ? 1 : 0, resolved_by: adminIds[adminEmail] ?? null, resolved_at: addDays(created, 3) });
+          bump('campaign_prices');
+        }
+      }
       for (const dp of [['all_day', 0, 1440]] as const) {
         if (c.state === 'draft' || c.state === 'pending_review') continue;
         await ins(db, 'schedule_slots', { id: id(), campaign_id: c.id, partner_id: null, screen_group_id: null, target_type: 'tv', daypart: dp[0], start_min: dp[1], end_min: dp[2], priority: 2, reward_points: 10, regions: JSON.stringify(['HN', 'HCM']) });

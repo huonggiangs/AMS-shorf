@@ -1,4 +1,5 @@
 import { kvIncrMany, type Runtime } from '@ams/runtime';
+import { chargeMicro, daypartAt } from '@ams/shared';
 import { impressionEvent, proofOfPlayEvent, type ImpressionEvent } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 import type { ManifestView } from './manifest.js';
@@ -12,7 +13,11 @@ export interface EventPolicy {
   maxPerDeviceHour: number;
   maxAgeH: number;
   futureSkewS: number;
-  priceMicroVnd: number; // don gia/impression hop le, micro-VND (1 VND = 1.000.000) — TAM, can bang gia that
+  /**
+   * Gia DU PHONG moi impression hop le (micro-VND), CHI dung khi chien dich khong co gia chot trong manifest (DB cu/test). 0 = khong co du phong (production):
+   * impression do bi danh dau `no_price`, khong tinh tien. Gia that lay tu gia chot cua chien dich (campaign_prices) qua manifest, khong tu bien nay.
+   */
+  priceMicroVnd: number;
   rewardPointToVnd: number; // quy doi diem thuong -> VND — TAM
 }
 
@@ -22,7 +27,7 @@ export const DEFAULT_POLICY: EventPolicy = {
   maxPerDeviceHour: 120,
   maxAgeH: 48,
   futureSkewS: 300,
-  priceMicroVnd: 20_000_000,
+  priceMicroVnd: 0,
   rewardPointToVnd: 1,
 };
 
@@ -124,6 +129,11 @@ async function processEventsPass(
     if (dev.trust < 1) reason = 'untrusted_device';
     else if (e.vcr_pct < policy.minVcrPct) reason = 'vcr_low';
     else if (info.duration_s && e.played_ms < info.duration_s * 1000 * policy.minPlayedRatio) reason = 'short_play';
+    // GIA: don gia cua luot nay = gia CHOT cua chien dich luc duyet theo (khu vuc thiet bi, khung gio cua su kien theo gio VN), khong bao gio duoi san.
+    // Cung event_id luon cho cung gia (ts bat bien) nen lo giao lai khong doi so tien. Khong co gia chot: gia du phong (local/test) hoac `no_price`.
+    const snap = view.price(info.campaign_id, dev.region ?? '*', daypartAt(tsMs));
+    const unitPrice = snap ? chargeMicro({ unitPriceMicroVnd: snap.unit_price_micro_vnd, floorMicroVnd: snap.floor_micro_vnd }) : policy.priceMicroVnd;
+    if (!reason && !(Number.isSafeInteger(unitPrice) && unitPrice > 0)) reason = 'no_price';
     if (!reason) {
       if (capped(e.event_id)) reason = 'rate_cap'; // tran gio: quyet dinh theo lo, xem processEvents
     }
@@ -142,7 +152,7 @@ async function processEventsPass(
       vcr_pct: e.vcr_pct,
       valid: valid ? 1 : 0,
       reject_reason: reason,
-      revenue_micro_vnd: valid ? policy.priceMicroVnd : 0,
+      revenue_micro_vnd: valid ? unitPrice : 0,
       reward_vnd: reward,
     });
   }

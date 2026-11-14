@@ -358,3 +358,54 @@ export const activationLogSchema = z.object({
   items: z.array(z.object({ id: idStr, customer_id: z.string().nullish(), trigger_topup_id: z.string().nullish(), actions: z.array(z.unknown()).default([]), created_at: z.string().nullish() }).passthrough()),
 });
 export type ActivationEntry = z.infer<typeof activationLogSchema>['items'][number];
+
+/* ---------- pricing (p1) ---------- */
+export const quoteSchema = z
+  .object({
+    status: z.string(), // quoted | locked | unavailable
+    locked: z.boolean().default(false),
+    placeholder: z.boolean().default(false),
+    budget_vnd: z.coerce.number().nullish(),
+    message: z.string().nullish(),
+    lines: z
+      .array(
+        z
+          .object({
+            screen_type: z.string(),
+            region_id: z.string(),
+            daypart: z.string(),
+            unit_price_micro_vnd: z.coerce.number(),
+            unit_price_vnd: z.string(),
+            model: z.string().nullish(),
+            estimated_impressions: z.coerce.number().nullish(),
+            floor_micro_vnd: z.coerce.number().nullish(),
+            source: z.string().nullish(),
+            floored: z.boolean().nullish(),
+          })
+          .passthrough(),
+      )
+      .default([]),
+  })
+  .passthrough();
+export type Quote = z.infer<typeof quoteSchema>;
+
+export const rateCardSchema = z
+  .object({
+    id: idStr,
+    customer_id: z.string(),
+    customer_name: z.string().nullish(),
+    screen_type: z.string(),
+    region_id: z.string(),
+    daypart: z.string(),
+    model: z.string(),
+    price_micro_vnd: z.coerce.number(),
+    price_vnd: z.string(),
+    floor_micro_vnd: z.coerce.number(),
+    floor_vnd: z.string(),
+    effective_from: z.string(),
+    effective_to: z.string().nullish(),
+    status: z.string(),
+    note: z.string().nullish(),
+  })
+  .passthrough();
+export type RateCard = z.infer<typeof rateCardSchema>;

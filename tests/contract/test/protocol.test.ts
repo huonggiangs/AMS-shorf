@@ -325,7 +325,12 @@ describe('manifest', () => {
       await w2.close();
     }
   });
-  it('overlay do nguoi duyet dat (kid_safe/lock/duration_s/safe_area/qr.hint) duoc manifest mang nguyen ven; kid_safe!=true thi KHONG co ngu canh lock', async () => {
+  const LOCK_ON = JSON.stringify({ lock_ads_enabled: true });
+  const setLock = (w2: Awaited<ReturnType<typeof createWorld>>, value: string | null) =>
+    value === null
+      ? w2.rt.db.run("DELETE FROM settings WHERE key = 'tv_experience'")
+      : w2.rt.db.run("INSERT INTO settings (key, value, updated_by, updated_at) VALUES ('tv_experience', ?, NULL, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", [value, '2026-11-12T03:00:00.000Z']);
+  it('overlay do nguoi duyet dat (kid_safe/lock/duration_s/safe_area/qr.hint) duoc manifest mang nguyen ven khi lock_ads_enabled BAT; kid_safe!=true thi KHONG co ngu canh lock; creative chi-lock khong kid_safe bi loai', async () => {
     const w2 = await createWorld({ campaigns: 1, creativesPerCampaign: 3 });
     try {
       const [c1, c2, c3] = w2.fixture.campaigns[0]!.creatives;
@@ -333,13 +338,56 @@ describe('manifest', () => {
       await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify(reviewed), c1!.id]);
       await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify({ ...reviewed, kid_safe: false }), c2!.id]);
       await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify({ headline: 'Khong ro', contexts: ['lock'] }), c3!.id]);
+      await setLock(w2, LOCK_ON);
       const d = await Dev.create(w2);
       const m = (await d.manifest()).json! as any;
-      const ov = (id: string) => m.creatives.find((c: any) => c.id === id).overlay;
+      const ov = (id: string) => m.creatives.find((c: any) => c.id === id)?.overlay;
       expect(ov(c1!.id)).toMatchObject({ kid_safe: true, contexts: ['lock', 'fullscreen'], duration_s: 12, safe_area: { top: 5 }, qr: { hint: 'Quet de nhan uu dai' } });
       expect(ov(c2!.id).kid_safe).toBe(false);
       expect(ov(c2!.id).contexts).toEqual(['fullscreen']);
-      expect(ov(c3!.id).contexts ?? []).not.toContain('lock');
+      // c3: chi-lock + khong kid_safe => bi loai (khong roi ve fullscreen)
+      expect(m.creatives.find((c: any) => c.id === c3!.id)).toBeUndefined();
+    } finally {
+      await w2.close();
+    }
+  });
+  it('chinh sach tre em mac dinh (khong co/tat settings.tv_experience.lock_ads_enabled): KHONG co ngu canh lock du kid_safe, creative chi-lock vang khoi manifest', async () => {
+    const w2 = await createWorld({ campaigns: 1, creativesPerCampaign: 3 });
+    try {
+      const [c1, c2, c3] = w2.fixture.campaigns[0]!.creatives;
+      const reviewed = { v: 1, headline: 'Xin chao', kid_safe: true, contexts: ['lock', 'fullscreen'] };
+      await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify(reviewed), c1!.id]);
+      await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify({ headline: 'Chi khoa', kid_safe: true, contexts: ['lock'] }), c2!.id]);
+      const d = await Dev.create(w2);
+      let m = (await d.manifest()).json! as any;
+      expect(m.creatives.find((c: any) => c.id === c1!.id).overlay.contexts).toEqual(['fullscreen']);
+      expect(m.creatives.find((c: any) => c.id === c2!.id)).toBeUndefined();
+      expect(m.creatives.find((c: any) => c.id === c3!.id)).toBeDefined();
+      // bat co ro rang nhung gia tri khong phai true => van tat
+      for (const v of [JSON.stringify({ lock_ads_enabled: 'true' }), JSON.stringify({ lock_ads_enabled: 1 }), '{"lock_ads_enabled":', '[]']) {
+        await setLock(w2, v);
+        await w2.gw.manifests.invalidate();
+        await w2.rt.kv.del('manifest:epoch').catch(() => undefined);
+        m = (await (await Dev.create(w2)).manifest()).json! as any;
+        expect(m.creatives.find((c: any) => c.id === c2!.id)).toBeUndefined();
+      }
+    } finally {
+      await w2.close();
+    }
+  });
+  it('creative bi doi noi dung sau khi duyet (creative_security.approved_version != content_version) bi loai khoi manifest; approved_version NULL (du lieu cu) van phat', async () => {
+    const w2 = await createWorld({ campaigns: 1, creativesPerCampaign: 3 });
+    try {
+      const [c1, c2, c3] = w2.fixture.campaigns[0]!.creatives;
+      const at = '2026-11-12T03:00:00.000Z';
+      await w2.rt.db.run('INSERT INTO creative_security (creative_id, content_version, approved_version, approved_hash, updated_at) VALUES (?,?,?,?,?)', [c1!.id, 2, 1, 'h', at]); // doi sau duyet
+      await w2.rt.db.run('INSERT INTO creative_security (creative_id, content_version, approved_version, approved_hash, updated_at) VALUES (?,?,?,?,?)', [c2!.id, 3, 3, 'h', at]); // khop
+      await w2.rt.db.run('INSERT INTO creative_security (creative_id, content_version, approved_version, approved_hash, updated_at) VALUES (?,?,?,?,?)', [c3!.id, 5, null, null, at]); // du lieu cu
+      const d = await Dev.create(w2);
+      const ids = ((await d.manifest()).json! as any).creatives.map((c: any) => c.id);
+      expect(ids).not.toContain(c1!.id);
+      expect(ids).toContain(c2!.id);
+      expect(ids).toContain(c3!.id);
     } finally {
       await w2.close();
     }

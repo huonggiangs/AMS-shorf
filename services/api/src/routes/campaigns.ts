@@ -15,6 +15,7 @@ import { CAMPAIGN_DELETABLE_STATES, CAMPAIGN_EDITABLE_STATES, InvalidTransitionE
 import { TOPIC_CAMPAIGN_APPROVED, approvedKey, enqueueCampaignRelease, enqueueManifestBump, runOutbox } from '../outbox.js';
 import { allowUnscannedCreatives, assertScanOk } from './creatives-scan.js';
 import { assertLockPolicy, recordApproval } from '../lib/creative-security.js';
+import { assertPriced, loadSnapshot, planCampaignPrices, quoteFromRows, unavailableQuote, writeCampaignPrices } from '../lib/pricing.js';
 import { isBannedIndustry, loadTvSettings } from './tv-experience.js';
 import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv, AuthUser } from '../types.js';
@@ -163,6 +164,8 @@ const createBody = z.object({
   duration_sec: z.coerce.number().int().min(5).max(120).default(15),
   start_date: dateStr.optional().nullable(),
   end_date: dateStr.optional().nullable(),
+  /** chi nhan vien: gan hop dong de ap gia thoa thuan; bo trong = tu chon hop dong dang hieu luc co gia thoa thuan cua khach */
+  contract_id: z.string().max(64).optional().nullable(),
 });
 const updateBody = createBody.partial();
 export const RIGHTS_STATEMENT_VERSION = 'rights-v1-2026-11';
@@ -225,6 +228,27 @@ async function attachMedia(c: Ctx, db: Db, campaignId: string, customerId: strin
 }
 
 /** Con tien giu chua dung can hoan (viec hoan nam trong outbox cung giao dich voi doi trang thai, xem outbox.ts TOPIC_CAMPAIGN_RELEASE). */
+/** Hop dong ap gia: hop dong chi dinh (nhan vien) hoac hop dong dang hieu luc moi nhat cua khach co gia thoa thuan; null neu khong co. */
+async function pickContractId(rt: Runtime, customerId: string, explicit: string | null): Promise<string | null> {
+  if (explicit) {
+    const ct = (await rt.db.query<{ customer_id: string }>('SELECT customer_id FROM contracts WHERE id = ?', [explicit]))[0];
+    if (!ct || ct.customer_id !== customerId) throw unprocessable('Hợp đồng không tồn tại hoặc không thuộc khách hàng này.', 'contract_not_found');
+    return explicit;
+  }
+  const today = todayVn(rt);
+  const r = await rt.db.query<{ id: string }>(
+    `SELECT ct.id FROM contracts ct WHERE ct.customer_id = ? AND ct.state = 'active' AND (ct.start_date IS NULL OR ct.start_date <= ?) AND (ct.end_date IS NULL OR ct.end_date >= ?)
+        AND EXISTS (SELECT 1 FROM contract_lines cl JOIN contract_line_prices p ON p.contract_line_id = cl.id WHERE cl.contract_id = ct.id) ORDER BY ct.created_at DESC, ct.id DESC LIMIT 1`,
+    [customerId, today, today],
+  );
+  return r[0]?.id ?? null;
+}
+async function priceInput(rt: Runtime, campaignId: string, db: Pick<Db, 'query'> = rt.db) {
+  const r = (await db.query<{ id: string; customer_id: string; contract_id: string | null; target_types: string | null }>('SELECT id, customer_id, contract_id, target_types FROM campaigns WHERE id = ?', [campaignId]))[0];
+  if (!r) throw notFound('Không tìm thấy chiến dịch.');
+  return r;
+}
+
 const isFunded = (row: CampRow): boolean => row.funding_state === 'reserved' || num(row.reserved_vnd) > 0;
 /** Giu 'reserved' cho toi khi handler hoan tien xong (releaseCampaign chi hoan khi funding_state='reserved'); cac trang thai khac ve 'released'. */
 const FUNDING_AFTER_CLOSE = { sql: "CASE WHEN funding_state IN ('none','reserved') THEN funding_state ELSE 'released' END" };
@@ -262,6 +286,18 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     return c.json((await presentCampaigns(getRt(c), [row], external))[0]);
   });
 
+  // Bao gia: gia da chot (sau duyet) hoac gia theo bang gia hien hanh (se chot luc duyet). Khach khong thay san/gia niem yet/nguon.
+  r.get('/:id/quote', requirePerm('campaigns', 'view'), async (c) => {
+    const rt = getRt(c);
+    const row = await loadCampaign(c, c.req.param('id'));
+    const budget = num(row.budget_cap_vnd) || null;
+    const locked = ['awaiting_funds', 'scheduled', 'active', 'paused', 'ended'].includes(row.state);
+    const snap = locked ? await loadSnapshot(rt.db, row.id) : [];
+    if (snap.length) return c.json(quoteFromRows(snap, { budgetVnd: budget, locked: true, internal: !external }));
+    const plan = await planCampaignPrices(rt, rt.db, await priceInput(rt, row.id), rt.clock.now().toISOString());
+    return c.json(plan.missing.length ? unavailableQuote(plan, budget) : quoteFromRows(plan.rows, { budgetVnd: budget, locked: false, internal: !external, placeholder: plan.placeholder }));
+  });
+
   r.post('/', requirePerm('campaigns', 'write'), async (c) => {
     const rt = getRt(c);
     const u = c.get('user');
@@ -277,11 +313,12 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     if (target === 'led_p5' && b.screen_id && !(await ledPxOf(rt.db, b.screen_id))) throw unprocessable('Bảng LED không tồn tại.', 'screen_not_found');
     const id = rt.id();
     const nowIso = rt.clock.now().toISOString();
+    const contractId = await pickContractId(rt, customerId, external ? null : (b.contract_id ?? null));
     await rt.db.tx(async (db) => {
       await db.run(
-        `INSERT INTO campaigns (id, customer_id, name, state, budget_cap_vnd, approved_budget_vnd, reserved_vnd, spent_vnd, funding_state, activate_on_approve, target_types, duration_s, start_at, end_at, created_by, created_at, updated_at)
-         VALUES (?,?,?,'draft',?,0,0,0,'none',1,?,?,?,?,?,?,?)`,
-        [id, customerId, b.name, b.budget_vnd, JSON.stringify([target]), b.duration_sec, dayStart(start), b.end_date ? dayEnd(b.end_date) : null, u.id, nowIso, nowIso],
+        `INSERT INTO campaigns (id, customer_id, contract_id, name, state, budget_cap_vnd, approved_budget_vnd, reserved_vnd, spent_vnd, funding_state, activate_on_approve, target_types, duration_s, start_at, end_at, created_by, created_at, updated_at)
+         VALUES (?,?,?,?,'draft',?,0,0,0,'none',1,?,?,?,?,?,?,?)`,
+        [id, customerId, contractId, b.name, b.budget_vnd, JSON.stringify([target]), b.duration_sec, dayStart(start), b.end_date ? dayEnd(b.end_date) : null, u.id, nowIso, nowIso],
       );
       if (b.media_id) await attachMedia(c, db, id, customerId, b.media_id, target, b.screen_id);
       await auditCtx(c, db, { action: 'campaign.create', objectType: 'campaign', objectId: id, customerId, diff: { name: b.name, budget_vnd: b.budget_vnd, screen_type: b.screen_type, media_id: b.media_id ?? null } });
@@ -337,6 +374,8 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     const restricted = gate.restricted_industry === true || byIndustry;
     const reason = gate.restricted_industry === true ? 'declared' : byIndustry ? `customer_industry:${custIndustry}` : null;
     const nowIso = rt.clock.now().toISOString();
+    // gia that (P0-2): chua co bang gia (production) => tu choi ro rang; khach da thay bao gia (GET /:id/quote) truoc khi gui
+    assertPriced(await planCampaignPrices(rt, rt.db, await priceInput(rt, row.id), nowIso));
     await rt.db.tx(async (db) => {
       await transitionCampaign(db, { id: row.id, from: row.state as CampaignState, to: 'pending_review', nowIso, set: { reject_reason: null } });
       await db.run(
@@ -438,10 +477,14 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       const ap = await db.run("UPDATE creatives SET review_state = 'approved', state = CASE WHEN state = 'uploading' THEN state ELSE 'ready' END, review_note = NULL WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
       for (const cr of pendingCreatives) await recordApproval(db, cr, nowIso); // R1-14: gan duyet voi phien ban/dau van tay noi dung
       // manifest chi phat chien dich co lich: tao lich ca ngay mac dinh neu admin chua xep lich rieng
+      // CHOT GIA luc duyet (P0-2): gia nay la gia tru tien cua chien dich, doi bang gia sau do KHONG doi no. Thieu bang gia => 422 va khong duyet.
+      const plan = await planCampaignPrices(rt, db, await priceInput(rt, row.id, db), nowIso);
+      assertPriced(plan);
+      await writeCampaignPrices(db, row.id, plan.rows, u.id, nowIso);
       await ensureDefaultSlot(rt, db, row.id, jsonParse<string[]>(row.target_types, ['tv'])[0] ?? 'tv');
       await auditCtx(c, db, {
         action: 'campaign.approve', objectType: 'campaign', objectId: row.id, customerId: row.customer_id,
-        diff: { approved_budget_vnd: num(row.budget_cap_vnd), creatives_approved: ap.changes },
+        diff: { approved_budget_vnd: num(row.budget_cap_vnd), creatives_approved: ap.changes, price_snapshot: plan.rows.map((x) => ({ t: x.screen_type, r: x.region_id, d: x.daypart, unit_micro_vnd: x.unit_price_micro_vnd, src: x.source, ref: x.source_ref })) },
       });
       await enqueueOutbox(db, rt, { topic: TOPIC_CAMPAIGN_APPROVED, payload: { campaignId: row.id, actorId: u.id, approvedAt: nowIso }, dedupeKey: approvedKey(row.id, nowIso) });
     });

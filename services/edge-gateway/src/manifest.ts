@@ -1,5 +1,5 @@
 import type { Runtime } from '@ams/runtime';
-import { MANIFEST_EPOCH_KEY, isAdFormat, parseOverlay, sha256Hex } from '@ams/shared';
+import { ANY, MANIFEST_EPOCH_KEY, isAdFormat, parseOverlay, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart } from '@ams/shared';
 import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestSlot } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 
@@ -71,11 +71,28 @@ interface GroupRecord {
   /** gia tri kv `manifest:epoch` luc xay; API tang epoch khi doi chien dich/creative => moi ban cu bi bo */
   epoch?: string;
   prev: Record<string, string>; // creative_id -> campaign_id cua ban truoc (de nhan impression sat luc doi lich)
+  /** gia chot theo chien dich (p1-pricing): gateway tinh tien impression theo day, khong theo bang gia hien hanh */
+  prices?: CampaignPriceMap;
+  /** gia cua cac chien dich vua roi khoi manifest (impression den tre van duoc tinh dung gia) */
+  prevPrices?: CampaignPriceMap;
 }
+
+/** Gia chot cua chien dich (campaign_prices) da loc theo loai man + khu vuc cua nhom; CHI o phia may chu, KHONG gui xuong thiet bi (khong nam trong manifest JSON/etag). */
+export interface PriceRowLite {
+  screen_type: string;
+  region_id: string;
+  daypart: PricingDaypart;
+  unit_price_micro_vnd: number;
+  floor_micro_vnd: number;
+  source: PriceSource;
+  source_ref: string | null;
+}
+export type CampaignPriceMap = Record<string, PriceRowLite[]>;
 
 /** Thu thap tinh trang suy giam trong mot lan xay (loi TAM THOI cua kv/objects, khac voi 'khong co'). */
 interface BuildCtx {
   degraded: string[];
+  prices?: CampaignPriceMap;
 }
 
 /** Tra cuu nhanh cho gateway: creative -> thong tin; gom ca creative cua ban ngay truoc. */
@@ -85,6 +102,8 @@ export interface ManifestView {
   creative(id: string): { campaign_id: string; duration_s: number | null; current: boolean } | undefined;
   /** reward_points lon nhat cua chien dich (hoac cua slot neu co slot_id) */
   reward(campaignId: string, slotId?: string): number;
+  /** gia chot cua chien dich cho (khu vuc, khung gio); undefined = chien dich khong co gia chot trong ban nay */
+  price(campaignId: string, region: string, daypart: string): PriceRowLite | undefined;
 }
 
 const memTtlMs = 15_000;
@@ -137,6 +156,7 @@ export class ManifestService {
     let v = this.views.get(k);
     if (v) return v;
     const man = JSON.parse(rec.json) as Manifest;
+    const groupType = classType(parseGroup(man.group)?.modelClass ?? '').type;
     const cur = new Map(man.creatives.map((c) => [c.id, c]));
     v = {
       etag: rec.etag,
@@ -151,6 +171,10 @@ export class ManifestService {
         let best = 0;
         for (const s of man.schedule) if (s.campaign_id === campaignId && (!slotId || s.slot_id === slotId)) best = Math.max(best, s.reward_points);
         return best;
+      },
+      price: (campaignId, region, daypart) => {
+        const rows = rec.prices?.[campaignId] ?? rec.prevPrices?.[campaignId];
+        return rows ? pickSnapshotPrice(rows, { screenType: groupType, region: region || ANY, daypart }) : undefined;
       },
     };
     if (this.views.size > 2000) this.views.clear();
@@ -220,7 +244,13 @@ export class ManifestService {
     if (prev) {
       prevMap = prev.etag === man.etag ? prev.prev : Object.fromEntries((JSON.parse(prev.json) as Manifest).creatives.map((c) => [c.id, c.campaign_id]));
     }
-    const rec: GroupRecord = { etag: man.etag, json: JSON.stringify(man), builtAt: now, epoch, prev: prevMap };
+    const prices = ctx.prices ?? {};
+    const carried: CampaignPriceMap = {};
+    if (prev) {
+      const old = { ...(prev.prevPrices ?? {}), ...(prev.prices ?? {}) };
+      for (const cid of new Set(Object.values(prevMap))) if (!(cid in prices) && old[cid]) carried[cid] = old[cid]!;
+    }
+    const rec: GroupRecord = { etag: man.etag, json: JSON.stringify(man), builtAt: now, epoch, prev: prevMap, prices, prevPrices: carried };
     if (ctx.degraded.length) {
       // mot so creative khong xac minh duoc vi loi tam thoi: tuyet doi khong cache ban thieu. Co ban cu thi dung ban cu.
       console.error(`[manifest] ban suy giam ${key} (${ctx.degraded.length} creative: ${ctx.degraded.slice(0, 5).join(',')}): khong cache`);
@@ -269,6 +299,7 @@ export class ManifestService {
     const campaignIds = new Set(liveSlots.map((s) => s.campaign_id));
 
     const creativeRows = (await this.queryCreatives(type)).filter((r) => campaignIds.has(r.campaign_id));
+    const lockAllowed = await this.lockAdsEnabled();
     const creatives: ManifestCreative[] = [];
     for (const r of creativeRows) {
       if (px && (r.px_w !== px.w || r.px_h !== px.h)) continue; // thang may/LED khong tu co gian: dung do phan giai
@@ -297,7 +328,8 @@ export class ManifestService {
       }
       if (!sha) continue; // khong xac minh duoc tep => khong dua vao manifest
       const fmt = isAdFormat(r.format) ? r.format : isAdFormat(r.kind) ? r.kind : 'fullscreen';
-      const ov = parseOverlayJson(r.overlay);
+      const { ov, drop } = parseOverlayJson(r.overlay, lockAllowed);
+      if (drop) continue; // creative chi-man-khoa khi man khoa/tre em chua duoc bat (hoac khong kid_safe): khong phat o man thuong
       creatives.push({
         id: r.id,
         campaign_id: r.campaign_id,
@@ -331,9 +363,47 @@ export class ManifestService {
       });
     }
     schedule.sort((a, b) => (a.slot_id < b.slot_id ? -1 : 1));
+    ctx.prices = await this.loadPrices(type, g.region, schedule.map((s) => s.campaign_id));
     const body = { version: PROTOCOL_VERSION, group: groupString(g), tz: MANIFEST_TZ, creatives, schedule };
     const etag = (await sha256Hex(JSON.stringify(body))).slice(0, 16);
     return { version: PROTOCOL_VERSION, group: body.group, tz: MANIFEST_TZ, etag, generated_at: nowIso, ttl_s: this.opts.ttlS, creatives, schedule };
+  }
+
+  /** Gia chot (campaign_prices) cua cac chien dich trong ban: chi dong cua loai man cua nhom, khu vuc '*' hoac khu vuc cua nhom. Loi DB noi len (rebuild dung ban cu). */
+  private async loadPrices(type: string, region: string, campaignIds: string[]): Promise<CampaignPriceMap> {
+    const out: CampaignPriceMap = {};
+    const want = new Set(campaignIds);
+    if (want.size === 0) return out;
+    const rows = await this.rt.db.query<{ campaign_id: string; screen_type: string; region_id: string; daypart: string; unit_price_micro_vnd: unknown; floor_micro_vnd: unknown; source: string; source_ref: string | null }>(
+      `SELECT p.campaign_id, p.screen_type, p.region_id, p.daypart, p.unit_price_micro_vnd, p.floor_micro_vnd, p.source, p.source_ref
+         FROM campaign_prices p JOIN campaigns c ON c.id = p.campaign_id WHERE c.state = 'active' AND p.screen_type = ?`,
+      [type],
+    );
+    for (const r of rows) {
+      if (!want.has(r.campaign_id)) continue;
+      if (r.region_id !== ANY && r.region_id !== region) continue;
+      (out[r.campaign_id] ??= []).push({
+        screen_type: r.screen_type,
+        region_id: r.region_id,
+        daypart: r.daypart as PricingDaypart,
+        unit_price_micro_vnd: Number(r.unit_price_micro_vnd),
+        floor_micro_vnd: Number(r.floor_micro_vnd),
+        source: r.source as PriceSource,
+        source_ref: r.source_ref,
+      });
+    }
+    return out;
+  }
+
+  /** man khoa/tre em (p2): mac dinh TAT; bat bang settings.tv_experience.lock_ads_enabled === true. Loi DB khong duoc nuot (tra false se am tham go lock). */
+  private async lockAdsEnabled(): Promise<boolean> {
+    const r = (await this.rt.db.query<{ value: string }>("SELECT value FROM settings WHERE key = 'tv_experience'"))[0];
+    if (!r) return false;
+    try {
+      return (JSON.parse(r.value) as { lock_ads_enabled?: unknown }).lock_ads_enabled === true;
+    } catch {
+      return false;
+    }
   }
 
   /** Chi cho phat tep chua quet khi quan tri bat ro rang (settings.allow_unscanned_creatives = '1'/'true'). Mac dinh: chi `clean` (R1-03). */
@@ -386,8 +456,9 @@ export class ManifestService {
     const allowUnscanned = await this.allowUnscanned();
     return this.rt.db.query<CreativeRow>(
       `SELECT cr.id, cr.campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay, cr.customer_id, cr.scan_state
-         FROM creatives cr JOIN campaigns c ON c.id = cr.campaign_id
+         FROM creatives cr JOIN campaigns c ON c.id = cr.campaign_id LEFT JOIN creative_security cs ON cs.creative_id = cr.id
         WHERE c.state = 'active' AND cr.target_type = ? AND cr.review_state = 'approved' AND cr.state = 'ready'
+          AND NOT (cs.approved_version IS NOT NULL AND cs.approved_version <> cs.content_version)
           ${allowUnscanned ? "AND cr.scan_state NOT IN ('infected','failed')" : "AND cr.scan_state = 'clean'"}`,
       [type],
     );
@@ -415,23 +486,25 @@ export class ManifestService {
   }
 }
 
-/** overlay luu TEXT JSON; kiem lai khi phat (du lieu cu/hong thi bo qua, khong lam hong manifest). */
-function parseOverlayJson(raw: string | null | undefined): import('@ams/shared').CreativeOverlay | null {
-  if (!raw) return null;
+/**
+ * overlay luu TEXT JSON; kiem lai khi phat (du lieu cu/hong thi bo qua, khong lam hong manifest).
+ * Chinh sach tre em (p2, fail-safe): ngu canh 'lock' chi con khi settings.tv_experience.lock_ads_enabled === true VA creative kid_safe === true;
+ * nguoc lai 'lock' bi bo; neu 'lock' la ngu canh DUY NHAT thi creative bi loai khoi manifest (drop) — khong roi ve fullscreen.
+ */
+function parseOverlayJson(raw: string | null | undefined, lockAllowed: boolean): { ov: import('@ams/shared').CreativeOverlay | null; drop: boolean } {
+  if (!raw) return { ov: null, drop: false };
   try {
     // du lieu DB la dang tin cay (khach chi ghi qua route 'reject'/'strip'): giu kid_safe/ngu canh 'lock' do nguoi duyet dat
     const r = parseOverlay(JSON.parse(raw), { reviewerFields: 'keep' });
-    if (!r.ok || !r.value) return null;
+    if (!r.ok || !r.value) return { ov: null, drop: false };
     const v = r.value;
-    // fail-safe: chi creative duoc xac nhan kid_safe === true moi co ngu canh 'lock' (man khoa); con lai bo 'lock'
-    if (v.contexts?.includes('lock') && v.kid_safe !== true) {
+    if (v.contexts?.includes('lock') && !(lockAllowed && v.kid_safe === true)) {
       const rest = v.contexts.filter((x) => x !== 'lock');
-      const { contexts: _drop, ...others } = v;
-      void _drop;
-      return rest.length ? { ...others, contexts: rest } : Object.keys(others).length ? others : null;
+      if (rest.length === 0) return { ov: null, drop: true };
+      return { ov: { ...v, contexts: rest }, drop: false };
     }
-    return v;
+    return { ov: v, drop: false };
   } catch {
-    return null;
+    return { ov: null, drop: false };
   }
 }
