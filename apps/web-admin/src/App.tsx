@@ -3,10 +3,11 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
 import { Shell } from './components/Shell';
 import Login from './pages/Login';
-import Invite from './pages/Invite';
-import Activate from './pages/Activate';
 import { PAGE_BY_ID, visiblePages } from './nav';
 import { useUi } from './state/ui';
+
+const Invite = lazy(() => import('./pages/Invite'));
+const Activate = lazy(() => import('./pages/Activate'));
 
 const pages = {
   overview: lazy(() => import('./pages/Overview')),
@@ -74,8 +75,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/invite" element={<Invite />} />
-      <Route path="/activate" element={<Activate />} />
+      <Route path="/invite" element={<Suspense fallback={<Splash />}><Invite /></Suspense>} />
+      <Route path="/activate" element={<Suspense fallback={<Splash />}><Activate /></Suspense>} />
       <Route element={<Guard />}>
         <Route index element={<Home />} />
         {(Object.keys(pages) as (keyof typeof pages)[]).map((id) => (

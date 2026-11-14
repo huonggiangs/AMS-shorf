@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { api, errMsg, setCsrfToken } from '../api/client';
-import { ChangePasswordForm } from './Profile';
+import { ChangePasswordForm } from '../components/ChangePasswordForm';
 import { Icon } from '../components/Icon';
 import { Note } from '../components/ui';
 import { useT } from '../i18n';
