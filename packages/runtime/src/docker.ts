@@ -6,6 +6,7 @@ import { RedisKv, RedisQueue } from './redis.js';
 import { S3ObjectStore } from './s3.js';
 import { FsObjectStore } from './fs.js';
 import { SmtpMailer } from './smtp.js';
+import { HttpMailer, mailConfigFromEnv } from './mail-http.js';
 import { ClickHouseEventStore } from './clickhouse.js';
 import type { Config, EventStore, Mailer, ObjectStore, Runtime } from './types.js';
 
@@ -29,7 +30,7 @@ function need(env: DockerEnv, k: string): string {
  * Docker/PC: Postgres (pg Pool), Redis (ioredis), kho tep fs hoac S3 (presign), SMTP (Mailpit), EventStore -> ev_* hoac ClickHouse (CLICKHOUSE_URL).
  * Bien: DATABASE_URL, REDIS_URL, S3_ENDPOINT, S3_PUBLIC_ENDPOINT?, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION?,
  *       Hoac OBJECT_STORE=fs + OBJECT_STORE_DIR (+ OBJECT_STORE_SIGNED_BASE_URL?, OBJECT_STORE_SIGNING_SECRET? mac dinh SESSION_SECRET): khong can S3.
- *       SMTP_HOST, SMTP_PORT, SMTP_USER?, SMTP_PASS?, MAIL_FROM?, CLICKHOUSE_URL?
+ *       SMTP_HOST, SMTP_PORT, SMTP_USER?, SMTP_PASS?, SMTP_SECURE?, SMTP_REQUIRE_TLS?, MAIL_FROM?, MAIL_REPLY_TO? (hoac MAIL_HTTP_URL + MAIL_HTTP_KEY), CLICKHOUSE_URL?
  */
 export async function createDockerRuntime(
   env: DockerEnv,
@@ -54,15 +55,22 @@ export async function createDockerRuntime(
           accessKeyId: need(env, 'S3_ACCESS_KEY'),
           secretAccessKey: need(env, 'S3_SECRET_KEY'),
         });
+  // Thu: SMTP (SMTP_HOST) hoac HTTP API (MAIL_HTTP_URL + MAIL_HTTP_KEY) khi khong co SMTP. MAIL_TRANSPORT=http ep dung HTTP.
+  const useHttpMail = env['MAIL_TRANSPORT'] === 'http' || (!env['SMTP_HOST'] && !!env['MAIL_HTTP_URL']);
   const mail =
     overrides.mail ??
-    new SmtpMailer({
-      host: need(env, 'SMTP_HOST'),
-      port: Number(env['SMTP_PORT'] ?? 1025),
-      user: env['SMTP_USER'],
-      pass: env['SMTP_PASS'],
-      from: env['MAIL_FROM'] ?? 'AMS <no-reply@ams.localhost>',
-    });
+    (useHttpMail
+      ? new HttpMailer(mailConfigFromEnv(env, 'AMS <no-reply@ams.localhost>'))
+      : new SmtpMailer({
+          host: need(env, 'SMTP_HOST'),
+          port: Number(env['SMTP_PORT'] ?? 1025),
+          user: env['SMTP_USER'],
+          pass: env['SMTP_PASS'],
+          from: env['MAIL_FROM'] ?? 'AMS <no-reply@ams.localhost>',
+          ...(env['MAIL_REPLY_TO'] ? { replyTo: env['MAIL_REPLY_TO'] } : {}),
+          ...(env['SMTP_SECURE'] ? { secure: env['SMTP_SECURE'] === '1' || env['SMTP_SECURE'] === 'true' } : {}),
+          requireTls: env['SMTP_REQUIRE_TLS'] === '1' || env['SMTP_REQUIRE_TLS'] === 'true',
+        }));
   const events = overrides.events ?? (env['CLICKHOUSE_URL'] ? new ClickHouseEventStore(env['CLICKHOUSE_URL'], env['CLICKHOUSE_DB'] ?? 'default') : new DbEventStore(db));
   const clock = new SystemClock();
   const config: Config = { runtime: 'docker', env };

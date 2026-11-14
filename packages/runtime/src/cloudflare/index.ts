@@ -5,6 +5,7 @@ import { D1Db } from './d1.js';
 import { CfEventStore } from './events.js';
 import { CfKv } from './kv.js';
 import { HttpMailer } from './mail.js';
+import { mailConfigFromEnv } from '../mail-http.js';
 import { CfQueue } from './queue.js';
 import { R2ObjectStore } from './r2.js';
 
@@ -31,7 +32,7 @@ function str(env: CloudflareEnv): Record<string, string | undefined> {
 
 /**
  * D1 + KV + Queues + R2. Bien can: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME (ky URL),
- * MAIL_HTTP_URL, MAIL_HTTP_KEY, MAIL_FROM (gui thu). Phai goi `rt.queue.handleBatch(batch)` trong handler `queue()`.
+ * MAIL_HTTP_URL, MAIL_HTTP_KEY, MAIL_FROM, MAIL_PROVIDER? (resend|postmark|generic), MAIL_REPLY_TO? (gui thu; xem ../mail-http.ts). Phai goi `rt.queue.handleBatch(batch)` trong handler `queue()`.
  */
 export function createCloudflareRuntime(env: CloudflareEnv): CloudflareRuntime {
   const vars = str(env);
@@ -53,7 +54,7 @@ export function createCloudflareRuntime(env: CloudflareEnv): CloudflareRuntime {
       },
       clock,
     ),
-    mail: new HttpMailer({ url: vars['MAIL_HTTP_URL'] ?? '', key: vars['MAIL_HTTP_KEY'] ?? '', from: vars['MAIL_FROM'] ?? 'AMS <no-reply@ams.vn>' }),
+    mail: new HttpMailer(mailConfigFromEnv(vars, 'AMS <no-reply@ams.vn>')),
     events: new CfEventStore(queue, db),
     clock,
     config,

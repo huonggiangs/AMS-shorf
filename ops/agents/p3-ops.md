@@ -1,5 +1,5 @@
 STATUS: running
-UPDATED: 2026-11-14T12:30Z
+UPDATED: 2026-11-14T13:30Z (chay lai sau khi bi ngat)
 
 # p3-ops: tin cậy và vận hành (cảnh báo, trang trạng thái, sao lưu/khôi phục, trực sự cố, chuyển CF -> VPS)
 

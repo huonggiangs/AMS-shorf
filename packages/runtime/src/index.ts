@@ -19,3 +19,6 @@ export async function createDockerRuntime(env: Record<string, string | undefined
 }
 export * from './outbox.js';
 export * from './faults.js';
+export * from './ops.js';
+export { HttpMailer, createMailer, mailConfigFromEnv } from './mail-http.js';
+export type { HttpMailConfig, MailProvider } from './mail-http.js';
