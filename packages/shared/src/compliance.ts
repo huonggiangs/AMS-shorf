@@ -132,7 +132,9 @@ export interface DunningPlan {
 export function planDunning(r: { due_date: string | null; remaining_vnd: number }, today: string, cfg: DunningConfig, sentOffsets: readonly number[]): DunningPlan {
   if (!r.due_date || r.remaining_vnd <= 0) return { daysPastDue: 0, markOverdue: false, reminderOffset: null, autoPause: false };
   const d = daysPastDue(r.due_date, today);
-  const due = cfg.reminder_offsets_days.filter((o) => o <= d && !sentOffsets.includes(o));
+  // chi xet cac moc MOI hon moc da gui gan nhat (khong gui bu cac moc cu khi he thong chay tre/moi bat)
+  const maxSent = sentOffsets.length ? Math.max(...sentOffsets) : Number.NEGATIVE_INFINITY;
+  const due = cfg.reminder_offsets_days.filter((o) => o <= d && o > maxSent);
   return {
     daysPastDue: d,
     markOverdue: d > 0,

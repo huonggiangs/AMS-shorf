@@ -12,7 +12,7 @@ import type { AppEnv } from '../types.js';
 import { LEGAL_COLS, ensureDraftDocuments, pendingFor, publishedDocs, recordAcceptances } from './service.js';
 import type { LegalDocRow } from './service.js';
 
-const present = (r: LegalDocRow) => ({ ...r, requires_acceptance: num(r.requires_acceptance) === 1, is_draft_marked: undefined });
+const present = (r: LegalDocRow) => ({ ...r, requires_acceptance: num(r.requires_acceptance) === 1 });
 
 const createBody = z.object({
   kind: z.enum(LEGAL_KINDS),

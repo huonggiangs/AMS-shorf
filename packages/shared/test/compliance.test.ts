@@ -40,6 +40,8 @@ describe('dunning', () => {
     expect(daysPastDue('2026-11-01', '2026-11-08')).toBe(7);
     expect(planDunning({ due_date: '2026-11-01', remaining_vnd: 100 }, '2026-11-08', cfg, [-3, 0])).toMatchObject({ markOverdue: true, reminderOffset: 7, autoPause: false });
     expect(planDunning({ due_date: '2026-11-01', remaining_vnd: 100 }, '2026-11-08', cfg, [-3, 0, 3, 7]).reminderOffset).toBeNull();
+    // da gui moc 7 thi khong gui bu cac moc thap hon
+    expect(planDunning({ due_date: '2026-11-01', remaining_vnd: 100 }, '2026-11-08', cfg, [7]).reminderOffset).toBeNull();
     expect(planDunning({ due_date: '2026-11-01', remaining_vnd: 100 }, '2026-11-12', cfg, []).autoPause).toBe(true);
     expect(planDunning({ due_date: '2026-11-10', remaining_vnd: 100 }, '2026-11-08', cfg, [])).toMatchObject({ markOverdue: false, reminderOffset: -3 });
     expect(planDunning({ due_date: '2026-11-01', remaining_vnd: 0 }, '2026-11-30', cfg, []).markOverdue).toBe(false);

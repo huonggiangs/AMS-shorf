@@ -18,6 +18,8 @@ import { assertLockPolicy, recordApproval } from '../lib/creative-security.js';
 import { isBannedIndustry, loadTvSettings } from './tv-experience.js';
 import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv, AuthUser } from '../types.js';
+import { assertComplianceForApproval } from '../compliance/approval.js';
+import { assertCreditForApproval } from '../billing/dunning.js';
 
 const CAMP_SELECT = `c.id, c.name, c.customer_id, c.state, c.budget_cap_vnd, c.approved_budget_vnd, c.reserved_vnd, c.spent_vnd, c.funding_state, c.target_types, c.duration_s,
   c.start_at, c.end_at, c.reject_reason, c.created_at, c.approved_at, cu.payment_code AS customer_code, cu.industry AS customer_industry,
@@ -458,6 +460,9 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       warning = 'Đã duyệt nhưng chưa giữ được tiền từ ví (lỗi tạm thời); hệ thống sẽ tự thử lại khi ví đủ.';
     } else if (!funded) {
       const w = (await rt.db.query<{ balance_vnd: unknown; reserved_vnd: unknown }>('SELECT balance_vnd, reserved_vnd FROM ad_wallets WHERE customer_id = ?', [row.customer_id]))[0];
+    // p4: cong tuan thu + cong no: KYC, duyet lan hai nganh han che, khach no qua han/vuot han muc
+    await assertComplianceForApproval(rt.db, { id: row.id, customer_id: row.customer_id }, u.id);
+    await assertCreditForApproval(rt.db, row.customer_id);
       // khong giu duoc (thieu tien, hoac FinancePort rong): neu so du du ma van chua giu thi bao ca ngan sach nhu cu
       const short = Math.max(0, num(after.approved_budget_vnd) - (w ? num(w.balance_vnd) - num(w.reserved_vnd) : 0));
       shortfall = short > 0 ? short : num(after.approved_budget_vnd);

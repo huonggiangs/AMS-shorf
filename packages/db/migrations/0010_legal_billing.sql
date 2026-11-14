@@ -40,6 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_legal_acceptances_customer ON legal_acceptances(c
 
 -- (2) KYC nha quang cao: ho so phap nhan (1-1 voi customers) + giay to tai len (kho tep, tien to docs/kyc/).
 --   state: none -> submitted -> approved | rejected (sua ho so/giay to sau khi duyet dua ve submitted).
+--   restricted_industry/restricted_categories: nguoi duyet KYC danh dau khach thuoc nganh han che (JSON mang nganh) => chien dich can duyet lan hai (campaign_gate cua p2 la dau vao cung huong).
 CREATE TABLE IF NOT EXISTS customer_kyc (
   customer_id TEXT NOT NULL PRIMARY KEY,
   business_reg_no TEXT,
@@ -53,8 +54,11 @@ CREATE TABLE IF NOT EXISTS customer_kyc (
   reviewed_by TEXT,
   reviewed_at TEXT,
   review_note TEXT,
+  restricted_industry INTEGER NOT NULL DEFAULT 0 CHECK (restricted_industry IN (0,1)),
+  restricted_categories TEXT,
   updated_at TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_customer_kyc_state ON customer_kyc(state, submitted_at);
 
 CREATE TABLE IF NOT EXISTS kyc_documents (
   id TEXT NOT NULL PRIMARY KEY,
@@ -94,26 +98,6 @@ CREATE TABLE IF NOT EXISTS campaign_compliance (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_campaign_compliance_cat ON campaign_compliance(category);
-
--- Go noi dung (takedown): tam dung chien dich + ly do + nguoi khieu nai; state: open -> reinstated | removed.
-CREATE TABLE IF NOT EXISTS content_takedowns (
-  id TEXT NOT NULL PRIMARY KEY,
-  campaign_id TEXT NOT NULL,
-  customer_id TEXT NOT NULL,
-  creative_id TEXT,
-  kind TEXT NOT NULL CHECK (kind IN ('copyright','legal','complaint','policy','other')),
-  reason TEXT NOT NULL,
-  complainant TEXT,
-  state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open','reinstated','removed')),
-  prev_state TEXT,
-  created_by TEXT,
-  created_at TEXT NOT NULL,
-  resolved_by TEXT,
-  resolved_at TEXT,
-  resolution_note TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_content_takedowns_campaign ON content_takedowns(campaign_id, state);
-CREATE INDEX IF NOT EXISTS idx_content_takedowns_state ON content_takedowns(state, created_at);
 
 -- (5) Hoa don dien tu (ND123): moi dong la MOT chung tu gui nha cung cap (goc, dieu chinh, huy). Mot hoa don noi bo co the co nhieu chung tu
 --   (goc + dieu chinh khi hoan tien). idempotency_key UNIQUE: gui lai cung yeu cau khong tao chung tu thu hai o ben nha cung cap.
@@ -159,7 +143,7 @@ CREATE TABLE IF NOT EXISTS dunning_events (
   id TEXT NOT NULL PRIMARY KEY,
   customer_id TEXT NOT NULL,
   receivable_id TEXT,
-  kind TEXT NOT NULL CHECK (kind IN ('reminder','overdue','auto_pause','low_balance','credit_limit')),
+  kind TEXT NOT NULL CHECK (kind IN ('reminder','overdue','auto_pause','low_balance','credit_limit','einvoice_adjust')),
   stage TEXT,
   detail TEXT,
   mail_sent INTEGER NOT NULL DEFAULT 0 CHECK (mail_sent IN (0,1)),

@@ -7,6 +7,7 @@ import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import { mountFinanceRoutes } from './finance-mount.js';
 import type { FinancePort } from './ports.js';
 import { opsTick } from './ops/index.js';
+import { billingDailyTick, billingFrequentTick } from './billing/jobs.js';
 
 /**
  * Lap lich nen cho Docker (tren Cloudflare la cron cua Worker): moi 10 phut doi soat bu SePay + chien dich den/het han,
@@ -29,8 +30,20 @@ function startScheduler(rt: Runtime, port: () => FinancePort | undefined): () =>
       console.error('[api] job ops loi:', (e as Error).message);
     }
   };
+  // p4: thu lai hoa don dien tu moi 10 phut; nhac no/luu giu du lieu hang ngay (khoa kv chong chay trung giua cac ban sao)
+  const lockedBilling = async (daily: boolean, lockKey: string, ttl: number) => {
+    try {
+      if ((await rt.kv.incr(lockKey, ttl)) !== 1) return;
+      if (daily) await billingDailyTick(rt);
+      else await billingFrequentTick(rt);
+    } catch (e) {
+      console.error('[api] job billing loi:', (e as Error).message);
+    }
+  };
   const tick = () => {
     const now = rt.clock.now();
+    if (now.getUTCMinutes() % 10 === 3) void lockedBilling(false, `cron:billing10:${Math.floor(now.getTime() / 600_000)}`, 900);
+    if (now.getUTCHours() === 2 && now.getUTCMinutes() >= 20 && now.getUTCMinutes() < 30) void lockedBilling(true, `cron:billing-daily:${now.toISOString().slice(0, 10)}`, 86_400);
     // p3-ops: kiem tra canh bao moi 5 phut (khoa kv chong chay trung giua cac ban sao API); don dep hang ngay luc 03:30 UTC
     if (now.getUTCMinutes() % 5 === 0 && (now.getUTCHours() !== 3 || now.getUTCMinutes() !== 30)) void lockedOps(false);
     if (now.getUTCHours() === 3 && now.getUTCMinutes() === 30) void lockedOps(true);

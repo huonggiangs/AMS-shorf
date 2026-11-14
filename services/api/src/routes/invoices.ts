@@ -12,6 +12,8 @@ import { eq, getRt, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec, SqlFrag } from '../lib/http.js';
 import { todayVn } from '../lib/dates.js';
 import { requirePerm } from '../auth/middleware.js';
+import { CreditLimitError, assertCreditForInvoice } from '../billing/dunning.js';
+import { cancelEinvoice, issueEinvoice, loadEinvoiceSettings } from '../billing/einvoice.js';
 import type { AppEnv } from '../types.js';
 
 export const VAT_RATES = [0, 5, 8, 10] as const;
@@ -136,12 +138,26 @@ export function invoiceRoutes(): Hono<AppEnv> {
     const b = await parseBody(c, z.object({ einvoice_ref: z.string().trim().min(1).max(64).optional() }));
     const total = num(inv.amount_vnd) + vatOf(num(inv.amount_vnd), num(inv.vat_rate));
     const due = new Date(new Date(`${todayVn(rt)}T00:00:00Z`).getTime() + 30 * 86_400_000).toISOString().slice(0, 10);
+    // p4: han muc cong no (chi khi khach co han muc > 0 va bat enforce_credit_limit)
+    try {
+      await assertCreditForInvoice(rt.db, inv.customer_id, total);
+    } catch (e) {
+      if (e instanceof CreditLimitError) throw conflict('Phát hành hóa đơn này sẽ vượt hạn mức công nợ của khách hàng.', 'credit_limit_exceeded', { limit_vnd: e.limit, outstanding_vnd: e.outstanding, requested_vnd: e.requested });
+      throw e;
+    }
     await rt.db.tx(async (db) => {
       const u = await db.run("UPDATE invoices SET status = 'issued', einvoice_ref = COALESCE(?, einvoice_ref) WHERE id = ? AND status = 'draft'", [b.einvoice_ref ?? null, inv.id]);
       if (u.changes !== 1) throw conflict('Hóa đơn không còn ở trạng thái nháp.', 'invalid_state');
       await db.run("INSERT INTO receivables (id, customer_id, contract_id, invoice_id, amount_vnd, due_date, paid_vnd, state) VALUES (?,?,NULL,?,?,?,0,'open')", [rt.id(), inv.customer_id, inv.id, total, due]);
       await auditCtx(c, db, { action: 'invoice.issue', objectType: 'invoice', objectId: inv.id, customerId: inv.customer_id, diff: { total_vnd: total, einvoice_ref: b.einvoice_ref ?? null } });
     });
+    // p4: nha cung cap hoa don dien tu (khong phai 'manual') + auto_issue: gui ngay; loi KHONG lam hong viec phat hanh noi bo (thu lai bang job/nut thu lai)
+    try {
+      const es = await loadEinvoiceSettings(rt.db);
+      if (es.provider !== 'manual' && es.auto_issue) await issueEinvoice(rt, inv.id, { id: c.get('user').id, ip: c.get('ip') });
+    } catch (e) {
+      console.error('[invoices] tu phat hanh hoa don dien tu loi:', (e as Error).name);
+    }
     return c.json(present(await loadInvoice(c, inv.id), true));
   });
 
@@ -172,6 +188,13 @@ export function invoiceRoutes(): Hono<AppEnv> {
       await db.run('DELETE FROM receivables WHERE invoice_id = ? AND paid_vnd = 0', [inv.id]);
       await auditCtx(c, db, { action: 'invoice.void', objectType: 'invoice', objectId: inv.id, customerId: inv.customer_id, diff: { status: { from: inv.status, to: 'void' }, reason: b.reason } });
     });
+    // p4: da co hoa don dien tu goc con hieu luc => tao chung tu huy (che do thu cong: ke toan huy tren cong nha cung cap roi nhap lai)
+    try {
+      const doc = (await rt.db.query<{ id: string }>("SELECT id FROM einvoice_documents WHERE invoice_id = ? AND kind = 'original' AND status = 'issued' LIMIT 1", [inv.id]))[0];
+      if (doc) await cancelEinvoice(rt, doc.id, b.reason, { id: c.get('user').id, ip: c.get('ip') });
+    } catch (e) {
+      console.error('[invoices] huy hoa don dien tu loi:', (e as Error).name);
+    }
     return c.json(present(await loadInvoice(c, inv.id), true));
   });
   return r;

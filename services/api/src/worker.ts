@@ -6,6 +6,7 @@ import { mountFinanceRoutes } from './finance-mount.js';
 import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import type { FinancePort } from './ports.js';
 import { opsTick } from './ops/index.js';
+import { billingDailyTick, billingFrequentTick } from './billing/jobs.js';
 
 // Kieu toi thieu cua Workers (tranh keo @cloudflare/workers-types vao goi api).
 interface ScheduledEvent { cron: string }
@@ -54,6 +55,8 @@ export default {
     ctx.waitUntil(pruneOutboxAll(r.rt).then(() => undefined, () => undefined));
     // p3-ops: kiem tra canh bao (moi 10 phut); don dep nhat ky cung luc job hang ngay
     ctx.waitUntil(opsTick(r.rt, { prune: event.cron === '15 2 * * *' }));
+    // p4: thu lai hoa don dien tu (moi 10 phut) va job hang ngay (nhac no, hoa don dieu chinh, luu giu du lieu)
+    ctx.waitUntil((event.cron === '15 2 * * *' ? billingDailyTick(r.rt) : billingFrequentTick(r.rt)).then(() => undefined, () => undefined));
     const fin = await r.finance();
     if (fin.scheduled) ctx.waitUntil(fin.scheduled(r.rt, event.cron));
   },
