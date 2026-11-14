@@ -8,6 +8,7 @@ import { useUi } from './state/ui';
 
 const Invite = lazy(() => import('./pages/Invite'));
 const Activate = lazy(() => import('./pages/Activate'));
+const Status = lazy(() => import('./pages/Status'));
 
 const pages = {
   overview: lazy(() => import('./pages/Overview')),
@@ -27,6 +28,7 @@ const pages = {
   integrations: lazy(() => import('./pages/Integrations')),
   access: lazy(() => import('./pages/Access')),
   audit: lazy(() => import('./pages/Audit')),
+  alerts: lazy(() => import('./pages/Alerts')),
   profile: lazy(() => import('./pages/Profile')),
 } as const;
 
@@ -76,6 +78,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/invite" element={<Suspense fallback={<Splash />}><Invite /></Suspense>} />
+      <Route path="/status" element={<Suspense fallback={<Splash />}><Status /></Suspense>} />
       <Route path="/activate" element={<Suspense fallback={<Splash />}><Activate /></Suspense>} />
       <Route element={<Guard />}>
         <Route index element={<Home />} />
