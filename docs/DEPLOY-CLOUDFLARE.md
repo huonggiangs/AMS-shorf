@@ -225,3 +225,10 @@ Ghi chú media: Cloudflare không chạy `media-worker`/ClamAV (chỉ có trong 
 3. Tên quyền token và tên tài nguyên Terraform theo provider cloudflare v5: chưa chạy `terraform validate/plan` (CI có job validate). Script tạo tài nguyên bằng wrangler và tra ID bằng API; nếu định dạng đầu ra của wrangler đổi thì bước `resources` báo lỗi rõ và có thể điền `ids.<env>.json` tay.
 4. Giai đoạn 1 chỉ có Cloudflare Queues làm hàng đợi, ClickHouse/Redpanda chưa dùng (giai đoạn 2).
 5. Gói Free của Cloudflare giới hạn số request Worker/ngày và rate-limit rule; chạy thật với số lượng thiết bị lớn cần gói trả phí (xem `docs/COST-MODEL.md`).
+
+## 9. Chạy lên tên miền chính thức ams.anio.vn (Windows, một chạm)
+
+1. `scripts\DEPLOY-AMS-ANIO-VN.bat` (= môi trường **production**: `https://ams.anio.vn`, `https://ams.anio.vn/api`, `https://gw-ams.anio.vn`). Dán API Token (ô ẩn); preflight chạy trước; gõ đúng chữ `production` để deploy thật. Tài nguyên production (D1/KV/Queues/R2 `*-production`) tách riêng staging.
+2. `scripts\BOOTSTRAP-ADMIN-ANIO-VN.bat` tạo Super admin đầu tiên (email, mật khẩu, token đều nhập qua ô ẩn).
+3. Gói Workers Free chỉ cho 5 cron/tài khoản: script mặc định dùng `--no-crons`. Sau khi nâng **Workers Paid**, đặt biến môi trường `AMS_ENABLE_CRONS=1` rồi deploy lại để bật lịch nền (outbox, đối soát, gộp presence).
+4. Staging (`ams-stg.anio.vn`) giữ nguyên để thử nghiệm; muốn bỏ hẳn, xóa Worker/Domain `*-staging` trong Cloudflare sau khi production ổn.

@@ -37,9 +37,10 @@ const db = {
   async run(sql: string, params: unknown[] = []) { let i = 0; stmts.push(sql.replace(/\?/g, () => lit(params[i++])) + ';'); return { changes: 1 }; },
   async tx<T>(fn: (t: typeof db) => Promise<T>) { return fn(db); },
 };
+// SEPAY_WEBHOOK_SECRET/FIELD_ENC_KEY ở đây chỉ để qua kiểm tra của bootstrap; bí mật thật nằm ở Worker.
 const rt: SeedRuntime = {
   db, clock: { now: () => new Date() }, id: () => crypto.randomUUID(),
-  config: { env: { AMS_ENV: envName, SEPAY_MODE: envName === 'production' ? 'production' : 'sandbox', FIELD_ENC_KEY: randomBytes(32).toString('base64'), BOOTSTRAP_ADMIN_EMAIL: email } },
+  config: { env: { AMS_ENV: envName, SEPAY_MODE: envName === 'production' ? 'production' : 'sandbox', FIELD_ENC_KEY: randomBytes(32).toString('base64'), SEPAY_WEBHOOK_SECRET: randomBytes(32).toString('hex'), BOOTSTRAP_ADMIN_EMAIL: email } },
 };
 const r = await bootstrap(rt, { adminEmail: email, adminPassword: password });
 if (r.skipped) { console.log('Bỏ qua (đã có dữ liệu).'); process.exit(0); }

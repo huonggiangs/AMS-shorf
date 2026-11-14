@@ -21,9 +21,10 @@ try {
   pnpm install --frozen-lockfile 2>&1 | Tee-Object -FilePath $log -Append
   Say "--- Buoc 1: kiem tra (khong tao/sua gi tren Cloudflare), env=$Env ---"
   node scripts/deploy-cloudflare.mjs --env $Env --preflight 2>&1 | Tee-Object -FilePath $log -Append
-  $ans = Read-Host "Preflight on? Deploy THAT len Cloudflare ($Env)? (go 'yes' de tiep tuc)"
-  $extra = @(); if ($Env -ne 'production') { $extra = @('--no-crons') }
-  if ($ans -eq 'yes') {
+  $want = 'yes'; if ($Env -eq 'production') { $want = 'production' }
+  $ans = Read-Host "Preflight on? Deploy THAT len Cloudflare ($Env)? (go '$want' de tiep tuc)"
+  $extra = @(); if ($env:AMS_ENABLE_CRONS -ne '1') { $extra = @('--no-crons') }  # Workers Free: toi da 5 cron/tai khoan. Co goi Paid: dat AMS_ENABLE_CRONS=1
+  if ($ans -eq $want) {
     node scripts/deploy-cloudflare.mjs --env $Env --generate-secrets --yes $extra 2>&1 | Tee-Object -FilePath $log -Append
   } else { Say 'Da dung sau preflight.' }
 } catch { Say "LOI: $($_.Exception.Message)" }
