@@ -49,3 +49,8 @@ Bốn bước: (1) my.sepay.vn > Webhooks > Thêm webhook, dán URL, sự kiện
 
 - Production khởi động được khi khóa chỉ nằm trong DB; thiếu cả env lẫn DB thì webhook bị từ chối (401, fail-closed) và `has_secret=false`.
 - Khóa lưu trong DB mã hóa bằng `FIELD_ENC_KEY`; đổi khóa này làm khóa đã lưu không đọc được (webhook bị từ chối).
+
+## 5. Hoàn tiền và hóa đơn điện tử (p4)
+
+- Khi hoàn tiền cho hóa đơn đã phát hành hóa đơn điện tử, hệ thống tạo hóa đơn điều chỉnh (`einvoice_documents.kind = 'adjustment'`) theo số tiền hoàn, qua job hằng ngày (`adjustPaidRefunds`) hoặc nút "Điều chỉnh" ở Công nợ & Hóa đơn điện tử. Khóa idempotency `ams:<invoiceId>:adjustment:<mã hoàn tiền>` chống tạo trùng.
+- Tiền vào qua SePay làm khoản phải thu (`receivables`) chuyển sang đã thanh toán; nhắc nợ và tự tạm dừng chiến dịch chỉ xét khoản chưa thanh toán. Xem `docs/legal/README.md` mục 2 và 3.

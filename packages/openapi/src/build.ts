@@ -76,6 +76,10 @@ const SRC: { file: string; prefixes: string[] }[] = [
   { file: 'services/api/src/routes/history.ts', prefixes: ['/admin/v1/history', '/portal/v1/history'] },
   { file: 'services/api/src/routes/invoices.ts', prefixes: ['/admin/v1/invoices', '/admin/v1/payouts', '/portal/v1/invoices'] },
   { file: 'services/api/src/routes/tv-experience.ts', prefixes: ['/admin/v1/tv-experience'] },
+  { file: 'services/api/src/legal/routes.ts', prefixes: ['/admin/v1/legal', '/portal/v1/legal', '/legal'] },
+  { file: 'services/api/src/compliance/routes.ts', prefixes: ['/admin/v1/compliance', '/portal/v1/kyc'] },
+  { file: 'services/api/src/billing/routes.ts', prefixes: ['/admin/v1/einvoices', '/portal/v1/einvoices'] },
+  { file: 'services/api/src/billing/dunning-routes.ts', prefixes: ['/admin/v1/billing'] },
   { file: 'services/payments/src/routes.ts', prefixes: [''] },
 ];
 

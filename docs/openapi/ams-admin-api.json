@@ -415,7 +415,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/billing/dunning-routes.ts:63",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -448,8 +453,57 @@
           "billing"
         ],
         "summary": "GET /admin/v1/billing/events",
-        "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/billing/dunning-routes.ts:69",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -482,8 +536,57 @@
           "billing"
         ],
         "summary": "GET /admin/v1/billing/receivables",
-        "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/billing/dunning-routes.ts:47",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -517,7 +620,12 @@
         ],
         "summary": "POST /admin/v1/billing/run",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/billing/dunning-routes.ts:82",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -552,7 +660,12 @@
         ],
         "summary": "GET /admin/v1/billing/settings",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/billing/dunning-routes.ts:28",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -584,7 +697,22 @@
         ],
         "summary": "PUT /admin/v1/billing/settings",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/billing/dunning-routes.ts:29",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutBillingSettingsRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -619,7 +747,12 @@
         ],
         "summary": "GET /admin/v1/billing/summary",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/billing/dunning-routes.ts:56",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1307,7 +1440,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "campaigns",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:106",
+        "description": "Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1350,7 +1488,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "campaigns",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:112",
+        "description": "Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutComplianceCampaignsByIdCategoryRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1394,7 +1547,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "campaigns",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:129",
+        "description": "Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostComplianceCampaignsByIdSecondApprovalRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1428,8 +1596,57 @@
           "compliance"
         ],
         "summary": "GET /admin/v1/compliance/consents",
-        "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:281",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1461,10 +1678,25 @@
         ],
         "summary": "POST /admin/v1/compliance/consents",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:290",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostComplianceConsentsRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Thành công",
+          "201": {
+            "description": "Đã tạo",
             "content": {
               "application/json": {
                 "schema": {
@@ -1495,8 +1727,57 @@
           "compliance"
         ],
         "summary": "GET /admin/v1/compliance/dsr",
-        "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:159",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1528,10 +1809,25 @@
         ],
         "summary": "POST /admin/v1/compliance/dsr",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:160",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostComplianceDsrRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Thành công",
+          "201": {
+            "description": "Đã tạo",
             "content": {
               "application/json": {
                 "schema": {
@@ -1572,7 +1868,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:189",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostComplianceDsrByIdExecuteRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1616,7 +1927,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:213",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostComplianceDsrByIdRejectRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1650,8 +1976,57 @@
           "compliance"
         ],
         "summary": "GET /admin/v1/compliance/kyc",
-        "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:78",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1694,7 +2069,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:91",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1737,7 +2117,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:100",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostComplianceKycByCustomerIdDecisionRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1781,10 +2176,25 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:93",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostComplianceKycByCustomerIdDocumentsUploadUrlRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Thành công",
+          "201": {
+            "description": "Đã tạo",
             "content": {
               "application/json": {
                 "schema": {
@@ -1833,7 +2243,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:94",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1885,7 +2300,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:96",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostComplianceKycByCustomerIdDocumentsByIdReviewRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1929,7 +2359,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:92",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutComplianceKycByCustomerIdProfileRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -1973,7 +2418,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:95",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -2008,7 +2458,12 @@
         ],
         "summary": "GET /admin/v1/compliance/processing-records",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:248",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -2040,10 +2495,25 @@
         ],
         "summary": "POST /admin/v1/compliance/processing-records",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:254",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostComplianceProcessingRecordsRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Thành công",
+          "201": {
+            "description": "Đã tạo",
             "content": {
               "application/json": {
                 "schema": {
@@ -2084,7 +2554,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:268",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutComplianceProcessingRecordsByIdRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -2119,7 +2604,12 @@
         ],
         "summary": "GET /admin/v1/compliance/retention",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:225",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -2151,7 +2641,22 @@
         ],
         "summary": "PUT /admin/v1/compliance/retention",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:226",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutComplianceRetentionRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -2186,7 +2691,12 @@
         ],
         "summary": "POST /admin/v1/compliance/retention/run",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:240",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3080,7 +3590,52 @@
           "einvoices"
         ],
         "summary": "GET /admin/v1/einvoices",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-source": "services/api/src/billing/routes.ts:110",
         "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -3115,7 +3670,22 @@
         ],
         "summary": "POST /admin/v1/einvoices/adjust",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/billing/routes.ts:74",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostEinvoicesAdjustRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3159,7 +3729,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/billing/routes.ts:68",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostEinvoicesInvoiceByInvoiceIdIssueRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3194,7 +3779,12 @@
         ],
         "summary": "GET /admin/v1/einvoices/settings",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/billing/routes.ts:33",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3226,7 +3816,22 @@
         ],
         "summary": "PUT /admin/v1/einvoices/settings",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/billing/routes.ts:38",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutEinvoicesSettingsRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3270,7 +3875,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/billing/routes.ts:65",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3313,7 +3923,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/billing/routes.ts:84",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostEinvoicesByIdCancelRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3357,7 +3982,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/billing/routes.ts:88",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostEinvoicesByIdConfirmRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3401,7 +4041,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/billing/routes.ts:92",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3445,7 +4090,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "finance",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/billing/routes.ts:93",
+        "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -4094,8 +4744,57 @@
           "legal"
         ],
         "summary": "GET /admin/v1/legal/acceptances",
-        "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/legal/routes.ts:125",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -4129,7 +4828,12 @@
         ],
         "summary": "GET /admin/v1/legal/coverage",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/legal/routes.ts:139",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -4163,6 +4867,7 @@
         ],
         "summary": "GET /admin/v1/legal/documents",
         "parameters": [],
+        "x-ams-source": "services/api/src/legal/routes.ts:196",
         "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4195,10 +4900,25 @@
         ],
         "summary": "POST /admin/v1/legal/documents",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/legal/routes.ts:54",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostLegalDocumentsRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Thành công",
+          "201": {
+            "description": "Đã tạo",
             "content": {
               "application/json": {
                 "schema": {
@@ -4239,6 +4959,7 @@
             }
           }
         ],
+        "x-ams-source": "services/api/src/legal/routes.ts:173",
         "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4280,7 +5001,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/legal/routes.ts:72",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutLegalDocumentsByIdRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -4324,7 +5060,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/legal/routes.ts:91",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostLegalDocumentsByIdPublishRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -4368,7 +5119,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/legal/routes.ts:112",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -9079,6 +9835,7 @@
         ],
         "summary": "GET /legal/documents",
         "parameters": [],
+        "x-ams-source": "services/api/src/legal/routes.ts:196",
         "description": "Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -9122,6 +9879,7 @@
             }
           }
         ],
+        "x-ams-source": "services/api/src/legal/routes.ts:201",
         "description": "Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -9631,7 +10389,52 @@
           "einvoices"
         ],
         "summary": "GET /portal/v1/einvoices",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-source": "services/api/src/billing/routes.ts:110",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -9999,6 +10802,7 @@
         ],
         "summary": "GET /portal/v1/kyc",
         "parameters": [],
+        "x-ams-source": "services/api/src/compliance/routes.ts:59",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -10033,10 +10837,25 @@
         ],
         "summary": "POST /portal/v1/kyc/documents/upload-url",
         "parameters": [],
-        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "campaigns",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:64",
+        "description": "Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortalPostKycDocumentsUploadUrlRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Thành công",
+          "201": {
+            "description": "Đã tạo",
             "content": {
               "application/json": {
                 "schema": {
@@ -10077,7 +10896,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "campaigns",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:66",
+        "description": "Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Đã xóa",
@@ -10121,7 +10945,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "campaigns",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:65",
+        "description": "Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -10156,7 +10985,22 @@
         ],
         "summary": "PUT /portal/v1/kyc/profile",
         "parameters": [],
-        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "campaigns",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:60",
+        "description": "Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortalPutKycProfileRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -10191,7 +11035,12 @@
         ],
         "summary": "POST /portal/v1/kyc/submit",
         "parameters": [],
-        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "campaigns",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/compliance/routes.ts:70",
+        "description": "Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -10226,7 +11075,18 @@
         ],
         "summary": "POST /portal/v1/legal/accept",
         "parameters": [],
+        "x-ams-source": "services/api/src/legal/routes.ts:179",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortalPostLegalAcceptRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -10261,6 +11121,7 @@
         ],
         "summary": "GET /portal/v1/legal/documents",
         "parameters": [],
+        "x-ams-source": "services/api/src/legal/routes.ts:196",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -10304,6 +11165,7 @@
             }
           }
         ],
+        "x-ams-source": "services/api/src/legal/routes.ts:173",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -10338,6 +11200,7 @@
         ],
         "summary": "GET /portal/v1/legal/pending",
         "parameters": [],
+        "x-ams-source": "services/api/src/legal/routes.ts:156",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -11289,6 +12152,297 @@
         ],
         "additionalProperties": true
       },
+      "AdminPostComplianceCampaignsByIdSecondApprovalRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostComplianceConsentsRequest": {
+        "type": "object",
+        "properties": {
+          "subject_type": {
+            "type": "string",
+            "enum": [
+              "customer_contact",
+              "end_user"
+            ]
+          },
+          "subject_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 200
+          },
+          "granted": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "subject_type",
+          "subject_id",
+          "purpose",
+          "granted"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostComplianceDsrByIdExecuteRequest": {
+        "type": "object",
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
+      },
+      "AdminPostComplianceDsrByIdRejectRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostComplianceDsrRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "export",
+              "anonymize"
+            ]
+          },
+          "subject_type": {
+            "type": "string",
+            "enum": [
+              "customer_contact",
+              "end_user"
+            ]
+          },
+          "subject_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "requester": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "channel": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "kind",
+          "subject_type",
+          "subject_id"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostComplianceKycByCustomerIdDecisionRequest": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "restricted_industry": {
+            "type": "boolean"
+          },
+          "restricted_categories": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "general",
+                "food_beverage",
+                "retail",
+                "real_estate",
+                "education",
+                "automotive",
+                "technology",
+                "entertainment",
+                "finance_banking",
+                "health_pharma",
+                "supplement",
+                "alcohol",
+                "tobacco",
+                "gambling",
+                "loan_credit",
+                "adult",
+                "political_religious"
+              ]
+            },
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostComplianceKycByCustomerIdDocumentsByIdReviewRequest": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostComplianceKycByCustomerIdDocumentsUploadUrlRequest": {
+        "type": "object",
+        "properties": {
+          "doc_type": {
+            "type": "string",
+            "enum": [
+              "business_registration",
+              "industry_licence",
+              "ad_content_permit",
+              "authorization_letter",
+              "other"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "file_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "content_type": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 52428800
+          },
+          "expires_on": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "doc_type",
+          "file_name",
+          "content_type",
+          "size_bytes"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostComplianceProcessingRecordsRequest": {
+        "type": "object",
+        "properties": {
+          "activity": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          },
+          "data_categories": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 500
+          },
+          "data_subjects": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "legal_basis": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "recipients": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "cross_border": {
+            "type": "boolean",
+            "default": false
+          },
+          "retention": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "owner": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "active": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "activity",
+          "purpose",
+          "data_categories"
+        ],
+        "additionalProperties": true
+      },
       "AdminPostContractsByIdLinesRequest": {
         "type": "object",
         "properties": {
@@ -11725,6 +12879,92 @@
         ],
         "additionalProperties": true
       },
+      "AdminPostEinvoicesAdjustRequest": {
+        "type": "object",
+        "properties": {
+          "invoice_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "refund_total_vnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000000
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
+          },
+          "refund_request_id": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "manual_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "invoice_id",
+          "refund_total_vnd",
+          "reason"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostEinvoicesByIdCancelRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostEinvoicesByIdConfirmRequest": {
+        "type": "object",
+        "properties": {
+          "einvoice_no": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "series": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "lookup_code": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "issue_date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          }
+        },
+        "required": [
+          "einvoice_no"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostEinvoicesInvoiceByInvoiceIdIssueRequest": {
+        "type": "object",
+        "properties": {
+          "manual_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "additionalProperties": true
+      },
       "AdminPostInvoicesByIdIssueRequest": {
         "type": "object",
         "properties": {
@@ -11793,6 +13033,69 @@
           "period",
           "amount_vnd",
           "vat_rate"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostLegalDocumentsByIdPublishRequest": {
+        "type": "object",
+        "properties": {
+          "confirm_lawyer_approved": {
+            "type": "boolean",
+            "const": true
+          },
+          "lawyer_ref": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "allow_draft_markers": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirm_lawyer_approved"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostLegalDocumentsRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "terms",
+              "privacy",
+              "sla",
+              "ad_policy"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,23}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "body_md": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 400000
+          },
+          "requires_acceptance": {
+            "type": "boolean",
+            "default": true
+          },
+          "change_note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "kind",
+          "version",
+          "title",
+          "body_md"
         ],
         "additionalProperties": true
       },
@@ -12547,6 +13850,42 @@
         ],
         "additionalProperties": true
       },
+      "AdminPutBillingSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "reminder_offsets_days": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": -30,
+              "maximum": 120
+            },
+            "maxItems": 12
+          },
+          "auto_pause_after_days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 365
+          },
+          "enforce_credit_limit": {
+            "type": "boolean"
+          },
+          "low_balance_email": {
+            "type": "boolean"
+          },
+          "send_emails": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reminder_offsets_days",
+          "auto_pause_after_days",
+          "enforce_credit_limit",
+          "low_balance_email",
+          "send_emails"
+        ],
+        "additionalProperties": true
+      },
       "AdminPutCampaignsByIdRequest": {
         "type": "object",
         "properties": {
@@ -12683,6 +14022,184 @@
             ]
           }
         },
+        "additionalProperties": true
+      },
+      "AdminPutComplianceCampaignsByIdCategoryRequest": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "general",
+              "food_beverage",
+              "retail",
+              "real_estate",
+              "education",
+              "automotive",
+              "technology",
+              "entertainment",
+              "finance_banking",
+              "health_pharma",
+              "supplement",
+              "alcohol",
+              "tobacco",
+              "gambling",
+              "loan_credit",
+              "adult",
+              "political_religious"
+            ]
+          }
+        },
+        "required": [
+          "category"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPutComplianceKycByCustomerIdProfileRequest": {
+        "type": "object",
+        "properties": {
+          "business_reg_no": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "business_reg_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "business_reg_place": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "legal_rep_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "legal_rep_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "AdminPutComplianceProcessingRecordsByIdRequest": {
+        "type": "object",
+        "properties": {
+          "activity": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          },
+          "data_categories": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 500
+          },
+          "data_subjects": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "legal_basis": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "recipients": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "cross_border": {
+            "type": "boolean",
+            "default": false
+          },
+          "retention": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "owner": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "active": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "activity",
+          "purpose",
+          "data_categories"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPutComplianceRetentionRequest": {
+        "type": "object",
+        "properties": {
+          "ev_heartbeat_days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3650
+          },
+          "ev_ad_impression_days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3650
+          },
+          "ev_proof_of_play_days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3650
+          },
+          "impression_hourly_days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3650
+          }
+        },
+        "required": [
+          "ev_heartbeat_days",
+          "ev_ad_impression_days",
+          "ev_proof_of_play_days",
+          "impression_hourly_days"
+        ],
         "additionalProperties": true
       },
       "AdminPutContractsByIdRequest": {
@@ -12876,6 +14393,48 @@
         },
         "additionalProperties": true
       },
+      "AdminPutEinvoicesSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "misa",
+              "viettel"
+            ]
+          },
+          "sandbox": {
+            "type": "boolean"
+          },
+          "series": {
+            "type": "string",
+            "maxLength": 20,
+            "default": ""
+          },
+          "template_code": {
+            "type": "string",
+            "maxLength": 20,
+            "default": ""
+          },
+          "auto_issue": {
+            "type": "boolean",
+            "default": false
+          },
+          "auto_adjust_on_refund": {
+            "type": "boolean",
+            "default": true
+          },
+          "confirm_production": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "provider",
+          "sandbox"
+        ],
+        "additionalProperties": true
+      },
       "AdminPutInvoicesByIdRequest": {
         "type": "object",
         "properties": {
@@ -12886,6 +14445,30 @@
           },
           "vat_rate": {
             "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      },
+      "AdminPutLegalDocumentsByIdRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "body_md": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 400000
+          },
+          "requires_acceptance": {
+            "type": "boolean",
+            "default": true
+          },
+          "change_note": {
+            "type": "string",
+            "maxLength": 500
           }
         },
         "additionalProperties": true
@@ -15008,6 +16591,89 @@
         ],
         "additionalProperties": true
       },
+      "PortalPostKycDocumentsUploadUrlRequest": {
+        "type": "object",
+        "properties": {
+          "doc_type": {
+            "type": "string",
+            "enum": [
+              "business_registration",
+              "industry_licence",
+              "ad_content_permit",
+              "authorization_letter",
+              "other"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "file_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "content_type": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 52428800
+          },
+          "expires_on": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "doc_type",
+          "file_name",
+          "content_type",
+          "size_bytes"
+        ],
+        "additionalProperties": true
+      },
+      "PortalPostLegalAcceptRequest": {
+        "type": "object",
+        "properties": {
+          "acceptances": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "document_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "sha256": {
+                  "type": "string",
+                  "minLength": 64,
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "document_id",
+                "sha256"
+              ],
+              "additionalProperties": true
+            },
+            "minItems": 1,
+            "maxItems": 10
+          }
+        },
+        "required": [
+          "acceptances"
+        ],
+        "additionalProperties": true
+      },
       "PortalPostMediaByIdConfirmRequest": {
         "type": "object",
         "properties": {
@@ -15307,6 +16973,67 @@
                     "maxLength": 64
                   }
                 ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "PortalPutKycProfileRequest": {
+        "type": "object",
+        "properties": {
+          "business_reg_no": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "business_reg_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "business_reg_place": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "legal_rep_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "legal_rep_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
               },
               {
                 "type": "null"
