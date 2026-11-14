@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ZodError } from 'zod';
-import type { Runtime } from '@ams/runtime';
+import { bumpOpsCounter, type Runtime } from '@ams/runtime';
 import { randomBytes, shardOf, toBase64Url } from '@ams/shared';
 import { KvNonceStore, authenticateDevice, readEnvelope, verifyEnvelope, type AuthDeps, type NonceStore } from './auth.js';
 import { DeviceDirectory, type DeviceRec } from './devices.js';
@@ -138,6 +138,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     if (err instanceof HttpProblem) return problem(c, err.code, err.message, err.details, err.headers);
     if (err instanceof ZodError) return problem(c, 'validation_failed', 'Du lieu khong hop le.', err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
     if (err instanceof SyntaxError) return problem(c, 'bad_request', 'Than yeu cau khong phai JSON hop le.');
+    void bumpOpsCounter(rt, 'gateway_5xx'); // p3-ops: kiem tra canh bao gateway:5xx
     console.error('[gateway] loi noi bo:', err instanceof Error ? err.message : err);
     return problem(c, 'internal', 'Loi may chu.');
   });

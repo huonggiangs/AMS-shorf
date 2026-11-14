@@ -95,16 +95,6 @@ CREATE TABLE IF NOT EXISTS campaign_compliance (
 );
 CREATE INDEX IF NOT EXISTS idx_campaign_compliance_cat ON campaign_compliance(category);
 
--- Xac nhan quyen su dung noi dung khi tai creative (ai, luc nao, IP, phien ban cau cam ket).
-CREATE TABLE IF NOT EXISTS creative_rights (
-  creative_id TEXT NOT NULL PRIMARY KEY,
-  customer_id TEXT NOT NULL,
-  confirmed_by TEXT NOT NULL,
-  confirmed_at TEXT NOT NULL,
-  ip TEXT,
-  statement_version TEXT NOT NULL
-);
-
 -- Go noi dung (takedown): tam dung chien dich + ly do + nguoi khieu nai; state: open -> reinstated | removed.
 CREATE TABLE IF NOT EXISTS content_takedowns (
   id TEXT NOT NULL PRIMARY KEY,
@@ -125,41 +115,44 @@ CREATE TABLE IF NOT EXISTS content_takedowns (
 CREATE INDEX IF NOT EXISTS idx_content_takedowns_campaign ON content_takedowns(campaign_id, state);
 CREATE INDEX IF NOT EXISTS idx_content_takedowns_state ON content_takedowns(state, created_at);
 
--- (4) Doi tuong khan gia cua thiet bi: general (mac dinh khi khong co dong) | family | child.
---   Thiet bi family/child chi nhan chien dich kid_safe thuoc nganh trong danh sach cho phep (gateway loc khi xay manifest).
-CREATE TABLE IF NOT EXISTS device_audience (
-  device_id TEXT NOT NULL PRIMARY KEY,
-  audience TEXT NOT NULL DEFAULT 'general' CHECK (audience IN ('general','family','child')),
-  note TEXT,
-  updated_by TEXT,
-  updated_at TEXT NOT NULL
-);
-
--- (5) Hoa don dien tu (ND123) 1-1 voi invoices: so hoa don, ma tra cuu, ngay lap, ma CQT, tep PDF/XML.
---   kind: original | adjustment (dieu chinh, tro toi hoa don goc qua adjusts_invoice_id).
-CREATE TABLE IF NOT EXISTS invoice_einvoices (
-  invoice_id TEXT NOT NULL PRIMARY KEY,
+-- (5) Hoa don dien tu (ND123): moi dong la MOT chung tu gui nha cung cap (goc, dieu chinh, huy). Mot hoa don noi bo co the co nhieu chung tu
+--   (goc + dieu chinh khi hoan tien). idempotency_key UNIQUE: gui lai cung yeu cau khong tao chung tu thu hai o ben nha cung cap.
+--   kind: original | adjustment (tro toi chung tu goc qua adjusts_document_id) | cancellation
+--   status: pending (cho gui/thu lai) -> issued | failed (het so lan thu) ; issued -> cancelled
+--   provider: manual | misa | viettel ; sandbox 1 = moi truong thu nghiem cua nha cung cap (khong co gia tri phap ly)
+CREATE TABLE IF NOT EXISTS einvoice_documents (
+  id TEXT NOT NULL PRIMARY KEY,
+  invoice_id TEXT NOT NULL,
   customer_id TEXT NOT NULL,
   provider TEXT NOT NULL,
-  kind TEXT NOT NULL DEFAULT 'original' CHECK (kind IN ('original','adjustment')),
-  einvoice_no TEXT NOT NULL,
+  sandbox INTEGER NOT NULL DEFAULT 0 CHECK (sandbox IN (0,1)),
+  kind TEXT NOT NULL DEFAULT 'original' CHECK (kind IN ('original','adjustment','cancellation')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','issued','failed','cancelled')),
+  idempotency_key TEXT NOT NULL UNIQUE,
+  einvoice_no TEXT,
   series TEXT,
-  lookup_code TEXT NOT NULL,
-  issue_date TEXT NOT NULL,
+  lookup_code TEXT,
+  provider_ref TEXT,
+  issue_date TEXT,
   tax_authority_code TEXT,
-  amount_vnd BIGINT NOT NULL,
-  vat_vnd BIGINT NOT NULL,
-  total_vnd BIGINT NOT NULL,
+  amount_vnd BIGINT NOT NULL DEFAULT 0,
+  vat_vnd BIGINT NOT NULL DEFAULT 0,
+  total_vnd BIGINT NOT NULL DEFAULT 0,
   pdf_key TEXT,
   xml_key TEXT,
-  adjusts_invoice_id TEXT,
-  adjust_reason TEXT,
+  adjusts_document_id TEXT,
+  reason TEXT,
   refund_request_id TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  next_retry_at TEXT,
   created_by TEXT,
   created_at TEXT NOT NULL,
-  UNIQUE (provider, einvoice_no, series)
+  updated_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_invoice_einvoices_adjusts ON invoice_einvoices(adjusts_invoice_id);
+CREATE INDEX IF NOT EXISTS idx_einvoice_documents_invoice ON einvoice_documents(invoice_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_einvoice_documents_status ON einvoice_documents(status, next_retry_at);
+CREATE INDEX IF NOT EXISTS idx_einvoice_documents_refund ON einvoice_documents(refund_request_id);
 
 -- (6) Nhac no: moi viec (danh dau qua han, thu nhac, tu tam dung, canh bao so du, vuot han muc) ghi mot dong; dedupe_key UNIQUE => chay lai khong gui trung.
 CREATE TABLE IF NOT EXISTS dunning_events (
@@ -175,42 +168,56 @@ CREATE TABLE IF NOT EXISTS dunning_events (
 );
 CREATE INDEX IF NOT EXISTS idx_dunning_events_customer ON dunning_events(customer_id, created_at);
 
--- (7) Ban ky hop dong da tai len (lich su; contracts.signed_file_key tro toi ban moi nhat).
-CREATE TABLE IF NOT EXISTS contract_signed_files (
+-- (7) Quyen cua chu the du lieu (Nghi dinh 13/2023): yeu cau xuat du lieu / an danh. Ket qua khong chua du lieu ca nhan (chi dem + loai).
+--   subject_type: customer_contact (nguoi dung cong khach hang) | end_user (nguoi xem tren TV)
+--   state: requested -> completed | rejected ; due_at = han tra loi (mac dinh 72 gio theo ND13, luat su xac nhan)
+CREATE TABLE IF NOT EXISTS dsr_requests (
   id TEXT NOT NULL PRIMARY KEY,
-  contract_id TEXT NOT NULL,
-  customer_id TEXT NOT NULL,
-  storage_key TEXT NOT NULL,
-  file_name TEXT NOT NULL,
-  mime TEXT NOT NULL,
-  size_bytes BIGINT NOT NULL DEFAULT 0,
-  sha256 TEXT,
-  state TEXT NOT NULL DEFAULT 'uploading' CHECK (state IN ('uploading','stored')),
-  signed_on TEXT,
-  uploaded_by TEXT,
+  kind TEXT NOT NULL CHECK (kind IN ('export','anonymize')),
+  subject_type TEXT NOT NULL CHECK (subject_type IN ('customer_contact','end_user')),
+  subject_id TEXT NOT NULL,
+  customer_id TEXT,
+  requester TEXT,
+  channel TEXT,
+  note TEXT,
+  state TEXT NOT NULL DEFAULT 'requested' CHECK (state IN ('requested','completed','rejected')),
+  result_summary TEXT,
+  due_at TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  completed_by TEXT,
+  completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_dsr_requests_state ON dsr_requests(state, created_at);
+CREATE INDEX IF NOT EXISTS idx_dsr_requests_subject ON dsr_requests(subject_type, subject_id);
+
+-- (8) So dang ky hoat dong xu ly du lieu (ND13: ho so xu ly) va so ghi nhan dong y. Chi la so dang ky; noi dung phap ly do luat su hoan thien.
+CREATE TABLE IF NOT EXISTS processing_records (
+  id TEXT NOT NULL PRIMARY KEY,
+  activity TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  data_categories TEXT NOT NULL,
+  data_subjects TEXT,
+  legal_basis TEXT,
+  recipients TEXT,
+  cross_border INTEGER NOT NULL DEFAULT 0 CHECK (cross_border IN (0,1)),
+  retention TEXT,
+  owner TEXT,
+  active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+  updated_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS consent_records (
+  id TEXT NOT NULL PRIMARY KEY,
+  subject_type TEXT NOT NULL CHECK (subject_type IN ('customer_contact','end_user')),
+  subject_id TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  granted INTEGER NOT NULL DEFAULT 1 CHECK (granted IN (0,1)),
+  version TEXT,
+  source TEXT,
+  recorded_by TEXT,
   created_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_contract_signed_files_contract ON contract_signed_files(contract_id, created_at);
-
--- (8) Yeu cau dang ky (lead) tu trang cong khai: nhan vien duyet -> tao khach hang + moi nguoi dung.
-CREATE TABLE IF NOT EXISTS signup_requests (
-  id TEXT NOT NULL PRIMARY KEY,
-  company_name TEXT NOT NULL,
-  tax_code TEXT,
-  contact_name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phone TEXT,
-  industry TEXT,
-  message TEXT,
-  accepted_terms_version TEXT,
-  state TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new','approved','rejected','spam')),
-  ip TEXT,
-  created_at TEXT NOT NULL,
-  reviewed_by TEXT,
-  reviewed_at TEXT,
-  review_note TEXT,
-  customer_id TEXT,
-  admin_id TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_signup_requests_state ON signup_requests(state, created_at);
-CREATE INDEX IF NOT EXISTS idx_signup_requests_email ON signup_requests(email);
+CREATE INDEX IF NOT EXISTS idx_consent_records_subject ON consent_records(subject_type, subject_id, created_at);

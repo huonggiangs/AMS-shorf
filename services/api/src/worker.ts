@@ -5,6 +5,7 @@ import { createCfCreativeValidator } from './lib/cf-creative-validate.js';
 import { mountFinanceRoutes } from './finance-mount.js';
 import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import type { FinancePort } from './ports.js';
+import { opsTick } from './ops/index.js';
 
 // Kieu toi thieu cua Workers (tranh keo @cloudflare/workers-types vao goi api).
 interface ScheduledEvent { cron: string }
@@ -51,6 +52,8 @@ export default {
     ctx.waitUntil(r.rt.kv.purgeExpiredCounters().then(() => undefined, () => undefined)); // don bo dem D1 het han
     if (event.cron === '* * * * *') return; // cron moi phut chi de outbox + kiem tra creative
     ctx.waitUntil(pruneOutboxAll(r.rt).then(() => undefined, () => undefined));
+    // p3-ops: kiem tra canh bao (moi 10 phut); don dep nhat ky cung luc job hang ngay
+    ctx.waitUntil(opsTick(r.rt, { prune: event.cron === '15 2 * * *' }));
     const fin = await r.finance();
     if (fin.scheduled) ctx.waitUntil(fin.scheduled(r.rt, event.cron));
   },

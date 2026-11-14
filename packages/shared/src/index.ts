@@ -10,3 +10,4 @@ export * from './types.js';
 export * from './overlay.js';
 export * from './campaign-state.js';
 export * from './pricing.js';
+export * from './compliance.js';

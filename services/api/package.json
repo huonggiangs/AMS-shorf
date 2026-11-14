@@ -19,7 +19,8 @@
     "build": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx watch src/index.ts",
     "migrate": "tsx src/cli/migrate.ts",
-    "seed": "tsx src/cli/seed.ts"
+    "seed": "tsx src/cli/seed.ts",
+    "gen:legal": "node scripts/gen-legal-docs.mjs"
   },
   "dependencies": {
     "@ams/shared": "workspace:*",

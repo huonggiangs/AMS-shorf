@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { secureHeaders } from 'hono/secure-headers';
 import { ZodError } from 'zod';
-import type { Runtime } from '@ams/runtime';
+import { bumpOpsCounter, type Runtime } from '@ams/runtime';
 import { isInvalidTransition } from '@ams/shared';
 import { HttpError } from './lib/errors.js';
 import { clientIp } from './lib/http.js';
@@ -20,6 +20,7 @@ import { deviceRoutes } from './routes/devices.js';
 import { historyRoutes, portalHistoryRoutes } from './routes/history.js';
 import { invoiceRoutes, payoutRoutes, portalInvoiceRoutes } from './routes/invoices.js';
 import { mediaRoutes } from './routes/media.js';
+import { opsRoutes, publicOpsRoutes } from './routes/ops.js';
 import { storageRoutes, STORAGE_UPLOAD_PATH } from './routes/storage.js';
 import { partnerRoutes } from './routes/partners.js';
 import { portalRoutes } from './routes/portal.js';
@@ -64,6 +65,12 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
 
   app.get('/health', (c) => c.json({ ok: true, service: 'ams-api', runtime: rt.config.runtime }));
 
+  // p3-ops: dem 5xx cua webhook thanh toan (kiem tra canh bao webhook:5xx)
+  app.use('/webhooks/*', async (c, next) => {
+    await next();
+    if (c.res.status >= 500) await bumpOpsCounter(rt, 'sepay_webhook_5xx');
+  });
+  app.route('/', publicOpsRoutes()); // GET /status (cong khai), POST /ops/backup-report (Bearer OPS_REPORT_TOKEN)
   app.route('/storage', storageRoutes());
   app.route('/auth', authRoutes());
 
@@ -92,6 +99,7 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
   admin.route('/tv-experience', tvExperienceRoutes());
   admin.route('/invoices', invoiceRoutes());
   admin.route('/payouts', payoutRoutes());
+  admin.route('/ops', opsRoutes());
   app.route('/admin/v1', admin);
   app.route('/portal/v1/history', portalHistoryRoutes());
   app.route('/portal/v1/invoices', portalInvoiceRoutes());
@@ -114,6 +122,7 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
     const status = (err as { status?: number }).status;
     if (status === 413) return c.json({ error: { code: 'payload_too_large', message: 'Nội dung gửi lên quá lớn.' } }, 413);
     // khong ro ri chi tiet; ghi ten loi, khong ghi noi dung (tranh PII)
+    void bumpOpsCounter(rt, 'api_5xx');
     console.error('[api] loi khong xu ly:', err.name, c.req.method, new URL(c.req.url).pathname);
     return c.json({ error: { code: 'internal_error', message: 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại.' } }, 500);
   });
