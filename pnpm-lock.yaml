@@ -488,6 +488,40 @@ importers:
         specifier: 4.20.6
         version: 4.20.6
 
+  tools/ops:
+    dependencies:
+      '@ams/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@ams/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@ams/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      pg:
+        specifier: 8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@types/node':
+        specifier: 22.18.0
+        version: 22.18.0
+      '@types/pg':
+        specifier: 8.15.5
+        version: 8.15.5
+      embedded-postgres:
+        specifier: 16.15.0-beta.19
+        version: 16.15.0-beta.19
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.6
+        version: 3.2.6(@types/node@22.18.0)(jsdom@25.0.1)(tsx@4.20.6)(yaml@2.8.1)
+
   tools/sim:
     dependencies:
       '@ams/config':

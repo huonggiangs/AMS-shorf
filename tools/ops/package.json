@@ -1,0 +1,29 @@
+{
+  "name": "@ams/ops-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sao luu/khoi phuc/dien tap (Postgres, D1), chuyen D1 -> Postgres (p3-ops)",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "backup": "tsx src/backup.ts",
+    "restore": "tsx src/restore.ts",
+    "drill": "tsx src/drill.ts",
+    "d1-to-pg": "tsx src/d1-to-pg.ts"
+  },
+  "dependencies": {
+    "@ams/db": "workspace:*",
+    "@ams/runtime": "workspace:*",
+    "@ams/shared": "workspace:*",
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "embedded-postgres": "16.15.0-beta.19",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "3.2.6",
+    "@types/node": "22.18.0",
+    "@types/pg": "8.15.5"
+  }
+}
