@@ -134,6 +134,7 @@ export default {
     const b = boot(env);
     ctx.waitUntil(b.gw.flush().catch(() => undefined));
     ctx.waitUntil(b.gw.sweep().then(() => undefined, () => undefined)); // het han lenh thiet bi
+    ctx.waitUntil(b.rt.kv.purgeExpiredCounters().then(() => undefined, () => undefined)); // don bo dem D1 het han (kv_counters)
     if (!env.EVENTS_AE) return;
     const now = Math.floor(Date.now() / 1000);
     const n = SHARDS(env);

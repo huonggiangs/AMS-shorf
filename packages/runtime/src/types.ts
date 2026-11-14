@@ -15,7 +15,19 @@ export interface Kv {
   get(k: string): Promise<string | null>;
   set(k: string, v: string, ttlSec?: number): Promise<void>;
   del(k: string): Promise<void>;
+  /** Tang nguyen tu 1; ttl (cua so co dinh) chi dat o lan tao. Tren Cloudflare tang nguyen tu qua D1 (xem cloudflare/kv.ts, docs/DECISIONS-CF-COUNTERS.md). */
   incr(k: string, ttlSec?: number): Promise<number>;
+  /** Tuy chon: tang nguyen tu them `by`. Dung `kvIncrBy` (counters.ts) de co duong lui. */
+  incrBy?(k: string, by: number, ttlSec?: number): Promise<number>;
+  /** Tuy chon: tang nhieu khoa trong MOT vong (D1 batch / Redis pipeline). Dung `kvIncrMany` (counters.ts) de co duong lui. */
+  incrMany?(ops: KvIncrOp[]): Promise<number[]>;
+}
+
+export interface KvIncrOp {
+  k: string;
+  /** mac dinh 1; 0 = chi doc gia tri hien tai (tao khoa neu chua co) */
+  by?: number;
+  ttlSec?: number | undefined;
 }
 
 export interface Queue<T = unknown> {

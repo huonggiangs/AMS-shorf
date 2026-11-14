@@ -9,6 +9,7 @@ import { mailConfigFromEnv } from '../mail-http.js';
 import { CfQueue } from './queue.js';
 import { R2ObjectStore } from './r2.js';
 
+export { D1Counters } from './counters.js';
 export { D1Db, CfKv, CfQueue, R2ObjectStore, HttpMailer, CfEventStore };
 
 /** Binding + bien cua Worker (wrangler.toml). Cac khoa khac la bien chuoi/secret. */
@@ -22,6 +23,7 @@ export interface CloudflareEnv {
 
 export interface CloudflareRuntime extends Runtime {
   queue: CfQueue;
+  kv: CfKv;
 }
 
 function str(env: CloudflareEnv): Record<string, string | undefined> {
@@ -42,7 +44,7 @@ export function createCloudflareRuntime(env: CloudflareEnv): CloudflareRuntime {
   const config: Config = { runtime: 'cloudflare', env: vars };
   return {
     db,
-    kv: new CfKv(env.KV),
+    kv: new CfKv(env.KV, env.DB),
     queue,
     objects: new R2ObjectStore(
       env.BUCKET,

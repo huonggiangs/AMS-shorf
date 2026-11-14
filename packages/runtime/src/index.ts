@@ -2,6 +2,7 @@
 // Cloudflare: import tu '@ams/runtime/cloudflare'.
 export * from './types.js';
 export * from './memory.js';
+export * from './counters.js';
 export * from './events.js';
 export * from './sql.js';
 export { SqlDb, Mutex } from './base-db.js';

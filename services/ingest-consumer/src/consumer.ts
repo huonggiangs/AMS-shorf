@@ -1,6 +1,6 @@
 // ingest-consumer: nhan lo su kien tu queue, khu trung, ghi event store, tru chi tieu chien dich (qua ham duoc tiem vao).
 // Khong import @ams/payments: ben tai chinh cung cap SpendFn khi gan consumer vao tien trinh.
-import { DbEventStore, type EventStore, type Runtime } from '@ams/runtime';
+import { DbEventStore, kvClaimMany, type EventStore, type Runtime } from '@ams/runtime';
 import { sha256Hex } from '@ams/shared';
 import { INGEST_TOPIC, type ImpressionRow, type IngestMessage } from './contract.js';
 
@@ -97,8 +97,11 @@ export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): Ing
   /** Giu cho event_id bang kv (nguyen tu tren Redis); tra ve cac id GIANH DUOC. */
   async function claim(prefix: string, ids: string[]): Promise<Set<string>> {
     const won = new Set<string>();
-    const res = await pmap(ids, ioN, async (id) => (await rt.kv.incr(`${prefix}${id}`, ttl)) === 1);
-    ids.forEach((id, i) => res[i] && won.add(id));
+    // mot vong cho ca lo (Cloudflare: D1 batch nguyen tu; Redis: pipeline), theo cum de khong vuot gioi han cau lenh/lo
+    for (const part of chunk(ids, 100)) {
+      const res = await kvClaimMany(rt.kv, part.map((id) => `${prefix}${id}`), ttl);
+      part.forEach((id, i) => res[i] && won.add(id));
+    }
     return won;
   }
   async function release(prefix: string, ids: Iterable<string>): Promise<void> {
@@ -177,7 +180,7 @@ export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): Ing
     try {
       const fresh = pops.filter((p) => won.has(p.row.event_id));
       if (fresh.length === 0) return;
-      await sink.append('proof_of_play', fresh.map(({ row: p, source }) => ({ ts: p.ts, screen_id: p.screen_id, creative_id: p.creative_id, duration_ms: p.duration_ms, source: p.source ?? source })));
+      await sink.append('proof_of_play', fresh.map(({ row: p, source }) => ({ event_id: p.event_id, ts: p.ts, screen_id: p.screen_id, creative_id: p.creative_id, duration_ms: p.duration_ms, source: p.source ?? source })));
       stats.pops += fresh.length;
     } catch (e) {
       await release('ingest:pop:', won);

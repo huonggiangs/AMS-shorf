@@ -23,8 +23,7 @@ export async function requireStepUp(rt: Runtime, adminId: string, code: unknown)
   const bad = () => new FinanceError('step_up_invalid', 'Mã xác thực không đúng hoặc đã dùng', 403);
   if (!r.ok) throw bad();
   const k = `totp:used:${adminId}:${r.counter}`;
-  if (await rt.kv.get(k)) throw bad();
-  await rt.kv.set(k, '1', 120);
+  if ((await rt.kv.incr(k, 120)) !== 1) throw bad(); // chiem nguyen tu (R1-12)
 }
 
 /** Bao moi nguoi co quyen tai chinh (thong bao trong he thong + email, loi email khong chan thao tac). Khong bao gio chua bi mat. */

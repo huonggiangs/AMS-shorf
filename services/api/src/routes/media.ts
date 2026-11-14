@@ -13,6 +13,7 @@ import {
 import { todayVn } from '../lib/dates.js';
 import { bumpManifest } from '../lib/manifest.js';
 import { enqueueMediaUploaded, runOutbox } from '../outbox.js';
+import { mediaScanReviewRoutes } from './media-scan-review.js';
 import { UNSCANNED_STATES, allowUnscannedCreatives, assertScanOk } from './creatives-scan.js';
 import { requirePerm } from '../auth/middleware.js';
 import { AD_FORMATS, isAdFormat, parseOverlay, sha256Hex, type CreativeOverlay } from '@ams/shared';
@@ -97,7 +98,7 @@ export const present = (m: MediaRow): Record<string, unknown> => ({
   campaign_id: m.campaign_id,
   target_type: apiTarget(m.target_type),
   scan_state: m.scan_state,
-  scan_warning: (UNSCANNED_STATES as readonly string[]).includes(m.scan_state) ? 'Chưa quét mã độc' : null,
+  scan_warning: (UNSCANNED_STATES as readonly string[]).includes(m.scan_state) ? 'Chưa quét mã độc' : m.scan_state === 'needs_manual_review' ? 'Chờ kiểm tra thủ công (không có quét mã độc)' : null,
   format: isAdFormat(m.format) ? m.format : 'fullscreen',
   overlay: overlayOf(m.overlay),
   sha256: m.sha256,
@@ -395,6 +396,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const rt = getRt(c);
     const m = await loadMedia(c, c.req.param('id'));
     const b = await parseBody(c, z.object({ reason: z.string().trim().min(3, 'Nhập lý do (tối thiểu 3 ký tự)').max(500) }));
+  r.route('/', mediaScanReviewRoutes()); // creative 'needs_manual_review' (duong Cloudflare)
     if (m.state === 'uploading') throw conflict('Tệp chưa tải xong.', 'invalid_state');
     await rt.db.tx(async (db) => {
       await db.run("UPDATE creatives SET review_state = 'rejected', review_note = ?, state = 'rejected' WHERE id = ?", [b.reason, m.id]);

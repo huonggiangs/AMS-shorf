@@ -1,4 +1,4 @@
-import type { Runtime } from '@ams/runtime';
+import { kvIncrMany, type Runtime } from '@ams/runtime';
 import { impressionEvent, proofOfPlayEvent, type ImpressionEvent } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 import type { ManifestView } from './manifest.js';
@@ -33,6 +33,17 @@ export interface EventResult {
   rejected: { event_id: string | null; reason: string }[];
 }
 
+/** Quyet dinh tran gio cho tung event_id (bo dem nguyen tu, tinh truoc cho ca lo). */
+type CapFn = (eventId: string) => boolean;
+
+/**
+ * Tran gio/thiet bi (R1-12, N1, N4): MOT vong cho ca lo thay vi toi da 50 lan `kv.incr` tuan tu.
+ *  1. Chay lo lan 1 chi de thu thap event_id dung duoc den buoc dem tran (cac ly do khac da loai truoc khi dem).
+ *  2. Chiem `capev:<thiet bi>:<event_id>` (khoa khu trung, nguyen tu) -> chi su kien MOI moi duoc tinh; lo giao lai (mat phan hoi) KHONG tru tran lan hai.
+ *  3. Cong dung so su kien moi vao `cap:<thiet bi>:<gio>` (mot incrBy nguyen tu) -> thu tu thu tu cua tung su kien MOI = n - moi + i + 1; > maxPerDeviceHour => rate_cap.
+ *  4. Su kien da chiem truoc do (giao lai): khong dem them; bi rate_cap khi bo dem gio hien da vuot tran (an toan: khong bao gio tinh tien nhieu hon, ingest khu trung theo event_id nen ban ghi dau tien thang).
+ * Lo lan 2 chay lai dung logic cu voi quyet dinh da co. Dong ghi gia/doanh thu khong bi sua boi ham nay.
+ */
 export async function processEvents(
   rt: Runtime,
   dev: DeviceRec,
@@ -40,12 +51,37 @@ export async function processEvents(
   view: ManifestView,
   policy: EventPolicy,
 ): Promise<{ result: EventResult; msg: IngestMessage | null }> {
+  const candidates: string[] = [];
+  await processEventsPass(rt, dev, rawEvents, view, policy, (id) => {
+    candidates.push(id);
+    return false;
+  });
+  if (candidates.length === 0) return processEventsPass(rt, dev, rawEvents, view, policy, () => false);
+  const now = rt.clock.now().getTime();
+  const hourKey = new Date(now).toISOString().slice(0, 13).replace(/\D/g, '');
+  const capKey = `cap:${dev.id}:${hourKey}`;
+  const claims = await kvIncrMany(rt.kv, candidates.map((id) => ({ k: `capev:${dev.id}:${id}`, ttlSec: 3700 })));
+  const fresh = candidates.filter((_, i) => claims[i] === 1);
+  const [n] = await kvIncrMany(rt.kv, [{ k: capKey, by: fresh.length, ttlSec: 3700 }]);
+  const capped = new Map<string, boolean>();
+  const firstOrd = (n ?? 0) - fresh.length;
+  fresh.forEach((id, i) => capped.set(id, firstOrd + i + 1 > policy.maxPerDeviceHour));
+  for (const id of candidates) if (!capped.has(id)) capped.set(id, (n ?? 0) > policy.maxPerDeviceHour);
+  return processEventsPass(rt, dev, rawEvents, view, policy, (id) => capped.get(id) === true);
+}
+
+async function processEventsPass(
+  rt: Runtime,
+  dev: DeviceRec,
+  rawEvents: unknown[],
+  view: ManifestView,
+  policy: EventPolicy,
+  capped: CapFn,
+): Promise<{ result: EventResult; msg: IngestMessage | null }> {
   const now = rt.clock.now().getTime();
   const rejected: EventResult['rejected'] = [];
   const impressions: ImpressionRow[] = [];
   const pops: PopRow[] = [];
-  const hourKey = new Date(now).toISOString().slice(0, 13).replace(/\D/g, '');
-  const capKey = `cap:${dev.id}:${hourKey}`;
   const seen = new Set<string>();
 
   for (const raw of rawEvents) {
@@ -89,9 +125,7 @@ export async function processEvents(
     else if (e.vcr_pct < policy.minVcrPct) reason = 'vcr_low';
     else if (info.duration_s && e.played_ms < info.duration_s * 1000 * policy.minPlayedRatio) reason = 'short_play';
     if (!reason) {
-      // dem nguyen tu (incr) cho tung su kien: nhieu lo song song khong vuot tran (R1-04)
-      const n = await rt.kv.incr(capKey, 3700);
-      if (n > policy.maxPerDeviceHour) reason = 'rate_cap';
+      if (capped(e.event_id)) reason = 'rate_cap'; // tran gio: quyet dinh theo lo, xem processEvents
     }
     const valid = reason === null;
     const reward = valid && dev.screenType === 'tv' && dev.trust >= 1 ? view.reward(e.campaign_id, e.slot_id) * policy.rewardPointToVnd : 0;

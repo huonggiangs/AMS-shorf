@@ -61,6 +61,27 @@ export class DbEventStore implements EventStore {
       });
       return;
     }
+    if (table === 'proof_of_play' && rows.some((r) => typeof r.event_id === 'string')) {
+      // khu trung theo event_id (N8): chiem trong ev_pop_seen roi ghi PoP CHI cho chinh nguoi chiem (cung mot lo = mot giao dich).
+      // KV het han / mat khong con gay ghi doi. Hang khong co event_id (client cu) ghi nhu truoc.
+      const stmts: { sql: string; params: unknown[] }[] = [];
+      let n = 0;
+      for (const r of rows) {
+        const vals = cols.map((c) => (r[c] !== undefined ? r[c] : (DEFAULTS[c] ?? null)));
+        if (typeof r.event_id !== 'string') {
+          stmts.push({ sql: `INSERT INTO ev_proof_of_play (${cols.join(',')}) VALUES (${ph})`, params: vals });
+          continue;
+        }
+        const claim = `${Date.now().toString(36)}-${n++}-${Math.random().toString(36).slice(2, 10)}`;
+        stmts.push({ sql: 'INSERT INTO ev_pop_seen (event_id, claim, ts) VALUES (?,?,?) ON CONFLICT (event_id) DO NOTHING', params: [r.event_id, claim, String(r.ts)] });
+        stmts.push({
+          sql: `INSERT INTO ev_proof_of_play (${cols.join(',')}) SELECT ${ph} WHERE EXISTS (SELECT 1 FROM ev_pop_seen WHERE event_id = ? AND claim = ?)`,
+          params: [...vals, r.event_id, claim],
+        });
+      }
+      await this.db.batch(stmts);
+      return;
+    }
     await this.db.batch(
       rows.map((r) => ({
         sql: `INSERT INTO ${spec.table} (${cols.join(',')}) VALUES (${ph})`,

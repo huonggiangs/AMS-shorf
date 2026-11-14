@@ -10,7 +10,7 @@ export class ClickHouseEventStore implements EventStore {
   async append(table: EventTable, rows: Record<string, unknown>[]): Promise<void> {
     if (rows.length === 0) return;
     const q = encodeURIComponent(`INSERT INTO ${this.database}.${table} FORMAT JSONEachRow`);
-    const res = await this.fetchFn(`${this.url}/?query=${q}`, { method: 'POST', body: rows.map((r) => JSON.stringify(r)).join('\n') });
+    const res = await this.fetchFn(`${this.url}/?query=${q}`, { method: 'POST', body: rows.map((r) => JSON.stringify(table === 'proof_of_play' ? { ...r, event_id: undefined } : r)).join('\n') });
     if (!res.ok) throw new Error(`ClickHouse insert ${table} loi ${res.status}: ${(await res.text()).slice(0, 200)}`);
   }
 

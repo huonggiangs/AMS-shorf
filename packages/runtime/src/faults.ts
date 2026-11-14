@@ -1,5 +1,6 @@
 // Cong cu kiem thu: mo phong tien trinh chet GIUA CAC CAU LENH. Dem moi lan GHI (db.run, db.batch = mot lan, truy van UPDATE/INSERT/DELETE, kv.set/incr/del)
 // va nem SimulatedCrash TRUOC lan ghi thu `armAt` (nghia la moi ranh gioi giua hai lan ghi deu duoc thu). Chi dung trong test.
+import { kvIncrBy, kvIncrMany } from './counters.js';
 import type { Db, Kv, Runtime } from './types.js';
 
 export class SimulatedCrash extends Error {
@@ -55,6 +56,8 @@ export function crashable<R extends Runtime>(rt: R, opts: { nonAtomic?: boolean 
     set: (k, v, ttl) => (tick(), rt.kv.set(k, v, ttl)),
     del: (k) => (tick(), rt.kv.del(k)),
     incr: (k, ttl) => (tick(), rt.kv.incr(k, ttl)),
+    incrBy: (k, by, ttl) => (tick(), kvIncrBy(rt.kv, k, by, ttl)),
+    incrMany: (ops) => (tick(), kvIncrMany(rt.kv, ops)),
   };
   const ctl: CrashController = {
     get writes() {

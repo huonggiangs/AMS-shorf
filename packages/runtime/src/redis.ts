@@ -1,8 +1,12 @@
 import type { Redis } from 'ioredis';
-import type { Kv, Queue } from './types.js';
+import type { Kv, KvIncrOp, Queue } from './types.js';
 
 const INCR_LUA = `local v = redis.call('INCR', KEYS[1])
 if v == 1 and tonumber(ARGV[1]) > 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+return v`;
+// INCRBY: ttl dat khi khoa vua duoc tao (gia tri sau == by), giong INCR_LUA
+const INCRBY_LUA = `local v = redis.call('INCRBY', KEYS[1], ARGV[2])
+if v == tonumber(ARGV[2]) and tonumber(ARGV[1]) > 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
 return v`;
 
 export class RedisKv implements Kv {
@@ -29,6 +33,13 @@ export class RedisKv implements Kv {
   /** Tang nguyen tu; ttl chi dat o lan dau (cua so co dinh, dung cho rate limit). */
   async incr(k: string, ttlSec?: number) {
     return Number(await this.client.eval(INCR_LUA, 1, k, String(ttlSec ?? 0)));
+  }
+  async incrBy(k: string, by: number, ttlSec?: number) {
+    return Number(await this.client.eval(INCRBY_LUA, 1, k, String(ttlSec ?? 0), String(by)));
+  }
+  /** ioredis day cac lenh vao ong tren mot ket noi: mot vong mang cho ca lo. */
+  async incrMany(ops: KvIncrOp[]) {
+    return Promise.all(ops.map((o) => this.incrBy(o.k, o.by ?? 1, o.ttlSec)));
   }
   async close() {
     this.client.disconnect();

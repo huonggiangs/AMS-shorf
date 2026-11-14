@@ -1,4 +1,4 @@
-import type { Clock, Kv, Mailer, ObjectStore, Queue } from './types.js';
+import type { Clock, Kv, KvIncrOp, Mailer, ObjectStore, Queue } from './types.js';
 
 export class SystemClock implements Clock {
   now(): Date {
@@ -52,8 +52,18 @@ export class MemoryKv implements Kv {
     this.m.delete(k);
   }
   async incr(k: string, ttlSec?: number) {
+    return this.add(k, 1, ttlSec);
+  }
+  async incrBy(k: string, by: number, ttlSec?: number) {
+    return this.add(k, by, ttlSec);
+  }
+  /** dong bo trong mot tick => nguyen tu doi voi cac loi goi dong thoi */
+  async incrMany(ops: KvIncrOp[]) {
+    return ops.map((o) => this.add(o.k, o.by ?? 1, o.ttlSec));
+  }
+  private add(k: string, by: number, ttlSec?: number): number {
     const e = this.live(k);
-    const n = (e ? Number(e.v) : 0) + 1;
+    const n = (e ? Number(e.v) : 0) + by;
     this.m.set(k, { v: String(n), exp: e ? e.exp : ttlSec ? this.clock.now().getTime() + ttlSec * 1000 : null });
     return n;
   }

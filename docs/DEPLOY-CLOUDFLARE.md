@@ -216,7 +216,7 @@ Quy ước bí mật (giống mục 5): **mọi** bí mật là GitHub Secret t�
 
 **Không còn** secret `CF_IDS_*` hay ID tài nguyên (D1, KV, Queues) đặt tay: script tự tra/tạo qua API Cloudflare rồi ghi `wrangler.generated.toml` (không commit). CI không sinh khóa (`--generate-secrets` chỉ dùng khi chạy tay trên máy bạn); thiếu bí mật bắt buộc thì script dừng **trước** khi deploy. Nên tạo Environment `production` có *Required reviewers*. Đặc tả 14/1b yêu cầu "tự deploy từ main"; workflow này cố ý chỉ chạy tay/tag cho an toàn, bật thêm trigger `push: main` cho staging khi đã tin cậy.
 
-Ghi chú media: Cloudflare không chạy `media-worker`/ClamAV (chỉ có trong Docker Compose, profile `core`). Trên Cloudflare, việc quét/chuyển mã media cần một đường riêng (xem `ops/agents/m1-media-worker.requests.md`); cho đến khi có, creative upload giữ `scan_state` chưa `clean` và không nên duyệt phát.
+Ghi chú media: Cloudflare không chạy `media-worker`/ClamAV (chỉ có trong Docker Compose, profile `core`). Trên Cloudflare, API Worker tự kiểm tra creative bằng danh sách cho phép hẹp (png/jpg/webp/mp4) khi xác nhận tải lên; tệp ngoài danh sách vào `needs_manual_review` chờ admin duyệt tay. **Đây KHÔNG phải quét virus**: đọc `docs/CLOUDFLARE-MEDIA-LIMITS.md` trước khi cho khách trả tiền tải tệp. Bộ đếm nguyên tử (giới hạn tốc độ, trần giờ/thiết bị, khóa chiếm) nằm trong D1 bảng `kv_counters` (migration 0011), không cần Durable Object mới: xem `docs/DECISIONS-CF-COUNTERS.md`.
 
 ## 10. Rủi ro và việc cần xác nhận khi chạy thật lần đầu
 

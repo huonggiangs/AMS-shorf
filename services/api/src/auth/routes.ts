@@ -84,9 +84,7 @@ async function checkTotp(rt: Runtime, adminId: string, secret: string, code: str
   const r = await verifyTotp(secret, code, { timeMs: rt.clock.now().getTime() });
   if (!r.ok) return false;
   const k = `totp:used:${adminId}:${r.counter}`; // chong dung lai cung mot ma trong cua so
-  if (await rt.kv.get(k)) return false;
-  await rt.kv.set(k, '1', 120);
-  return true;
+  return (await rt.kv.incr(k, 120)) === 1; // chiem nguyen tu (R1-12): get+set khong nguyen tu tren Cloudflare
 }
 
 export function meBody(rt: Runtime, u: import('../types.js').AuthUser, scope: { code: string | null; name: string | null; grants?: string[] } | null, mustChangePw = false) {

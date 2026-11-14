@@ -2,6 +2,7 @@
 //  - 'clean'                 : duoc duyet / duoc phat.
 //  - 'unscanned' | 'skipped' : chua quet duoc (ClamAV tat/loi; 'skipped' la du lieu demo). CHI duoc duyet khi setting
 //                              `allow_unscanned_creatives` = '1'|'true' (mac dinh: tat). Nguoi duyet thay canh bao o `scan_warning`.
+//  - 'needs_manual_review'   : (Cloudflare) kiem tra tu dong khong du de danh dau 'clean'; chan cho toi khi admin duyet tay (media-scan-review.ts).
 //  - 'pending'               : dang cho quet (hoac tep lien ket chua tai ve) -> chan.
 //  - 'infected' | 'failed'   : chan.
 import type { Runtime } from '@ams/runtime';
@@ -29,6 +30,7 @@ export function scanVerdict(c: { scan_state: string; source?: string | null }, a
       ? { ok: true }
       : { ok: false, code: 'creative_not_scanned', message: 'Tệp chưa được quét mã độc (dịch vụ quét không khả dụng) nên chưa thể duyệt. Thử lại sau hoặc bật tùy chọn cho phép tệp chưa quét.' };
   }
+  if (s === 'needs_manual_review') return { ok: false, code: 'creative_needs_manual_review', message: 'Tệp chưa qua kiểm tra tự động (định dạng ngoài danh sách an toàn hoặc có điểm bất thường) nên cần người có quyền kiểm tra thủ công trước khi duyệt.' };
   if (s === 'infected') return { ok: false, code: 'creative_infected', message: 'Tệp bị phát hiện mã độc, không thể duyệt.' };
   if (s === 'failed') return { ok: false, code: 'creative_scan_failed', message: 'Quét tệp thất bại, không thể duyệt. Hãy tải lại tệp.' };
   if (c.source && c.source !== 'upload') return { ok: false, code: 'creative_link_not_ingested', message: 'Tệp lấy từ liên kết chưa được tải về và quét mã độc nên chưa thể duyệt.' };
