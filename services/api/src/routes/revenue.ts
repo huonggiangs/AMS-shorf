@@ -13,7 +13,7 @@ export function revenueRoutes(): Hono<AppEnv> {
     const now = rt.clock.now();
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1)).toISOString().slice(0, 7);
     const rows = await rt.db.query<{ m: string; rev: number; reward: number }>(
-      'SELECT substr(hour, 1, 7) AS m, SUM(revenue_micro_vnd) AS rev, SUM(reward_vnd) AS reward FROM impression_hourly WHERE substr(hour, 1, 7) >= ? GROUP BY substr(hour, 1, 7) ORDER BY m',
+      'SELECT substr(hour, 1, 7) AS m, SUM(revenue_micro_vnd) AS rev, SUM(reward_vnd) AS reward FROM impression_hourly WHERE hour >= ? GROUP BY substr(hour, 1, 7) ORDER BY m',
       [start],
     );
     return c.json({ months: rows.map((x) => ({ label: `${x.m.slice(5)}/${x.m.slice(0, 4)}`, revenue_vnd: Math.round(num(x.rev) / 1e6), reward_vnd: num(x.reward) })) });
