@@ -5292,7 +5292,12 @@
         ],
         "summary": "GET /admin/v1/media/scan-review/queue",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "media",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/routes/media-scan-review.ts:19",
+        "description": "Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -5716,7 +5721,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "media",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/routes/media-scan-review.ts:40",
+        "description": "Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostMediaByIdScanReviewRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -5760,7 +5780,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/ops.ts:79",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostOpsIncidentsByIdAckRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -5795,7 +5830,12 @@
         ],
         "summary": "POST /admin/v1/ops/run",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/ops.ts:93",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -5830,7 +5870,22 @@
         ],
         "summary": "PUT /admin/v1/ops/settings",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/ops.ts:107",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutOpsSettingsRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -5865,7 +5920,12 @@
         ],
         "summary": "GET /admin/v1/ops/summary",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/routes/ops.ts:52",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -5899,7 +5959,12 @@
         ],
         "summary": "POST /admin/v1/ops/test-notification",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/ops.ts:99",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -9914,7 +9979,18 @@
         ],
         "summary": "POST /ops/backup-report",
         "parameters": [],
+        "x-ams-source": "services/api/src/routes/ops.ts:34",
         "description": "Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostOpsBackupReportRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -11866,6 +11942,7 @@
         ],
         "summary": "GET /status",
         "parameters": [],
+        "x-ams-source": "services/api/src/routes/ops.ts:16",
         "description": "Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -13144,6 +13221,28 @@
         ],
         "additionalProperties": true
       },
+      "AdminPostMediaByIdScanReviewRequest": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "decision",
+          "note"
+        ],
+        "additionalProperties": true
+      },
       "AdminPostMediaImportRequest": {
         "type": "object",
         "properties": {
@@ -13273,6 +13372,16 @@
           "content_type",
           "size_bytes"
         ],
+        "additionalProperties": true
+      },
+      "AdminPostOpsIncidentsByIdAckRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
         "additionalProperties": true
       },
       "AdminPostPartnersRequest": {
@@ -14489,6 +14598,32 @@
                   },
                   {}
                 ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "AdminPutOpsSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email",
+              "maxLength": 200
+            },
+            "maxItems": 10
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
               },
               {
                 "type": "null"
@@ -17119,6 +17254,58 @@
             ]
           }
         },
+        "additionalProperties": true
+      },
+      "PostOpsBackupReportRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "d1",
+              "postgres",
+              "media"
+            ]
+          },
+          "env": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "encrypted": {
+            "type": "boolean"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "started_at": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "finished_at": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "kind",
+          "ok"
+        ],
         "additionalProperties": true
       },
       "Quote": {
