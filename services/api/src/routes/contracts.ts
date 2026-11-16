@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { formatVnd, microToVndString, vndToWordsVi } from '@ams/shared';
+import { formatVnd, microToVndString, unitFromCard, vndToWordsVi } from '@ams/shared';
 import type { Runtime } from '@ams/runtime';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { diffObjects } from '../lib/audit.js';
@@ -177,6 +177,92 @@ async function nextContractNo(rt: Runtime, db: { query: Runtime['db']['query'] }
   return `HD-${year}-${String(max + 1).padStart(3, '0')}`;
 }
 
+// ---------- dong gia hop dong: doc / kiem tra ----------
+const LINE_EDITABLE = ['draft', 'pending_sign', 'active'];
+interface LineView {
+  id: string;
+  screen_type: string | null;
+  region_id: string | null;
+  daypart: string | null;
+  frequency: number | null;
+  duration_s: number | null;
+  qty: number;
+  impression_price_micro_vnd: number | null;
+  impression_price_vnd: string | null;
+  model: 'fixed' | 'cpm';
+  cpm_micro_vnd: number | null;
+  cpm_vnd: string | null;
+  effective_from: string | null;
+  effective_to: string | null;
+}
+async function loadLines(rt: Runtime, contractId: string, lineId?: string): Promise<LineView[]> {
+  const raw = await rt.db.query<Record<string, unknown>>(
+    `SELECT cl.id, cl.screen_type, cl.region_id, cl.daypart, cl.frequency, cl.duration_s, cl.qty, p.impression_price_micro_vnd, t.model, t.cpm_micro_vnd, t.effective_from, t.effective_to
+       FROM contract_lines cl LEFT JOIN contract_line_prices p ON p.contract_line_id = cl.id LEFT JOIN contract_line_terms t ON t.contract_line_id = cl.id
+      WHERE cl.contract_id = ?${lineId ? ' AND cl.id = ?' : ''} ORDER BY cl.id`,
+    lineId ? [contractId, lineId] : [contractId],
+  );
+  const n = (v: unknown): number | null => (v === null || v === undefined ? null : num(v));
+  return raw.map((l) => {
+    const unit = n(l['impression_price_micro_vnd']);
+    const cpm = n(l['cpm_micro_vnd']);
+    return {
+      id: String(l['id']),
+      screen_type: (l['screen_type'] as string | null) ?? null,
+      region_id: (l['region_id'] as string | null) ?? null,
+      daypart: (l['daypart'] as string | null) ?? null,
+      frequency: n(l['frequency']),
+      duration_s: n(l['duration_s']),
+      qty: num(l['qty']),
+      impression_price_micro_vnd: unit,
+      impression_price_vnd: unit === null ? null : microToVndString(unit),
+      model: l['model'] === 'cpm' ? 'cpm' : 'fixed',
+      cpm_micro_vnd: cpm,
+      cpm_vnd: cpm === null ? null : microToVndString(cpm),
+      effective_from: (l['effective_from'] as string | null) ?? null,
+      effective_to: (l['effective_to'] as string | null) ?? null,
+    };
+  });
+}
+async function loadLine(rt: Runtime, contractId: string, lineId: string): Promise<LineView> {
+  const l = (await loadLines(rt, contractId, lineId))[0];
+  if (!l) throw notFound('Không tìm thấy dòng giá trong hợp đồng này.', 'line_not_found');
+  return l;
+}
+function assertLinesEditable(row: ContractRow): void {
+  if (!LINE_EDITABLE.includes(row.state)) throw conflict('Không sửa dòng giá của hợp đồng ở trạng thái này.', 'invalid_state');
+}
+const lineDate = z.string().refine(isDate, 'Ngày phải theo dạng YYYY-MM-DD');
+const MAX_PRICE_MICRO = 1_000_000_000_000;
+const lineBody = z.object({
+  screen_type: z.enum(['tv', 'elevator', 'led_p5']).optional().nullable(),
+  region_id: z.string().trim().max(16).optional().nullable(),
+  daypart: z.enum(['peak', 'off_peak']).optional().nullable(),
+  frequency: z.coerce.number().int().min(0).max(100000).optional().nullable(),
+  duration_s: z.coerce.number().int().min(1).max(600).optional().nullable(),
+  qty: z.coerce.number().int().min(1).max(1_000_000).default(1),
+  // price_model=fixed: price_micro_vnd = gia moi luot; cpm: = gia moi 1.000 luot. `impression_price_micro_vnd` (cu) = fixed.
+  price_model: z.enum(['fixed', 'cpm']).default('fixed'),
+  price_micro_vnd: z.coerce.number().int('Giá phải là số nguyên micro-VND').min(1, 'Giá phải lớn hơn 0').max(MAX_PRICE_MICRO, 'Giá vượt mức tối đa').optional(),
+  impression_price_micro_vnd: z.coerce.number().int('Giá phải là số nguyên micro-VND').min(1, 'Giá phải lớn hơn 0').max(MAX_PRICE_MICRO, 'Giá vượt mức tối đa').optional(),
+  effective_from: lineDate.optional().nullable(),
+  effective_to: lineDate.optional().nullable(),
+});
+/** Chuan hoa dong gia: don gia moi luot (micro nguyen; CPM lam tron len), mo hinh, ngay hieu luc nam trong thoi han hop dong. */
+function resolveLine(b: z.infer<typeof lineBody>, ct: ContractRow): { unit: number; model: 'fixed' | 'cpm'; cpm: number | null; from: string | null; to: string | null } {
+  const raw = b.impression_price_micro_vnd ?? b.price_micro_vnd;
+  if (raw === undefined) throw unprocessable('Nhập giá cho dòng hợp đồng.', 'price_required');
+  const model = b.impression_price_micro_vnd !== undefined ? 'fixed' : b.price_model;
+  const unit = unitFromCard(model === 'cpm' ? 'cpm' : 'per_impression', raw);
+  const from = b.effective_from ?? null;
+  const to = b.effective_to ?? null;
+  if (from && to && to < from) throw unprocessable('Ngày kết thúc hiệu lực phải sau hoặc bằng ngày bắt đầu.', 'line_bad_dates');
+  if ((from && ct.start_date && from < ct.start_date) || (to && ct.end_date && to > ct.end_date) || (from && ct.end_date && from > ct.end_date) || (to && ct.start_date && to < ct.start_date)) {
+    throw unprocessable('Ngày hiệu lực của dòng giá phải nằm trong thời hạn hợp đồng.', 'line_outside_term', { start_date: ct.start_date, end_date: ct.end_date });
+  }
+  return { unit, model, cpm: model === 'cpm' ? raw : null, from, to };
+}
+
 export function contractRoutes(): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
 
@@ -188,12 +274,7 @@ export function contractRoutes(): Hono<AppEnv> {
   r.get('/:id', requirePerm('customers', 'view'), async (c) => {
     const rt = getRt(c);
     const row = await loadContract(c, c.req.param('id'));
-    const raw = await rt.db.query<{ id: string; screen_type: string | null; region_id: string | null; daypart: string | null; frequency: number | null; duration_s: number | null; unit_price_vnd: number; qty: number; impression_price_micro_vnd: unknown }>(
-      'SELECT cl.id, cl.screen_type, cl.region_id, cl.daypart, cl.frequency, cl.duration_s, cl.unit_price_vnd, cl.qty, p.impression_price_micro_vnd FROM contract_lines cl LEFT JOIN contract_line_prices p ON p.contract_line_id = cl.id WHERE cl.contract_id = ? ORDER BY cl.id',
-      [row.id],
-    );
-    // gia thoa thuan moi luot (micro-VND nguyen): ghi de bang gia khi chien dich gan hop dong nay
-    const lines = raw.map((l) => ({ ...l, impression_price_micro_vnd: l.impression_price_micro_vnd === null ? null : num(l.impression_price_micro_vnd), impression_price_vnd: l.impression_price_micro_vnd === null ? null : microToVndString(num(l.impression_price_micro_vnd)) }));
+    const lines = await loadLines(rt, row.id);
     return c.json({ ...present(row), lines });
   });
 
@@ -283,29 +364,69 @@ export function contractRoutes(): Hono<AppEnv> {
     return c.json(present(await loadContract(c, row.id)));
   });
 
-  // Them dong hop dong co gia thoa thuan moi luot (ghi de bang gia; van bi nang len gia san). Dat gia = finance:approve.
-  r.post('/:id/lines', requirePerm('customers', 'write'), async (c) => {
+  // ---------- dong gia hop dong (gia thoa thuan moi luot) ----------
+  // Xem: finance:view. Them/sua/xoa (dat gia): finance:approve. Moi dong phai thuoc hop dong trong URL (IDOR: dong cua hop dong khac => 404).
+  r.get('/:id/lines', requirePerm('finance', 'view'), async (c) => {
+    const row = await loadContract(c, c.req.param('id'));
+    const lines = await loadLines(getRt(c), row.id);
+    return c.json({ contract_id: row.id, status: STATE_TO_API[row.state] ?? row.state, start_date: row.start_date, end_date: row.end_date, editable: LINE_EDITABLE.includes(row.state), items: lines, total: lines.length });
+  });
+
+  r.post('/:id/lines', requirePerm('finance', 'approve'), async (c) => {
     const rt = getRt(c);
     const row = await loadContract(c, c.req.param('id'));
-    if (!hasPerm(c, 'finance', 'approve')) throw forbidden('Chỉ người có quyền tài chính (duyệt) mới đặt giá thỏa thuận.', 'forbidden', { module: 'finance', action: 'approve' });
-    if (!['draft', 'pending_sign', 'active'].includes(row.state)) throw conflict('Không thêm dòng giá cho hợp đồng ở trạng thái này.', 'invalid_state');
-    const b = await parseBody(c, z.object({
-      screen_type: z.enum(['tv', 'elevator', 'led_p5']).optional().nullable(),
-      region_id: z.string().max(16).optional().nullable(),
-      daypart: z.enum(['peak', 'off_peak']).optional().nullable(),
-      frequency: z.coerce.number().int().min(0).max(100000).optional().nullable(),
-      duration_s: z.coerce.number().int().min(1).max(600).optional().nullable(),
-      qty: z.coerce.number().int().min(1).max(1_000_000).default(1),
-      impression_price_micro_vnd: z.coerce.number().int().min(1).max(1_000_000_000_000),
-    }));
+    assertLinesEditable(row);
+    const b = await parseBody(c, lineBody);
+    const p = resolveLine(b, row);
     const id = rt.id();
     const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
       await db.run('INSERT INTO contract_lines (id, contract_id, screen_type, region_id, daypart, frequency, duration_s, unit_price_vnd, qty) VALUES (?,?,?,?,?,?,?,0,?)', [id, row.id, b.screen_type ?? null, b.region_id ?? null, b.daypart ?? null, b.frequency ?? null, b.duration_s ?? null, b.qty]);
-      await db.run('INSERT INTO contract_line_prices (contract_line_id, contract_id, impression_price_micro_vnd, updated_by, updated_at) VALUES (?,?,?,?,?)', [id, row.id, b.impression_price_micro_vnd, c.get('user').id, nowIso]);
-      await auditCtx(c, db, { action: 'contract.line_price', objectType: 'contract', objectId: row.id, customerId: row.customer_id, diff: { line_id: id, screen_type: b.screen_type ?? null, region_id: b.region_id ?? null, daypart: b.daypart ?? null, impression_price_micro_vnd: b.impression_price_micro_vnd } });
+      await db.run('INSERT INTO contract_line_prices (contract_line_id, contract_id, impression_price_micro_vnd, updated_by, updated_at) VALUES (?,?,?,?,?)', [id, row.id, p.unit, c.get('user').id, nowIso]);
+      await db.run('INSERT INTO contract_line_terms (contract_line_id, contract_id, model, cpm_micro_vnd, effective_from, effective_to) VALUES (?,?,?,?,?,?)', [id, row.id, p.model, p.cpm, p.from, p.to]);
+      await auditCtx(c, db, { action: 'contract.line_price', objectType: 'contract', objectId: row.id, customerId: row.customer_id, diff: { line_id: id, screen_type: b.screen_type ?? null, region_id: b.region_id ?? null, daypart: b.daypart ?? null, impression_price_micro_vnd: p.unit, model: p.model, cpm_micro_vnd: p.cpm, effective_from: p.from, effective_to: p.to } });
     });
-    return c.json({ id, contract_id: row.id, impression_price_micro_vnd: b.impression_price_micro_vnd, impression_price_vnd: microToVndString(b.impression_price_micro_vnd) }, 201);
+    return c.json({ id, contract_id: row.id, impression_price_micro_vnd: p.unit, impression_price_vnd: microToVndString(p.unit), model: p.model, cpm_micro_vnd: p.cpm, effective_from: p.from, effective_to: p.to }, 201);
+  });
+
+  r.put('/:id/lines/:lineId', requirePerm('finance', 'approve'), async (c) => {
+    const rt = getRt(c);
+    const row = await loadContract(c, c.req.param('id'));
+    assertLinesEditable(row);
+    const before = await loadLine(rt, row.id, c.req.param('lineId'));
+    const b = await parseBody(c, lineBody);
+    const p = resolveLine(b, row);
+    const nowIso = rt.clock.now().toISOString();
+    await rt.db.tx(async (db) => {
+      await db.run('UPDATE contract_lines SET screen_type = ?, region_id = ?, daypart = ?, frequency = ?, duration_s = ?, qty = ? WHERE id = ? AND contract_id = ?', [b.screen_type ?? null, b.region_id ?? null, b.daypart ?? null, b.frequency ?? null, b.duration_s ?? null, b.qty, before.id, row.id]);
+      await db.run(
+        `INSERT INTO contract_line_prices (contract_line_id, contract_id, impression_price_micro_vnd, updated_by, updated_at) VALUES (?,?,?,?,?)
+         ON CONFLICT (contract_line_id) DO UPDATE SET impression_price_micro_vnd = excluded.impression_price_micro_vnd, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+        [before.id, row.id, p.unit, c.get('user').id, nowIso],
+      );
+      await db.run(
+        `INSERT INTO contract_line_terms (contract_line_id, contract_id, model, cpm_micro_vnd, effective_from, effective_to) VALUES (?,?,?,?,?,?)
+         ON CONFLICT (contract_line_id) DO UPDATE SET model = excluded.model, cpm_micro_vnd = excluded.cpm_micro_vnd, effective_from = excluded.effective_from, effective_to = excluded.effective_to`,
+        [before.id, row.id, p.model, p.cpm, p.from, p.to],
+      );
+      const after = { screen_type: b.screen_type ?? null, region_id: b.region_id ?? null, daypart: b.daypart ?? null, frequency: b.frequency ?? null, duration_s: b.duration_s ?? null, qty: b.qty, impression_price_micro_vnd: p.unit, model: p.model, cpm_micro_vnd: p.cpm, effective_from: p.from, effective_to: p.to };
+      await auditCtx(c, db, { action: 'contract.line_update', objectType: 'contract', objectId: row.id, customerId: row.customer_id, diff: { line_id: before.id, ...diffObjects(before as unknown as Record<string, unknown>, after) } });
+    });
+    return c.json((await loadLines(rt, row.id)).find((l) => l.id === before.id));
+  });
+
+  r.delete('/:id/lines/:lineId', requirePerm('finance', 'approve'), async (c) => {
+    const rt = getRt(c);
+    const row = await loadContract(c, c.req.param('id'));
+    assertLinesEditable(row);
+    const before = await loadLine(rt, row.id, c.req.param('lineId'));
+    await rt.db.tx(async (db) => {
+      await db.run('DELETE FROM contract_line_terms WHERE contract_line_id = ?', [before.id]);
+      await db.run('DELETE FROM contract_line_prices WHERE contract_line_id = ?', [before.id]);
+      await db.run('DELETE FROM contract_lines WHERE id = ? AND contract_id = ?', [before.id, row.id]);
+      await auditCtx(c, db, { action: 'contract.line_delete', objectType: 'contract', objectId: row.id, customerId: row.customer_id, diff: { line_id: before.id, screen_type: before.screen_type, region_id: before.region_id, daypart: before.daypart, impression_price_micro_vnd: before.impression_price_micro_vnd, model: before.model } });
+    });
+    return c.json({ ok: true });
   });
 
   r.post('/:id/render', requirePerm('customers', 'view'), async (c) => {

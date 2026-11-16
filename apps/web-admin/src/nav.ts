@@ -9,6 +9,7 @@ export const PAGE_DEFS: PageDef[] = [
   { id: 'customers', path: '/customers', label: 'Khách hàng & Hợp đồng', module: 'customers' },
   { id: 'approvals', path: '/approvals', label: 'Phê duyệt', module: 'approvals' },
   { id: 'media', path: '/media', label: 'Nội dung & Media', module: 'media' },
+  { id: 'creativeReview', path: '/creative-review', label: 'Duyệt creative', module: 'media' },
   { id: 'screens', path: '/screens', label: 'Màn hình thang máy & LED', module: 'screens' },
   { id: 'formats', path: '/formats', label: 'Mẫu hiển thị TV', module: 'campaigns' },
   { id: 'schedule', path: '/schedule', label: 'Lịch phát', module: 'schedule' },
@@ -31,7 +32,7 @@ export const PAGE_BY_ID = Object.fromEntries(PAGE_DEFS.map((p) => [p.id, p])) as
 export interface GroupDef { id: string; label: string; icon: string; pages: string[] }
 export const GROUPS: GroupDef[] = [
   { id: 'g1', label: 'Tổng quan', icon: 'home', pages: ['overview', 'devices', 'tvexp'] },
-  { id: 'g2', label: 'Quảng cáo', icon: 'ads', pages: ['ads', 'customers', 'approvals', 'media', 'screens', 'formats', 'schedule', 'kyc'] },
+  { id: 'g2', label: 'Quảng cáo', icon: 'ads', pages: ['ads', 'customers', 'approvals', 'media', 'creativeReview', 'screens', 'formats', 'schedule', 'kyc'] },
   { id: 'g3', label: 'Doanh thu', icon: 'coin', pages: ['finance', 'billing', 'integrity', 'history'] },
   { id: 'g4', label: 'Đối tác', icon: 'link', pages: ['partners', 'integrations'] },
   { id: 'g5', label: 'Quản trị', icon: 'users', pages: ['access', 'audit', 'alerts', 'legal', 'compliance', 'profile'] },

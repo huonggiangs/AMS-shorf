@@ -10,6 +10,7 @@ import type { Col } from '../components/DataTable';
 import { Btn, Field, Kpi, LoadingBlock, NameCell, Note, PageHead, StatusTag, Tabs } from '../components/ui';
 import { Drawer } from '../components/Drawer';
 import { Dialog } from '../components/Dialog';
+import { ContractLinesPanel } from '../components/ContractLines';
 import { useT } from '../i18n';
 import { fmtDate, vnd, vndInWords } from '../lib/format';
 
@@ -22,6 +23,7 @@ export default function Customers() {
   const [add, setAdd] = useState(false);
   const [tplCus, setTplCus] = useState('');
   const [tplContract, setTplContract] = useState('');
+  const [linesOf, setLinesOf] = useState<Contract | null>(null);
   const total = (key: string, path: string, schema: typeof customerSchema | typeof contractSchema, filter?: string) =>
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useQuery({ queryKey: [path, 'count', key], queryFn: () => api.get(path, { query: { page_size: 1, filter }, schema: listOf(schema) }) }).data?.total;
@@ -48,7 +50,7 @@ export default function Customers() {
     { key: 'term', label: 'Thời hạn', text: (r) => `${r.start_date ?? ''} → ${r.end_date ?? ''}`, cell: (r) => <span className="mono" style={{ fontSize: 12.5 }}>{fmtDate(r.start_date)} → {fmtDate(r.end_date)}</span> },
     { key: 'paid', label: 'Đã thu', text: (r) => `${r.paid_pct}%`, cell: (r) => <div style={{ minWidth: 100 }}><b className="mono" style={{ fontSize: 12.5 }}>{r.paid_pct}%</b><div className="bar" style={{ marginTop: 4 }}><i style={{ width: `${r.paid_pct}%` }} /></div></div> },
     { key: 'status', label: 'Trạng thái', text: (r) => r.status, cell: (r) => <StatusTag status={r.status} /> },
-    { key: 'view', label: '', cell: (r) => <Btn className="sm" onClick={() => { setTplContract(r.id); setTab('tpl'); }}>Xem mẫu</Btn> },
+    { key: 'view', label: '', cell: (r) => <><Btn className="sm" onClick={() => { setTplContract(r.id); setTab('tpl'); }}>Xem mẫu</Btn>{can('finance', 'view') ? <>{' '}<Btn className="sm" onClick={() => setLinesOf(r)}>Dòng giá</Btn></> : null}</> },
   ];
   return (
     <>
@@ -70,6 +72,15 @@ export default function Customers() {
       {tab === 'tpl' ? <ContractTemplate initialCustomer={tplCus} initialContract={tplContract} /> : null}
       <CustomerDrawer id={sp.get('open')} onClose={() => setSp({})} onTemplate={(cid) => { setTplCus(cid); setTplContract(''); setSp({}); setTab('tpl'); }} />
       <AddCustomer open={add} onClose={() => setAdd(false)} />
+      <Drawer open={!!linesOf} onClose={() => setLinesOf(null)}>
+        {linesOf ? (
+          <>
+            <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>Dòng giá · {linesOf.number}</h2>
+            <p className="sub" style={{ margin: '0 0 12px' }}>{linesOf.customer_name ?? linesOf.customer_id} · {fmtDate(linesOf.start_date)} → {fmtDate(linesOf.end_date)}</p>
+            <ContractLinesPanel contractId={linesOf.id} customerId={linesOf.customer_id} />
+          </>
+        ) : null}
+      </Drawer>
     </>
   );
 }

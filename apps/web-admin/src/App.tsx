@@ -19,6 +19,7 @@ const pages = {
   customers: lazy(() => import('./pages/Customers')),
   approvals: lazy(() => import('./pages/Approvals')),
   media: lazy(() => import('./pages/MediaPage')),
+  creativeReview: lazy(() => import('./pages/CreativeReview')),
   screens: lazy(() => import('./pages/Screens')),
   formats: lazy(() => import('./pages/Formats')),
   schedule: lazy(() => import('./pages/Schedule')),

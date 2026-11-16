@@ -47,8 +47,10 @@ export async function loadContractLinePrices(rt: Runtime, db: Q, contractId: str
   const today = todayVn(rt);
   if ((ct.start_date && ct.start_date > today) || (ct.end_date && ct.end_date < today)) return null;
   const lines = await db.query<{ id: string; screen_type: string | null; region_id: string | null; daypart: string | null; p: unknown }>(
-    'SELECT cl.id, cl.screen_type, cl.region_id, cl.daypart, p.impression_price_micro_vnd AS p FROM contract_lines cl JOIN contract_line_prices p ON p.contract_line_id = cl.id WHERE cl.contract_id = ? ORDER BY cl.id',
-    [contractId],
+    `SELECT cl.id, cl.screen_type, cl.region_id, cl.daypart, p.impression_price_micro_vnd AS p FROM contract_lines cl JOIN contract_line_prices p ON p.contract_line_id = cl.id
+       LEFT JOIN contract_line_terms t ON t.contract_line_id = cl.id
+      WHERE cl.contract_id = ? AND (t.effective_from IS NULL OR t.effective_from <= ?) AND (t.effective_to IS NULL OR t.effective_to >= ?) ORDER BY cl.id`,
+    [contractId, today, today],
   );
   return lines.map((l) => ({ id: l.id, screen_type: l.screen_type, region_id: l.region_id, daypart: l.daypart, impression_price_micro_vnd: num(l.p) }));
 }

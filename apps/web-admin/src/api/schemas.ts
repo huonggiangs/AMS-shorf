@@ -409,3 +409,51 @@ export const rateCardSchema = z
   })
   .passthrough();
 export type RateCard = z.infer<typeof rateCardSchema>;
+
+/* ---------- u1: dong gia hop dong + hang duyet creative ---------- */
+export const contractLineSchema = z
+  .object({
+    id: idStr,
+    screen_type: z.string().nullish(),
+    region_id: z.string().nullish(),
+    daypart: z.string().nullish(),
+    frequency: z.coerce.number().nullish(),
+    duration_s: z.coerce.number().nullish(),
+    qty: z.coerce.number().default(1),
+    impression_price_micro_vnd: z.coerce.number().nullish(),
+    impression_price_vnd: z.string().nullish(),
+    model: z.enum(['fixed', 'cpm']).default('fixed'),
+    cpm_micro_vnd: z.coerce.number().nullish(),
+    cpm_vnd: z.string().nullish(),
+    effective_from: z.string().nullish(),
+    effective_to: z.string().nullish(),
+  })
+  .passthrough();
+export type ContractLine = z.infer<typeof contractLineSchema>;
+export const contractLinesSchema = z
+  .object({ contract_id: z.string().optional(), status: z.string().optional(), start_date: z.string().nullish(), end_date: z.string().nullish(), editable: z.boolean().default(true), items: z.array(contractLineSchema).default([]), total: z.coerce.number().optional() })
+  .passthrough();
+export type ContractLines = z.infer<typeof contractLinesSchema>;
+
+export const scanQueueItemSchema = z
+  .object({
+    id: idStr,
+    customer_id: z.string().nullish(),
+    customer_name: z.string().nullish(),
+    name: z.string().nullish(),
+    mime: z.string().nullish(),
+    kind: z.string().nullish(),
+    size_bytes: z.coerce.number().nullish(),
+    duration_s: z.coerce.number().nullish(),
+    width: z.coerce.number().nullish(),
+    height: z.coerce.number().nullish(),
+    scan_state: z.string().default('needs_manual_review'),
+    content_version: z.coerce.number().default(1),
+    created_at: z.string().nullish(),
+    engine: z.string().nullish(),
+    sha256: z.string().nullish(),
+    reasons: z.array(z.string()).default([]),
+    preview_url: z.string().nullish(),
+  })
+  .passthrough();
+export type ScanQueueItem = z.infer<typeof scanQueueItemSchema>;
