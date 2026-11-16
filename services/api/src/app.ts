@@ -18,6 +18,7 @@ import { adminLegalRoutes, portalLegalRoutes, publicLegalRoutes, termsGate } fro
 import { auditRoutes } from './routes/audit-log.js';
 import { campaignRoutes } from './routes/campaigns.js';
 import { contractRoutes } from './routes/contracts.js';
+import { contractDocRoutes } from './contracts-doc/routes.js';
 import { customerRoutes } from './routes/customers.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { deviceRoutes } from './routes/devices.js';
@@ -92,6 +93,7 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
   admin.route('/campaigns', campaignRoutes(false));
   admin.route('/customers', customerRoutes());
   admin.route('/contracts', contractRoutes());
+  admin.route('/contract-docs', contractDocRoutes());
   admin.route('/approvals', approvalRoutes());
   admin.route('/media', mediaRoutes(false));
   admin.route('/screens', screenRoutes());
