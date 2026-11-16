@@ -36,6 +36,10 @@ Ba bản trong thư mục này (`TERMS-OF-SERVICE.draft.md`, `PRIVACY-POLICY.dra
 - Cờ ngành hạn chế do người duyệt đặt; chiến dịch thuộc ngành hạn chế cần duyệt lần hai bởi người khác (`campaigns:approve`). Nhóm ngành hạn chế cuối cùng do luật sư chốt.
 - Cài đặt `kyc_required_for_approval` (bảng `settings`) quyết định có bắt buộc KYC đã duyệt trước khi duyệt chiến dịch hay không.
 
+## 5b. Hợp đồng soạn từ mẫu và PDF (luật sư)
+
+Mẫu hợp đồng dịch vụ quảng cáo (`contract_doc_templates`, mã `ads-service`) cũng là BẢN NHÁP và cũng cần luật sư duyệt trước khi chốt bản ký. Cách làm, các chỗ `[...]` cần điền và cổng chặn (`template_not_approved`) nằm ở `docs/CONTRACTS.md`. Bản nháp xuất PDF luôn có dấu "BẢN NHÁP"; PDF có logo mờ ở mọi trang (cấu hình trong Web Admin > Soạn hợp đồng > Logo watermark).
+
 ## 6. Chưa làm (cần quyết định hoặc cần nhà cung cấp)
 
-Hợp đồng PDF và chữ ký điện tử, lọc thiết bị `kid_safe` theo đối tượng, quy trình gỡ nội dung theo khiếu nại, tự đăng ký công khai, ánh xạ trường thật của MISA/Viettel.
+Chữ ký điện tử cho hợp đồng, lọc thiết bị `kid_safe` theo đối tượng, quy trình gỡ nội dung theo khiếu nại, tự đăng ký công khai, ánh xạ trường thật của MISA/Viettel.

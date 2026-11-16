@@ -7,6 +7,7 @@ export const PAGE_DEFS: PageDef[] = [
   { id: 'tvexp', path: '/tv-experience', label: 'Trải nghiệm trên TV', module: 'tv_experience' },
   { id: 'ads', path: '/ads', label: 'Quảng cáo', module: 'campaigns' },
   { id: 'customers', path: '/customers', label: 'Khách hàng & Hợp đồng', module: 'customers' },
+  { id: 'contractDoc', path: '/contract-docs', label: 'Soạn hợp đồng & PDF', module: 'customers' },
   { id: 'approvals', path: '/approvals', label: 'Phê duyệt', module: 'approvals' },
   { id: 'media', path: '/media', label: 'Nội dung & Media', module: 'media' },
   { id: 'creativeReview', path: '/creative-review', label: 'Duyệt creative', module: 'media' },
@@ -32,7 +33,7 @@ export const PAGE_BY_ID = Object.fromEntries(PAGE_DEFS.map((p) => [p.id, p])) as
 export interface GroupDef { id: string; label: string; icon: string; pages: string[] }
 export const GROUPS: GroupDef[] = [
   { id: 'g1', label: 'Tổng quan', icon: 'home', pages: ['overview', 'devices', 'tvexp'] },
-  { id: 'g2', label: 'Quảng cáo', icon: 'ads', pages: ['ads', 'customers', 'approvals', 'media', 'creativeReview', 'screens', 'formats', 'schedule', 'kyc'] },
+  { id: 'g2', label: 'Quảng cáo', icon: 'ads', pages: ['ads', 'customers', 'contractDoc', 'approvals', 'media', 'creativeReview', 'screens', 'formats', 'schedule', 'kyc'] },
   { id: 'g3', label: 'Doanh thu', icon: 'coin', pages: ['finance', 'billing', 'integrity', 'history'] },
   { id: 'g4', label: 'Đối tác', icon: 'link', pages: ['partners', 'integrations'] },
   { id: 'g5', label: 'Quản trị', icon: 'users', pages: ['access', 'audit', 'alerts', 'legal', 'compliance', 'profile'] },

@@ -17,6 +17,7 @@ const pages = {
   tvexp: lazy(() => import('./pages/TvExperience')),
   ads: lazy(() => import('./pages/Campaigns')),
   customers: lazy(() => import('./pages/Customers')),
+  contractDoc: lazy(() => import('./pages/ContractDocEditor')),
   approvals: lazy(() => import('./pages/Approvals')),
   media: lazy(() => import('./pages/MediaPage')),
   creativeReview: lazy(() => import('./pages/CreativeReview')),

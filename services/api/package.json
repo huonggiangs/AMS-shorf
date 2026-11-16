@@ -23,14 +23,16 @@
     "gen:legal": "node scripts/gen-legal-docs.mjs"
   },
   "dependencies": {
-    "@ams/shared": "workspace:*",
     "@ams/config": "workspace:*",
     "@ams/db": "workspace:*",
-    "@ams/runtime": "workspace:*",
-    "hono": "4.13.18",
-    "@hono/node-server": "1.19.19",
-    "zod": "3.25.76",
     "@ams/edge-gateway": "workspace:*",
-    "@ams/payments": "workspace:*"
+    "@ams/payments": "workspace:*",
+    "@ams/runtime": "workspace:*",
+    "@ams/shared": "workspace:*",
+    "@hono/node-server": "1.19.19",
+    "@pdf-lib/fontkit": "1.1.1",
+    "hono": "4.13.18",
+    "pdf-lib": "1.17.1",
+    "zod": "3.25.76"
   }
 }

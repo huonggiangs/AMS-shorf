@@ -2743,7 +2743,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:239",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -2784,10 +2789,25 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:250",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostContractDocsByContractByContractIdRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Thành công",
+          "201": {
+            "description": "Đã tạo",
             "content": {
               "application/json": {
                 "schema": {
@@ -2819,7 +2839,12 @@
         ],
         "summary": "DELETE /admin/v1/contract-docs/logo",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:229",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Đã xóa",
@@ -2852,7 +2877,12 @@
         ],
         "summary": "GET /admin/v1/contract-docs/logo",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:175",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -2884,7 +2914,22 @@
         ],
         "summary": "PUT /admin/v1/contract-docs/logo",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:188",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutContractDocsLogoRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -2919,7 +2964,12 @@
         ],
         "summary": "GET /admin/v1/contract-docs/logo/image",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:180",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -2953,7 +3003,12 @@
         ],
         "summary": "GET /admin/v1/contract-docs/templates",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:103",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -2985,10 +3040,25 @@
         ],
         "summary": "POST /admin/v1/contract-docs/templates",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:115",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostContractDocsTemplatesRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "Thành công",
+          "201": {
+            "description": "Đã tạo",
             "content": {
               "application/json": {
                 "schema": {
@@ -3029,7 +3099,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:110",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3070,7 +3145,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:136",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutContractDocsTemplatesByIdRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3114,7 +3204,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:153",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostContractDocsTemplatesByIdApproveRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3149,7 +3254,12 @@
         ],
         "summary": "GET /admin/v1/contract-docs/variables",
         "parameters": [],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:100",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3192,7 +3302,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:321",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Đã xóa",
@@ -3234,7 +3349,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:292",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3275,7 +3395,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:295",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutContractDocsByIdRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3319,7 +3454,22 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:333",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostContractDocsByIdFinalizeRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3363,7 +3513,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:355",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -3406,7 +3561,12 @@
             }
           }
         ],
-        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:293",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -13397,6 +13557,102 @@
         ],
         "additionalProperties": true
       },
+      "AdminPostContractDocsByContractByContractIdRequest": {
+        "type": "object",
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "additionalProperties": true
+      },
+      "AdminPostContractDocsByIdFinalizeRequest": {
+        "type": "object",
+        "properties": {
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": true
+      },
+      "AdminPostContractDocsTemplatesByIdApproveRequest": {
+        "type": "object",
+        "properties": {
+          "confirm_lawyer_approved": {
+            "type": "boolean",
+            "const": true
+          },
+          "lawyer_ref": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "allow_draft_markers": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirm_lawyer_approved"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPostContractDocsTemplatesRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,39}$",
+            "default": "ads-service"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "articles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,40}$"
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "body": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "numbered": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "body"
+              ],
+              "additionalProperties": true
+            },
+            "minItems": 1,
+            "maxItems": 40
+          },
+          "change_note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "name",
+          "articles"
+        ],
+        "additionalProperties": true
+      },
       "AdminPostContractsByIdLinesRequest": {
         "type": "object",
         "properties": {
@@ -15234,6 +15490,112 @@
           "ev_proof_of_play_days",
           "impression_hourly_days"
         ],
+        "additionalProperties": true
+      },
+      "AdminPutContractDocsByIdRequest": {
+        "type": "object",
+        "properties": {
+          "variables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "propertyNames": {
+              "maxLength": 100
+            }
+          },
+          "article_overrides": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "body": {
+                  "type": "string",
+                  "maxLength": 20000
+                }
+              },
+              "additionalProperties": true
+            },
+            "propertyNames": {
+              "pattern": "^[a-z][a-z0-9_]{0,40}$"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "AdminPutContractDocsLogoRequest": {
+        "type": "object",
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg"
+            ]
+          },
+          "data_base64": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 819208
+          }
+        },
+        "required": [
+          "content_type",
+          "data_base64"
+        ],
+        "additionalProperties": true
+      },
+      "AdminPutContractDocsTemplatesByIdRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "articles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,40}$"
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "body": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "numbered": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "body"
+              ],
+              "additionalProperties": true
+            },
+            "minItems": 1,
+            "maxItems": 40
+          },
+          "change_note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
         "additionalProperties": true
       },
       "AdminPutContractsByIdLinesByLineIdRequest": {
