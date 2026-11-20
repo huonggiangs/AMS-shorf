@@ -106,3 +106,58 @@ export const manifestDelta = z.object({
   schedule: z.array(manifestSlot),
 });
 export const health = z.object({ ok: z.literal(true), service: z.string(), runtime: z.string(), time: z.string().optional() });
+
+// ---------------------------------------------------------------- phia nguoi xem (WP-18), nguon: services/edge-gateway/src/viewer.ts
+export const viewerPairResponse = z.object({ paired: z.literal(true), device_id: z.string().describe('device_id cua TV vua ghep'), trust_level: z.number().int(), already: z.boolean().optional() });
+export const viewerPayoutStatus = z.enum(['pending', 'paid', 'rejected']);
+export const walletResponse = z.object({
+  paired: z.boolean(),
+  balance_vnd: z.number().int().describe('so du KHA DUNG = so cai - lenh rut dang cho'),
+  ledger_balance_vnd: z.number().int(),
+  pending_payout_vnd: z.number().int(),
+  total_paid_vnd: z.number().int(),
+  views: z.number().int().describe('so luot xem DA CO THUONG (chien dich phu)'),
+  interactions: z.number().int().describe('so tuong tac DA CO THUONG'),
+  payouts: z.array(z.object({ id: z.string(), amount_vnd: z.number().int(), status: viewerPayoutStatus, requested_at: z.string(), paid_at: z.string().nullable() })),
+  devices: z.array(z.object({ device_id: z.string(), name: z.string().nullable(), paired_at: z.string().nullable() })),
+  tax_mode: z.enum(['none', 'auto_pay', 'delegate']),
+  tax_authorization: z.enum(['none', 'auto_pay', 'delegate']).describe('trung tax_mode, ten truong cua app Mindo'),
+  phone_verified: z.boolean(),
+  today_reward_vnd: z.number().int().optional(),
+  unit_price_vnd: z.number().int().describe('don gia chi de hien thi (20 d)'),
+  payout_threshold_vnd: z.number().int().describe('moc nhan thuong cong don (mac dinh 100000)'),
+  interaction_reward_range_vnd: z.array(z.number().int()).length(2),
+  daily_reward_cap_vnd: z.number().int(),
+  withdraw_enabled: z.boolean().describe('false => POST /v1/withdraw tra feature_disabled'),
+});
+export const ledgerResponse = z.object({
+  items: z.array(z.object({ id: z.string(), kind: z.string(), amount_vnd: z.number().int(), status: z.string(), created_at: z.string(), ref_type: z.string().nullable() })),
+  next_cursor: z.string().optional(),
+});
+export const phoneOtpResponse = z.object({ otp_sent: z.literal(true), expires_in: z.number().int(), phone_masked: z.string(), dev_otp: z.string().optional().describe('CHI local/test khi VIEWER_OTP_DEV_ECHO=1') });
+export const phoneVerifiedResponse = z.object({ verified: z.literal(true), phone_masked: z.string() });
+export const taxAuthResponse = z.object({
+  mode: z.enum(['none', 'auto_pay', 'delegate']),
+  tax_authorization: z.enum(['none', 'auto_pay', 'delegate']).describe('trung mode, ten truong cua app Mindo'),
+  consent_version: z.string().nullable(),
+  updated_at: z.string().nullable(),
+  current_consent_version: z.string(),
+  modes: z.array(z.string()),
+  remittance_active: z.literal(false).describe('CHUA khau tru/nop thue that'),
+});
+export const withdrawResponse = z.object({
+  payout_id: z.string(),
+  id: z.string(),
+  status: viewerPayoutStatus,
+  amount_vnd: z.number().int(),
+  requested_at: z.string(),
+  review: z.literal('awaiting_finance_approval'),
+  idempotent_replay: z.boolean().optional().describe('true => 200, tra lai lenh cu theo idempotency_key'),
+});
+export const interactionsResponse = z.object({
+  accepted: z.number().int(),
+  valid: z.number().int(),
+  credited_vnd: z.number().int(),
+  rejected: z.array(z.object({ event_id: z.string(), reason: z.string() })),
+  results: z.array(z.object({ event_id: z.string(), status: z.enum(['credited', 'recorded', 'duplicate', 'rejected']), credited_vnd: z.number().int(), reason: z.string().optional() })),
+});

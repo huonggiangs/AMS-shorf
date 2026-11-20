@@ -111,6 +111,8 @@ export const campaignSchema = z
     media_name: z.string().nullish(),
     pacing_pct: z.coerce.number().nullish(),
     reward_per_view: z.coerce.number().nullish(),
+    reward_model: z.enum(['cover', 'performance']).optional(), // WP-18: 'cover' = luot xem co thuong; 'performance' = chi tuong tac QR
+    interaction_reward_vnd: z.coerce.number().optional(),
     reject_reason: z.string().nullish(),
     restricted_industry: z.boolean().optional(),
     restricted_reason: z.string().nullish(),

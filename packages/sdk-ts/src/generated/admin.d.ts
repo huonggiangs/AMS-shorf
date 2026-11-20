@@ -92,6 +92,158 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/billing/customers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/billing/customers/{id}
+         * @description Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetBillingCustomersById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/billing/events
+         * @description Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetBillingEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/receivables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/billing/receivables
+         * @description Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetBillingReceivables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/billing/run
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostBillingRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/billing/settings
+         * @description Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetBillingSettings"];
+        /**
+         * PUT /admin/v1/billing/settings
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutBillingSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/billing/summary
+         * @description Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetBillingSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/campaigns": {
         parameters: {
             query?: never;
@@ -226,6 +378,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/campaigns/{id}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/campaigns/{id}/quote
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         */
+        get: operations["adminGetCampaignsByIdQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/campaigns/{id}/reject": {
         parameters: {
             query?: never;
@@ -274,6 +448,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/campaigns/{id}/reward-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * PUT /admin/v1/campaigns/{id}/reward-config
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutCampaignsByIdRewardConfig"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/campaigns/{id}/submit": {
         parameters: {
             query?: never;
@@ -292,6 +490,814 @@ export interface paths {
          *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
          */
         post: operations["adminPostCampaignsByIdSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/campaigns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/compliance/campaigns/{id}
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetComplianceCampaignsById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/campaigns/{id}/category": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * PUT /admin/v1/compliance/campaigns/{id}/category
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutComplianceCampaignsByIdCategory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/campaigns/{id}/second-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/campaigns/{id}/second-approval
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceCampaignsByIdSecondApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/compliance/consents
+         * @description Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetComplianceConsents"];
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/consents
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceConsents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/dsr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/compliance/dsr
+         * @description Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetComplianceDsr"];
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/dsr
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceDsr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/dsr/{id}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/dsr/{id}/execute
+         * @description Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceDsrByIdExecute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/dsr/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/dsr/{id}/reject
+         * @description Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceDsrByIdReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/kyc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/compliance/kyc
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetComplianceKyc"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/kyc/{customerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/compliance/kyc/{customerId}
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetComplianceKycByCustomerId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/kyc/{customerId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/kyc/{customerId}/decision
+         * @description Quyền cần có: mô-đun `customers`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceKycByCustomerIdDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/kyc/{customerId}/documents/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/kyc/{customerId}/documents/upload-url
+         * @description Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceKycByCustomerIdDocumentsUploadUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/kyc/{customerId}/documents/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/kyc/{customerId}/documents/{id}/confirm
+         * @description Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceKycByCustomerIdDocumentsByIdConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/kyc/{customerId}/documents/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/kyc/{customerId}/documents/{id}/review
+         * @description Quyền cần có: mô-đun `customers`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceKycByCustomerIdDocumentsByIdReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/kyc/{customerId}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * PUT /admin/v1/compliance/kyc/{customerId}/profile
+         * @description Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutComplianceKycByCustomerIdProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/kyc/{customerId}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/kyc/{customerId}/submit
+         * @description Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceKycByCustomerIdSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/processing-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/compliance/processing-records
+         * @description Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetComplianceProcessingRecords"];
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/processing-records
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceProcessingRecords"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/processing-records/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * PUT /admin/v1/compliance/processing-records/{id}
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutComplianceProcessingRecordsById"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/compliance/retention
+         * @description Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetComplianceRetention"];
+        /**
+         * PUT /admin/v1/compliance/retention
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutComplianceRetention"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/compliance/retention/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/compliance/retention/run
+         * @description Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostComplianceRetentionRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/by-contract/{contractId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/contract-docs/by-contract/{contractId}
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetContractDocsByContractByContractId"];
+        put?: never;
+        /**
+         * POST /admin/v1/contract-docs/by-contract/{contractId}
+         * @description Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostContractDocsByContractByContractId"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/contract-docs/logo
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetContractDocsLogo"];
+        /**
+         * PUT /admin/v1/contract-docs/logo
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutContractDocsLogo"];
+        post?: never;
+        /**
+         * DELETE /admin/v1/contract-docs/logo
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        delete: operations["adminDeleteContractDocsLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/logo/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/contract-docs/logo/image
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetContractDocsLogoImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/contract-docs/templates
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetContractDocsTemplates"];
+        put?: never;
+        /**
+         * POST /admin/v1/contract-docs/templates
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostContractDocsTemplates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/contract-docs/templates/{id}
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetContractDocsTemplatesById"];
+        /**
+         * PUT /admin/v1/contract-docs/templates/{id}
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutContractDocsTemplatesById"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/templates/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/contract-docs/templates/{id}/approve
+         * @description Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostContractDocsTemplatesByIdApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/contract-docs/variables
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetContractDocsVariables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/contract-docs/{id}
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetContractDocsById"];
+        /**
+         * PUT /admin/v1/contract-docs/{id}
+         * @description Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutContractDocsById"];
+        post?: never;
+        /**
+         * DELETE /admin/v1/contract-docs/{id}
+         * @description Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        delete: operations["adminDeleteContractDocsById"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/{id}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/contract-docs/{id}/finalize
+         * @description Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostContractDocsByIdFinalize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/contract-docs/{id}/pdf
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetContractDocsByIdPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contract-docs/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/contract-docs/{id}/preview
+         * @description Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetContractDocsByIdPreview"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -349,6 +1355,70 @@ export interface paths {
         put: operations["adminPutContractsById"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contracts/{id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/contracts/{id}/lines
+         * @description Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetContractsByIdLines"];
+        put?: never;
+        /**
+         * POST /admin/v1/contracts/{id}/lines
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostContractsByIdLines"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/contracts/{id}/lines/{lineId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * PUT /admin/v1/contracts/{id}/lines/{lineId}
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutContractsByIdLinesByLineId"];
+        post?: never;
+        /**
+         * DELETE /admin/v1/contracts/{id}/lines/{lineId}
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        delete: operations["adminDeleteContractsByIdLinesByLineId"];
         options?: never;
         head?: never;
         patch?: never;
@@ -540,6 +1610,228 @@ export interface paths {
         get: operations["adminGetDevicesById"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/einvoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/einvoices
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetEinvoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/einvoices/adjust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/einvoices/adjust
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostEinvoicesAdjust"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/einvoices/invoice/{invoiceId}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/einvoices/invoice/{invoiceId}/issue
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostEinvoicesInvoiceByInvoiceIdIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/einvoices/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/einvoices/settings
+         * @description Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetEinvoicesSettings"];
+        /**
+         * PUT /admin/v1/einvoices/settings
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutEinvoicesSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/einvoices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/einvoices/{id}
+         * @description Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetEinvoicesById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/einvoices/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/einvoices/{id}/cancel
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostEinvoicesByIdCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/einvoices/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/einvoices/{id}/confirm
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostEinvoicesByIdConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/einvoices/{id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/einvoices/{id}/refresh
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostEinvoicesByIdRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/einvoices/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/einvoices/{id}/retry
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostEinvoicesByIdRetry"];
         delete?: never;
         options?: never;
         head?: never;
@@ -748,6 +2040,162 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/legal/acceptances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/legal/acceptances
+         * @description Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetLegalAcceptances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/legal/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/legal/coverage
+         * @description Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetLegalCoverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/legal/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/legal/documents
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetLegalDocuments"];
+        put?: never;
+        /**
+         * POST /admin/v1/legal/documents
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostLegalDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/legal/documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/legal/documents/{id}
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetLegalDocumentsById"];
+        /**
+         * PUT /admin/v1/legal/documents/{id}
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutLegalDocumentsById"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/legal/documents/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/legal/documents/{id}/publish
+         * @description Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostLegalDocumentsByIdPublish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/legal/documents/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/legal/documents/{id}/retire
+         * @description Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostLegalDocumentsByIdRetire"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/media": {
         parameters: {
             query?: never;
@@ -788,6 +2236,30 @@ export interface paths {
          *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
          */
         post: operations["adminPostMediaImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/media/scan-review/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/media/scan-review/queue
+         * @description Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetMediaScanReviewQueue"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -942,6 +2414,150 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/media/{id}/scan-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/media/{id}/scan-review
+         * @description Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostMediaByIdScanReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/ops/incidents/{id}/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/ops/incidents/{id}/ack
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostOpsIncidentsByIdAck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/ops/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/ops/run
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostOpsRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/ops/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * PUT /admin/v1/ops/settings
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["adminPutOpsSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/ops/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/ops/summary
+         * @description Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetOpsSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/ops/test-notification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/ops/test-notification
+         * @description Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostOpsTestNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/partners": {
         parameters: {
             query?: never;
@@ -1090,6 +2706,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/payouts/{id}/destination": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/payouts/{id}/destination
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetPayoutsByIdDestination"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/payouts/{id}/pay": {
         parameters: {
             query?: never;
@@ -1165,6 +2805,92 @@ export interface paths {
         put: operations["adminPutPermissionsByAdminId"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/pricing/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/pricing/quote
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         */
+        get: operations["adminGetPricingQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/rate-cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/rate-cards
+         * @description Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         */
+        get: operations["adminGetRateCards"];
+        put?: never;
+        /**
+         * POST /admin/v1/rate-cards
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         */
+        post: operations["adminPostRateCards"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/rate-cards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/rate-cards/{id}
+         * @description Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         */
+        get: operations["adminGetRateCardsById"];
+        /**
+         * PUT /admin/v1/rate-cards/{id}
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         */
+        put: operations["adminPutRateCardsById"];
+        post?: never;
+        /**
+         * DELETE /admin/v1/rate-cards/{id}
+         * @description Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        delete: operations["adminDeleteRateCardsById"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2291,6 +4017,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/legal/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /legal/documents
+         * @description Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["GetLegalDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/legal/documents/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /legal/documents/{kind}
+         * @description Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["GetLegalDocumentsByKind"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ops/backup-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /ops/backup-report
+         * @description Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["PostOpsBackupReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/v1/campaigns": {
         parameters: {
             query?: never;
@@ -2371,6 +4157,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/v1/campaigns/{id}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/campaigns/{id}/quote
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         */
+        get: operations["portalGetCampaignsByIdQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/v1/campaigns/{id}/resume": {
         parameters: {
             query?: never;
@@ -2413,6 +4221,28 @@ export interface paths {
          *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
          */
         post: operations["portalPostCampaignsByIdSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/einvoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/einvoices
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetEinvoices"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2525,6 +4355,236 @@ export interface paths {
          *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
          */
         get: operations["portalGetInvoicesById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/kyc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/kyc
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetKyc"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/kyc/documents/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /portal/v1/kyc/documents/upload-url
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["portalPostKycDocumentsUploadUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/kyc/documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * DELETE /portal/v1/kyc/documents/{id}
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        delete: operations["portalDeleteKycDocumentsById"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/kyc/documents/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /portal/v1/kyc/documents/{id}/confirm
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["portalPostKycDocumentsByIdConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/kyc/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * PUT /portal/v1/kyc/profile
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        put: operations["portalPutKycProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/kyc/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /portal/v1/kyc/submit
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["portalPostKycSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/legal/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /portal/v1/legal/accept
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["portalPostLegalAccept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/legal/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/legal/documents
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetLegalDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/legal/documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/legal/documents/{id}
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetLegalDocumentsById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/legal/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/legal/pending
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetLegalPending"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2693,6 +4753,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/v1/pricing/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/pricing/quote
+         * @description Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         */
+        get: operations["portalGetPricingQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/v1/topups": {
         parameters: {
             query?: never;
@@ -2773,6 +4855,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /status
+         * @description Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["GetStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/payments/sepay": {
         parameters: {
             query?: never;
@@ -2816,6 +4918,12 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        AdminPostCampaignsByIdSubmitRequest: {
+            content_rights_confirmed?: boolean;
+            restricted_industry?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
         AdminPostCampaignsRequest: {
             name: string;
             customer_id?: (unknown | string) | null;
@@ -2831,6 +4939,143 @@ export interface components {
             duration_sec: number;
             start_date?: (unknown | string) | null;
             end_date?: (unknown | string) | null;
+            contract_id?: (unknown | string) | null;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostComplianceCampaignsByIdSecondApprovalRequest: {
+            note: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostComplianceConsentsRequest: {
+            /** @enum {string} */
+            subject_type: "customer_contact" | "end_user";
+            subject_id: string;
+            purpose: string;
+            granted: boolean;
+            version?: string;
+            source?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostComplianceDsrByIdExecuteRequest: {
+            confirm?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostComplianceDsrByIdRejectRequest: {
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostComplianceDsrRequest: {
+            /** @enum {string} */
+            kind: "export" | "anonymize";
+            /** @enum {string} */
+            subject_type: "customer_contact" | "end_user";
+            subject_id: string;
+            requester?: string;
+            channel?: string;
+            note?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostComplianceKycByCustomerIdDecisionRequest: {
+            /** @enum {string} */
+            decision: "approve" | "reject";
+            note?: string;
+            restricted_industry?: boolean;
+            restricted_categories?: ("general" | "food_beverage" | "retail" | "real_estate" | "education" | "automotive" | "technology" | "entertainment" | "finance_banking" | "health_pharma" | "supplement" | "alcohol" | "tobacco" | "gambling" | "loan_credit" | "adult" | "political_religious")[];
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostComplianceKycByCustomerIdDocumentsByIdReviewRequest: {
+            /** @enum {string} */
+            decision: "approve" | "reject";
+            note?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostComplianceKycByCustomerIdDocumentsUploadUrlRequest: {
+            /** @enum {string} */
+            doc_type: "business_registration" | "industry_licence" | "ad_content_permit" | "authorization_letter" | "other";
+            category?: string;
+            file_name: string;
+            content_type: string;
+            size_bytes: number;
+            expires_on?: string;
+            note?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostComplianceProcessingRecordsRequest: {
+            activity: string;
+            purpose: string;
+            data_categories: string;
+            data_subjects?: string;
+            legal_basis?: string;
+            recipients?: string;
+            /** @default false */
+            cross_border: boolean;
+            retention?: string;
+            owner?: string;
+            /** @default true */
+            active: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostContractDocsByContractByContractIdRequest: {
+            template_id?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostContractDocsByIdFinalizeRequest: {
+            content_hash?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostContractDocsTemplatesByIdApproveRequest: {
+            /** @constant */
+            confirm_lawyer_approved: true;
+            lawyer_ref?: string;
+            allow_draft_markers?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostContractDocsTemplatesRequest: {
+            /** @default ads-service */
+            code: string;
+            name: string;
+            articles: ({
+                key: string;
+                title: string;
+                body: string;
+                numbered?: boolean;
+            } & {
+                [key: string]: unknown;
+            })[];
+            change_note?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostContractsByIdLinesRequest: {
+            screen_type?: (unknown | ("tv" | "elevator" | "led_p5")) | null;
+            region_id?: (unknown | string) | null;
+            daypart?: (unknown | ("peak" | "off_peak")) | null;
+            frequency?: (unknown | number) | null;
+            duration_s?: (unknown | number) | null;
+            /** @default 1 */
+            qty: number;
+            /**
+             * @default fixed
+             * @enum {string}
+             */
+            price_model: "fixed" | "cpm";
+            price_micro_vnd?: number;
+            impression_price_micro_vnd?: number;
+            effective_from?: (unknown | string) | null;
+            effective_to?: (unknown | string) | null;
         } & {
             [key: string]: unknown;
         };
@@ -2887,6 +5132,33 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        AdminPostEinvoicesAdjustRequest: {
+            invoice_id: string;
+            refund_total_vnd: number;
+            reason: string;
+            refund_request_id?: string;
+            manual_ref?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostEinvoicesByIdCancelRequest: {
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostEinvoicesByIdConfirmRequest: {
+            einvoice_no: string;
+            series?: string;
+            lookup_code?: string;
+            issue_date?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostEinvoicesInvoiceByInvoiceIdIssueRequest: {
+            manual_ref?: string;
+        } & {
+            [key: string]: unknown;
+        };
         AdminPostInvoicesByIdIssueRequest: {
             einvoice_ref?: string;
         } & {
@@ -2911,6 +5183,31 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        AdminPostLegalDocumentsByIdPublishRequest: {
+            /** @constant */
+            confirm_lawyer_approved: true;
+            lawyer_ref?: string;
+            allow_draft_markers?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostLegalDocumentsRequest: {
+            /** @enum {string} */
+            kind: "terms" | "privacy" | "sla" | "ad_policy";
+            version: string;
+            title: string;
+            body_md: string;
+            /** @default true */
+            requires_acceptance: boolean;
+            change_note?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostMediaByIdApproveRequest: {
+            content_version?: number;
+        } & {
+            [key: string]: unknown;
+        };
         AdminPostMediaByIdConfirmRequest: {
             width?: number;
             height?: number;
@@ -2920,6 +5217,14 @@ export interface components {
         };
         AdminPostMediaByIdRejectRequest: {
             reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostMediaByIdScanReviewRequest: {
+            /** @enum {string} */
+            decision: "approve" | "reject";
+            note: string;
+            content_version?: number;
         } & {
             [key: string]: unknown;
         };
@@ -2947,6 +5252,11 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        AdminPostOpsIncidentsByIdAckRequest: {
+            note?: string;
+        } & {
+            [key: string]: unknown;
+        };
         AdminPostPartnersRequest: {
             name: string;
             protocol?: (unknown | string) | null;
@@ -2969,6 +5279,35 @@ export interface components {
         };
         AdminPostPayoutsByIdRejectRequest: {
             reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostRateCardsRequest: {
+            /** @default * */
+            customer_id: string;
+            /**
+             * @default *
+             * @enum {string}
+             */
+            screen_type: "*" | "tv" | "elevator" | "led_p5";
+            /** @default * */
+            region_id: string;
+            /**
+             * @default *
+             * @enum {string}
+             */
+            daypart: "*" | "peak" | "off_peak";
+            /**
+             * @default per_impression
+             * @enum {string}
+             */
+            model: "per_impression" | "cpm";
+            price_micro_vnd?: number;
+            price_vnd?: string | number;
+            floor_micro_vnd?: number;
+            floor_vnd?: string | number;
+            effective_from?: string;
+            note?: (unknown | string) | null;
         } & {
             [key: string]: unknown;
         };
@@ -3073,6 +5412,15 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        AdminPutBillingSettingsRequest: {
+            reminder_offsets_days: number[];
+            auto_pause_after_days: number;
+            enforce_credit_limit: boolean;
+            low_balance_email: boolean;
+            send_emails: boolean;
+        } & {
+            [key: string]: unknown;
+        };
         AdminPutCampaignsByIdRequest: {
             name?: string;
             customer_id?: (unknown | string) | null;
@@ -3088,6 +5436,109 @@ export interface components {
             duration_sec: number;
             start_date?: (unknown | string) | null;
             end_date?: (unknown | string) | null;
+            contract_id?: (unknown | string) | null;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutCampaignsByIdRewardConfigRequest: {
+            /** @enum {string} */
+            reward_model: "cover" | "performance";
+            interaction_reward_vnd: number;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutComplianceCampaignsByIdCategoryRequest: {
+            /** @enum {string} */
+            category: "general" | "food_beverage" | "retail" | "real_estate" | "education" | "automotive" | "technology" | "entertainment" | "finance_banking" | "health_pharma" | "supplement" | "alcohol" | "tobacco" | "gambling" | "loan_credit" | "adult" | "political_religious";
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutComplianceKycByCustomerIdProfileRequest: {
+            business_reg_no?: string | null;
+            business_reg_date?: string | null;
+            business_reg_place?: string | null;
+            legal_rep_name?: string | null;
+            legal_rep_title?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutComplianceProcessingRecordsByIdRequest: {
+            activity: string;
+            purpose: string;
+            data_categories: string;
+            data_subjects?: string;
+            legal_basis?: string;
+            recipients?: string;
+            /** @default false */
+            cross_border: boolean;
+            retention?: string;
+            owner?: string;
+            /** @default true */
+            active: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutComplianceRetentionRequest: {
+            ev_heartbeat_days: number;
+            ev_ad_impression_days: number;
+            ev_proof_of_play_days: number;
+            impression_hourly_days: number;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutContractDocsByIdRequest: {
+            variables?: {
+                [key: string]: string;
+            };
+            article_overrides?: {
+                [key: string]: {
+                    title?: string;
+                    body?: string;
+                } & {
+                    [key: string]: unknown;
+                };
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutContractDocsLogoRequest: {
+            /** @enum {string} */
+            content_type: "image/png" | "image/jpeg";
+            data_base64: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutContractDocsTemplatesByIdRequest: {
+            name?: string;
+            articles?: ({
+                key: string;
+                title: string;
+                body: string;
+                numbered?: boolean;
+            } & {
+                [key: string]: unknown;
+            })[];
+            change_note?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutContractsByIdLinesByLineIdRequest: {
+            screen_type?: (unknown | ("tv" | "elevator" | "led_p5")) | null;
+            region_id?: (unknown | string) | null;
+            daypart?: (unknown | ("peak" | "off_peak")) | null;
+            frequency?: (unknown | number) | null;
+            duration_s?: (unknown | number) | null;
+            /** @default 1 */
+            qty: number;
+            /**
+             * @default fixed
+             * @enum {string}
+             */
+            price_model: "fixed" | "cpm";
+            price_micro_vnd?: number;
+            impression_price_micro_vnd?: number;
+            effective_from?: (unknown | string) | null;
+            effective_to?: (unknown | string) | null;
         } & {
             [key: string]: unknown;
         };
@@ -3123,15 +5574,46 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        AdminPutEinvoicesSettingsRequest: {
+            /** @enum {string} */
+            provider: "manual" | "misa" | "viettel";
+            sandbox: boolean;
+            /** @default  */
+            series: string;
+            /** @default  */
+            template_code: string;
+            /** @default false */
+            auto_issue: boolean;
+            /** @default true */
+            auto_adjust_on_refund: boolean;
+            confirm_production?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
         AdminPutInvoicesByIdRequest: {
             amount_vnd?: number;
             vat_rate?: number;
         } & {
             [key: string]: unknown;
         };
+        AdminPutLegalDocumentsByIdRequest: {
+            title?: string;
+            body_md?: string;
+            /** @default true */
+            requires_acceptance: boolean;
+            change_note?: string;
+        } & {
+            [key: string]: unknown;
+        };
         AdminPutMediaByIdOverlayRequest: {
             format?: string;
             overlay?: (unknown | unknown) | null;
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutOpsSettingsRequest: {
+            emails?: string[];
+            webhook_url?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -3149,6 +5631,21 @@ export interface components {
             permissions: {
                 [key: string]: string[];
             };
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPutRateCardsByIdRequest: {
+            /**
+             * @default per_impression
+             * @enum {string}
+             */
+            model: "per_impression" | "cpm";
+            price_micro_vnd?: number;
+            price_vnd?: string | number;
+            floor_micro_vnd?: number;
+            floor_vnd?: string | number;
+            effective_from?: string;
+            note?: (unknown | string) | null;
         } & {
             [key: string]: unknown;
         };
@@ -3216,6 +5713,7 @@ export interface components {
                 [key: string]: unknown;
             };
             banned_industries: string[];
+            confirm_children_policy?: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -3323,7 +5821,16 @@ export interface components {
             media_name?: string | null;
             pacing_pct?: number | null;
             reward_per_view?: number | null;
+            /** @enum {string} */
+            reward_model?: "cover" | "performance";
+            interaction_reward_vnd?: number;
             reject_reason?: string | null;
+            restricted_industry?: boolean;
+            restricted_reason?: string | null;
+            customer_industry?: string | null;
+            content_rights_confirmed?: boolean;
+            content_rights_confirmed_at?: string | null;
+            content_rights_confirmed_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -3575,7 +6082,16 @@ export interface components {
                 media_name?: string | null;
                 pacing_pct?: number | null;
                 reward_per_view?: number | null;
+                /** @enum {string} */
+                reward_model?: "cover" | "performance";
+                interaction_reward_vnd?: number;
                 reject_reason?: string | null;
+                restricted_industry?: boolean;
+                restricted_reason?: string | null;
+                customer_industry?: string | null;
+                content_rights_confirmed?: boolean;
+                content_rights_confirmed_at?: string | null;
+                content_rights_confirmed_by?: string | null;
             } & {
                 [key: string]: unknown;
             })[];
@@ -3602,6 +6118,12 @@ export interface components {
             page: number;
             page_size: number;
         };
+        PortalPostCampaignsByIdSubmitRequest: {
+            content_rights_confirmed?: boolean;
+            restricted_industry?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
         PortalPostCampaignsRequest: {
             name: string;
             customer_id?: (unknown | string) | null;
@@ -3617,6 +6139,29 @@ export interface components {
             duration_sec: number;
             start_date?: (unknown | string) | null;
             end_date?: (unknown | string) | null;
+            contract_id?: (unknown | string) | null;
+        } & {
+            [key: string]: unknown;
+        };
+        PortalPostKycDocumentsUploadUrlRequest: {
+            /** @enum {string} */
+            doc_type: "business_registration" | "industry_licence" | "ad_content_permit" | "authorization_letter" | "other";
+            category?: string;
+            file_name: string;
+            content_type: string;
+            size_bytes: number;
+            expires_on?: string;
+            note?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        PortalPostLegalAcceptRequest: {
+            acceptances: ({
+                document_id: string;
+                sha256: string;
+            } & {
+                [key: string]: unknown;
+            })[];
         } & {
             [key: string]: unknown;
         };
@@ -3672,6 +6217,16 @@ export interface components {
             duration_sec: number;
             start_date?: (unknown | string) | null;
             end_date?: (unknown | string) | null;
+            contract_id?: (unknown | string) | null;
+        } & {
+            [key: string]: unknown;
+        };
+        PortalPutKycProfileRequest: {
+            business_reg_no?: string | null;
+            business_reg_date?: string | null;
+            business_reg_place?: string | null;
+            legal_rep_name?: string | null;
+            legal_rep_title?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -3701,6 +6256,72 @@ export interface components {
             }) | null;
         } & {
             [key: string]: unknown;
+        };
+        PostOpsBackupReportRequest: {
+            /** @enum {string} */
+            kind: "d1" | "postgres" | "media";
+            env?: string;
+            target?: string;
+            bytes?: number;
+            sha256?: string;
+            encrypted?: boolean;
+            ok: boolean;
+            note?: string;
+            started_at?: string;
+            finished_at?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        Quote: {
+            status: string;
+            /** @default false */
+            locked: boolean;
+            /** @default false */
+            placeholder: boolean;
+            budget_vnd?: number | null;
+            message?: string | null;
+            /** @default [] */
+            lines: ({
+                screen_type: string;
+                region_id: string;
+                daypart: string;
+                unit_price_micro_vnd: number;
+                unit_price_vnd: string;
+                model?: string | null;
+                estimated_impressions?: number | null;
+                floor_micro_vnd?: number | null;
+                source?: string | null;
+                floored?: boolean | null;
+            } & {
+                [key: string]: unknown;
+            })[];
+        } & {
+            [key: string]: unknown;
+        };
+        RateCard: {
+            id: string | number;
+            customer_id: string;
+            customer_name?: string | null;
+            screen_type: string;
+            region_id: string;
+            daypart: string;
+            model: string;
+            price_micro_vnd: number;
+            price_vnd: string;
+            floor_micro_vnd: number;
+            floor_vnd: string;
+            effective_from: string;
+            effective_to?: string | null;
+            status: string;
+            note?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        RateCardPage: {
+            items: components["schemas"]["RateCard"][];
+            total: number;
+            page: number;
+            page_size: number;
         };
         RefundRequests: {
             items: ({
@@ -4005,6 +6626,184 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
+    adminGetBillingCustomersById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetBillingEvents: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Tìm kiếm văn bản (các cột tìm kiếm của danh sách) */
+                q?: string;
+                /** @description `<trường>:<asc|desc>` */
+                sort?: string;
+                /** @description `khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng */
+                filter?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetBillingReceivables: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Tìm kiếm văn bản (các cột tìm kiếm của danh sách) */
+                q?: string;
+                /** @description `<trường>:<asc|desc>` */
+                sort?: string;
+                /** @description `khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng */
+                filter?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostBillingRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetBillingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutBillingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutBillingSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetBillingSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
     adminGetCampaigns: {
         parameters: {
             query?: {
@@ -4210,6 +7009,30 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
+    adminGetCampaignsByIdQuote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
     adminPostCampaignsByIdReject: {
         parameters: {
             query?: never;
@@ -4262,7 +7085,1098 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
+    adminPutCampaignsByIdRewardConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutCampaignsByIdRewardConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
     adminPostCampaignsByIdSubmit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostCampaignsByIdSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetComplianceCampaignsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutComplianceCampaignsByIdCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutComplianceCampaignsByIdCategoryRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceCampaignsByIdSecondApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostComplianceCampaignsByIdSecondApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetComplianceConsents: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Tìm kiếm văn bản (các cột tìm kiếm của danh sách) */
+                q?: string;
+                /** @description `<trường>:<asc|desc>` */
+                sort?: string;
+                /** @description `khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng */
+                filter?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceConsents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostComplianceConsentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetComplianceDsr: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Tìm kiếm văn bản (các cột tìm kiếm của danh sách) */
+                q?: string;
+                /** @description `<trường>:<asc|desc>` */
+                sort?: string;
+                /** @description `khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng */
+                filter?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceDsr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostComplianceDsrRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceDsrByIdExecute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostComplianceDsrByIdExecuteRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceDsrByIdReject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostComplianceDsrByIdRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetComplianceKyc: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Tìm kiếm văn bản (các cột tìm kiếm của danh sách) */
+                q?: string;
+                /** @description `<trường>:<asc|desc>` */
+                sort?: string;
+                /** @description `khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng */
+                filter?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetComplianceKycByCustomerId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceKycByCustomerIdDecision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostComplianceKycByCustomerIdDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceKycByCustomerIdDocumentsUploadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostComplianceKycByCustomerIdDocumentsUploadUrlRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceKycByCustomerIdDocumentsByIdConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceKycByCustomerIdDocumentsByIdReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostComplianceKycByCustomerIdDocumentsByIdReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutComplianceKycByCustomerIdProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutComplianceKycByCustomerIdProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceKycByCustomerIdSubmit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetComplianceProcessingRecords: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceProcessingRecords: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostComplianceProcessingRecordsRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutComplianceProcessingRecordsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutComplianceProcessingRecordsByIdRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetComplianceRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutComplianceRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutComplianceRetentionRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostComplianceRetentionRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetContractDocsByContractByContractId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contractId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostContractDocsByContractByContractId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contractId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostContractDocsByContractByContractIdRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetContractDocsLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutContractDocsLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutContractDocsLogoRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminDeleteContractDocsLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã xóa */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetContractDocsLogoImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetContractDocsTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostContractDocsTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostContractDocsTemplatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetContractDocsTemplatesById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutContractDocsTemplatesById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutContractDocsTemplatesByIdRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostContractDocsTemplatesByIdApprove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostContractDocsTemplatesByIdApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetContractDocsVariables: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetContractDocsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutContractDocsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutContractDocsByIdRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminDeleteContractDocsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã xóa */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostContractDocsByIdFinalize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostContractDocsByIdFinalizeRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetContractDocsByIdPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetContractDocsByIdPreview: {
         parameters: {
             query?: never;
             header?: never;
@@ -4389,6 +8303,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Contract"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetContractsByIdLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostContractsByIdLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostContractsByIdLinesRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutContractsByIdLinesByLineId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                lineId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutContractsByIdLinesByLineIdRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminDeleteContractsByIdLinesByLineId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                lineId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã xóa */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
                 };
             };
             "4XX": components["responses"]["Error"];
@@ -4655,6 +8675,267 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Device"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetEinvoices: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Tìm kiếm văn bản (các cột tìm kiếm của danh sách) */
+                q?: string;
+                /** @description `<trường>:<asc|desc>` */
+                sort?: string;
+                /** @description `khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng */
+                filter?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostEinvoicesAdjust: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostEinvoicesAdjustRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostEinvoicesInvoiceByInvoiceIdIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoiceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostEinvoicesInvoiceByInvoiceIdIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetEinvoicesSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutEinvoicesSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutEinvoicesSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetEinvoicesById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostEinvoicesByIdCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostEinvoicesByIdCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostEinvoicesByIdConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostEinvoicesByIdConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostEinvoicesByIdRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostEinvoicesByIdRetry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
                 };
             };
             "4XX": components["responses"]["Error"];
@@ -4940,6 +9221,211 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
+    adminGetLegalAcceptances: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Tìm kiếm văn bản (các cột tìm kiếm của danh sách) */
+                q?: string;
+                /** @description `<trường>:<asc|desc>` */
+                sort?: string;
+                /** @description `khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng */
+                filter?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetLegalCoverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetLegalDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostLegalDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostLegalDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetLegalDocumentsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutLegalDocumentsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutLegalDocumentsByIdRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostLegalDocumentsByIdPublish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostLegalDocumentsByIdPublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostLegalDocumentsByIdRetire: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
     adminGetMedia: {
         parameters: {
             query?: {
@@ -4986,6 +9472,28 @@ export interface operations {
         responses: {
             /** @description Đã tạo */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetMediaScanReviewQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5080,7 +9588,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostMediaByIdApproveRequest"];
+            };
+        };
         responses: {
             /** @description Thành công */
             200: {
@@ -5165,6 +9677,154 @@ export interface operations {
                 "application/json": components["schemas"]["AdminPostMediaByIdRejectRequest"];
             };
         };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostMediaByIdScanReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostMediaByIdScanReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostOpsIncidentsByIdAck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostOpsIncidentsByIdAckRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostOpsRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutOpsSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutOpsSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetOpsSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostOpsTestNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Thành công */
             200: {
@@ -5393,6 +10053,30 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
+    adminGetPayoutsByIdDestination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
     adminPostPayoutsByIdPay: {
         parameters: {
             query?: never;
@@ -5489,6 +10173,161 @@ export interface operations {
         };
         responses: {
             /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetPricingQuote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetRateCards: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Tìm kiếm văn bản (các cột tìm kiếm của danh sách) */
+                q?: string;
+                /** @description `<trường>:<asc|desc>` */
+                sort?: string;
+                /** @description `khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng */
+                filter?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateCardPage"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostRateCards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostRateCardsRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateCard"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetRateCardsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateCard"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPutRateCardsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPutRateCardsByIdRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateCard"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminDeleteRateCardsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã xóa */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6962,6 +11801,78 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
+    GetLegalDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    GetLegalDocumentsByKind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    PostOpsBackupReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostOpsBackupReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
     portalGetCampaigns: {
         parameters: {
             query?: {
@@ -7095,6 +12006,30 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
+    portalGetCampaignsByIdQuote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
     portalPostCampaignsByIdResume: {
         parameters: {
             query?: never;
@@ -7126,6 +12061,41 @@ export interface operations {
             path: {
                 id: string;
             };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalPostCampaignsByIdSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalGetEinvoices: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description Tìm kiếm văn bản (các cột tìm kiếm của danh sách) */
+                q?: string;
+                /** @description `<trường>:<asc|desc>` */
+                sort?: string;
+                /** @description `khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng */
+                filter?: string;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -7267,6 +12237,244 @@ export interface operations {
             path: {
                 id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalGetKyc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalPostKycDocumentsUploadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalPostKycDocumentsUploadUrlRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã tạo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalDeleteKycDocumentsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã xóa */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalPostKycDocumentsByIdConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalPutKycProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalPutKycProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalPostKycSubmit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalPostLegalAccept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalPostLegalAcceptRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalGetLegalDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalGetLegalDocumentsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalGetLegalPending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -7469,6 +12677,28 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
+    portalGetPricingQuote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quote"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
     portalGetTopups: {
         parameters: {
             query?: never;
@@ -7572,6 +12802,28 @@ export interface operations {
         responses: {
             /** @description Đã tạo */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    GetStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

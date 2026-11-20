@@ -6,7 +6,7 @@ import { z, type ZodTypeAny } from 'zod';
 import { createTestRuntime } from '@ams/runtime/test';
 import { createApp } from '@ams/api/app';
 import { createGateway } from '@ams/edge-gateway';
-import { heartbeatBody, registerBody, commandAckBody, eventsBody, HEADER, MAX_CLOCK_SKEW_S, MAX_EVENTS_PER_BATCH, PROTOCOL_VERSION, ERROR_CODES } from '@ams/edge-gateway/protocol';
+import { heartbeatBody, registerBody, commandAckBody, eventsBody, HEADER, MAX_CLOCK_SKEW_S, MAX_EVENTS_PER_BATCH, PROTOCOL_VERSION, ERROR_CODES, viewerPairBody, phoneBody, taxAuthBody, withdrawBody, interactionsBody } from '@ams/edge-gateway/protocol';
 import { extractFile, type Extracted } from './extract.js';
 import * as W from '../../../apps/web-admin/src/api/schemas.js';
 import * as G from './gateway-schemas.js';
@@ -374,6 +374,62 @@ export function buildGatewayDoc(routes: RouteKey[]): Json {
       parameters: sigHeaders(true),
       requestBody: { required: true, content: { 'application/json': { schema: c.add('EventsRequest', eventsBody) } } },
       responses: { '202': json('EventsResponse', G.eventsResponse, 'Đã nhận'), ...common429 },
+    },
+    'POST /v1/viewer/pair': {
+      summary: 'Điện thoại nhập mã 6 số của TV để ghép đôi (người xem)',
+      description: 'Chỉ thiết bị `kind=phone`. Mã 6 số hết hạn sau 5 phút, dùng một lần. Chống dò: sai quá 5 lần/15 phút/thiết bị => 429 `rate_limited` (Retry-After 900); giới hạn theo IP. Mã sai/hết hạn/đã dùng trả cùng một lỗi `invalid_code` (404). Lần ghép đầu tạo người dùng cho điện thoại và nâng trust_level lên 1.',
+      parameters: sigHeaders(true),
+      requestBody: { required: true, content: { 'application/json': { schema: c.add('ViewerPairRequest', viewerPairBody) } } },
+      responses: { '200': json('ViewerPairResponse', G.viewerPairResponse, 'Đã ghép đôi'), '404': { $ref: '#/components/responses/Error' }, ...common429 },
+    },
+    'GET /v1/wallet': {
+      summary: 'Ví thưởng của người xem',
+      description: 'Chỉ điện thoại (`kind=phone`). `balance_vnd` là số dư khả dụng (sổ cái trừ lệnh rút đang chờ). Điện thoại chưa ghép TV nhận ví 0 với `paired=false`.',
+      parameters: sigHeaders(true),
+      responses: { '200': json('WalletResponse', G.walletResponse, 'OK'), ...common429 },
+    },
+    'GET /v1/wallet/ledger': {
+      summary: 'Sao kê ví (phân trang theo con trỏ, mới nhất trước)',
+      parameters: [...sigHeaders(true), { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } }, { name: 'cursor', in: 'query', schema: { type: 'string' } }],
+      responses: { '200': json('LedgerResponse', G.ledgerResponse, 'OK'), ...common429 },
+    },
+    'POST /v1/viewer/phone': {
+      summary: 'Xác minh số điện thoại bằng OTP (không có `otp` => gửi OTP; có `otp` => xác minh)',
+      description: 'Cần đã ghép TV. 202 khi đã gửi OTP. Kênh gửi OTP chưa được cấu hình => 503 `not_configured`. OTP 6 số, hết hạn 5 phút, tối đa 5 lần thử, 3 lần gửi/giờ.',
+      parameters: sigHeaders(true),
+      requestBody: { required: true, content: { 'application/json': { schema: c.add('ViewerPhoneRequest', phoneBody) } } },
+      responses: { '200': json('ViewerPhoneVerified', G.phoneVerifiedResponse, 'Đã xác minh'), '202': json('ViewerPhoneOtp', G.phoneOtpResponse, 'Đã gửi OTP'), ...common429 },
+    },
+    'GET /v1/tax-authorization': {
+      summary: 'Chế độ thuế hiện tại của người nhận chi trả',
+      parameters: sigHeaders(true),
+      responses: { '200': json('TaxAuthResponse', G.taxAuthResponse, 'OK'), ...common429 },
+    },
+    'POST /v1/tax-authorization': {
+      summary: 'Chọn/đổi chế độ thuế: `auto_pay` (thanh toán tự động, chấp nhận chi trả thuế), `delegate` (ủy quyền ứng dụng nộp thuế) hoặc `none` (thu hồi)',
+      description: 'Chỉ LƯU ý chí và đồng ý (lịch sử chỉ thêm dòng; `none` = thu hồi). **Chưa khấu trừ hay nộp thuế thật** (`remittance_active=false`). `tax_code` (MST, tùy chọn, mã hóa khi lưu). `consent_version` phải khớp phiên bản điều khoản hiện hành.',
+      parameters: sigHeaders(true),
+      requestBody: { required: true, content: { 'application/json': { schema: c.add('TaxAuthRequest', taxAuthBody) } } },
+      responses: { '200': json('TaxAuthResponse', G.taxAuthResponse, 'Đã ghi'), ...common429 },
+    },
+    'POST /v1/withdraw': {
+      summary: 'Yêu cầu rút thưởng (tạo lệnh CHỜ tài chính duyệt, KHÔNG tự chuyển tiền)',
+      description: [
+        'Điều kiện: bật `VIEWER_WITHDRAW_ENABLED=1` (mặc định tắt => 403 `feature_disabled`), đã xác minh điện thoại, đã chọn chế độ thuế (nếu `PAYOUT_REQUIRE_TAX_CONSENT`; có thể gửi kèm `tax_authorization` trong chính yêu cầu rút, tương thích app Mindo), `amount_vnd >= PAYOUT_THRESHOLD_VND` (100.000) và <= số dư khả dụng, không có lệnh rút nào đang chờ.',
+        'OTP: gọi lần đầu KHÔNG có `otp` => 403 `otp_required` (và gửi OTP tới số đã xác minh); gọi lại cùng thân kèm `otp`. OTP gắn với đúng số tiền + tài khoản nhận.',
+        'Idempotent theo `idempotency_key` (8-64 ký tự): gửi lại cùng khóa => 200 trả lệnh cũ (không cần OTP mới); cùng khóa khác nội dung => 409 `idempotency_conflict`.',
+        'Tài khoản nhận lưu mã hóa AES-GCM; nhân viên tài chính duyệt/chi ở `/admin/v1/payouts/{id}/pay|reject`.',
+      ].join('\n\n'),
+      parameters: sigHeaders(true),
+      requestBody: { required: true, content: { 'application/json': { schema: c.add('WithdrawRequest', withdrawBody) } } },
+      responses: { '200': json('WithdrawResponse', G.withdrawResponse, 'Lệnh cũ (idempotent)'), '201': { description: 'Đã tạo lệnh chờ duyệt', content: { 'application/json': { schema: ref('WithdrawResponse') } } }, ...common429 },
+    },
+    'POST /v1/interactions': {
+      summary: 'Báo tương tác (nhấp / quét QR), tối đa 10 sự kiện/lô, khử trùng theo event_id',
+      description: 'Xác thực bằng chữ ký thiết bị (phone hoặc tv, đã ghép: trust_level >= 1). Thưởng = `interaction_reward_vnd` của chiến dịch (tối đa `INTERACTION_MAX_REWARD_VND`=50), ghi `wallet_ledger` bất biến, một lần theo event_id. Giới hạn: 20 lô/phút/thiết bị, 30 tương tác/người/ngày, 3/chiến dịch/người/ngày, trần thưởng/ngày. Gửi lại event_id => `duplicate` (không cộng lại). Sự kiện từ chối nằm ở `rejected` (vd `untrusted_device`, `not_in_manifest`, `campaign_cap`).',
+      parameters: sigHeaders(true),
+      requestBody: { required: true, content: { 'application/json': { schema: c.add('InteractionsRequest', interactionsBody) } } },
+      responses: { '200': json('InteractionsResponse', G.interactionsResponse, 'Đã xử lý'), ...common429 },
     },
     'GET /health': {
       summary: 'Sức khỏe dịch vụ',

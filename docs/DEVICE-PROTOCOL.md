@@ -317,6 +317,11 @@ Bậc tin cậy: `0` chưa ghép/chưa xác minh (không hoa hồng, không tín
 | 413 | `payload_too_large` | thân quá giới hạn | rút gọn |
 | 422 | `validation_failed` | sai kiểu/giá trị (`details`: danh sách `{path,message}`) hoặc lô sự kiện sai kích thước | sửa dữ liệu, không thử lại nguyên xi |
 | 429 | `rate_limited` | quá tốc độ (đăng ký theo IP, xin mã, heartbeat dày, lô sự kiện) | ngủ `Retry-After` giây |
+| 403 | `forbidden` / `feature_disabled` / `otp_required` / `otp_invalid` / `phone_not_verified` / `tax_consent_required` | phía người xem (WP-18), xem `docs/VIEWER-API.md` | theo từng mã |
+| 404 | `invalid_code` | mã ghép đôi sai/hết hạn/đã dùng (gộp một lỗi để chống dò) | báo người dùng nhập lại |
+| 409 | `already_paired` / `conflict` / `insufficient_balance` / `idempotency_conflict` | phía người xem | theo từng mã |
+| 422 | `below_threshold` | chưa đạt mốc rút | hiển thị tiến độ |
+| 503 | `not_configured` | máy chủ chưa cấu hình (khóa mã hóa, kênh OTP; `details.reason`) | thử lại sau, báo vận hành |
 | 500 | `internal` | lỗi server | backoff mũ |
 | 503 | `overloaded` | giảm tải | ngủ `Retry-After` giây (đã có jitter) |
 
@@ -342,12 +347,16 @@ Bậc tin cậy: `0` chưa ghép/chưa xác minh (không hoa hồng, không tín
 | Nonce nhớ | 10 phút |
 | Lệch đồng hồ | ±300 giây |
 
+## 11b. Phía người xem (app điện thoại Mindo)
+
+`POST /v1/viewer/pair`, `GET /v1/wallet`, `GET /v1/wallet/ledger`, `POST /v1/viewer/phone`, `GET|POST /v1/tax-authorization`, `POST /v1/withdraw`, `POST /v1/interactions` dùng cùng chữ ký thiết bị (mục 3), cùng host gateway (`gw-ams.anio.vn`), thiết bị `kind=phone`. Đặc tả đầy đủ, luật thưởng, chống gian lận và việc cần chủ dự án duyệt: **`docs/VIEWER-API.md`**.
+
 ## 12. Khác biệt theo môi trường và giới hạn đã biết
 
 - **Docker/Node:** presence và nonce nằm ở Redis (kv); `incr` của Redis nguyên tử nên chống phát lại chặt. **Cloudflare:** presence và nonce nằm ở Durable Object `PresenceShard` (SQLite, nguyên tử, chia 16 shard); KV không nguyên tử nên **không** dùng để chống phát lại ở production. Code Cloudflare chỉ mới qua `tsc`, chưa chạy thật.
 - Telemetry heartbeat gộp lô ở gateway (không qua Queue từng heartbeat); mất heartbeat khi tiến trình khởi động lại là chấp nhận được. Impression đi qua Queue (`ingest.events`) vì liên quan tiền.
 - Đã có và đã kiểm chứng: ký/nonce/skew, đăng ký/ghép đôi, heartbeat (jitter, giảm tải, lệnh), manifest (nhóm, 304, delta, CDN), sự kiện (idempotent, kiểm hợp lệ).
-- **Chưa làm:** xác minh chứng thực thiết bị (Play Integrity/Widevine), push FCM, WebSocket cho nhóm giám sát, CBOR/protobuf, `GET /v1/wallet` và `POST /v1/withdraw` (app điện thoại, thuộc API), lấy mẫu telemetry theo thiết bị (chỉ có lấy mẫu toàn cục `TELEMETRY_SAMPLE_EVERY`), kiểm tra cụm thiết bị cùng IP/ASN, định dạng quảng cáo khác `fullscreen` (cần cột riêng), quy tắc xoay vòng/tần suất.
+- **Chưa làm:** xác minh chứng thực thiết bị (Play Integrity/Widevine), push FCM, WebSocket cho nhóm giám sát, CBOR/protobuf, lấy mẫu telemetry theo thiết bị (chỉ có lấy mẫu toàn cục `TELEMETRY_SAMPLE_EVERY`), kiểm tra cụm thiết bị cùng IP/ASN, định dạng quảng cáo khác `fullscreen` (cần cột riêng), quy tắc xoay vòng/tần suất.
 
 ## 13. Checklist ánh xạ cho app TV Brain-rot (a4)
 

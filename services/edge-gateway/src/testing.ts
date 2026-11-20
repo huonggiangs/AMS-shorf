@@ -28,6 +28,9 @@ export interface FixtureOpts {
   durationS?: number;
   state?: string;
   withObjects?: boolean;
+  /** loai thuong chien dich (WP-18). Fixture mac dinh 'cover' de test cu giu nguyen; cot DB mac dinh 'performance'. */
+  rewardModel?: 'cover' | 'performance';
+  interactionRewardVnd?: number;
 }
 
 /** Tao tenant/khach/chien dich active + lich + creative da duyet (+ tep trong object store de co sha256). */
@@ -45,9 +48,9 @@ export async function seedAdFixture(rt: Runtime, o: FixtureOpts = {}): Promise<A
   for (let i = 0; i < (o.campaigns ?? 1); i++) {
     const cid = rt.id();
     await rt.db.run(
-      `INSERT INTO campaigns (id, customer_id, name, state, budget_cap_vnd, approved_budget_vnd, reserved_vnd, spent_vnd, funding_state, start_at, end_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 50000000, 50000000, 50000000, 0, 'reserved', ?, ?, ?, ?)`,
-      [cid, customerId, `Chien dich ${i + 1}`, o.state ?? 'active', start, end, now, now],
+      `INSERT INTO campaigns (id, customer_id, name, state, budget_cap_vnd, approved_budget_vnd, reserved_vnd, spent_vnd, funding_state, start_at, end_at, created_at, updated_at, reward_model, interaction_reward_vnd)
+       VALUES (?, ?, ?, ?, 50000000, 50000000, 50000000, 0, 'reserved', ?, ?, ?, ?, ?, ?)`,
+      [cid, customerId, `Chien dich ${i + 1}`, o.state ?? 'active', start, end, now, now, o.rewardModel ?? 'cover', o.interactionRewardVnd ?? 0],
     );
     const slotId = rt.id();
     const regions = o.regions === null ? null : JSON.stringify(o.regions ?? ['HN', 'HCM']);

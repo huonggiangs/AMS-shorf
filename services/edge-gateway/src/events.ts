@@ -55,13 +55,15 @@ export async function processEvents(
   rawEvents: unknown[],
   view: ManifestView,
   policy: EventPolicy,
+  /** loai chien dich (WP-18). Co tham so: chi chien dich 'cover' moi sinh thuong luot xem. Bo trong: giu hanh vi cu (khong loc). */
+  rewardModels?: ReadonlyMap<string, { reward_model: string }>,
 ): Promise<{ result: EventResult; msg: IngestMessage | null }> {
   const candidates: string[] = [];
-  await processEventsPass(rt, dev, rawEvents, view, policy, (id) => {
+  await processEventsPass(rt, dev, rawEvents, view, policy, rewardModels, (id) => {
     candidates.push(id);
     return false;
   });
-  if (candidates.length === 0) return processEventsPass(rt, dev, rawEvents, view, policy, () => false);
+  if (candidates.length === 0) return processEventsPass(rt, dev, rawEvents, view, policy, rewardModels, () => false);
   const now = rt.clock.now().getTime();
   const hourKey = new Date(now).toISOString().slice(0, 13).replace(/\D/g, '');
   const capKey = `cap:${dev.id}:${hourKey}`;
@@ -72,7 +74,7 @@ export async function processEvents(
   const firstOrd = (n ?? 0) - fresh.length;
   fresh.forEach((id, i) => capped.set(id, firstOrd + i + 1 > policy.maxPerDeviceHour));
   for (const id of candidates) if (!capped.has(id)) capped.set(id, (n ?? 0) > policy.maxPerDeviceHour);
-  return processEventsPass(rt, dev, rawEvents, view, policy, (id) => capped.get(id) === true);
+  return processEventsPass(rt, dev, rawEvents, view, policy, rewardModels, (id) => capped.get(id) === true);
 }
 
 async function processEventsPass(
@@ -81,6 +83,7 @@ async function processEventsPass(
   rawEvents: unknown[],
   view: ManifestView,
   policy: EventPolicy,
+  rewardModels: ReadonlyMap<string, { reward_model: string }> | undefined,
   capped: CapFn,
 ): Promise<{ result: EventResult; msg: IngestMessage | null }> {
   const now = rt.clock.now().getTime();
@@ -138,7 +141,8 @@ async function processEventsPass(
       if (capped(e.event_id)) reason = 'rate_cap'; // tran gio: quyet dinh theo lo, xem processEvents
     }
     const valid = reason === null;
-    const reward = valid && dev.screenType === 'tv' && dev.trust >= 1 ? view.reward(e.campaign_id, e.slot_id) * policy.rewardPointToVnd : 0;
+    const coverCampaign = rewardModels ? rewardModels.get(info.campaign_id)?.reward_model === 'cover' : true; // 'performance': luot xem thuan KHONG co thuong
+    const reward = valid && coverCampaign && dev.screenType === 'tv' && dev.trust >= 1 ? view.reward(e.campaign_id, e.slot_id) * policy.rewardPointToVnd : 0;
     impressions.push({
       ts,
       event_id: e.event_id,
