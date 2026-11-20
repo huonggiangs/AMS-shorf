@@ -477,6 +477,19 @@ function readSecretSources(a) {
   return vals;
 }
 
+// FIELD_ENC_KEY cua gateway PHAI trung Worker api. Nguon: gia tri vua sinh/cung cap trong lan chay nay, hoac ban sao backups/secrets-<env>-*.env moi nhat (do lan deploy truoc tu sinh).
+function fieldEncKeyFromBackups(env) {
+  try {
+    const dir = join(ROOT, 'backups');
+    const files = readdirSync(dir).filter((f) => f.startsWith(`secrets-${env}-`) && f.endsWith('.env')).sort().reverse();
+    for (const f of files) {
+      const m = /^FIELD_ENC_KEY=(.+)$/m.exec(readFileSync(join(dir, f), 'utf8'));
+      if (m && m[1].trim()) { sensitive.add(m[1].trim()); return m[1].trim(); }
+    }
+  } catch { /* chua co thu muc backups */ }
+  return '';
+}
+
 function genValue(kind) {
   return kind === 'b64' ? randomBytes(32).toString('base64') : randomBytes(36).toString('hex'); // hex 72 ký tự
 }
@@ -500,10 +513,12 @@ function ensureSecrets(a, cfgs, phase, state) {
       const present = have.has(s.name);
       if (present && !a.overwriteSecrets) continue;
       let val = supplied[s.name];
+      if (!val && key === 'gateway' && s.name === 'FIELD_ENC_KEY') val = state.fieldEncKey || fieldEncKeyFromBackups(a.env);
       if (!val && s.gen && a.genSecrets && !present) { val = genValue(s.gen); sensitive.add(val); generated[s.name] = val; }
       if (val) toSet[s.name] = val;
       else if (!present && s.required) missingRequired.push(s.name);
     }
+    if (key === 'api') { const k = toSet.FIELD_ENC_KEY || supplied.FIELD_ENC_KEY; if (k) state.fieldEncKey = k; }
     for (const s of spec) log(`  ${w}.${s.name}: ${have.has(s.name) ? (toSet[s.name] ? 'sẽ ghi đè' : 'đã có') : (toSet[s.name] ? (generated[s.name] ? 'sẽ tự sinh' : 'sẽ đặt') : (s.required ? 'THIẾU (bắt buộc)' : 'chưa đặt (tùy chọn)'))}`);
     const names = Object.keys(toSet);
     if (!names.length) continue;
@@ -523,6 +538,19 @@ function ensureSecrets(a, cfgs, phase, state) {
     for (const n of names) { const i = missingRequired.indexOf(n); if (i >= 0) missingRequired.splice(i, 1); }
   }
   return missingRequired;
+}
+
+// CORS cho bucket media: trinh duyet PUT truc tiep len R2 bang URL ky san (docs/CLOUDFLARE-MEDIA-LIMITS.md). Idempotent.
+async function r2Cors(a) {
+  step(`CORS bucket media R2 (${a.env})`);
+  const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const origin = `https://${a.env === 'production' ? 'ams.anio.vn' : 'ams-stg.anio.vn'}`;
+  const bucket = `ams-media-${a.env}`;
+  if (a.dryRun) { log(`[dry-run] CORS ${bucket}: ${origin} (GET, PUT, HEAD)`); return 0; }
+  const r = await cf(`/accounts/${account}/r2/buckets/${bucket}/cors`, { method: 'PUT', body: { rules: [{ id: 'ams-web-upload', allowed: { origins: [origin], methods: ['GET', 'PUT', 'HEAD'], headers: ['*'] }, exposeHeaders: ['ETag'], maxAgeSeconds: 3600 }] } });
+  if (!r.ok) { warn(`Khong dat duoc CORS ${bucket}: ${r.error || `HTTP ${r.status}`}. Dat tay: R2 > ${bucket} > Settings > CORS policy (origin ${origin}, PUT/GET/HEAD).`); return 1; }
+  log(`  [OK]    CORS ${bucket} cho ${origin}`);
+  return 0;
 }
 
 // ================================================================ BƯỚC 7: TÊN MIỀN / ROUTE / DNS
@@ -664,7 +692,7 @@ async function main() {
     if (has('secrets') && a.secrets && online) ensureSecrets(a, cfgs, 'pre', {});
     step('Dry-run: wrangler deploy --dry-run (không gửi gì lên Cloudflare)');
     for (const n of a.only) wr(['deploy', '--dry-run', '--outdir', join(ROOT, '.wrangler/dry', WORKERS[n]), '-c', cfgs[WORKERS[n]], '--env', a.env]);
-    if (has('domains') && a.domains) await domains(a, zoneId, routes);
+    if (has('domains') && a.domains) { await domains(a, zoneId, routes); await r2Cors(a); }
     log('\nDry-run xong. KHÔNG có gì được tạo/sửa/deploy trên Cloudflare.');
     return;
   }
@@ -687,7 +715,7 @@ async function main() {
     const miss = ensureSecrets(a, cfgs, 'post', secState);
     if (miss.length) { exit = 1; warn(`Worker api đang chạy NHƯNG thiếu bí mật bắt buộc: ${[...new Set(miss)].join(', ')}. API sẽ lỗi cho đến khi đặt (xem docs/DEPLOY-CLOUDFLARE.md mục 5).`); }
   }
-  if (has('domains') && a.domains) { const bad = await domains(a, zoneId, routes); if (bad) exit = 1; }
+  if (has('domains') && a.domains) { const bad = await domains(a, zoneId, routes); if (bad) exit = 1; await r2Cors(a); }
   if (has('smoke')) { const bad = await smoke(a, routes); if (bad) exit = 1; }
   log(`\n${exit ? 'Xong nhưng CÓ CẢNH BÁO/LỖI ở trên.' : 'Xong.'} Việc tiếp theo: danh sách kiểm tra sau deploy trong docs/DEPLOY-CLOUDFLARE.md (SePay sandbox, đăng nhập, tạo chiến dịch thử).`);
   rl?.close();
