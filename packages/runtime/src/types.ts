@@ -54,6 +54,22 @@ export interface ObjectStore {
   getRange?(key: string, offset: number, length: number): Promise<Uint8Array | null>;
   delete?(key: string): Promise<void>;
   list?(prefix?: string, limit?: number): Promise<{ key: string; size: number }[]>;
+  /**
+   * Tai len TUNG PHAN (multipart), tuy chon. Dung khi tep lon khong gui duoc trong mot request (Cloudflare Worker: body toi da 100 MB)
+   * va khong co khoa S3 de ky URL. Quy tac chung (R2/S3): moi phan (tru phan cuoi) co CUNG kich thuoc va >= 5 MiB; so phan <= 10000.
+   * `etag` do kho tra ve; `multipartComplete` phai nhan DUNG cac etag do (sai/thieu phan => nem loi, khong tao tep).
+   */
+  multipartCreate?(key: string, contentType: string): Promise<{ uploadId: string }>;
+  multipartUploadPart?(key: string, uploadId: string, partNumber: number, body: Uint8Array | ReadableStream<Uint8Array>, size: number): Promise<{ etag: string }>;
+  multipartComplete?(key: string, uploadId: string, parts: MultipartPart[]): Promise<void>;
+  /** Huy va giai phong cac phan da tai; idempotent (khong loi neu uploadId khong con). */
+  multipartAbort?(key: string, uploadId: string): Promise<void>;
+}
+
+export interface MultipartPart {
+  /** so thu tu phan, tu 1 */
+  n: number;
+  etag: string;
 }
 
 export interface Mailer {

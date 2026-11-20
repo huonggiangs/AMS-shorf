@@ -11,6 +11,8 @@ export const TOPIC_CAMPAIGN_APPROVED = 'campaign.approved';
 export const TOPIC_MANIFEST_BUMP = 'manifest.bump';
 /** Tep tai len vua xac nhan -> bao media-worker quet/chuyen ma (cung ten chu de voi MEDIA_TOPIC cua @ams/media-worker). */
 export const TOPIC_MEDIA_UPLOADED = 'media.uploaded';
+/** Nhap tep tu lien ket (Drive/Dropbox/URL): tai ve R2 roi chay luong xac nhan nhu tep tai len. Consumer: lib/media-import.ts (Queue consumer cua API Worker / API Node). */
+export const TOPIC_MEDIA_IMPORT = 'media.import';
 /** Hoan phan tien giu chua dung cua chien dich da tra lai/ket thuc/xoa; ghi CUNG giao dich voi viec doi trang thai. */
 export const TOPIC_CAMPAIGN_RELEASE = 'campaign.release';
 
@@ -24,6 +26,11 @@ export interface CampaignReleasePayload {
 
 export function enqueueMediaUploaded(db: Parameters<typeof enqueueOutbox>[0], rt: Pick<Runtime, 'clock' | 'id'>, creativeId: string): Promise<boolean> {
   return enqueueOutbox(db, rt, { topic: TOPIC_MEDIA_UPLOADED, payload: { creative_id: creativeId }, dedupeKey: `${TOPIC_MEDIA_UPLOADED}:${creativeId}` });
+}
+
+/** `attempt`: lan thu (de Thu lai tao viec moi, khong bi khoa khu trung chan). */
+export function enqueueMediaImport(db: Parameters<typeof enqueueOutbox>[0], rt: Pick<Runtime, 'clock' | 'id'>, creativeId: string, attempt: string): Promise<boolean> {
+  return enqueueOutbox(db, rt, { topic: TOPIC_MEDIA_IMPORT, payload: { creative_id: creativeId }, dedupeKey: `${TOPIC_MEDIA_IMPORT}:${creativeId}:${attempt}` });
 }
 
 /** Khoa khu trung theo (chien dich, lan chuyen trang thai): ULID de moi lan reject/end la mot viec rieng. */
@@ -79,6 +86,11 @@ export function createOutboxHandlers(getFinance: () => Promise<FinancePort>): Ou
       const p = msg.payload as { creative_id?: string } | null;
       if (!p?.creative_id) return;
       await rt.queue.send(TOPIC_MEDIA_UPLOADED, { creative_id: p.creative_id });
+    },
+    [TOPIC_MEDIA_IMPORT]: async (msg, rt) => {
+      const p = msg.payload as { creative_id?: string } | null;
+      if (!p?.creative_id) return;
+      await rt.queue.send(TOPIC_MEDIA_IMPORT, { creative_id: p.creative_id });
     },
     // Hoan tien chua dung. CHI khi chien dich van o trang thai cuoi (rejected/ended): neu da duyet lai truoc khi worker chay thi bo qua
     // (khong giai phong tien cua lan duyet moi). releaseForCampaign idempotent => thu lai/chay song song an toan.

@@ -128,6 +128,12 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
   return json as never;
 }
 
+/** Tieu de CSRF cho request ghi tu code khac (vd XHR tai tung phan len). */
+export const csrfHeaders = (): Record<string, string> => {
+  const t = csrfToken ?? readCsrfCookie();
+  return t ? { 'X-CSRF-Token': t } : {};
+};
+
 /** PUT thang byte (anh dai dien): cung phien/CSRF nhu request(); khong doc JSON, nem ApiError khi loi. */
 export async function putBlob(path: string, blob: Blob): Promise<void> {
   const headers: Record<string, string> = { 'Content-Type': blob.type || 'application/octet-stream', Accept: 'application/json' };

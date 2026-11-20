@@ -76,6 +76,31 @@ describe.each(factories)('ObjectStore contract: %s', (_n, make) => {
     expect(p.headers['Content-Type']).toBe('video/mp4');
     expect(await s.getSigned('media/c1/a.mp4', 60)).toContain('media/c1/a.mp4');
   });
+  it('multipart: tai tung phan (Uint8Array va luong), complete noi dung thu tu, etag sai/thieu phan bi tu choi, abort don dep', async () => {
+    const s = await make();
+    const k = 'media/c1/big.mp4';
+    const { uploadId } = await s.multipartCreate!(k, 'video/mp4');
+    const p1 = await s.multipartUploadPart!(k, uploadId, 1, new Uint8Array([1, 2, 3, 4]), 4);
+    const stream = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new Uint8Array([5, 6])); c.enqueue(new Uint8Array([7])); c.close(); } });
+    const p2 = await s.multipartUploadPart!(k, uploadId, 2, stream, 3);
+    expect(p1.etag).not.toBe(p2.etag);
+    expect(await s.head(k)).toBeNull(); // chua complete: chua co tep
+    await expect(s.multipartUploadPart!(k, uploadId, 3, new Uint8Array([1]), 2)).rejects.toThrow(); // sai kich thuoc khai bao
+    await expect(s.multipartComplete!(k, uploadId, [{ n: 1, etag: p1.etag }, { n: 2, etag: '"sai"' }])).rejects.toThrow();
+    await expect(s.multipartComplete!(k, uploadId, [{ n: 1, etag: p1.etag }, { n: 3, etag: p2.etag }])).rejects.toThrow(); // thieu phan 2
+    expect(await s.head(k)).toBeNull();
+    await s.multipartComplete!(k, uploadId, [{ n: 2, etag: p2.etag }, { n: 1, etag: p1.etag }]); // thu tu nhan khong quan trong
+    expect(Array.from((await s.get(k))!)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(await s.head(k)).toEqual({ size: 7, contentType: 'video/mp4' });
+    await expect(s.multipartUploadPart!(k, uploadId, 3, new Uint8Array([1]), 1)).rejects.toThrow(); // uploadId da dong
+    const u2 = await s.multipartCreate!('media/c1/x.mp4', 'video/mp4');
+    await s.multipartUploadPart!('media/c1/x.mp4', u2.uploadId, 1, new Uint8Array([9]), 1);
+    await s.multipartAbort!('media/c1/x.mp4', u2.uploadId);
+    await s.multipartAbort!('media/c1/x.mp4', u2.uploadId); // idempotent
+    expect(await s.head('media/c1/x.mp4')).toBeNull();
+    await expect(s.multipartUploadPart!('media/c1/x.mp4', u2.uploadId, 2, new Uint8Array([9]), 1)).rejects.toThrow();
+    await expect(s.multipartUploadPart!('media/c1/khac.mp4', uploadId, 1, new Uint8Array([9]), 1)).rejects.toThrow(); // sai khoa
+  });
   it('khoang trang, unicode, dau cham ben trong ten', async () => {
     const s = await make();
     const k = 'media/c1/01HX/ten tep (1) - Quang cao.v2.mp4';

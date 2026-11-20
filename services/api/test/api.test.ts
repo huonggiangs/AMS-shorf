@@ -443,12 +443,17 @@ describe('tai media: kiem tra kich thuoc va han muc', () => {
     expect((await lan.req('POST', `/portal/v1/media/${r.body.id}/confirm`, {})).status).toBe(422);
   });
 
-  it('nhap lien ket chi la tham chieu, kiem tra ten mien (khong IP, khong localhost, khong http)', async () => {
-    const ok = await lan.json('POST', '/portal/v1/media/import', { source: 'youtube', url: 'https://www.youtube.com/watch?v=abc123' });
+  it('nhap lien ket: kiem tra ten mien (khong IP, khong localhost, khong http), YouTube bao chua ho tro, Drive/Dropbox xep viec tai ve', async () => {
+    const yt = await lan.json('POST', '/portal/v1/media/import', { source: 'youtube', url: 'https://www.youtube.com/watch?v=abc123' });
+    expect(yt.status).toBe(422);
+    expect(yt.body.error.code).toBe('youtube_unsupported');
+    expect(yt.body.error.message).toMatch(/Chưa hỗ trợ tải từ YouTube/);
+    const ok = await lan.json('POST', '/portal/v1/media/import', { source: 'drive', url: 'https://drive.google.com/file/d/1cfoXZesra4gI_XZNDOFXMpYXo2BgFIvF/view?usp=sharing' });
     expect(ok.status).toBe(201);
-    expect(ok.body.source).toMatch(/youtube/);
-    for (const url of ['http://youtube.com/watch?v=1', 'https://127.0.0.1/x.mp4', 'https://localhost/a', 'https://evil.com/watch?v=1', 'https://user:pw@youtube.com/watch?v=1', 'https://169.254.169.254/latest']) {
-      const r = await lan.json('POST', '/portal/v1/media/import', { source: 'youtube', url });
+    expect(ok.body.source).toBe('gdrive');
+    expect(ok.body.status).toBe('processing');
+    for (const [source, url] of [['drive', 'http://drive.google.com/file/d/1cfoXZesra4gI_XZNDOFXMpYXo2BgFIvF/view'], ['drive', 'https://127.0.0.1/x.mp4'], ['drive', 'https://localhost/a'], ['drive', 'https://evil.com/file/d/1cfoXZesra4gI_XZNDOFXMpYXo2BgFIvF/view'], ['drive', 'https://user:pw@drive.google.com/file/d/1cfoXZesra4gI_XZNDOFXMpYXo2BgFIvF/view'], ['dropbox', 'https://169.254.169.254/latest'], ['youtube', 'http://youtube.com/watch?v=1']]) {
+      const r = await lan.json('POST', '/portal/v1/media/import', { source, url });
       expect(r.status, url).toBe(422);
     }
   });

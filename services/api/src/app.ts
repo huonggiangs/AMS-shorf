@@ -69,8 +69,11 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
     maxSize: 2 * 1024 * 1024,
     onError: (c) => c.json({ error: { code: 'payload_too_large', message: 'Nội dung gửi lên quá lớn.' } }, 413),
   });
-  // PUT /storage/upload/* (OBJECT_STORE=fs) co gioi han rieng theo chu ky URL (routes/storage.ts)
-  app.use('*', (c, next) => (c.req.path.startsWith(STORAGE_UPLOAD_PATH) ? next() : jsonLimit(c, next)));
+  // PUT /storage/upload/* (OBJECT_STORE=fs) co gioi han rieng theo chu ky URL (routes/storage.ts).
+  // Tai tep qua Worker: PUT /media/:id/content (<= 95 MB) va PUT /media/:id/parts/:n (phan <= 50 MiB) la thân tệp, KHÔNG phải JSON: giới hạn 2 MB không áp dụng;
+  // route tự bắt buộc Content-Length đúng khai báo và đếm byte thực khi ghi luồng (routes/media.ts, routes/media-multipart.ts).
+  const mediaBodyRoute = (c: { req: { method: string; path: string } }) => c.req.method === 'PUT' && /^\/(admin|portal)\/v1\/media\/[^/]+\/(content|parts\/\d{1,5})$/.test(c.req.path);
+  app.use('*', (c, next) => (c.req.path.startsWith(STORAGE_UPLOAD_PATH) || mediaBodyRoute(c) ? next() : jsonLimit(c, next)));
 
   app.get('/health', (c) => c.json({ ok: true, service: 'ams-api', runtime: rt.config.runtime }));
 

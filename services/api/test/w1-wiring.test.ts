@@ -169,10 +169,11 @@ describe('w1: media.uploaded + cua quet ma doc', () => {
     await setPolicy(null);
   });
 
-  it('tep lien ket (import) chua tai ve: khong duyet duoc, ma loi rieng', async () => {
-    const r = await lan.json('POST', '/portal/v1/media/import', { source: 'youtube', url: 'https://www.youtube.com/watch?v=abc123' });
+  it('tep lien ket (import) chua tai ve: khong duyet duoc (dang nhap tu lien ket -> invalid_state)', async () => {
+    const r = await lan.json('POST', '/portal/v1/media/import', { source: 'drive', url: 'https://drive.google.com/file/d/1cfoXZesra4gI_XZNDOFXMpYXo2BgFIvF/view' });
+    expect(r.status).toBe(201);
     const a = await admin.json('POST', `/admin/v1/media/${r.body.id}/approve`);
-    expect([a.status, a.body.error.code]).toEqual([422, 'creative_link_not_ingested']);
+    expect([a.status, a.body.error.code]).toEqual([409, 'invalid_state']);
   });
 
   it('duyet chien dich: creative chua quet bi chan, quet sach thi duyet duoc', async () => {

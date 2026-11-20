@@ -53,7 +53,7 @@ describe('creative size check', () => {
 
 describe('media link domain check', () => {
   it('accepts matching hosts only', () => {
-    expect(checkMediaUrl('youtube', 'https://www.youtube.com/watch?v=abc').ok).toBe(true);
+    expect(checkMediaUrl('youtube', 'https://www.youtube.com/watch?v=abc')).toMatchObject({ ok: false, message: expect.stringMatching(/Chưa hỗ trợ tải từ YouTube/) });
     expect(checkMediaUrl('youtube', 'https://evil.example/watch').ok).toBe(false);
     expect(checkMediaUrl('drive', 'https://drive.google.com/file/d/1/view').ok).toBe(true);
     expect(checkMediaUrl('dropbox', 'https://www.dropbox.com/s/x/a.mp4?dl=1').ok).toBe(true);

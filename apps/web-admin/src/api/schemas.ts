@@ -197,6 +197,20 @@ export const mediaSchema = z
     preview_url: z.string().nullish(),
     /** vì sao chưa duyệt được + việc cần làm (confirm | recheck | manual_review | reupload | wait | none) */
     blocker: z.object({ code: z.string(), message: z.string(), action: z.string() }).nullish(),
+    /** tiến độ tải từng phần / nhập từ liên kết (Drive...): kind multipart|import; status open|completed|queued|running|done|failed... */
+    transfer: z
+      .object({
+        kind: z.string(),
+        status: z.string(),
+        bytes_done: z.coerce.number().default(0),
+        bytes_total: z.coerce.number().nullish(),
+        percent: z.coerce.number().nullish(),
+        parts_done: z.coerce.number().nullish(),
+        total_parts: z.coerce.number().nullish(),
+        error_code: z.string().nullish(),
+        error_message: z.string().nullish(),
+      })
+      .nullish(),
   })
   .passthrough();
 export type Media = z.infer<typeof mediaSchema>;
@@ -214,7 +228,7 @@ export const bulkDeleteResultSchema = z
   .passthrough();
 export type BulkDeleteResult = z.infer<typeof bulkDeleteResultSchema>;
 export const uploadUrlSchema = z
-  .object({ id: idStr, url: z.string(), method: z.string().optional(), headers: z.record(z.string(), z.string()).optional(), via: z.enum(['direct', 'proxy']).optional() })
+  .object({ id: idStr, url: z.string(), method: z.string().optional(), headers: z.record(z.string(), z.string()).optional(), via: z.enum(['direct', 'proxy', 'multipart']).optional(), multipart: z.object({ part_size: z.number(), total_parts: z.number() }).passthrough().optional() })
   .passthrough();
 
 /* ---------- devices ---------- */

@@ -51,16 +51,36 @@ describe('upload-url khi kho khong ky duoc: URL cung origin toi API', () => {
     expect(d.body.url).toContain('objects.test');
     store().signedPut = false;
   });
-  it('tep > 95 MB bi tu choi som voi thong bao tieng Viet ro rang', async () => {
-    const r = await admin.json('POST', '/admin/v1/media/upload-url', { customer_id: K001, name: 'v.mp4', content_type: 'video/mp4', size_bytes: PROXY_UPLOAD_MAX_BYTES + 1, width: 1920, height: 1080, duration_sec: 30 });
+  it('tep > 90 MB: kho ho tro multipart -> via=multipart (tung phan 32 MiB); kho khong ho tro -> tu choi som voi thong bao tieng Viet', async () => {
+    const mk = (size: number) => admin.json('POST', '/admin/v1/media/upload-url', { customer_id: K001, name: 'v.mp4', content_type: 'video/mp4', size_bytes: size, width: 1920, height: 1080, duration_sec: 30 });
+    expect((await mk(90 * 1048576)).body.via).toBe('proxy'); // <= 90 MB: mot PUT qua Worker
+    const big = await mk(PROXY_UPLOAD_MAX_BYTES + 1);
+    expect(big.status, JSON.stringify(big.body)).toBe(201);
+    expect(big.body).toMatchObject({ via: 'multipart', method: 'POST', url: `/api/admin/v1/media/${big.body.id}/multipart`, multipart: { part_size: 32 * 1048576, total_parts: 3 } });
+    const s = store();
+    const saved = [s.multipartCreate, s.multipartUploadPart, s.multipartComplete];
+    s.multipartCreate = undefined; // kho khong co multipart
+    const r = await mk(PROXY_UPLOAD_MAX_BYTES + 1);
+    [s.multipartCreate] = saved;
     expect(r.status).toBe(422);
     expect(r.body.error.code).toBe('file_too_large');
     expect(r.body.error.message).toMatch(/vượt 95 MB: nén lại \(H\.264\) rồi tải lại/);
-    expect((await admin.json('POST', '/admin/v1/media/upload-url', { customer_id: K001, name: 'v.mp4', content_type: 'video/mp4', size_bytes: 90 * 1048576, width: 1920, height: 1080, duration_sec: 30 })).status).toBe(201);
   });
 });
 
 describe('PUT /media/:id/content', () => {
+  it('HOI QUY 413: than tep > 2 MB (gioi han body JSON toan cuc) van duoc nhan qua /content (truoc day bi chan 413 payload_too_large)', async () => {
+    const big = new Uint8Array([...png(1080, 1920), ...new Uint8Array(3 * 1048576)]); // PNG + 3 MB du lieu thua: chi kiem tra tai len, khong kiem tra cau truc
+    const r = await create(admin, '/admin/v1', big);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const res = await put(admin, r.body.url, big, withLen(big));
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect((await store().head(r.body.key))!.size).toBe(big.length);
+    // dang JSON thuong van bi gioi han 2 MB
+    const json = await env.app.request('/admin/v1/media/upload-url', { method: 'POST', headers: { cookie: admin.cookie, 'x-csrf-token': admin.csrf, 'content-type': 'application/json', 'content-length': String(3 * 1048576) }, body: new Uint8Array(3 * 1048576) as any });
+    expect(json.status).toBe(413);
+  });
+
   it('luong day du: PUT dung -> luu dung byte vao kho, audit media.upload_proxy, confirm -> pending_review (dung ca stream)', async () => {
     const b = png(1080, 1920);
     const r = await create(admin, '/admin/v1', b);

@@ -28,6 +28,42 @@ export class R2ObjectStore implements ObjectStore {
     }
     await this.bucket.put(key, stream as never, { httpMetadata: { contentType } });
   }
+  /**
+   * Multipart qua BINDING (khong can khoa S3, khong CORS): createMultipartUpload / resumeMultipartUpload(key, uploadId) / uploadPart / complete / abort.
+   * Phan tai bang luong can do dai biet truoc => FixedLengthStream; phan Uint8Array (nhap tu Drive) gui thang.
+   */
+  async multipartCreate(key: string, contentType: string) {
+    const up = await this.bucket.createMultipartUpload(key, { httpMetadata: { contentType } });
+    return { uploadId: up.uploadId };
+  }
+  async multipartUploadPart(key: string, uploadId: string, n: number, body: Uint8Array | ReadableStream<Uint8Array>, size: number) {
+    const up = this.bucket.resumeMultipartUpload(key, uploadId);
+    let value: ReadableStream<Uint8Array> | Uint8Array = body;
+    if (!(body instanceof Uint8Array)) {
+      const FLS = (globalThis as unknown as { FixedLengthStream?: new (n: number) => TransformStream<Uint8Array, Uint8Array> }).FixedLengthStream;
+      if (FLS) {
+        const fl = new FLS(size);
+        void body.pipeTo(fl.writable).catch(() => undefined);
+        value = fl.readable;
+      }
+    } else if (body.length !== size) throw new Error('part_size_mismatch');
+    const part = await up.uploadPart(n, value as never);
+    return { etag: part.etag };
+  }
+  async multipartComplete(key: string, uploadId: string, parts: { n: number; etag: string }[]) {
+    const up = this.bucket.resumeMultipartUpload(key, uploadId);
+    await up.complete([...parts].sort((a, b) => a.n - b.n).map((p) => ({ partNumber: p.n, etag: p.etag })));
+  }
+  async multipartAbort(key: string, uploadId: string) {
+    try {
+      await this.bucket.resumeMultipartUpload(key, uploadId).abort();
+    } catch {
+      /* da het han/da huy: idempotent */
+    }
+  }
+  async delete(key: string) {
+    await this.bucket.delete(key);
+  }
   private base() {
     return `https://${this.cfg.accountId}.r2.cloudflarestorage.com`;
   }

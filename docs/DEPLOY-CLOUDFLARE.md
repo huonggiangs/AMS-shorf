@@ -41,7 +41,7 @@ Hãy làm **staging trước**, kiểm tra xong mới làm production.
 **C. Giá trị bí mật (mỗi môi trường một bộ riêng, staging khác production)**
 - [ ] `SEPAY_WEBHOOK_SECRET`: chuỗi bạn đặt, **cùng giá trị** dán vào my.sepay.vn > Webhooks. Không tự sinh được.
 - [ ] `SESSION_SECRET`, `FIELD_ENC_KEY`: script có thể tự sinh (`--generate-secrets`); **bạn phải sao lưu `FIELD_ENC_KEY`** ở nơi an toàn (mất = mất dữ liệu mã hóa MST/số tài khoản).
-- [ ] (TÙY CHỌN, chỉ để tải tệp > 95 MB trực tiếp lên R2; **không cần** cho tải video thông thường vì mặc định tệp đi qua Worker, tối đa 95 MB, không cần CORS) khóa S3 của R2: R2 > Manage API tokens > tạo token chỉ cho bucket `ams-media-*`: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
+- [ ] (TÙY CHỌN, chỉ để tải thẳng lên R2 bằng URL ký; **không cần**: tệp <= 90 MB đi một PUT qua Worker, tệp lớn hơn (tới 200 MB) tải từng phần qua Worker bằng R2 binding, không cần CORS) khóa S3 của R2: R2 > Manage API tokens > tạo token chỉ cho bucket `ams-media-*`: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
 - [ ] (Cho email mời/kích hoạt) dịch vụ gửi thư qua HTTP: `MAIL_HTTP_URL`, `MAIL_HTTP_KEY`, `MAIL_FROM`. Chưa có thì email không gửi được (vẫn deploy được).
 
 **D. Bên thứ ba và quy trình**
@@ -146,7 +146,7 @@ Script đặt bí mật bằng `wrangler secret bulk` (đọc từ stdin), **ch�
 | `SESSION_SECRET` | có | chuỗi ngẫu nhiên >= 32 ký tự |
 | `FIELD_ENC_KEY` | có | đúng 32 byte mã hóa base64; **sao lưu**: mất khóa là mất dữ liệu đã mã hóa (MST, số tài khoản) |
 | `SEPAY_WEBHOOK_SECRET` | có | bạn tự đặt, dán **cùng giá trị** vào my.sepay.vn > Webhooks > Bảo mật; không tự sinh |
-| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | tùy chọn: upload trực tiếp lên R2 bằng URL ký (tệp lớn) | thiếu một trong ba (hoặc `R2_BUCKET_NAME`) thì tệp tải lên đi qua Worker (`PUT /media/:id/content`, tối đa 95 MB, không cần CORS). Khóa S3 của R2, tạo token chỉ cho bucket media. Tên bucket (`R2_BUCKET_NAME`) đã nằm trong `wrangler.toml` |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | tùy chọn: upload trực tiếp lên R2 bằng URL ký (tệp lớn) | thiếu một trong ba (hoặc `R2_BUCKET_NAME`) thì tệp tải lên đi qua Worker (`PUT /media/:id/content` tối đa 95 MB; tệp > 90 MB tải từng phần `POST /media/:id/multipart` + `PUT /media/:id/parts/:n`, video thang máy tới 200 MB; không cần CORS). Nhập từ Google Drive chạy trong consumer queue `media.import` (cần Workers Paid cho tệp ~200 MB; xem `CLOUDFLARE-MEDIA-LIMITS.md`). Migration mới `0018_creative_transfers`. Khóa S3 của R2, tạo token chỉ cho bucket media. Tên bucket (`R2_BUCKET_NAME`) đã nằm trong `wrangler.toml` |
 | `MAIL_HTTP_URL`, `MAIL_HTTP_KEY`, `MAIL_FROM` | cho email | dịch vụ gửi thư qua HTTP (runtime Cloudflare không dùng SMTP) |
 
 Dùng **giá trị riêng cho staging**, khác production. Ví dụ (PowerShell dùng `$env:TÊN="..."`):

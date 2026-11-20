@@ -57,6 +57,46 @@ export class S3ObjectStore implements ObjectStore {
     }
     await this.put(key, Buffer.concat(parts), contentType);
   }
+  async multipartCreate(key: string, contentType: string) {
+    const { s3, client } = await this.load();
+    const r = await client.send(new s3.CreateMultipartUploadCommand({ Bucket: this.cfg.bucket, Key: key, ContentType: contentType }));
+    if (!r.UploadId) throw new Error('multipart_create_failed');
+    return { uploadId: r.UploadId };
+  }
+  async multipartUploadPart(key: string, uploadId: string, n: number, body: Uint8Array | ReadableStream<Uint8Array>, size: number) {
+    const { s3, client } = await this.load();
+    let bytes: Uint8Array;
+    if (body instanceof Uint8Array) bytes = body;
+    else {
+      const parts: Uint8Array[] = []; // may chu Node: gom mot phan (<= 50 MiB) roi gui
+      const rd = body.getReader();
+      for (;;) {
+        const { done, value } = await rd.read();
+        if (done) break;
+        parts.push(value);
+      }
+      bytes = Buffer.concat(parts);
+    }
+    if (bytes.length !== size) throw new Error('part_size_mismatch');
+    const r = await client.send(new s3.UploadPartCommand({ Bucket: this.cfg.bucket, Key: key, UploadId: uploadId, PartNumber: n, Body: bytes, ContentLength: size }));
+    if (!r.ETag) throw new Error('multipart_no_etag');
+    return { etag: r.ETag };
+  }
+  async multipartComplete(key: string, uploadId: string, parts: { n: number; etag: string }[]) {
+    const { s3, client } = await this.load();
+    await client.send(new s3.CompleteMultipartUploadCommand({
+      Bucket: this.cfg.bucket, Key: key, UploadId: uploadId,
+      MultipartUpload: { Parts: [...parts].sort((a, b) => a.n - b.n).map((p) => ({ PartNumber: p.n, ETag: p.etag })) },
+    }));
+  }
+  async multipartAbort(key: string, uploadId: string) {
+    const { s3, client } = await this.load();
+    try {
+      await client.send(new s3.AbortMultipartUploadCommand({ Bucket: this.cfg.bucket, Key: key, UploadId: uploadId }));
+    } catch (e) {
+      if (!isNotFound(e) && (e as { name?: string })?.name !== 'NoSuchUpload') throw e;
+    }
+  }
   async get(key: string) {
     const { s3, client } = await this.load();
     try {

@@ -34,7 +34,7 @@ Quy tắc đã mã hóa (`services/api/src/lib/creative.ts`: `VIDEO_RULES`, `DUR
 |---|---|---|
 | Codec hình | TV/LED: H.264 (`avc1`/`avc3`) + AAC. **Thang máy: H.264 hoặc H.265 (`hvc1`/`hev1`) + AAC** (bitrate khuyến nghị <= 16 Mbps). AV1, VP9... và H.265 cho TV/LED bị từ chối, tệp bị xóa khỏi kho | 422 `unsupported_codec` |
 | Độ phân giải video | TV/LED: cạnh dài <= 1920, cạnh ngắn <= 1080 (Full HD). Thang máy: dọc 9:16 từ 720×1280 đến 2160×3840 (4K) | 422 `video_resolution_too_high` / `creative_size_mismatch` |
-| Dung lượng video | <= 100 MB (mọi loại màn); thang máy <= 30 MB (đến Full HD) và <= 100 MB (2K/4K, chiều rộng > 1080), LED <= 50 MB; khách còn hạn mức tài khoản (mặc định 30 MB/tệp) | 422 `file_too_large` |
+| Dung lượng video | **thang máy <= 200 MB (mọi cỡ HD–4K)**, TV <= 100 MB, LED <= 50 MB; khách còn hạn mức tài khoản (mặc định 30 MB/tệp) | 422 `file_too_large` |
 | Thời lượng | TV 5-60 s, thang máy 10-30 s, LED 5-15 s | 422 `duration_out_of_range` |
 | Ảnh | PNG/JPG <= 500 MB (TV) | |
 | Định dạng | MP4 (khuyến nghị), MOV, WebM, PNG, JPG; magic bytes + MIME + kích thước thật | |
@@ -43,14 +43,14 @@ Khuyến nghị xuất video: H.264 High, 1920x1080, 24-30 fps, 6-10 Mbps, AAC 1
 
 **Hai đường tải lên (tự chọn theo cấu hình, từ 20/11/2026).**
 
-1. **Mặc định, không cần khóa S3 và không cần CORS: qua Worker.** Nếu thiếu một trong `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` thì `R2ObjectStore.signedPut = false`; `POST /media/upload-url` trả `via:"proxy"` và `url:"/api/{admin|portal}/v1/media/:id/content"` (cùng origin). Trình duyệt `PUT` tệp (phiên đăng nhập + `X-CSRF-Token`, `Content-Type` = loại khai báo, `Content-Length` = `size_bytes` đã khai) tới đó; Worker ghi **thẳng luồng** vào R2 binding (`putStream`, không đọc cả tệp vào bộ nhớ), kiểm quyền `media:write`, phạm vi khách hàng, chỉ người tạo tệp, tệp còn `uploading` (<= 1 giờ), 60 lần/giờ/người, ghi audit `media.upload_proxy`. Rồi client gọi `/confirm` như cũ. **Giới hạn: 95 MB mỗi tệp** (body Worker tối đa 100 MB); quá thì `upload-url` trả 422 `file_too_large` "Tệp vượt 95 MB: nén lại (H.264) rồi tải lại". Mã lỗi: `length_mismatch`, `content_type_mismatch`, `length_required`, `not_uploader`, `invalid_state`, `upload_expired`, `file_too_large`.
+1. **Mặc định, không cần khóa S3 và không cần CORS: qua Worker.** Nếu thiếu một trong `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` thì `R2ObjectStore.signedPut = false`; `POST /media/upload-url` trả `via:"proxy"` và `url:"/api/{admin|portal}/v1/media/:id/content"` (cùng origin). Trình duyệt `PUT` tệp (phiên đăng nhập + `X-CSRF-Token`, `Content-Type` = loại khai báo, `Content-Length` = `size_bytes` đã khai) tới đó; Worker ghi **thẳng luồng** vào R2 binding (`putStream`, không đọc cả tệp vào bộ nhớ), kiểm quyền `media:write`, phạm vi khách hàng, chỉ người tạo tệp, tệp còn `uploading` (<= 1 giờ), 60 lần/giờ/người, ghi audit `media.upload_proxy`. Rồi client gọi `/confirm` như cũ. **Giới hạn một PUT: 95 MB** (body Worker tối đa 100 MB). Tệp > 90 MB đi đường tải từng phần (mục dưới). Nếu store không hỗ trợ multipart thì `upload-url` vẫn trả 422 `file_too_large` "Tệp vượt 95 MB...". Mã lỗi: `length_mismatch`, `content_type_mismatch`, `length_required`, `not_uploader`, `invalid_state`, `upload_expired`, `file_too_large`.
 2. **Tối ưu cho tệp lớn: URL ký trực tiếp lên R2** (khi đủ khóa S3). Mô tả bên dưới.
 
-**Tải lên đi thẳng lên R2** bằng URL ký trước (một PUT, tối đa 5 GiB theo R2): Worker không nhận thân tệp nên không vướng giới hạn 100 MB của request. Không cần multipart vì giới hạn nghiệp vụ (100 MB) thấp hơn nhiều. Điều kiện hạ tầng: bucket R2 phải bật **CORS** cho origin `https://ams.anio.vn` (method `PUT`, header `Content-Type`); thiếu CORS thì trình duyệt báo lỗi mạng và UI hiện hướng dẫn. URL ký hết hạn sau 15 phút.
+**Tải lên đi thẳng lên R2** bằng URL ký trước (một PUT, tối đa 5 GiB theo R2): Worker không nhận thân tệp nên không vướng giới hạn 100 MB của request. Đường này vẫn giữ nguyên (không đổi). Điều kiện hạ tầng: bucket R2 phải bật **CORS** cho origin `https://ams.anio.vn` (method `PUT`, header `Content-Type`); thiếu CORS thì trình duyệt báo lỗi mạng và UI hiện hướng dẫn. URL ký hết hạn sau 15 phút.
 
 **Đọc header MP4** (`lib/mp4-probe.ts`, chạy trong Worker, không native): duyệt các box cấp cao bằng đọc đoạn nhỏ (`ObjectStore.getRange`, R2 range) bỏ qua `mdat`, đọc `moov` (<= 16 MB, ở đầu hoặc cuối tệp): `mvhd` (thời lượng), `tkhd` (rộng/cao), `stsd` (fourcc codec hình/tiếng). Dùng ở confirm (thay giá trị client khai báo) và cho tệp > 48 MB ở validator để người duyệt thấy thời lượng/kích thước thật.
 
-**Băm/chép tệp ở confirm**: chỉ tệp <= 32 MB (bộ nhớ Worker). Tệp lớn hơn để `sha256 = NULL`, giữ khóa tải lên; thiết bị đối chiếu khi tải.
+**Băm/chép tệp ở confirm**: chỉ tệp <= 32 MB (`SHA_MAX_BYTES`, bộ nhớ Worker). Tệp lớn hơn **không băm SHA-256** (`sha256 = NULL`, không có giá trị đối chiếu cho thiết bị), giữ khóa tải lên; `/confirm` không bao giờ đọc tệp lớn vào bộ nhớ (chỉ đọc đoạn nhỏ để dò MP4).
 
 ## Duyệt một bước và tự khắc phục
 - Mọi trạng thái chưa duyệt được hiện lý do + việc cần làm ở thẻ Media (`blocker.code/action` trong `GET /media`): `confirm` (Xác nhận lại), `recheck` (Kiểm tra lại), `manual_review` (Xem và duyệt), `reupload`, `none`.
@@ -85,3 +85,21 @@ Khuyến nghị: khách trả tiền, đặc biệt tệp lớn và video, nên 
 
 ## Test
 `services/api/test/cf-media.test.ts`: bộ dựng png/jpg/mp4 tối thiểu; 12 loại tệp bất thường -> manual review; cổng quét (`needs_manual_review` không duyệt được kể cả `allow_unscanned`); luồng queue -> validator -> approve; duyệt tay có audit, 409 khi duyệt lại; tự choi -> không bao giờ phát; không đè kết quả có sẵn; `CF_VALIDATOR_MARK_CLEAN=0`; sweep.
+
+## Video thang máy tới 200 MB, tải từng phần và nhập từ Google Drive (20/11/2026)
+**Nguyên nhân thật của lỗi "Tải lên kho lưu trữ thất bại (413)"**: `app.ts` có `bodyLimit` toàn cục 2 MB cho mọi route, kể cả `PUT /media/:id/content`; Worker trả 413 `payload_too_large` trước khi route chạy. Nay `PUT .../content` và `PUT .../parts/:n` được miễn bodyLimit toàn cục (route tự kiểm `Content-Length` chính xác và đếm byte).
+
+**Quy tắc dung lượng video** (`sizeLimitBytes(target, quota, width, video)`): thang máy 200 MB cho mọi cỡ HD–4K (trước đây <= Full HD chỉ 30 MB); TV/LED giữ 100 MB (LED 50 MB); ảnh không đổi. Áp ở `upload-url`, `confirm`, `media-worker`, giao diện và OpenAPI.
+
+**Tải từng phần qua Worker (R2 binding, không cần khóa S3)**: dùng khi proxy và tệp > 90 MB (`upload-url` trả `via:"multipart"` + `multipart{part_size,total_parts,parts_url,complete_url,abort_url}`).
+- `POST /media/:id/multipart` (khởi tạo, hoặc tiếp tục phiên cũ: trả lại `parts` đã có), `PUT /media/:id/parts/:n` (đúng `Content-Length`, phần `part_size` = 32 MiB, phần cuối ngắn hơn), `POST /media/:id/multipart/complete` `{parts:[{n,etag}]}`, `POST /media/:id/multipart/abort`.
+- Mã lỗi: `length_required`, `length_mismatch`, `part_failed` (502, thử lại được), `parts_missing`, `parts_invalid`, `etag_mismatch`, `size_mismatch` (422), `complete_failed` (502), `not_uploader`, `upload_expired`, `multipart_unsupported`.
+- Phiên tối đa 3 giờ; cron dọn phiên quá hạn (hủy multipart trên R2, creative thành `invalid`, audit `media.multipart_expired`). Trạng thái phiên ở bảng mới `creative_transfers` (migration 0018). Mọi ghi đều có audit (`media.multipart_part|complete|abort`).
+- Web-admin: mỗi phần thử lại 3 lần (lui dần 1s/2s/4s), có thanh tiến độ %, nút Hủy tải lên, tải lại tiếp tục từ phần đã có. Mã lỗi hiện cho người dùng: `UP-PART-<n>-<status>` (`NET` khi mất mạng).
+- Giao diện cả `ObjectStore` có thêm `multipartCreate/UploadPart/Complete/Abort` (memory, fs, S3, R2). R2 trước đây thiếu `delete(key)` nên các lời gọi `delete?.` là không làm gì; nay đã có.
+
+**Nhập từ liên kết (Google Drive, Dropbox `?dl=1`, URL trực tiếp)**: `POST /media/import` tạo creative ở trạng thái `importing` + dòng `creative_transfers` (kind=import) và đẩy tin vào queue `media.import`; consumer (chính API Worker) tải về và ghi thẳng luồng vào R2 multipart, tối đa 200 MB.
+- Drive: `https://drive.usercontent.google.com/download?id=<ID>&export=download&confirm=t`; xử lý trang xác nhận quét virus (form + cookie). Nếu nhận HTML: lỗi "Tệp Drive không chia sẻ công khai hoặc vượt hạn mức tải".
+- An toàn: danh sách miền cho phép (drive.google.com, docs.google.com, drive.usercontent.google.com, *.googleusercontent.com, dropbox), chặn SSRF, chuyển hướng thủ công và kiểm lại danh sách ở mỗi bước; kiểm Content-Type/magic bytes; URL trực tiếp chỉ bật trên Cloudflare (và test). YouTube: 422 `youtube_unsupported` "Chưa hỗ trợ tải từ YouTube, hãy dùng tệp hoặc Drive".
+- Tiếp tục bằng Range khi bị cắt, tối đa 3 lần thử; cron quét lại tác vụ kẹt. Xong thì dùng chung `finalizeUpload` (head, dò MP4, kiểm quy cách, outbox, tự duyệt nếu đủ điều kiện). Lỗi cụ thể + nút "Thử lại" (`POST /media/:id/import/retry`, audit `media.import_retry`).
+- **Giới hạn đã biết**: nhập 200 MB từ Drive trong Worker tốn nhiều CPU và subrequest; gói **Workers Free** (CPU 10 ms/lần gọi, 50 subrequest) rất có thể không đủ; cần gói **Workers Paid**. Mỗi lần chạy có ngân sách thời gian, hết thì tự xếp hàng lại và tiếp tục bằng Range. Chưa kiểm thử trên production.

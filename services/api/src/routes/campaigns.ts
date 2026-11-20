@@ -201,7 +201,7 @@ async function attachMedia(c: Ctx, db: Db, campaignId: string, customerId: strin
   )[0];
   if (!m || m.customer_id !== customerId) throw notFound('Không tìm thấy tệp media.');
   if (m.review_state === 'rejected' || m.review_state === 'returned') throw unprocessable('Tệp media đã bị trả lại, hãy tải tệp khác.', 'media_rejected');
-  if (m.state === 'uploading') throw unprocessable('Tệp media chưa tải xong.', 'media_not_ready');
+  if (m.state === 'uploading' || m.state === 'importing') throw unprocessable('Tệp media chưa tải xong.', 'media_not_ready');
   const w = num(m.px_w);
   const h = num(m.px_h);
   if (w && h) {
@@ -503,7 +503,7 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       const plan = await planCampaignPrices(rt, db, await priceInput(rt, row.id, db), nowIso);
       assertPriced(plan);
       await writeCampaignPrices(db, row.id, plan.rows, u.id, nowIso);
-      const ap = await db.run("UPDATE creatives SET review_state = 'approved', state = CASE WHEN state = 'uploading' THEN state ELSE 'ready' END, review_note = NULL WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
+      const ap = await db.run("UPDATE creatives SET review_state = 'approved', state = CASE WHEN state IN ('uploading','importing') THEN state ELSE 'ready' END, review_note = NULL WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
       for (const cr of pendingCreatives) await recordApproval(db, cr, nowIso); // R1-14: gan duyet voi phien ban/dau van tay noi dung
       // manifest chi phat chien dich co lich: tao lich ca ngay mac dinh neu admin chua xep lich rieng
       await ensureDefaultSlot(rt, db, row.id, jsonParse<string[]>(row.target_types, ['tv'])[0] ?? 'tv');

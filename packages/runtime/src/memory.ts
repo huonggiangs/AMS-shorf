@@ -163,6 +163,75 @@ export class MemoryObjectStore implements ObjectStore {
     }
     this.m.set(key, { body: out, contentType });
   }
+  /** Multipart gia lap (test): moi uploadId giu cac phan trong bo nho; `multipartMinPart` dat 0 mac dinh de test dung phan nho. */
+  private mp = new Map<string, { key: string; contentType: string; parts: Map<number, { body: Uint8Array; etag: string }> }>();
+  private mpSeq = 0;
+  /** test: so lan multipartAbort da goi, de kiem tra don dep */
+  readonly aborted: string[] = [];
+  /** test: gay loi khi tai phan so n (1 lan) de kiem tra thu lai */
+  failPart: { n: number; times: number } | null = null;
+  openMultipart(): string[] {
+    return [...this.mp.keys()];
+  }
+  async multipartCreate(key: string, contentType: string) {
+    const uploadId = `mem-up-${++this.mpSeq}`;
+    this.mp.set(uploadId, { key, contentType, parts: new Map() });
+    return { uploadId };
+  }
+  async multipartUploadPart(key: string, uploadId: string, n: number, body: Uint8Array | ReadableStream<Uint8Array>, size: number) {
+    const u = this.mp.get(uploadId);
+    if (!u || u.key !== key) throw new Error('NoSuchUpload');
+    if (this.failPart && this.failPart.n === n && this.failPart.times > 0) {
+      this.failPart.times--;
+      throw new Error('part_failed');
+    }
+    let bytes: Uint8Array;
+    if (body instanceof Uint8Array) bytes = body.slice();
+    else {
+      const parts: Uint8Array[] = [];
+      const rd = body.getReader();
+      for (;;) {
+        const { done, value } = await rd.read();
+        if (done) break;
+        parts.push(value);
+      }
+      bytes = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
+      let o = 0;
+      for (const p of parts) {
+        bytes.set(p, o);
+        o += p.length;
+      }
+    }
+    if (bytes.length !== size) throw new Error('part_size_mismatch');
+    const etag = `"mem-${uploadId}-${n}-${bytes.length}"`;
+    u.parts.set(n, { body: bytes, etag });
+    return { etag };
+  }
+  async multipartComplete(key: string, uploadId: string, parts: { n: number; etag: string }[]) {
+    const u = this.mp.get(uploadId);
+    if (!u || u.key !== key) throw new Error('NoSuchUpload');
+    if (parts.length === 0) throw new Error('EmptyUpload');
+    const sorted = [...parts].sort((a, b) => a.n - b.n);
+    const chunks: Uint8Array[] = [];
+    sorted.forEach((p, i) => {
+      const have = u.parts.get(p.n);
+      if (!have || have.etag !== p.etag) throw new Error('InvalidPart');
+      if (p.n !== i + 1) throw new Error('InvalidPartOrder');
+      chunks.push(have.body);
+    });
+    const out = new Uint8Array(chunks.reduce((a, c) => a + c.length, 0));
+    let o = 0;
+    for (const c of chunks) {
+      out.set(c, o);
+      o += c.length;
+    }
+    this.m.set(key, { body: out, contentType: u.contentType });
+    this.mp.delete(uploadId);
+  }
+  async multipartAbort(_key: string, uploadId: string) {
+    this.aborted.push(uploadId);
+    this.mp.delete(uploadId);
+  }
   async get(key: string) {
     return this.m.get(key)?.body.slice() ?? null;
   }

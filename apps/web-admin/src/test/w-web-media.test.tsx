@@ -110,10 +110,47 @@ describe('Noi dung & Media: moi trang thai khong duyet duoc co giai thich + hanh
     mount('/media');
     await userEvent.click(await screen.findByRole('button', { name: /Tải nội dung mới/ }));
     const dlg = await screen.findByRole('dialog', { name: 'Tải nội dung' });
-    expect(dlg).toHaveTextContent('tối đa 100 MB');
+    expect(dlg).toHaveTextContent('tối đa 100 MB'); // TV/LED
+    expect(dlg).toHaveTextContent('tối đa 200 MB'); // thang may
     expect(dlg).toHaveTextContent('AV1');
     expect(dlg).toHaveTextContent('5–60 giây');
     expect(dlg.className).toContain('lg');
+  });
+});
+
+describe('Nhap tu lien ket: tien do va Thu lai', () => {
+  it('dang tai tu Drive hien "Dang tai tu Drive... 45%" + dung luong; trang thai Dang xu ly', async () => {
+    const m = media('i1', { status: 'processing', kind: 'link', source: 'gdrive', mime: null, width: null, height: null, duration_sec: null, size_bytes: null, scan_reasons: [], blocker: BLK('importing', 'wait', 'Hệ thống đang tải tệp từ liên kết về kho lưu trữ. Vui lòng đợi, trạng thái tự cập nhật.'), transfer: { kind: 'import', status: 'running', bytes_done: 90 * 1048576, bytes_total: 200 * 1048576, percent: 45, parts_done: 2, total_parts: 7, error_code: null, error_message: null } });
+    handlers.push(me(['view', 'write']), on('/admin/v1/media', { items: [m], total: 1, page: 1, page_size: 9 }));
+    vi.stubGlobal('fetch', mockFetch());
+    mount('/media');
+    const bar = await screen.findByRole('progressbar', { name: 'Tiến độ tải' });
+    expect(bar).toHaveAttribute('aria-valuenow', '45');
+    expect(bar).toHaveTextContent('Đang tải từ Drive… 45%');
+    expect(bar).toHaveTextContent('90.0 MB / 200.0 MB');
+  });
+
+  it('loi cu the (Drive khong cong khai) + nut Thu lai goi POST /media/:id/import/retry', async () => {
+    const msg = 'Tệp Drive không chia sẻ công khai hoặc vượt hạn mức tải. Hãy đặt chia sẻ "Bất kỳ ai có đường liên kết" hoặc tải tệp lên trực tiếp.';
+    const m = media('i2', { status: 'rejected', kind: 'link', source: 'gdrive', reject_reason: msg, scan_reasons: [], blocker: BLK('import_failed', 'retry', msg), transfer: { kind: 'import', status: 'failed', bytes_done: 0, bytes_total: null, percent: null, error_code: 'drive_not_public', error_message: msg } });
+    handlers.push(me(['view', 'write']), on('/admin/v1/media', { items: [m], total: 1, page: 1, page_size: 9 }), on('/admin/v1/media/i2/import/retry', { ...m, status: 'processing' }, 'POST'));
+    vi.stubGlobal('fetch', mockFetch());
+    mount('/media');
+    const why = await screen.findByRole('status', { name: 'Vì sao chưa duyệt được' });
+    expect(why).toHaveTextContent('không chia sẻ công khai hoặc vượt hạn mức tải');
+    await userEvent.click(within(why).getByRole('button', { name: 'Thử lại' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/api/admin/v1/media/i2/import/retry')).toBe(true));
+  });
+
+  it('YouTube: bao ro chua ho tro, khong cho gui', async () => {
+    handlers.push(me(['view', 'write']), on('/admin/v1/media', { items: [], total: 0 }));
+    vi.stubGlobal('fetch', mockFetch());
+    mount('/media');
+    await userEvent.click(await screen.findByRole('button', { name: /Tải nội dung mới/ }));
+    const dlg = await screen.findByRole('dialog', { name: 'Tải nội dung' });
+    await userEvent.click(within(dlg).getByRole('button', { name: 'YouTube' }));
+    expect(dlg).toHaveTextContent('Chưa hỗ trợ tải từ YouTube');
+    expect(within(dlg).getByRole('button', { name: 'Nhập từ liên kết' })).toBeDisabled();
   });
 });
 

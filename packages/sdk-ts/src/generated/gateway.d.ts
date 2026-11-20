@@ -45,7 +45,7 @@ export interface paths {
         put?: never;
         /**
          * Gửi lô sự kiện (tối đa 50, idempotent theo event_id)
-         * @description Thân tối đa 16 KB. Impression hợp lệ khi vcr_pct >= ngưỡng; sự kiện không có trong manifest bị từ chối từng cái (`rejected`).
+         * @description Thân tối đa 16 KB. Impression hợp lệ khi vcr_pct >= ngưỡng; sự kiện không có trong manifest bị từ chối từng cái (`rejected`). `proof_of_play` (thang máy/LED): thiết bị đã được cấp quyền => hợp lệ (`valid`); chưa cấp quyền => vẫn lưu với trạng thái `pending_trust` (đếm vào `flagged`, không bị loại, tính lại khi được cấp quyền); không bao giờ sinh doanh thu/thưởng ở gateway.
          */
         post: operations["gatewayPostEvents"];
         delete?: never;
@@ -65,7 +65,7 @@ export interface paths {
         put?: never;
         /**
          * Nhịp sống + nhận lệnh
-         * @description Thân tối đa 2 KB. Trả khoảng nghỉ kế tiếp có jitter, etag manifest và lệnh đang chờ (giao at-least-once; xác nhận qua `cmd_ack` hoặc /v1/commands/ack). 429/503 kèm `Retry-After`.
+         * @description Thân tối đa 2 KB. Trả khoảng nghỉ kế tiếp có jitter, etag manifest và lệnh đang chờ (giao at-least-once; xác nhận qua `cmd_ack` hoặc /v1/commands/ack). 429/503 kèm `Retry-After`. Thang máy/LED có thể gửi `source` (ams|usb|lan), `app_version`, `cache_mb`, `px_w`/`px_h`/`orientation`/`region` (tùy chọn); nhận thêm `hotline`, `app_update_url`, `app_update_sha256`, `min_app_version` khi có cấu hình.
          */
         post: operations["gatewayPostHeartbeat"];
         delete?: never;
@@ -88,6 +88,26 @@ export interface paths {
          * @description Xác thực bằng chữ ký thiết bị (phone hoặc tv, đã ghép: trust_level >= 1). Thưởng = `interaction_reward_vnd` của chiến dịch (tối đa `INTERACTION_MAX_REWARD_VND`=50), ghi `wallet_ledger` bất biến, một lần theo event_id. Giới hạn: 20 lô/phút/thiết bị, 30 tương tác/người/ngày, 3/chiến dịch/người/ngày, trần thưởng/ngày. Gửi lại event_id => `duplicate` (không cộng lại). Sự kiện từ chối nằm ở `rejected` (vd `untrusted_device`, `not_in_manifest`, `campaign_cap`).
          */
         post: operations["gatewayPostInteractions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Gửi nhật ký thiết bị (Signage Player)
+         * @description Thân tối đa 8 KB, tối đa 100 dòng. Giới hạn tần suất theo device_id (mặc định 60 lần/giờ, 5000 dòng/ngày; 429 + `Retry-After`). `ts` quá cũ bị kẹp về mốc 7 ngày, tương lai kẹp +5 phút. Lưu 7 ngày; quản trị xem ở ngăn chi tiết thiết bị.
+         */
+        post: operations["gatewayPostLogs"];
         delete?: never;
         options?: never;
         head?: never;
@@ -165,7 +185,7 @@ export interface paths {
         put?: never;
         /**
          * Đăng ký thiết bị (idempotent theo pubkey)
-         * @description Ký bằng chính khóa riêng tương ứng `pubkey` trong body (không có X-Device-Id). Trả `attestation_nonce` để kiểm chứng. Giới hạn theo IP.
+         * @description Ký bằng chính khóa riêng tương ứng `pubkey` trong body (không có X-Device-Id). Trả `attestation_nonce` để kiểm chứng. Giới hạn theo IP. Cùng `pubkey` LUÔN nhận lại cùng `device_id` (200). Thang máy/LED gửi thêm `px_w`, `px_h`, `orientation`, `region` để vào đúng nhóm manifest `elevator_<w>x<h>`; chờ vận hành cấp quyền trên admin (không dùng mã 6 số).
          */
         post: operations["gatewayPostRegister"];
         delete?: never;
@@ -322,7 +342,8 @@ export interface components {
             ok: true;
             acked: number;
             known: number;
-            unknown: number;
+            /** @description id khong thuoc thiet bi nay (bo qua, khong loi) */
+            unknown: string[];
         } & {
             [key: string]: unknown;
         };
@@ -399,6 +420,15 @@ export interface components {
             cache_slots?: number;
             manifest_etag?: string;
             cmd_ack?: string[];
+            app_version?: string;
+            cache_mb?: number;
+            /** @enum {string} */
+            source?: "ams" | "usb" | "lan";
+            px_w?: number;
+            px_h?: number;
+            /** @enum {string} */
+            orientation?: "landscape" | "portrait";
+            region?: string;
         } & {
             [key: string]: unknown;
         };
@@ -418,7 +448,7 @@ export interface components {
             commands: ({
                 /** @description id dong trong bang device_commands */
                 id: string;
-                /** @description Ban dau: refresh_manifest, reboot, set_monitor. Type la: bo qua nhung VAN ack. */
+                /** @description refresh_manifest, reboot, set_monitor; Signage Player: reset_pin (args rong), set_volume {percent 0-100}, set_orientation {orientation landscape|portrait}, message {text <= 200, duration_s? 3-120}; TV: lock, unlock, message {text, seconds}... Type la: bo qua nhung VAN ack. */
                 type: string;
                 args?: {
                     [key: string]: unknown;
@@ -427,6 +457,12 @@ export interface components {
                 [key: string]: unknown;
             })[];
             min_app_version?: string;
+            /** @description CHI thang may/LED, khi co cau hinh: hotline/Zalo hien o man hinh logo (luu de hien ca khi mat mang) */
+            hotline?: string;
+            /** @description CHI thang may/LED, khi co cau hinh: URL HTTPS tai ban cap nhat app (di kem app_update_sha256) */
+            app_update_url?: string;
+            /** @description SHA-256 hex cua tep cap nhat; app PHAI kiem truoc khi cai */
+            app_update_sha256?: string;
         } & {
             [key: string]: unknown;
         };
@@ -487,6 +523,31 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        LogsRequest: {
+            entries: ({
+                /** Format: date-time */
+                ts: string;
+                /**
+                 * @default info
+                 * @enum {string}
+                 */
+                level: "debug" | "info" | "warn" | "error";
+                tag?: string;
+                msg: string;
+            } & {
+                [key: string]: unknown;
+            })[];
+        } & {
+            [key: string]: unknown;
+        };
+        LogsResponse: {
+            /** @constant */
+            ok: true;
+            /** @description so dong da luu */
+            stored: number;
+        } & {
+            [key: string]: unknown;
+        };
         Manifest: {
             version: number;
             group: string;
@@ -533,6 +594,11 @@ export interface components {
                 /** @enum {string} */
                 media_type: "video" | "image";
                 size_bytes: number | null;
+                /**
+                 * @description CHI thang may/LED: cach hien trong khung (mac dinh fit = vua khung, giu ti le, co vien den neu lech; cover = phu kin, co the cat mep)
+                 * @enum {string}
+                 */
+                fit?: "fit" | "cover";
             } & {
                 [key: string]: unknown;
             })[];
@@ -545,9 +611,26 @@ export interface components {
                 end_min: number;
                 priority: number;
                 reward_points: number;
+                /** @description CHI thang may/LED: ghi de header cap manifest cho lich nay (chuoi rong = an) */
+                header?: string;
+                /** @description CHI thang may/LED: ghi de footer cap manifest cho lich nay (chuoi rong = an) */
+                footer?: string;
             } & {
                 [key: string]: unknown;
             })[];
+            /** @description CHI thang may/LED: chu header (rong = an) */
+            header?: string;
+            /** @description CHI thang may/LED: chu footer (rong = an) */
+            footer?: string;
+            /** @description CHI thang may/LED: hotline/Zalo (dung khi mat mang) */
+            hotline?: string;
+            /** @description CHI thang may/LED: phat tuan tu theo priority tang dan, lap vo han; cung priority theo slot_id */
+            rotation?: {
+                /** @constant */
+                mode: "sequential";
+            } & {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
         };
@@ -596,9 +679,15 @@ export interface components {
                 /** @enum {string} */
                 media_type: "video" | "image";
                 size_bytes: number | null;
+                /**
+                 * @description CHI thang may/LED: cach hien trong khung (mac dinh fit = vua khung, giu ti le, co vien den neu lech; cover = phu kin, co the cat mep)
+                 * @enum {string}
+                 */
+                fit?: "fit" | "cover";
             } & {
                 [key: string]: unknown;
             })[];
+            /** @description creative bi go; thang may/LED: ca id creative DOI noi dung (cung id xuat hien trong creatives_added) de client thay the */
             creatives_removed: string[];
             schedule: ({
                 slot_id: string;
@@ -609,9 +698,26 @@ export interface components {
                 end_min: number;
                 priority: number;
                 reward_points: number;
+                /** @description CHI thang may/LED: ghi de header cap manifest cho lich nay (chuoi rong = an) */
+                header?: string;
+                /** @description CHI thang may/LED: ghi de footer cap manifest cho lich nay (chuoi rong = an) */
+                footer?: string;
             } & {
                 [key: string]: unknown;
             })[];
+            /** @description CHI thang may/LED: chu header (rong = an) */
+            header?: string;
+            /** @description CHI thang may/LED: chu footer (rong = an) */
+            footer?: string;
+            /** @description CHI thang may/LED: hotline/Zalo (dung khi mat mang) */
+            hotline?: string;
+            /** @description CHI thang may/LED: phat tuan tu theo priority tang dan, lap vo han; cung priority theo slot_id */
+            rotation?: {
+                /** @constant */
+                mode: "sequential";
+            } & {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
         };
@@ -643,6 +749,10 @@ export interface components {
             os?: string;
             app_version?: string;
             region?: string;
+            px_w?: number;
+            px_h?: number;
+            /** @enum {string} */
+            orientation?: "landscape" | "portrait";
         } & {
             [key: string]: unknown;
         };
@@ -1003,6 +1113,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InteractionsResponse"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayPostLogs: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogsRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã lưu */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogsResponse"];
                 };
             };
             401: components["responses"]["Error"];

@@ -21,6 +21,7 @@ const EXT_MIME: Record<string, string> = {
 const MAX_KEY = 1024;
 const META = '.meta'; // sidecar content-type: <dir>/.meta/<key>.json  (khoa khong duoc bat dau bang '.')
 const TMP = '.tmp';
+const MP = '.mp'; // cac phan multipart dang cho
 
 /** Ten khoa hop le: phan doan khong rong, khong '.'/'..', khong bat dau bang '.', khong ky tu dieu khien hoac '\\'. */
 export function assertSafeKey(key: string): void {
@@ -102,6 +103,77 @@ export class FsObjectStore implements ObjectStore {
       parts.push(value);
     }
     await this.put(key, Buffer.concat(parts), contentType);
+  }
+
+  // ------------------------------------------------------------------ multipart (cac phan nam o <root>/.mp/<uploadId>/<n>; complete noi lai roi ghi nguyen tu)
+  private mpDir(uploadId: string): string {
+    if (!/^[a-f0-9]{32}$/.test(uploadId)) throw new Error('NoSuchUpload');
+    return join(this.root, MP, uploadId);
+  }
+  async multipartCreate(key: string, contentType: string): Promise<{ uploadId: string }> {
+    this.path(key); // kiem tra khoa an toan
+    const uploadId = randomBytes(16).toString('hex');
+    const dir = this.mpDir(uploadId);
+    await this.rootDir();
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'meta.json'), JSON.stringify({ key, contentType }), { mode: 0o600 });
+    return { uploadId };
+  }
+  private async mpMeta(key: string, uploadId: string): Promise<{ key: string; contentType: string }> {
+    try {
+      const m = JSON.parse(await readFile(join(this.mpDir(uploadId), 'meta.json'), 'utf8')) as { key: string; contentType: string };
+      if (m.key !== key) throw new Error('NoSuchUpload');
+      return m;
+    } catch {
+      throw new Error('NoSuchUpload');
+    }
+  }
+  async multipartUploadPart(key: string, uploadId: string, n: number, body: Uint8Array | ReadableStream<Uint8Array>, size: number): Promise<{ etag: string }> {
+    await this.mpMeta(key, uploadId);
+    if (!Number.isInteger(n) || n < 1 || n > 10000) throw new Error('InvalidPart');
+    let bytes: Uint8Array;
+    if (body instanceof Uint8Array) bytes = body;
+    else {
+      const parts: Uint8Array[] = [];
+      const rd = body.getReader();
+      for (;;) {
+        const { done, value } = await rd.read();
+        if (done) break;
+        parts.push(value);
+      }
+      bytes = Buffer.concat(parts);
+    }
+    if (bytes.length !== size) throw new Error('part_size_mismatch');
+    await writeFile(join(this.mpDir(uploadId), String(n)), bytes);
+    return { etag: `"${createHmac('sha256', this.cfg.signingSecret).update(bytes).digest('hex').slice(0, 32)}"` };
+  }
+  async multipartComplete(key: string, uploadId: string, parts: { n: number; etag: string }[]): Promise<void> {
+    const meta = await this.mpMeta(key, uploadId);
+    if (parts.length === 0) throw new Error('EmptyUpload');
+    const sorted = [...parts].sort((a, b) => a.n - b.n);
+    const bufs: Buffer[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const p = sorted[i]!;
+      if (p.n !== i + 1) throw new Error('InvalidPartOrder');
+      let b: Buffer;
+      try {
+        b = await readFile(join(this.mpDir(uploadId), String(p.n)));
+      } catch {
+        throw new Error('InvalidPart');
+      }
+      const et = `"${createHmac('sha256', this.cfg.signingSecret).update(b).digest('hex').slice(0, 32)}"`;
+      if (et !== p.etag) throw new Error('InvalidPart');
+      bufs.push(b);
+    }
+    await this.put(key, Buffer.concat(bufs), meta.contentType);
+    await rm(this.mpDir(uploadId), { recursive: true, force: true });
+  }
+  async multipartAbort(_key: string, uploadId: string): Promise<void> {
+    try {
+      await rm(this.mpDir(uploadId), { recursive: true, force: true });
+    } catch {
+      /* khong co: idempotent */
+    }
   }
 
   async get(key: string): Promise<Uint8Array | null> {

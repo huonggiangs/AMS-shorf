@@ -19,6 +19,22 @@ export const SIZE_LIMIT_MB: Record<TargetType, number> = { tv: 500, elevator: 30
 /** Thang may 2K/4K (chieu rong > 1080): 30 MB khong du cho clip 10-30 giay 4K, nang tran len bang tran video 100 MB (VIDEO_RULES.maxBytes). */
 export const ELEVATOR_HIRES_LIMIT_MB = 100;
 export const ELEVATOR_HIRES_MIN_W = 1081;
+/** Tran dung luong VIDEO man THANG MAY (HD-4K), tu 20/11/2026: 200 MB. TV/LED giu VIDEO_RULES.maxBytes (100 MB). Tep > 95 MB di qua Worker bang tai TUNG PHAN (multipart). */
+export const ELEVATOR_VIDEO_LIMIT_MB = 200;
+/** Tai tung phan qua Worker: moi phan 32 MiB (R2/S3: phan >= 5 MiB tru phan cuoi; <= 50 MiB de body Worker < 100 MB). */
+export const MULTIPART_PART_BYTES = 32 * MB;
+export const MULTIPART_MIN_PART_BYTES = 5 * MB;
+export const MULTIPART_MAX_PART_BYTES = 50 * MB;
+/** Tep lon hon nguong nay (va kho khong ky duoc URL) tai bang multipart; nho hon/bang: mot PUT qua Worker (PROXY_UPLOAD_MAX_BYTES). */
+export const MULTIPART_THRESHOLD_BYTES = 90 * MB;
+/** Phien tai tung phan song toi da 3 gio (tep thuong 1 gio). */
+export const MULTIPART_SESSION_MS = 3 * 3600_000;
+/** Kich thuoc phan multipart. Chi RUNTIME 'test' moi ghi de duoc (MEDIA_PART_SIZE_BYTES, >= 1 KiB) de test khong phai dung tep that hang tram MB. */
+export function multipartPartSize(rt: { config: { runtime: string; env: Record<string, string | undefined> } }): number {
+  const raw = Number(rt.config.env['MEDIA_PART_SIZE_BYTES']);
+  if (rt.config.runtime === 'test' && Number.isInteger(raw) && raw >= 1024 && raw <= MULTIPART_MAX_PART_BYTES) return raw;
+  return MULTIPART_PART_BYTES;
+}
 /** Tran dung luong khi tep di QUA Worker (Cloudflare chua co khoa S3 => PUT /media/:id/content): body Worker toi da 100 MB, de 5 MB du phong. */
 export const PROXY_UPLOAD_MAX_BYTES = 95 * MB;
 /** Thoi luong cho phep (giay), neu biet. */
@@ -27,12 +43,13 @@ export const DURATION_RANGE: Partial<Record<TargetType, [number, number]>> = { t
 /**
  * Quy tac VIDEO quang cao (Cloudflare khong co ffmpeg => khong chuyen ma duoc; man phai phat truc tiep tep tai len):
  * - TV/LED: H.264 (avc1/avc3) + AAC, canh dai <= 1920 va canh ngan <= 1080 (Full HD), toi da 100 MB/tep.
- * - THANG MAY (tu 20/11/2026): H.264 hoac H.265/HEVC (hvc1/hev1) + AAC, den 4K 2160x3840; van toi da 100 MB/tep (giu nguyen tran video).
- *   Bitrate khuyen nghi <= 8 Mbps (Full HD) / <= 16 Mbps (2K/4K): clip 30 giay 4K @16 Mbps ~ 60 MB, nam trong tran 100 MB.
+ * - THANG MAY (tu 20/11/2026): H.264 hoac H.265/HEVC (hvc1/hev1) + AAC, den 4K 2160x3840; toi da 200 MB/tep (elevatorMaxBytes).
+ *   Bitrate khuyen nghi <= 8 Mbps (Full HD) / <= 16 Mbps (2K/4K): clip 30 giay 4K @16 Mbps ~ 60 MB; tran 200 MB cho ban goc bitrate cao.
  * AV1/VP9 khong phat duoc tren da so box => tu choi som voi thong bao ro.
  */
 export const VIDEO_RULES = {
   maxBytes: 100 * MB,
+  elevatorMaxBytes: ELEVATOR_VIDEO_LIMIT_MB * MB,
   maxLongSide: 1920,
   maxShortSide: 1080,
   codecs: ['avc1', 'avc3'] as readonly string[],
@@ -41,6 +58,8 @@ export const VIDEO_RULES = {
   elevatorMaxShortSide: ELEVATOR_MAX.w,
 };
 const CODEC_NAME: Record<string, string> = { av01: 'AV1', hvc1: 'H.265/HEVC', hev1: 'H.265/HEVC', vp09: 'VP9', vp08: 'VP8', mp4v: 'MPEG-4 Part 2', avc1: 'H.264', avc3: 'H.264' };
+/** Tran dung luong video theo loai man: thang may 200 MB, TV/LED 100 MB. */
+export const videoMaxBytes = (target?: TargetType | null): number => (target === 'elevator' ? VIDEO_RULES.elevatorMaxBytes : VIDEO_RULES.maxBytes);
 export const codecLabel = (fcc: string): string => CODEC_NAME[fcc] ?? fcc.trim();
 /** Tra thong bao loi tieng Viet neu video khong dat quy tac; null neu dat. `target='elevator'`: cho phep H.265 va den 4K. */
 export function videoSpecProblem(p: { w?: number | null; h?: number | null; codec?: string | null }, target?: TargetType | null): { code: string; message: string } | null {
@@ -50,7 +69,7 @@ export function videoSpecProblem(p: { w?: number | null; h?: number | null; code
     return {
       code: 'unsupported_codec',
       message: el
-        ? `Video dùng codec ${codecLabel(p.codec)} mà màn thang máy không phát được ổn định. Hãy xuất lại video H.264 (AVC) hoặc H.265 (HEVC) + AAC, tối đa 2160×3840 (4K), bitrate khuyến nghị ≤ 16 Mbps, tệp tối đa ${VIDEO_RULES.maxBytes / MB} MB, rồi tải lên.`
+        ? `Video dùng codec ${codecLabel(p.codec)} mà màn thang máy không phát được ổn định. Hãy xuất lại video H.264 (AVC) hoặc H.265 (HEVC) + AAC, tối đa 2160×3840 (4K), bitrate khuyến nghị ≤ 16 Mbps, tệp tối đa ${VIDEO_RULES.elevatorMaxBytes / MB} MB, rồi tải lên.`
         : `Video dùng codec ${codecLabel(p.codec)} mà TV không phát được ổn định. Hãy xuất lại video H.264 (AVC) + AAC, tối đa 1920×1080, rồi tải lên.`,
     };
   }
@@ -59,7 +78,7 @@ export function videoSpecProblem(p: { w?: number | null; h?: number | null; code
     const short = Math.min(p.w, p.h);
     if (el) {
       if (long > VIDEO_RULES.elevatorMaxLongSide || short > VIDEO_RULES.elevatorMaxShortSide) {
-        return { code: 'video_resolution_too_high', message: `Video ${p.w}×${p.h} vượt độ phân giải tối đa của màn thang máy ${ELEVATOR_MAX.w}×${ELEVATOR_MAX.h} (4K). Hãy xuất lại ở tối đa 4K dọc, H.264/H.265 + AAC, bitrate ≤ 16 Mbps, tệp ≤ ${VIDEO_RULES.maxBytes / MB} MB.` };
+        return { code: 'video_resolution_too_high', message: `Video ${p.w}×${p.h} vượt độ phân giải tối đa của màn thang máy ${ELEVATOR_MAX.w}×${ELEVATOR_MAX.h} (4K). Hãy xuất lại ở tối đa 4K dọc, H.264/H.265 + AAC, bitrate ≤ 16 Mbps, tệp ≤ ${VIDEO_RULES.elevatorMaxBytes / MB} MB.` };
       }
     } else if (long > VIDEO_RULES.maxLongSide || short > VIDEO_RULES.maxShortSide) {
       return { code: 'video_resolution_too_high', message: `Video ${p.w}×${p.h} vượt độ phân giải tối đa ${VIDEO_RULES.maxLongSide}×${VIDEO_RULES.maxShortSide} (Full HD). Hãy xuất lại ở 1080p (H.264) rồi tải lên.` };
@@ -117,8 +136,10 @@ export function inferTarget(w: number, h: number, knownLed: Px[] = []): TargetTy
   return null;
 }
 
-export function sizeLimitBytes(target: TargetType, quotaMbPerFile: number | null, width?: number | null): number {
-  const typeCap = (target === 'elevator' && width && width >= ELEVATOR_HIRES_MIN_W ? ELEVATOR_HIRES_LIMIT_MB : SIZE_LIMIT_MB[target]) * MB;
+/** `video`: tep video (thang may 200 MB; TV/LED = min(tran loai man, 100 MB)). Anh giu tran theo loai man (thang may 30 MB, 100 MB tu 2K). */
+export function sizeLimitBytes(target: TargetType, quotaMbPerFile: number | null, width?: number | null, video = false): number {
+  const base = (target === 'elevator' && width && width >= ELEVATOR_HIRES_MIN_W ? ELEVATOR_HIRES_LIMIT_MB : SIZE_LIMIT_MB[target]) * MB;
+  const typeCap = video ? (target === 'elevator' ? videoMaxBytes('elevator') : Math.min(base, videoMaxBytes(target))) : base;
   return quotaMbPerFile && quotaMbPerFile > 0 ? Math.min(typeCap, quotaMbPerFile * MB) : typeCap;
 }
 
@@ -174,7 +195,7 @@ export function checkImportUrl(source: LinkSource, raw: string): { ok: true; url
   }
   const is = (d: string) => host === d || host.endsWith(`.${d}`);
   if (source === 'youtube' && !(is('youtube.com') || host === 'youtu.be')) return { ok: false, message: 'Liên kết phải thuộc youtube.com hoặc youtu.be.' };
-  if (source === 'drive' && !(host === 'drive.google.com' || host === 'docs.google.com')) return { ok: false, message: 'Liên kết phải thuộc drive.google.com.' };
+  if (source === 'drive' && !(host === 'drive.google.com' || host === 'docs.google.com' || host === 'drive.usercontent.google.com')) return { ok: false, message: 'Liên kết phải thuộc drive.google.com.' };
   if (source === 'dropbox' && !(is('dropbox.com') || is('dl.dropboxusercontent.com'))) return { ok: false, message: 'Liên kết phải thuộc dropbox.com.' };
   if (source === 'url' && !/\.(mp4|mov|webm|png|jpe?g)$/i.test(u.pathname)) return { ok: false, message: 'Liên kết trực tiếp phải trỏ tới tệp .mp4, .mov, .webm, .png hoặc .jpg.' };
   u.hash = '';

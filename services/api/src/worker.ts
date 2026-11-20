@@ -4,6 +4,8 @@ import { createApp } from './app.js';
 import { createCfCreativeValidator } from './lib/cf-creative-validate.js';
 import { mountFinanceRoutes } from './finance-mount.js';
 import { sweepAutoApprove } from './lib/auto-approve.js';
+import { createMediaImporter } from './lib/media-import.js';
+import { sweepMultipart } from './lib/transfers.js';
 import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import type { FinancePort } from './ports.js';
 import { opsTick } from './ops/index.js';
@@ -17,6 +19,7 @@ type WorkerEnv = Record<string, unknown>;
 interface Ready {
   rt: CloudflareRuntime;
   media: ReturnType<typeof createCfCreativeValidator>;
+  importer: ReturnType<typeof createMediaImporter>;
   app: ReturnType<typeof createApp>;
   finance: () => Promise<FinancePort>;
 }
@@ -31,7 +34,11 @@ function build(env: WorkerEnv): Ready {
   // ffmpeg/ClamAV khong chay duoc trong Worker: kiem tra creative bang allow-list (docs/CLOUDFLARE-MEDIA-LIMITS.md), KHONG phai quet virus.
   const media = createCfCreativeValidator(rt);
   media.subscribe(); // chu de 'media.uploaded' (outbox -> JOBS_QUEUE -> queue())
-  return { rt, app, media, finance: async () => port as FinancePort };
+  // Nhap tu Drive/Dropbox/URL: chu de 'media.import' (outbox -> JOBS_QUEUE -> queue()), tai ve R2 bang multipart (can goi Workers Paid cho tep lon: xem docs/CLOUDFLARE-MEDIA-LIMITS.md)
+  const finance = async () => port as FinancePort;
+  const importer = createMediaImporter(rt, { finance });
+  importer.subscribe();
+  return { rt, app, media, importer, finance };
 }
 const ready = (env: WorkerEnv): Ready => (cached ??= build(env));
 
@@ -52,6 +59,8 @@ export default {
     ctx.waitUntil(sweepOutbox(r.rt, r.finance).catch((e) => console.error('[api] outbox loi:', (e as Error).message)));
     ctx.waitUntil(sweepAutoApprove(r.rt).then(() => undefined, () => undefined)); // tep noi bo co quyen duyet, da qua quet
     ctx.waitUntil(r.media.sweep(5).then(() => undefined, () => undefined)); // creative con 'pending' (mat tin nhan)
+    ctx.waitUntil(r.importer.sweep().then(() => undefined, () => undefined)); // nhap tu lien ket bi ket/loi tam thoi -> dat lai viec
+    ctx.waitUntil(sweepMultipart(r.rt).then(() => undefined, () => undefined)); // phien tai tung phan het han (> 3 gio) -> huy tren R2
     ctx.waitUntil(r.rt.kv.purgeExpiredCounters().then(() => undefined, () => undefined)); // don bo dem D1 het han
     if (event.cron === '* * * * *') return; // cron moi phut chi de outbox + kiem tra creative
     ctx.waitUntil(pruneOutboxAll(r.rt).then(() => undefined, () => undefined));

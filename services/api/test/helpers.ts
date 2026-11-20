@@ -16,8 +16,8 @@ export interface Env {
   byRole: (role: string, nth?: number) => string;
 }
 
-export async function setup(opts: AppOptions = {}, dialect: 'postgres' | 'sqlite' = 'postgres'): Promise<Env> {
-  const rt = await createTestRuntime({ now: NOW, dialect, env: { SCRYPT_N: '1024' } });
+export async function setup(opts: AppOptions = {}, dialect: 'postgres' | 'sqlite' = 'postgres', extraEnv: Record<string, string> = {}): Promise<Env> {
+  const rt = await createTestRuntime({ now: NOW, dialect, env: { SCRYPT_N: '1024', ...extraEnv } });
   const s = await seed(rt, { log: false, passwordParams: { N: 1024 }, deviceCount: 20 });
   // du lieu seed demo co scan_state='skipped' (chua quet): cho phep duyet trong test, giong cau hinh demo (xem routes/creatives-scan.ts)
   await rt.db.run("INSERT INTO settings (key, value, updated_by, updated_at) VALUES ('allow_unscanned_creatives', '1', NULL, ?)", [NOW]);

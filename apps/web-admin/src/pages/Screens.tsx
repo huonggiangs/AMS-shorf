@@ -77,7 +77,7 @@ export default function Screens() {
             <dl className="kv" style={{ margin: '16px 0 0' }}>
               <dt>Kích thước màn</dt><dd className="mono">{e[0] ? `${e[0]}"` : `mẫu ${EL_LABEL(el)}`} · khoảng {ew} × {eh} mm (đặt dọc)</dd>
               <dt>Độ phân giải</dt><dd className="mono">{e[1]} × {e[2]} px</dd><dt>Tỷ lệ</dt><dd>9:16 · không dùng ảnh ngang 16:9</dd>
-              <dt>Độ phân giải nhận</dt><dd className="mono">mọi độ phân giải dọc 9:16 từ 720×1280 (HD) đến 2160×3840 (4K)</dd><dt>Định dạng</dt><dd>MP4 H.264 hoặc H.265 (bitrate ≤ 16 Mbps), hoặc JPG/PNG; tối đa 30 MB (đến Full HD) / 100 MB (2K, 4K)</dd><dt>Thời lượng</dt><dd>10–30 giây, lặp liên tục</dd>
+              <dt>Độ phân giải nhận</dt><dd className="mono">mọi độ phân giải dọc 9:16 từ 720×1280 (HD) đến 2160×3840 (4K)</dd><dt>Định dạng</dt><dd>MP4 H.264 hoặc H.265 (bitrate ≤ 16 Mbps), hoặc JPG/PNG; video tối đa 200 MB (ảnh 30 MB đến Full HD / 100 MB 2K, 4K)</dd><dt>Thời lượng</dt><dd>10–30 giây, lặp liên tục</dd>
               <dt>Âm thanh</dt><dd>Mặc định tắt; bật theo quy định tòa nhà</dd><dt>Vùng an toàn</dt><dd>Lề 6% mỗi cạnh; chữ tối thiểu 36 px</dd>
             </dl>
           </div>

@@ -34,6 +34,16 @@ export const parsePx = (s?: string | null): { w: number; h: number } | null => {
   return m ? { w: +m[1]!, h: +m[2]! } : null;
 };
 
+/** Video 9:16 (sai so 2%) trong khoang HD 720x1280 .. 4K 2160x3840 = video man thang may. */
+export function isElevatorDims(w?: number | null, h?: number | null): boolean {
+  if (!w || !h) return false;
+  const near = (a: number, b: number, tol = 0.02) => Math.abs(a - b) / b <= tol;
+  return near(w / h, 9 / 16) && w >= 720 * 0.98 && w <= 2160 * 1.02 && h >= 1280 * 0.98 && h <= 3840 * 1.02;
+}
+/** Tran dung luong VIDEO (MB): thang may (HD-4K) 200 MB; TV/LED 100 MB. Khop videoMaxBytes() cua API. */
+export const VIDEO_LIMIT_MB = { elevator: 200, other: 100 } as const;
+export const videoLimitMb = (w?: number | null, h?: number | null): number => (isElevatorDims(w, h) ? VIDEO_LIMIT_MB.elevator : VIDEO_LIMIT_MB.other);
+
 /** Allowed link sources for media import (domain check). */
 export type LinkSource = 'youtube' | 'drive' | 'dropbox' | 'url';
 export function checkMediaUrl(source: LinkSource, raw: string): { ok: boolean; message: string } {
@@ -43,9 +53,10 @@ export function checkMediaUrl(source: LinkSource, raw: string): { ok: boolean; m
   const host = u.hostname.toLowerCase();
   const is = (d: string) => host === d || host.endsWith(`.${d}`);
   if (source === 'youtube' && !(is('youtube.com') || host === 'youtu.be')) return { ok: false, message: 'Liên kết phải thuộc youtube.com hoặc youtu.be.' };
-  if (source === 'drive' && !(host === 'drive.google.com' || host === 'docs.google.com')) return { ok: false, message: 'Liên kết phải thuộc drive.google.com.' };
+  if (source === 'youtube') return { ok: false, message: 'Chưa hỗ trợ tải từ YouTube. Hãy dùng tệp tải lên hoặc liên kết Google Drive.' };
+  if (source === 'drive' && !(host === 'drive.google.com' || host === 'docs.google.com' || host === 'drive.usercontent.google.com')) return { ok: false, message: 'Liên kết phải thuộc drive.google.com.' };
   if (source === 'dropbox' && !(is('dropbox.com') || is('dl.dropboxusercontent.com'))) return { ok: false, message: 'Liên kết phải thuộc dropbox.com.' };
   if (source === 'url' && !/\.(mp4|mov|webm|png|jpe?g)$/i.test(u.pathname)) return { ok: false, message: 'Liên kết trực tiếp phải trỏ tới tệp .mp4, .mov, .webm, .png hoặc .jpg.' };
   if (/^(localhost|127\.|10\.|192\.168\.|0\.)/.test(host) || host.endsWith('.local')) return { ok: false, message: 'Không chấp nhận địa chỉ nội bộ.' };
-  return { ok: true, message: 'Hệ thống sẽ tải về và chuyển mã trước khi phát. Chỉ dùng nội dung bạn có quyền sử dụng.' };
+  return { ok: true, message: source === 'drive' ? 'Tệp Drive phải chia sẻ "Bất kỳ ai có đường liên kết". Hệ thống tải về kho (tối đa 200 MB) rồi kiểm tra như tệp tải lên. Chỉ dùng nội dung bạn có quyền sử dụng.' : 'Hệ thống tải về kho (tối đa 200 MB) rồi kiểm tra như tệp tải lên. Chỉ dùng nội dung bạn có quyền sử dụng.' };
 }

@@ -2,7 +2,7 @@
 // tai len (upload-url + confirm voi MP4 H.264/H.265 tong hop) va tao vi tri man hinh. Chon manifest theo bac: services/edge-gateway/test/signage.test.ts.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ELEVATOR_TIERS, elevatorTierFor, isElevatorResolution, signageModelClass } from '@ams/shared';
-import { fitsTarget, inferTarget, sizeLimitBytes, videoSpecProblem, MB } from '../src/lib/creative.js';
+import { fitsTarget, inferTarget, sizeLimitBytes, videoMaxBytes, videoSpecProblem, MB } from '../src/lib/creative.js';
 import { login, setup } from './helpers.js';
 import type { Env, Session } from './helpers.js';
 
@@ -79,7 +79,7 @@ describe('thang may HD-4K: video (codec, do phan giai, dung luong)', () => {
     expect(av1.message).toMatch(/H\.264/);
     expect(av1.message).toMatch(/H\.265/);
     expect(av1.message).toMatch(/16 Mbps/);
-    expect(av1.message).toMatch(/100 MB/);
+    expect(av1.message).toMatch(/200 MB/); // thang may: tran video 200 MB
     const big = videoSpecProblem({ w: 4320, h: 7680, codec: 'avc1' }, 'elevator')!;
     expect(big.code).toBe('video_resolution_too_high');
     expect(big.message).toMatch(/2160×3840/);
@@ -91,12 +91,17 @@ describe('thang may HD-4K: video (codec, do phan giai, dung luong)', () => {
       expect(videoSpecProblem({ w: 1920, h: 1080, codec: 'avc1' }, t)).toBeNull();
     }
   });
-  it('dung luong: thang may <= Full HD 30 MB (nhu cu); 2K/4K toi 100 MB (tran video); khach bi han muc tai khoan', () => {
+  it('dung luong: VIDEO thang may (HD-4K) toi 200 MB, VIDEO TV/LED giu 100 MB / 50 MB; anh giu tran cu; khach bi han muc tai khoan', () => {
+    for (const w of [720, 1080, 1440, 2160, undefined]) expect(sizeLimitBytes('elevator', null, w, true), String(w)).toBe(200 * MB);
+    expect(sizeLimitBytes('elevator', 30, 2160, true)).toBe(30 * MB); // han muc tai khoan cua khach van ap dung
+    expect(videoMaxBytes('elevator')).toBe(200 * MB);
+    expect(videoMaxBytes('tv')).toBe(100 * MB);
+    expect(videoMaxBytes('led_p5')).toBe(100 * MB);
+    expect(sizeLimitBytes('tv', null, 1920, true)).toBe(100 * MB);
+    expect(sizeLimitBytes('led_p5', null, 512, true)).toBe(50 * MB);
+    // anh: khong doi (thang may <= Full HD 30 MB, 2K/4K 100 MB; TV 500 MB)
     expect(sizeLimitBytes('elevator', null, 1080)).toBe(30 * MB);
-    expect(sizeLimitBytes('elevator', null)).toBe(30 * MB);
-    expect(sizeLimitBytes('elevator', null, 1440)).toBe(100 * MB);
     expect(sizeLimitBytes('elevator', null, 2160)).toBe(100 * MB);
-    expect(sizeLimitBytes('elevator', 30, 2160)).toBe(30 * MB);
     expect(sizeLimitBytes('tv', null, 2160)).toBe(500 * MB);
     expect(sizeLimitBytes('led_p5', null, 512)).toBe(50 * MB);
   });
@@ -126,15 +131,22 @@ describe('thang may HD-4K: API tai len + vi tri man hinh', () => {
     expect((await up({ width: 540, height: 960, target_type: 'elevator' })).status).toBe(422);
     expect((await up({ width: 4320, height: 7680, target_type: 'elevator' })).status).toBe(422);
   });
-  it('upload-url: video 4K doc 80 MB duoc (thang may), 4K 120 MB bi tu choi (tran 100 MB); 1080x1920 40 MB van bi tu choi (tran 30 MB)', async () => {
+  it('upload-url: video thang may toi 200 MB (4K 120 MB va 1080x1920 40 MB deu duoc), 201 MB bi tu choi; TV van 100 MB', async () => {
     expect((await up({ width: 2160, height: 3840, size_bytes: 80 * MB })).status).toBe(201);
-    const big = await up({ width: 2160, height: 3840, size_bytes: 120 * MB });
+    expect((await up({ width: 2160, height: 3840, size_bytes: 120 * MB })).status).toBe(201);
+    expect((await up({ width: 1080, height: 1920, size_bytes: 40 * MB })).status).toBe(201);
+    expect((await up({ width: 2160, height: 3840, size_bytes: 200 * MB })).status).toBe(201);
+    const big = await up({ width: 2160, height: 3840, size_bytes: 200 * MB + 1 });
     expect(big.status).toBe(422);
     expect(big.body.error.code).toBe('file_too_large');
-    expect(big.body.error.message).toMatch(/100 MB/);
-    const fhd = await up({ width: 1080, height: 1920, size_bytes: 40 * MB });
+    expect(big.body.error.message).toMatch(/giới hạn 200 MB/);
+    const fhd = await up({ width: 1080, height: 1920, size_bytes: 201 * MB });
     expect(fhd.status).toBe(422);
-    expect(fhd.body.error.message).toMatch(/30 MB/);
+    expect(fhd.body.error.message).toMatch(/200 MB/);
+    const tv = await up({ width: 1920, height: 1080, size_bytes: 101 * MB });
+    expect(tv.status).toBe(422);
+    expect(tv.body.error.message).toMatch(/giới hạn 100 MB/);
+    expect((await up({ width: 1920, height: 1080, size_bytes: 100 * MB })).status).toBe(201);
     // TV 4K ngang van bi tu choi nhu cu
     expect((await up({ width: 3840, height: 2160, size_bytes: 40 * MB })).body.error.code).toBe('video_resolution_too_high');
   });

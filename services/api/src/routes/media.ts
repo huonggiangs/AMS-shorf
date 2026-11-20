@@ -8,11 +8,14 @@ import { eq, getRt, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { mediaScope } from '../lib/scope.js';
 import {
-  ALLOWED_MIME, DURATION_RANGE, PROXY_UPLOAD_MAX_BYTES, VIDEO_RULES, videoSpecProblem, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
+  ALLOWED_MIME, DURATION_RANGE, MULTIPART_SESSION_MS, MULTIPART_THRESHOLD_BYTES, PROXY_UPLOAD_MAX_BYTES, multipartPartSize, videoSpecProblem, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
 } from '../lib/creative.js';
 import { todayVn } from '../lib/dates.js';
 import { bumpManifest } from '../lib/manifest.js';
-import { enqueueMediaUploaded, runOutbox } from '../outbox.js';
+import { enqueueMediaImport, enqueueMediaUploaded, runOutbox } from '../outbox.js';
+import { ImportError, YOUTUBE_MSG, planImport } from '../lib/media-import.js';
+import { abortOpenMultipart, getTransfer, partsOf } from '../lib/transfers.js';
+import { mediaMultipartRoutes } from './media-multipart.js';
 import { assertContentVersion, assertLockPolicy, bumpContentVersion, recordApproval, syncKidFlags } from '../lib/creative-security.js';
 import { NEEDS_MANUAL_REVIEW, mediaScanReviewRoutes } from './media-scan-review.js';
 import { UNSCANNED_STATES, allowUnscannedCreatives, assertScanOk, scanVerdict } from './creatives-scan.js';
@@ -21,11 +24,14 @@ import { requirePerm } from '../auth/middleware.js';
 import { can } from '@ams/config';
 import { autoApprovePrivileged } from '../lib/auto-approve.js';
 import { AD_FORMATS, isAdFormat, parseOverlay, sha256Hex, type CreativeOverlay } from '@ams/shared';
+import { writeAudit } from '../lib/audit.js';
+import type { FinancePort } from '../ports.js';
 import type { AppEnv, AuthUser } from '../types.js';
 
 const M_SELECT = `m.id, m.campaign_id, m.customer_id, m.name, m.target_type, m.px_w, m.px_h, m.kind, m.source, m.source_url, m.storage_key, m.mime, m.size_bytes, m.duration_s,
-  m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code, COALESCE(sec.content_version, 1) AS content_version, cv.detail AS scan_detail, th.created_at AS thumb_at`;
-const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_validation cv ON cv.creative_id = m.id LEFT JOIN creative_thumbnails th ON th.creative_id = m.id';
+  m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code, COALESCE(sec.content_version, 1) AS content_version, cv.detail AS scan_detail, th.created_at AS thumb_at,
+  tr.kind AS tr_kind, tr.status AS tr_status, tr.bytes_done AS tr_done, tr.bytes_total AS tr_total, tr.error_code AS tr_error_code, tr.error_message AS tr_error, tr.total_parts AS tr_total_parts, tr.parts AS tr_parts`;
+const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_validation cv ON cv.creative_id = m.id LEFT JOIN creative_thumbnails th ON th.creative_id = m.id LEFT JOIN creative_transfers tr ON tr.creative_id = m.id';
 
 interface MediaRow {
   id: string;
@@ -57,6 +63,14 @@ interface MediaRow {
   content_version: number;
   scan_detail: string | null;
   thumb_at?: string | null;
+  tr_kind?: string | null;
+  tr_status?: string | null;
+  tr_done?: number | string | null;
+  tr_total?: number | string | null;
+  tr_error_code?: string | null;
+  tr_error?: string | null;
+  tr_total_parts?: number | null;
+  tr_parts?: string | null;
 }
 
 function overlayOf(raw: string | null | undefined): CreativeOverlay | null {
@@ -100,10 +114,12 @@ export interface Blocker {
   code: string;
   message: string;
   /** confirm: xac nhan lai tai len | recheck: kiem tra lai tu dong | manual_review: nguoi co quyen xem va duyet tay | reupload: tai lai tep | wait: cho | none */
-  action: 'confirm' | 'recheck' | 'manual_review' | 'reupload' | 'wait' | 'none';
+  action: 'confirm' | 'recheck' | 'manual_review' | 'reupload' | 'wait' | 'retry' | 'none';
 }
-export function blockerOf(m: Pick<MediaRow, 'state' | 'review_state' | 'scan_state' | 'source'>): Blocker | null {
+export function blockerOf(m: Pick<MediaRow, 'state' | 'review_state' | 'scan_state' | 'source'> & { tr_kind?: string | null; tr_status?: string | null; tr_error?: string | null; storage_key?: string | null }): Blocker | null {
   if (m.review_state === 'approved') return null;
+  if (m.state === 'importing') return { code: 'importing', message: 'Hệ thống đang tải tệp từ liên kết về kho lưu trữ. Vui lòng đợi, trạng thái tự cập nhật.', action: 'wait' };
+  if (m.tr_kind === 'import' && m.tr_status === 'failed') return { code: 'import_failed', message: m.tr_error ?? 'Tải tệp từ liên kết thất bại. Bấm "Thử lại" hoặc dùng tệp tải lên.', action: 'retry' };
   if (m.state === 'uploading') return { code: 'upload_incomplete', message: 'Tệp chưa tải xong hoặc chưa được xác nhận. Bấm "Xác nhận lại" sau khi tệp đã tải lên; nếu vẫn lỗi, hãy tải lại tệp.', action: 'confirm' };
   if (m.state === 'invalid') return { code: 'invalid', message: 'Tệp không hợp lệ (đã bị từ chối khi xác nhận). Hãy tải lại tệp đúng định dạng.', action: 'reupload' };
   if (m.review_state === 'rejected' || m.review_state === 'returned' || m.state === 'rejected') return { code: 'rejected', message: 'Tệp đã bị trả lại. Chỉnh sửa và tải lại tệp mới.', action: 'reupload' };
@@ -122,11 +138,28 @@ function reasonsOf(raw: string | null | undefined): string[] {
   }
 }
 
-const statusOf = (m: Pick<MediaRow, 'state' | 'review_state'>): string => (m.state === 'uploading' ? 'processing' : m.review_state === 'returned' ? 'rejected' : m.review_state);
+const statusOf = (m: Pick<MediaRow, 'state' | 'review_state'>): string => (m.state === 'uploading' || m.state === 'importing' ? 'processing' : m.review_state === 'returned' ? 'rejected' : m.review_state);
 
 /** Anh dai dien: duong dan API co xac thuc (cookie phien, cung origin voi /api); `v` = thoi diem tao de trinh duyet nap lai khi doi anh. */
 export const thumbUrlOf = (m: Pick<MediaRow, 'id' | 'thumb_at'>, external: boolean): string | null =>
   m.thumb_at ? `/api/${external ? 'portal' : 'admin'}/v1/media/${m.id}/thumbnail?v=${encodeURIComponent(m.thumb_at)}` : null;
+
+/** Tien do tai len tung phan / nhap tu lien ket (hien o trang Media: "Dang tai tu Drive... X%"). */
+function transferView(m: MediaRow): Record<string, unknown> {
+  const done = num(m.tr_done ?? 0);
+  const total = m.tr_total === null || m.tr_total === undefined ? null : num(m.tr_total);
+  return {
+    kind: m.tr_kind,
+    status: m.tr_status,
+    bytes_done: done,
+    bytes_total: total,
+    percent: total && total > 0 ? Math.min(100, Math.floor((done * 100) / total)) : null,
+    parts_done: partsOf(m.tr_parts).length,
+    total_parts: m.tr_total_parts ?? null,
+    error_code: m.tr_error_code ?? null,
+    error_message: m.tr_error ?? null,
+  };
+}
 
 export const present = (m: MediaRow, external = false): Record<string, unknown> => ({
   id: m.id,
@@ -147,6 +180,7 @@ export const present = (m: MediaRow, external = false): Record<string, unknown> 
   reject_reason: m.review_note,
   campaign_id: m.campaign_id,
   target_type: apiTarget(m.target_type),
+  transfer: m.tr_kind ? transferView(m) : null,
   scan_state: m.scan_state,
   scan_reasons: reasonsOf(m.scan_detail),
   blocker: blockerOf(m),
@@ -170,9 +204,9 @@ function mediaSpec(u: AuthUser, nowIso: string): ListSpec {
     tiebreak: 'm.id',
     filters: {
       status: (v) => {
-        if (v === 'processing') return { sql: "m.state = 'uploading'", params: [] };
-        if (v === 'rejected') return { sql: "m.review_state IN ('rejected','returned') AND m.state <> 'uploading'", params: [] };
-        return { sql: "m.review_state = ? AND m.state <> 'uploading'", params: [v] };
+        if (v === 'processing') return { sql: "m.state IN ('uploading','importing')", params: [] };
+        if (v === 'rejected') return { sql: "m.review_state IN ('rejected','returned') AND m.state NOT IN ('uploading','importing')", params: [] };
+        return { sql: "m.review_state = ? AND m.state NOT IN ('uploading','importing')", params: [v] };
       },
       customer_id: eq('m.customer_id'),
       campaign_id: eq('m.campaign_id'),
@@ -188,6 +222,13 @@ async function loadMedia(c: Ctx, id: string): Promise<MediaRow> {
   if (!r) throw notFound('Không tìm thấy tệp media.');
   return r;
 }
+
+/** Doc mot creative khong theo pham vi nguoi dung (dung cho tac vu nen: nhap tu lien ket, don dep). KHONG dung trong route. */
+export async function loadMediaUnscoped(rt: Runtime, id: string): Promise<MediaRow | null> {
+  return (await rt.db.query<MediaRow>(`SELECT ${M_SELECT} ${M_FROM} WHERE m.id = ?`, [id]))[0] ?? null;
+}
+
+export const safeFileName = (n: string) => n.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^\.+/, '').slice(0, 100) || 'file';
 
 interface Quota {
   max_files_per_day: number;
@@ -251,6 +292,126 @@ async function emailOwner(rt: Runtime, customerId: string, subject: string, html
   if (to && /@/.test(to)) await trySend(rt, { to, subject, html, text: html.replace(/<[^>]+>/g, '') });
 }
 
+export interface FinalizeOpts {
+  rt: Runtime;
+  m: MediaRow;
+  hints: { width?: number | undefined; height?: number | undefined; duration_sec?: number | undefined };
+  actor: { id: string | null; kind: string | null; ip: string };
+  /** 'uploading' (tai len) hoac 'importing' (nhap tu lien ket): trang thai tep phai dang o do thi moi chuyen sang pending_review. */
+  fromState: 'uploading' | 'importing';
+  finance?: (() => Promise<FinancePort>) | undefined;
+  /** true: sau khi xong thu tu duyet cho nguoi co quyen media:approve (autoApprovePrivileged tu kiem tra lai nguoi tai len) */
+  autoApprove: boolean;
+}
+
+/**
+ * Buoc "xac nhan" dung chung cho tai len (POST /:id/confirm) va nhap tu lien ket (media-import): doc header tu chinh tep (range read, KHONG nap ca tep vao bo nho Worker),
+ * kiem tra spec/dung luong/thoi luong theo loai man, bam SHA-256 (CHI tep <= SHA_MAX_BYTES = 32 MB; tep lon hon de sha256 = NULL, gateway/thiet bi doi chieu khi tai),
+ * chep sang khoa cuoi (cung gioi han 32 MB), ghi outbox `media.uploaded`, audit, tu duyet. Spec sai: danh dau 'invalid', xoa tep, nem 422 (tieng Viet).
+ */
+export async function finalizeUpload(o: FinalizeOpts): Promise<void> {
+  const { rt, m, hints } = o;
+  const actx = { rt, ip: o.actor.ip, actorId: o.actor.id };
+  if (!m.storage_key) throw conflict('Tệp chưa có nội dung trên kho lưu trữ.', 'upload_missing');
+  const head = await rt.objects.head(m.storage_key!);
+  if (!head) throw conflict('Chưa thấy tệp trên kho lưu trữ. Hãy tải lên bằng đường dẫn đã cấp rồi xác nhận lại.', 'upload_missing');
+
+  const reject = async (code: string, message: string) => {
+    await rt.db.tx(async (db) => {
+      await db.run("UPDATE creatives SET review_state = 'rejected', review_note = ?, state = 'invalid' WHERE id = ? AND state = ?", [message, m.id, o.fromState]);
+      await writeAudit(db, actx, { action: 'media.rejected_on_confirm', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { code, size: head.size } });
+    });
+    // R1-10: khong de lai tep bi tu choi (chi phi luu tru, tai su dung URL ky)
+    try { await rt.objects.delete?.(m.storage_key!); } catch { /* khong chan phan hoi loi */ }
+    throw unprocessable(message, code);
+  };
+
+  const declared = (m.mime ?? '').toLowerCase();
+  const got = head.contentType.toLowerCase().split(';')[0]!.trim();
+  if (declared && got && got !== declared && got !== 'application/octet-stream') await reject('content_type_mismatch', `Loại tệp tải lên (${got}) khác loại đã khai báo (${declared}).`);
+
+  let w = hints.width ?? (m.px_w ? num(m.px_w) : undefined);
+  let h = hints.height ?? (m.px_h ? num(m.px_h) : undefined);
+  if (declared.startsWith('image/')) {
+    if (head.size <= 25 * MB) {
+      const bytes = await rt.objects.get(m.storage_key);
+      const px = bytes ? probeImage(bytes) : null;
+      if (!px) await reject('invalid_image', 'Không đọc được ảnh (tệp hỏng hoặc không phải PNG/JPG).');
+      w = px!.w; // dung kich thuoc doc tu dau tep, khong tin khai bao cua client
+      h = px!.h;
+    }
+  }
+  let probedDuration: number | undefined;
+  let probedCodec: string | null | undefined;
+  if (declared === 'video/mp4') {
+    // doc header MP4 (range read, khong doc ca tep): dung thoi luong/kich thuoc doc tu chinh tep, khong tin khai bao cua client
+    try {
+      const p = await probeMp4(rangeReaderFor(rt.objects, m.storage_key), head.size);
+      if (p.recognized && p.w && p.h) {
+        w = p.w;
+        h = p.h;
+      }
+      if (p.recognized && p.durationS !== null && p.durationS > 0) probedDuration = p.durationS;
+      if (p.recognized) probedCodec = p.videoCodec;
+    } catch (e) {
+      console.error('[media] doc header mp4 loi:', (e as Error).name);
+    }
+  }
+  const led = await knownLedPx(rt);
+  const target: TargetType | null = m.target_type ? dbTarget(m.target_type) : w && h ? inferTarget(w, h, led) : null;
+  if (declared === 'video/mp4') {
+    // codec/độ phân giải màn không phát được: từ chối ngay, xóa tệp (thang máy được H.265 và tới 4K, loại khác H.264 <= Full HD)
+    const specProblem = videoSpecProblem({ w, h, codec: probedCodec }, target);
+    if (specProblem) await reject(specProblem.code, specProblem.message);
+  }
+  if (!w || !h) throw unprocessable('Chưa đọc được kích thước video. Hãy dùng tệp MP4 (H.264) chuẩn hoặc gửi width/height khi xác nhận.', 'dimensions_required');
+
+  if (!target) await reject('unsupported_resolution', `Độ phân giải ${w}×${h} không khớp loại màn hình nào.`);
+  const fit = fitsTarget(target!, w, h, { knownLed: led });
+  if (!fit.ok) await reject('creative_size_mismatch', fit.message);
+  const quota = await quotaOf(rt, m.customer_id);
+  const limit = sizeLimitBytes(target!, m.uploader_kind === 'internal' ? null : quota.max_mb_per_file, w, declared.startsWith('video/'));
+  if (head.size > limit) await reject('file_too_large', `Tệp ${(head.size / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB cho loại màn này.`);
+  const dur = DURATION_RANGE[target!];
+  const durationSec = probedDuration ?? hints.duration_sec ?? (m.duration_s === null ? undefined : num(m.duration_s));
+  if (dur && durationSec !== undefined && declared.startsWith('video/') && (durationSec < dur[0] || durationSec > dur[1])) {
+    await reject('duration_out_of_range', `Thời lượng phải từ ${dur[0]} đến ${dur[1]} giây cho loại màn này.`);
+  }
+
+  let sha: string | null = null;
+  let finalKey: string = m.storage_key;
+  if (head.size <= SHA_MAX_BYTES) {
+    const bytes = await rt.objects.get(m.storage_key);
+    if (!bytes) throw conflict('Chưa đọc được tệp trên kho lưu trữ để xác minh. Thử xác nhận lại.', 'upload_missing');
+    sha = await sha256Hex(bytes);
+    // R1-10: URL tai len con hieu luc 900 s va dung lai duoc => sau khi bam xong, chep sang khoa MOI (khong ai co URL ky) va xoa khoa cu;
+    // tep da bam khong the bi doi tu duoi sau khi duyet. Tep > 128 MB giu khoa cu (khong doc het vao bo nho), thiet bi van doi chieu sha256 khi tai.
+    const frozenKey = `media/${m.customer_id}/${m.id}/v1-${safeName(m.name ?? 'file')}`;
+    if (frozenKey !== m.storage_key) {
+      await rt.objects.put(frozenKey, bytes, m.mime ?? head.contentType);
+      try { await rt.objects.delete?.(m.storage_key); } catch { /* khoa cu mo coi: khong anh huong noi dung da duyet */ }
+      finalKey = frozenKey;
+    }
+  }
+  await rt.db.tx(async (db) => {
+    const res = await db.run(
+      `UPDATE creatives SET px_w = ?, px_h = ?, orientation = ?, target_type = ?, size_bytes = ?, duration_s = ?, sha256 = ?, storage_key = ?, state = 'pending_review', source = 'upload' WHERE id = ? AND state = ?`,
+      [w, h, w >= h ? 'landscape' : 'portrait', target, head.size, durationSec === undefined ? null : Math.round(durationSec), sha, finalKey, m.id, o.fromState],
+    );
+    if (res.changes === 0) throw conflict('Tệp vừa được xác nhận ở nơi khác.', 'invalid_state');
+    await enqueueMediaUploaded(db, rt, m.id); // cung giao dich: xac nhan xong thi chac chan co viec quet (media-worker)
+    await writeAudit(db, actx, { action: 'media.confirm', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { px: `${w}x${h}`, size_bytes: head.size, target_type: target, sha256: sha } });
+  });
+  if (o.finance) {
+    try {
+      await runOutbox(rt, o.finance); // day ngay cho media-worker; loi thi worker outbox thu lai
+    } catch (e) {
+      console.error('[media] xu ly outbox loi:', (e as Error).name);
+    }
+  }
+if (o.autoApprove) await autoApprovePrivileged(rt, m.id, o.actor.ip);
+}
+
 export function mediaRoutes(external: boolean): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
 
@@ -290,10 +451,13 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       const vp = videoSpecProblem({ w: b.width, h: b.height }, target);
       if (vp) throw unprocessable(vp.message, vp.code);
     }
-    // Kho khong ky duoc URL (Cloudflare thieu khoa S3): tep di qua Worker, tran 95 MB (body Worker 100 MB)
+    // Kho khong ky duoc URL (Cloudflare thieu khoa S3): tep <= 90 MB di qua Worker bang MOT PUT (body Worker toi da 100 MB, tran 95 MB);
+    // tep lon hon tai TUNG PHAN (multipart qua binding R2, moi phan 32 MiB) neu kho ho tro, khong thi bao nen lai.
     const viaProxy = rt.objects.signedPut === false && typeof rt.objects.putStream === 'function';
-    if (viaProxy && b.size_bytes > PROXY_UPLOAD_MAX_BYTES) throw unprocessable(`Tệp ${(b.size_bytes / MB).toFixed(1)} MB vượt 95 MB: nén lại (H.264) rồi tải lại.`, 'file_too_large', { limit_bytes: PROXY_UPLOAD_MAX_BYTES });
-    const limit = Math.min(sizeLimitBytes(target ?? 'tv', extQuotaMb, b.width), isVideoMime(mime) ? VIDEO_RULES.maxBytes : Infinity);
+    const canMultipart = typeof rt.objects.multipartCreate === 'function' && typeof rt.objects.multipartUploadPart === 'function' && typeof rt.objects.multipartComplete === 'function';
+    const viaMultipart = viaProxy && canMultipart && b.size_bytes > MULTIPART_THRESHOLD_BYTES;
+    if (viaProxy && !viaMultipart && b.size_bytes > PROXY_UPLOAD_MAX_BYTES) throw unprocessable(`Tệp ${(b.size_bytes / MB).toFixed(1)} MB vượt 95 MB: nén lại (H.264) rồi tải lại.`, 'file_too_large', { limit_bytes: PROXY_UPLOAD_MAX_BYTES });
+    const limit = sizeLimitBytes(target ?? 'tv', extQuotaMb, b.width, isVideoMime(mime));
     if (b.size_bytes > limit) throw unprocessable(`Tệp ${(b.size_bytes / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB${target ? ` cho loại màn này` : ''}.`, 'file_too_large', { limit_bytes: limit });
     const dur = target ? DURATION_RANGE[target] : undefined;
     if (dur && b.duration_sec !== undefined && isVideoMime(mime) && (b.duration_sec < dur[0] || b.duration_sec > dur[1])) {
@@ -305,7 +469,9 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const id = rt.id();
     const key = `media/${customerId}/${id}/${safeName(b.name)}`;
     const nowIso = rt.clock.now().toISOString();
-    const signed = viaProxy ? { url: `/api/${external ? 'portal' : 'admin'}/v1/media/${id}/content`, headers: { 'Content-Type': mime } } : await rt.objects.putSigned(key, mime, 900, { maxBytes: b.size_bytes });
+    const apiBase = `/api/${external ? 'portal' : 'admin'}/v1/media/${id}`;
+    const partSize = multipartPartSize(rt);
+    const signed = viaMultipart ? { url: `${apiBase}/multipart`, headers: { 'Content-Type': mime } } : viaProxy ? { url: `${apiBase}/content`, headers: { 'Content-Type': mime } } : await rt.objects.putSigned(key, mime, 900, { maxBytes: b.size_bytes });
     await rt.db.tx(async (db) => {
       await db.run(
         `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, uploaded_by, uploader_kind, scan_state, review_state, state, format, overlay, created_at)
@@ -314,7 +480,13 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       );
       await auditCtx(c, db, { action: 'media.upload_url', objectType: 'creative', objectId: id, customerId, diff: { name: b.name, size_bytes: b.size_bytes, mime } });
     });
-    return c.json({ id, url: signed.url, method: 'PUT', headers: signed.headers, key, expires_in: 900, via: viaProxy ? 'proxy' : 'direct' }, 201);
+    return c.json(
+      viaMultipart
+        // multipart: client goi POST url (khoi tao) roi PUT {apiBase}/parts/:n tuan tu, POST {apiBase}/multipart/complete, roi /confirm
+        ? { id, url: signed.url, method: 'POST', headers: signed.headers, key, expires_in: MULTIPART_SESSION_MS / 1000, via: 'multipart', multipart: { part_size: partSize, total_parts: Math.ceil(b.size_bytes / partSize), parts_url: `${apiBase}/parts/{n}`, complete_url: `${apiBase}/multipart/complete`, abort_url: `${apiBase}/multipart/abort` } }
+        : { id, url: signed.url, method: 'PUT', headers: signed.headers, key, expires_in: 900, via: viaProxy ? 'proxy' : 'direct' },
+      201,
+    );
   });
 
   /**
@@ -367,135 +539,92 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     return c.json({ ok: true, size_bytes: want });
   });
 
+  r.route('/', mediaMultipartRoutes<MediaRow>({ external, loadMedia }));
+
   r.post('/:id/confirm', requirePerm('media', 'write'), async (c) => {
     const rt = getRt(c);
     const m = await loadMedia(c, c.req.param('id'));
     const b = await parseBody(c, z.object({ width: z.coerce.number().int().min(1).max(20000).optional(), height: z.coerce.number().int().min(1).max(20000).optional(), duration_sec: z.coerce.number().min(0).max(36000).optional() }));
     if (m.source !== 'upload' || !m.storage_key) throw conflict('Tệp này không phải tệp tải lên.', 'invalid_state');
     if (m.state !== 'uploading') return c.json(present(m, external)); // idempotent
-    const head = await rt.objects.head(m.storage_key);
-    if (!head) throw conflict('Chưa thấy tệp trên kho lưu trữ. Hãy tải lên bằng đường dẫn đã cấp rồi xác nhận lại.', 'upload_missing');
-
-    const reject = async (code: string, message: string) => {
-      await rt.db.tx(async (db) => {
-        await db.run("UPDATE creatives SET review_state = 'rejected', review_note = ?, state = 'invalid' WHERE id = ? AND state = 'uploading'", [message, m.id]);
-        await auditCtx(c, db, { action: 'media.rejected_on_confirm', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { code, size: head.size } });
-      });
-      // R1-10: khong de lai tep bi tu choi (chi phi luu tru, tai su dung URL ky)
-      try { await rt.objects.delete?.(m.storage_key!); } catch { /* khong chan phan hoi loi */ }
-      throw unprocessable(message, code);
-    };
-
-    const declared = (m.mime ?? '').toLowerCase();
-    const got = head.contentType.toLowerCase().split(';')[0]!.trim();
-    if (declared && got && got !== declared && got !== 'application/octet-stream') await reject('content_type_mismatch', `Loại tệp tải lên (${got}) khác loại đã khai báo (${declared}).`);
-
-    let w = b.width ?? (m.px_w ? num(m.px_w) : undefined);
-    let h = b.height ?? (m.px_h ? num(m.px_h) : undefined);
-    if (declared.startsWith('image/')) {
-      if (head.size <= 25 * MB) {
-        const bytes = await rt.objects.get(m.storage_key);
-        const px = bytes ? probeImage(bytes) : null;
-        if (!px) await reject('invalid_image', 'Không đọc được ảnh (tệp hỏng hoặc không phải PNG/JPG).');
-        w = px!.w; // dung kich thuoc doc tu dau tep, khong tin khai bao cua client
-        h = px!.h;
-      }
-    }
-    let probedDuration: number | undefined;
-    let probedCodec: string | null | undefined;
-    if (declared === 'video/mp4') {
-      // doc header MP4 (range read, khong doc ca tep): dung thoi luong/kich thuoc doc tu chinh tep, khong tin khai bao cua client
-      try {
-        const p = await probeMp4(rangeReaderFor(rt.objects, m.storage_key), head.size);
-        if (p.recognized && p.w && p.h) {
-          w = p.w;
-          h = p.h;
-        }
-        if (p.recognized && p.durationS !== null && p.durationS > 0) probedDuration = p.durationS;
-        if (p.recognized) probedCodec = p.videoCodec;
-      } catch (e) {
-        console.error('[media] doc header mp4 loi:', (e as Error).name);
-      }
-    }
-    const led = await knownLedPx(rt);
-    const target: TargetType | null = m.target_type ? dbTarget(m.target_type) : w && h ? inferTarget(w, h, led) : null;
-    if (declared === 'video/mp4') {
-      // codec/độ phân giải màn không phát được: từ chối ngay, xóa tệp (thang máy được H.265 và tới 4K, loại khác H.264 <= Full HD)
-      const specProblem = videoSpecProblem({ w, h, codec: probedCodec }, target);
-      if (specProblem) await reject(specProblem.code, specProblem.message);
-    }
-    if (!w || !h) throw unprocessable('Chưa đọc được kích thước video. Hãy dùng tệp MP4 (H.264) chuẩn hoặc gửi width/height khi xác nhận.', 'dimensions_required');
-
-    if (!target) await reject('unsupported_resolution', `Độ phân giải ${w}×${h} không khớp loại màn hình nào.`);
-    const fit = fitsTarget(target!, w, h, { knownLed: led });
-    if (!fit.ok) await reject('creative_size_mismatch', fit.message);
-    const quota = await quotaOf(rt, m.customer_id);
-    const limit = Math.min(sizeLimitBytes(target!, c.get('user').kind === 'internal' ? null : quota.max_mb_per_file, w), declared.startsWith('video/') ? VIDEO_RULES.maxBytes : Infinity);
-    if (head.size > limit) await reject('file_too_large', `Tệp ${(head.size / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB cho loại màn này.`);
-    const dur = DURATION_RANGE[target!];
-    const durationSec = probedDuration ?? b.duration_sec ?? (m.duration_s === null ? undefined : num(m.duration_s));
-    if (dur && durationSec !== undefined && declared.startsWith('video/') && (durationSec < dur[0] || durationSec > dur[1])) {
-      await reject('duration_out_of_range', `Thời lượng phải từ ${dur[0]} đến ${dur[1]} giây cho loại màn này.`);
-    }
-
-    let sha: string | null = null;
-    let finalKey: string = m.storage_key;
-    if (head.size <= SHA_MAX_BYTES) {
-      const bytes = await rt.objects.get(m.storage_key);
-      if (!bytes) throw conflict('Chưa đọc được tệp trên kho lưu trữ để xác minh. Thử xác nhận lại.', 'upload_missing');
-      sha = await sha256Hex(bytes);
-      // R1-10: URL tai len con hieu luc 900 s va dung lai duoc => sau khi bam xong, chep sang khoa MOI (khong ai co URL ky) va xoa khoa cu;
-      // tep da bam khong the bi doi tu duoi sau khi duyet. Tep > 128 MB giu khoa cu (khong doc het vao bo nho), thiet bi van doi chieu sha256 khi tai.
-      const frozenKey = `media/${m.customer_id}/${m.id}/v1-${safeName(m.name ?? 'file')}`;
-      if (frozenKey !== m.storage_key) {
-        await rt.objects.put(frozenKey, bytes, m.mime ?? head.contentType);
-        try { await rt.objects.delete?.(m.storage_key); } catch { /* khoa cu mo coi: khong anh huong noi dung da duyet */ }
-        finalKey = frozenKey;
-      }
-    }
-    await rt.db.tx(async (db) => {
-      const res = await db.run(
-        `UPDATE creatives SET px_w = ?, px_h = ?, orientation = ?, target_type = ?, size_bytes = ?, duration_s = ?, sha256 = ?, storage_key = ?, state = 'pending_review' WHERE id = ? AND state = 'uploading'`,
-        [w, h, w >= h ? 'landscape' : 'portrait', target, head.size, durationSec === undefined ? null : Math.round(durationSec), sha, finalKey, m.id],
-      );
-      if (res.changes === 0) throw conflict('Tệp vừa được xác nhận ở nơi khác.', 'invalid_state');
-      await enqueueMediaUploaded(db, rt, m.id); // cung giao dich: xac nhan xong thi chac chan co viec quet (media-worker)
-      await auditCtx(c, db, { action: 'media.confirm', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { px: `${w}x${h}`, size_bytes: head.size, target_type: target, sha256: sha } });
+    const u = c.get('user');
+    await finalizeUpload({
+      rt, m, hints: { width: b.width, height: b.height, duration_sec: b.duration_sec }, fromState: 'uploading',
+      actor: { id: u.id, kind: u.kind, ip: c.get('ip') }, finance: c.get('finance'),
+      // Nguoi noi bo co quyen media:approve tu tai len: tu duyet (sau khi da qua kiem tra spec). Duong Cloudflare: validator da chay trong runOutbox.
+      // Duong VPS: media-worker quet bat dong bo -> sweepAutoApprove (worker outbox) duyet khi scan_state xong. Khach/doi tac: van cho duyet.
+      autoApprove: !external && u.kind === 'internal' && can(u.perms, u.role, 'media', 'approve'),
     });
-    try {
-      await runOutbox(rt, c.get('finance')); // day ngay cho media-worker; loi thi worker outbox thu lai
-    } catch (e) {
-      console.error('[media] xu ly outbox loi:', (e as Error).name);
-    }
-    // Nguoi noi bo co quyen media:approve tu tai len: tu duyet (sau khi da qua kiem tra spec o tren). Duong Cloudflare: validator da chay trong runOutbox.
-    // Duong VPS: media-worker quet bat dong bo -> sweepAutoApprove (worker outbox) duyet khi scan_state xong. Khach/doi tac: van cho duyet.
-    if (!external && c.get('user').kind === 'internal' && can(c.get('user').perms, c.get('user').role, 'media', 'approve')) await autoApprovePrivileged(rt, m.id, c.get('ip'));
     return c.json(present(await loadMedia(c, m.id), external));
   });
 
+  /**
+   * Nhap tu lien ket: Google Drive (cong khai) / Dropbox / URL truc tiep. Chi LUU tham chieu + xep viec; Worker (Queue consumer, lib/media-import.ts) tai ve R2 bang multipart,
+   * roi chay dung luong xac nhan nhu tep tai len. Tien do o `transfer` (percent/bytes/error); that bai -> nut "Thu lai" (POST /:id/import/retry). YouTube: chua ho tro (422).
+   */
   r.post('/import', requirePerm('media', 'write'), async (c) => {
     const rt = getRt(c);
     const u = c.get('user');
     const b = await parseBody(c, importBody);
     const customerId = await resolveOwner(c, b.customer_id);
+    if (b.source === 'youtube') throw unprocessable(YOUTUBE_MSG, 'youtube_unsupported');
     const chk = checkImportUrl(b.source as LinkSource, b.url);
     if (!chk.ok) throw unprocessable(chk.message, 'bad_media_url');
+    let plan;
+    try {
+      plan = planImport(b.source, chk.url.toString(), rt.config.runtime === 'cloudflare' || rt.config.runtime === 'test');
+    } catch (e) {
+      if (e instanceof ImportError) throw unprocessable(e.message, e.code);
+      throw e;
+    }
     const quota = await quotaOf(rt, customerId);
     await checkQuotas(rt, customerId, 0, quota);
     const id = rt.id();
     const url = chk.url.toString();
-    const name = b.name || decodeURIComponent(chk.url.pathname.split('/').filter(Boolean).pop() ?? '') || chk.url.hostname;
-    const source = b.source === 'drive' ? 'gdrive' : b.source;
+    const fromUrl = decodeURIComponent(chk.url.pathname.split('/').filter(Boolean).pop() ?? '');
+    const name = b.name || (plan.source === 'url' ? fromUrl || chk.url.hostname : `Tệp từ ${plan.label}`);
+    const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
-      // chi luu tham chieu; viec tai ve/chuyen ma/quet ma doc do dich vu transcoder dam nhan (scan_state='pending')
       await db.run(
         `INSERT INTO creatives (id, campaign_id, customer_id, name, kind, source, source_url, uploaded_by, uploader_kind, scan_state, review_state, state, created_at)
-         VALUES (?,NULL,?,?,'link',?,?,?,?,'pending','pending','pending_review',?)`,
-        [id, customerId, name.slice(0, 200), source, url, u.id, u.kind, rt.clock.now().toISOString()],
+         VALUES (?,NULL,?,?,'link',?,?,?,?,'pending','pending','importing',?)`,
+        [id, customerId, name.slice(0, 200), plan.source, url, u.id, u.kind, nowIso],
       );
-      await auditCtx(c, db, { action: 'media.import', objectType: 'creative', objectId: id, customerId, diff: { source, host: chk.url.hostname } });
+      await db.run("INSERT INTO creative_transfers (creative_id, kind, status, parts, bytes_done, attempts, started_at, updated_at) VALUES (?,'import','queued','[]',0,0,?,?)", [id, nowIso, nowIso]);
+      await enqueueMediaImport(db, rt, id, '1');
+      await auditCtx(c, db, { action: 'media.import', objectType: 'creative', objectId: id, customerId, diff: { source: plan.source, host: chk.url.hostname } });
     });
+    try {
+      await runOutbox(rt, c.get('finance')); // day ngay cho consumer; loi thi cron thu lai
+    } catch (e) {
+      console.error('[media] xu ly outbox loi:', (e as Error).name);
+    }
     return c.json(present(await loadMedia(c, id), external), 201);
+  });
+
+  // "Thu lai" nhap tu lien ket da that bai (vd Drive chua chia se cong khai, vuot han muc tai): dat lai tien trinh va xep viec moi.
+  r.post('/:id/import/retry', requirePerm('media', 'write'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const m = await loadMedia(c, c.req.param('id'));
+    if (m.uploaded_by !== u.id && !(!external && u.kind === 'internal' && can(u.perms, u.role, 'media', 'approve'))) throw forbidden('Chỉ người tạo tệp hoặc người có quyền duyệt mới được thử lại.', 'not_uploader');
+    const t = await getTransfer(rt.db, m.id);
+    if (!t || t.kind !== 'import' || t.status !== 'failed') throw conflict('Tệp này không có lần nhập nào thất bại để thử lại.', 'invalid_state', { status: t?.status ?? null });
+    if (!m.source_url) throw conflict('Tệp không còn liên kết nguồn.', 'invalid_state');
+    if ((await rt.kv.incr(`rl:media-import-retry:${u.id}`, 3600)) > 20) throw tooMany('Thử lại quá nhiều lần. Vui lòng thử lại sau.', 3600);
+    const nowIso = rt.clock.now().toISOString();
+    await rt.db.tx(async (db) => {
+      await db.run("UPDATE creative_transfers SET status = 'queued', attempts = 0, upload_id = NULL, parts = '[]', bytes_done = 0, bytes_total = NULL, error_code = NULL, error_message = NULL, started_at = ?, updated_at = ? WHERE creative_id = ? AND status = 'failed'", [nowIso, nowIso, m.id]);
+      await db.run("UPDATE creatives SET review_state = 'pending', review_note = NULL, state = 'importing', storage_key = NULL, size_bytes = NULL, scan_state = 'pending' WHERE id = ? AND state IN ('importing','invalid')", [m.id]);
+      await enqueueMediaImport(db, rt, m.id, rt.id());
+      await auditCtx(c, db, { action: 'media.import_retry', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { previous_error: t.error_code } });
+    });
+    try {
+      await runOutbox(rt, c.get('finance'));
+    } catch (e) {
+      console.error('[media] xu ly outbox loi:', (e as Error).name);
+    }
+    return c.json(present(await loadMedia(c, m.id), external));
   });
 
   // Kiem tra lai tu dong (tep 'pending' bi ket do mat tin nhan/queue, hoac 'needs_manual_review' muon chay lai kiem tra): dat lai 'pending' + day lai viec quet.
@@ -592,7 +721,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const u = c.get('user');
     const m = await loadMedia(c, c.req.param('id'));
     const body = await parseBody(c, z.object({ content_version: z.coerce.number().int().min(1).optional(), manual_review_note: z.string().trim().min(3, 'Nhập ghi chú kiểm tra thủ công (tối thiểu 3 ký tự)').max(500).optional() }));
-    if (m.state === 'uploading' || m.state === 'invalid') throw conflict('Tệp chưa tải xong hoặc không hợp lệ.', 'invalid_state');
+    if (m.state === 'uploading' || m.state === 'importing' || m.state === 'invalid') throw conflict('Tệp chưa tải xong hoặc không hợp lệ.', 'invalid_state');
     if (m.review_state === 'approved') return c.json(present(m, external));
     // Cloudflare (khong co ClamAV): nguoi co quyen media:approve xem tep roi duyet MOT BUOC; ghi chu bat buoc, ghi audit + creative_validation.engine='manual'.
     const manual = m.scan_state === NEEDS_MANUAL_REVIEW && body.manual_review_note !== undefined;
@@ -615,7 +744,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
         );
         await auditCtx(c, db, { action: 'media.scan_review.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { content_version: body.content_version ?? null, scan_state: { from: NEEDS_MANUAL_REVIEW, to: 'clean' }, note: body.manual_review_note, via: 'media.approve' } });
       }
-      const res = await db.run("UPDATE creatives SET review_state = 'approved', review_note = NULL, state = 'ready' WHERE id = ? AND state NOT IN ('uploading','invalid') AND scan_state = ?", [m.id, manual ? 'clean' : m.scan_state]);
+      const res = await db.run("UPDATE creatives SET review_state = 'approved', review_note = NULL, state = 'ready' WHERE id = ? AND state NOT IN ('uploading','importing','invalid') AND scan_state = ?", [m.id, manual ? 'clean' : m.scan_state]);
       if (res.changes === 0) throw conflict('Tệp vừa đổi trạng thái.', 'invalid_state');
       const ap = await recordApproval(db, { id: m.id, ...cur }, nowIso);
       await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'approved' }, scan_state: m.scan_state, content_version: ap.version, content_hash: ap.hash, version_bound: body.content_version !== undefined } });
@@ -629,7 +758,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const rt = getRt(c);
     const m = await loadMedia(c, c.req.param('id'));
     const b = await parseBody(c, z.object({ reason: z.string().trim().min(3, 'Nhập lý do (tối thiểu 3 ký tự)').max(500) }));
-    if (m.state === 'uploading') throw conflict('Tệp chưa tải xong.', 'invalid_state');
+    if (m.state === 'uploading' || m.state === 'importing') throw conflict('Tệp chưa tải xong.', 'invalid_state');
     await rt.db.tx(async (db) => {
       await db.run("UPDATE creatives SET review_state = 'rejected', review_note = ?, state = 'rejected' WHERE id = ?", [b.reason, m.id]);
       await auditCtx(c, db, { action: 'media.reject', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'rejected' }, reason: b.reason } });
@@ -668,6 +797,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
         }
       }
       const th = (await rt.db.query<{ thumb_key: string }>('SELECT thumb_key FROM creative_thumbnails WHERE creative_id = ?', [m.id]))[0];
+      await abortOpenMultipart(rt, m.id, m.storage_key, 'aborted', { actorId: c.get('user').id, ip: c.get('ip'), customerId: m.customer_id, reason: 'tệp bị xóa hàng loạt' });
       const res = await rt.db.tx(async (db) => {
         // dieu kien trang thai chien dich kiem lai ngay trong lenh xoa: chien dich vua duoc gui/chay thi khong xoa (tx tren D1 khong hoan tac => xoa creatives truoc, anh dai dien sau)
         const del = await db.run(
@@ -676,6 +806,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
         );
         if (del.changes === 0) return false;
         await db.run('DELETE FROM creative_thumbnails WHERE creative_id = ?', [m.id]);
+        await db.run('DELETE FROM creative_transfers WHERE creative_id = ?', [m.id]);
         await auditCtx(c, db, { action: 'media.delete', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { name: m.name, size_bytes: m.size_bytes === null ? null : num(m.size_bytes), bulk: true } });
         return true;
       });
@@ -725,8 +856,10 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       if (camp && !['draft', 'rejected'].includes(camp.state)) throw conflict('Tệp đang dùng trong chiến dịch đã gửi duyệt/đang chạy, không thể xóa.', 'in_use');
     }
     const th = (await rt.db.query<{ thumb_key: string }>('SELECT thumb_key FROM creative_thumbnails WHERE creative_id = ?', [m.id]))[0];
+    await abortOpenMultipart(rt, m.id, m.storage_key, 'aborted', { actorId: c.get('user').id, ip: c.get('ip'), customerId: m.customer_id, reason: 'tệp bị xóa' }); // khong de phan multipart mo coi tren kho
     await rt.db.tx(async (db) => {
       await db.run('DELETE FROM creative_thumbnails WHERE creative_id = ?', [m.id]);
+      await db.run('DELETE FROM creative_transfers WHERE creative_id = ?', [m.id]);
       await db.run('DELETE FROM creatives WHERE id = ?', [m.id]);
       await auditCtx(c, db, { action: 'media.delete', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { name: m.name } });
     });
