@@ -69,6 +69,7 @@ Chống đua: không dùng khóa hàng (D1/SQLite không có `FOR UPDATE`); dùn
 | Tiền | `ad_wallets` (cache), `wallet_entries` (sổ cái), `topups`, `payment_webhooks`, `activation_rules/log`, `invoices`, `payouts`, `wallet_ledger` | Giao dịch | Tiền là `BIGINT` đồng, không float |
 | Sự kiện | `heartbeat`, `ad_impression`, `proof_of_play` + bảng gộp | R2 Parquet / ClickHouse | Dashboard chỉ đọc bảng gộp |
 | Tệp | media, báo cáo, hợp đồng đã ký | R2 / S3 | Presigned URL, quét mã độc, kiểm kích thước; ảnh đại diện do trình duyệt tạo (`creative_thumbnails`); người có `media:approve` tự tải lên thì tự duyệt (docs/CLOUDFLARE-MEDIA-LIMITS.md) |
+| Signage Player | `device_profiles` (độ phân giải, nguồn phát, cache, cấp quyền), `device_logs` (nhật ký 7 ngày), `schedule_slot_text` (chữ theo lịch); cấu hình theo loại màn: `settings.signage_config` | Giao dịch | Migration 0017; thang máy/LED được cấp quyền ở admin thay cho mã 6 số (docs/SIGNAGE-PLAYER-AMS.md) |
 
 Quy ước SQL chung Postgres/D1: id `TEXT` ULID/UUIDv7, thời gian `TEXT` ISO-8601 UTC, boolean `INTEGER`, JSON `TEXT`, placeholder `?`, không ORM.
 

@@ -1,5 +1,5 @@
 import type { Runtime } from '@ams/runtime';
-import { ANY, MANIFEST_EPOCH_KEY, isAdFormat, parseOverlay, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart } from '@ams/shared';
+import { ANY, MANIFEST_EPOCH_KEY, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
 import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestSlot } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 
@@ -59,6 +59,9 @@ interface SlotRow {
   priority: number;
   reward_points: number;
   regions: string | null;
+  /** schedule_slot_text (0017): NULL = khong ghi de */
+  slot_header: string | null;
+  slot_footer: string | null;
 }
 
 export interface ManifestOpts {
@@ -155,6 +158,20 @@ export class ManifestService {
     return this.view(rec);
   }
 
+  /** cau hinh Signage theo loai man, bo nho dem ngan (heartbeat can hotline/cap nhat app ma khong hoi DB moi lan) */
+  private signageMem: { at: number; cfg: Record<'elevator' | 'led_p5', SignageKindConfig> } | null = null;
+
+  /** Cau hinh Signage Player cua mot loai man ('tv' => mac dinh rong: TV khong dung). Doc settings.signage_config (loi doc thi nem de caller xu ly). */
+  async signage(type: string, fresh = false): Promise<SignageKindConfig> {
+    if (!isSignageKind(type)) return { ...SIGNAGE_DEFAULT };
+    const now = this.rt.clock.now().getTime();
+    if (fresh || !this.signageMem || now - this.signageMem.at >= (this.opts.memTtlS ?? memTtlMs / 1000) * 1000) {
+      const r = (await this.rt.db.query<{ value: string }>('SELECT value FROM settings WHERE key = ?', [SIGNAGE_CONFIG_KEY]))[0];
+      this.signageMem = { at: now, cfg: parseSignageConfig(r?.value) };
+    }
+    return this.signageMem.cfg[type];
+  }
+
   private views = new Map<string, ManifestView>();
   private view(rec: GroupRecord): ManifestView {
     const k = rec.etag + ':' + rec.builtAt;
@@ -195,6 +212,7 @@ export class ManifestService {
 
   /** Cap nhat nong: xoa cache nhom (API goi sau khi duyet/dung chien dich). */
   async invalidate(g?: GroupKey): Promise<void> {
+    this.signageMem = null;
     if (g) {
       this.mem.delete(groupString(g));
       await this.rt.kv.del(`manifest:${groupString(g)}`);
@@ -208,8 +226,10 @@ export class ManifestService {
     if (!raw) return null;
     const base = JSON.parse(raw) as Manifest;
     const now = JSON.parse(cur.json) as Manifest;
-    const baseIds = new Set(base.creatives.map((c) => c.id));
+    const baseById = new Map(base.creatives.map((c) => [c.id, JSON.stringify(c)]));
     const nowIds = new Set(now.creatives.map((c) => c.id));
+    // creative co CUNG id nhung noi dung khac (vd doi `fit`/thoi luong): gui lai day du (them vao added; id cung nam trong removed de client thay the, khong nhan doi)
+    const changed = now.creatives.filter((c) => baseById.has(c.id) && baseById.get(c.id) !== JSON.stringify(c));
     return {
       version: PROTOCOL_VERSION,
       group: now.group,
@@ -217,9 +237,13 @@ export class ManifestService {
       base_etag: baseEtag,
       generated_at: now.generated_at,
       ttl_s: now.ttl_s,
-      creatives_added: now.creatives.filter((c) => !baseIds.has(c.id)),
-      creatives_removed: base.creatives.filter((c) => !nowIds.has(c.id)).map((c) => c.id),
+      creatives_added: now.creatives.filter((c) => !baseById.has(c.id) || baseById.get(c.id) !== JSON.stringify(c)),
+      creatives_removed: [...base.creatives.filter((c) => !nowIds.has(c.id)).map((c) => c.id), ...changed.map((c) => c.id)],
       schedule: now.schedule,
+      ...(now.rotation ? { rotation: now.rotation } : {}),
+      ...(now.header !== undefined ? { header: now.header } : {}),
+      ...(now.footer !== undefined ? { footer: now.footer } : {}),
+      ...(now.hotline !== undefined ? { hotline: now.hotline } : {}),
     };
   }
 
@@ -284,8 +308,9 @@ export class ManifestService {
       slotParams.push(g.daypart);
     }
     const slots = await this.rt.db.query<SlotRow>(
-      `SELECT c.id AS campaign_id, c.start_at, c.end_at, s.id AS slot_id, s.daypart, s.start_min, s.end_min, s.priority, s.reward_points, s.regions
-         FROM campaigns c JOIN schedule_slots s ON s.campaign_id = c.id
+      `SELECT c.id AS campaign_id, c.start_at, c.end_at, s.id AS slot_id, s.daypart, s.start_min, s.end_min, s.priority, s.reward_points, s.regions,
+              t.header AS slot_header, t.footer AS slot_footer
+         FROM campaigns c JOIN schedule_slots s ON s.campaign_id = c.id LEFT JOIN schedule_slot_text t ON t.slot_id = s.id
         WHERE c.state = 'active' AND s.target_type = ?${daypartSql}
         ORDER BY s.id`,
       slotParams,
@@ -303,6 +328,8 @@ export class ManifestService {
     });
     const campaignIds = new Set(liveSlots.map((s) => s.campaign_id));
 
+    // Signage Player (thang may/LED): cau hinh chung theo loai man. TV khong nhan cac truong nay (giu nguyen hop dong TV).
+    const signage = type === 'tv' ? null : await this.signage(type, true); // doc moi tu DB: ban dung ra duoc cache toi buildTtlS, khong duoc dung cau hinh cu
     const creativeRows = (await this.queryCreatives(type)).filter((r) => campaignIds.has(r.campaign_id));
     const lockAllowed = await this.lockAdsEnabled();
     const creatives: ManifestCreative[] = [];
@@ -340,13 +367,15 @@ export class ManifestService {
         campaign_id: r.campaign_id,
         url: `${this.opts.mediaBaseUrl.replace(/\/+$/, '')}/${key.split('/').map(encodeURIComponent).join('/')}`,
         sha256: sha,
-        duration_s: r.duration_s === null ? null : Number(r.duration_s),
+        // anh tinh tren thang may/LED: duration_s LUON co (mac dinh cau hinh, 10 giay); TV giu `null` nhu cu
+        duration_s: r.duration_s === null || r.duration_s === undefined ? (signage && isImage ? signage.image_duration_s : null) : Number(r.duration_s),
         px_w: r.px_w === null ? null : Number(r.px_w),
         px_h: r.px_h === null ? null : Number(r.px_h),
         format: fmt,
         ...(ov ? { overlay: ov } : {}),
         media_type: isImage ? 'image' : 'video',
         size_bytes: sizeBytes === null ? null : Number(sizeBytes),
+        ...(signage ? { fit: signage.fit } : {}),
       });
     }
     creatives.sort((a, b) => (a.id < b.id ? -1 : 1));
@@ -365,13 +394,17 @@ export class ManifestService {
         end_min: Number(s.end_min ?? 1440),
         priority: Number(s.priority),
         reward_points: Number(s.reward_points),
+        ...(signage && s.slot_header !== null && s.slot_header !== undefined ? { header: s.slot_header } : {}),
+        ...(signage && s.slot_footer !== null && s.slot_footer !== undefined ? { footer: s.slot_footer } : {}),
       });
     }
     schedule.sort((a, b) => (a.slot_id < b.slot_id ? -1 : 1));
     ctx.prices = await this.loadPrices(type, g.region, schedule.map((s) => s.campaign_id));
-    const body = { version: PROTOCOL_VERSION, group: groupString(g), tz: MANIFEST_TZ, creatives, schedule };
+    // thang may/LED: header/footer/hotline cap manifest + quy tac xoay vong (DEVICE-PROTOCOL 7.5). Nam trong etag nen doi cau hinh => thiet bi tai lai manifest.
+    const extra = signage ? { header: signage.header, footer: signage.footer, hotline: signage.hotline, rotation: { mode: 'sequential' as const } } : {};
+    const body = { version: PROTOCOL_VERSION, group: groupString(g), tz: MANIFEST_TZ, creatives, schedule, ...extra };
     const etag = (await sha256Hex(JSON.stringify(body))).slice(0, 16);
-    return { version: PROTOCOL_VERSION, group: body.group, tz: MANIFEST_TZ, etag, generated_at: nowIso, ttl_s: this.opts.ttlS, creatives, schedule };
+    return { version: PROTOCOL_VERSION, group: body.group, tz: MANIFEST_TZ, etag, generated_at: nowIso, ttl_s: this.opts.ttlS, creatives, schedule, ...extra };
   }
 
   /** Gia chot (campaign_prices) cua cac chien dich trong ban: chi dong cua loai man cua nhom, khu vuc '*' hoac khu vuc cua nhom. Loi DB noi len (rebuild dung ban cu). */

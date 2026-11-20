@@ -1,13 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { REGIONS } from '@ams/shared';
+import { REGIONS, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, SIGNAGE_KINDS, isSignageKind, parseSignageConfig, validateSignageKind, type SignageKindConfig } from '@ams/shared';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { diffObjects } from '../lib/audit.js';
 import { ELEVATOR_PX, LED_MODULE_PX, parsePx } from '../lib/creative.js';
-import { notFound, unprocessable } from '../lib/errors.js';
-import { getRt, num, parseBody, runList } from '../lib/http.js';
+import { forbidden, notFound, unprocessable } from '../lib/errors.js';
+import { readJson, getRt, num, parseBody, runList } from '../lib/http.js';
+import { bumpManifest } from '../lib/manifest.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
-import { requirePerm } from '../auth/middleware.js';
+import { hasPerm, requirePerm } from '../auth/middleware.js';
 import { regionCode } from './devices.js';
 import type { AppEnv } from '../types.js';
 
@@ -95,6 +96,42 @@ export function screenRoutes(): Hono<AppEnv> {
   r.get('/', requirePerm('screens', 'view'), async (c) => {
     const res = await runList<VenueRow>(c, spec);
     return c.json({ ...res, items: res.items.map(present) });
+  });
+
+  // ---------------------------------------------------------------- Cau hinh Signage Player (thang may / LED)
+  // settings.signage_config = { elevator: {...}, led_p5: {...} }: header/footer/hotline/fit/thoi luong anh mac dinh + cap nhat app tu xa.
+  // Khai bao TRUOC '/:id'. Doc: screens:view. Ghi: screens:write; rieng cac truong CAP NHAT APP (url/sha256/ban toi thieu) can them devices:approve
+  // (mot URL sai gui xuong ca doi box). Khong luu bi mat: URL chi HTTPS, cam tai khoan/query.
+  const SG_UPDATE_FIELDS: (keyof SignageKindConfig)[] = ['min_app_version', 'app_update_url', 'app_update_sha256'];
+  async function loadSignage(c: Ctx) {
+    const row = (await getRt(c).db.query<{ value: string; updated_at: string; updated_by: string | null }>('SELECT value, updated_at, updated_by FROM settings WHERE key = ?', [SIGNAGE_CONFIG_KEY]))[0];
+    return { cfg: parseSignageConfig(row?.value), updated_at: row?.updated_at ?? null };
+  }
+  r.get('/signage-config', requirePerm('screens', 'view'), async (c) => {
+    const { cfg, updated_at } = await loadSignage(c);
+    return c.json({ kinds: cfg, defaults: SIGNAGE_DEFAULT, updated_at });
+  });
+  r.put('/signage-config/:kind', requirePerm('screens', 'write'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const kind = c.req.param('kind');
+    if (!isSignageKind(kind)) throw notFound(`Loại màn hình phải là ${SIGNAGE_KINDS.join(' hoặc ')}.`);
+    const raw = await readJson(c);
+    const v = validateSignageKind(raw);
+    if (!v.ok) throw unprocessable(`Cấu hình không hợp lệ (${v.errors[0]!.path}): ${v.errors[0]!.message}`, 'validation_error', { errors: v.errors });
+    const { cfg } = await loadSignage(c);
+    const before = cfg[kind];
+    if (SG_UPDATE_FIELDS.some((f) => before[f] !== v.value[f]) && !hasPerm(c, 'devices', 'approve')) {
+      throw forbidden('Đổi thông tin cập nhật ứng dụng từ xa cần quyền duyệt thiết bị.', 'forbidden', { module: 'devices', action: 'approve' });
+    }
+    const next = { ...cfg, [kind]: v.value };
+    const now = rt.clock.now().toISOString();
+    await rt.db.tx(async (db) => {
+      await db.run('INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?,?,?,?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at', [SIGNAGE_CONFIG_KEY, JSON.stringify(next), u.id, now]);
+      await auditCtx(c, db, { action: 'signage.config', objectType: 'setting', objectId: `${SIGNAGE_CONFIG_KEY}:${kind}`, diff: diffObjects(before as unknown as Record<string, unknown>, v.value as unknown as Record<string, unknown>) });
+    });
+    await bumpManifest(rt); // manifest (header/footer/hotline/fit/thoi luong anh) xay lai; heartbeat doc lai cau hinh sau <= 15 giay
+    return c.json({ kind, config: v.value, updated_at: now });
   });
 
   r.get('/:id', requirePerm('screens', 'view'), async (c) => {

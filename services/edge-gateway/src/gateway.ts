@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ZodError } from 'zod';
-import { bumpOpsCounter, type Runtime } from '@ams/runtime';
+import { bumpOpsCounter, kvIncrMany, type Runtime } from '@ams/runtime';
 import { PLACEHOLDER_PRICE_MICRO_VND, explicitEnvPrice, placeholderAllowed, randomBytes, shardOf, toBase64Url } from '@ams/shared';
 import { KvNonceStore, authenticateDevice, readEnvelope, verifyEnvelope, type AuthDeps, type NonceStore } from './auth.js';
 import { DeviceDirectory, type DeviceRec } from './devices.js';
@@ -11,7 +11,8 @@ import { issuePairingCode } from './pairing.js';
 import { ttlForConfig } from './heartbeat-ttl.js';
 import { KvPresence, type Presence } from './presence.js';
 import { ackCommands, hasCommandFlag, type Delivered, sweepCommands, takeDeliverable } from './commands.js';
-import { MAX_ACK_BODY_BYTES, MAX_BODY_BYTES, MAX_HEARTBEAT_BODY_BYTES, PAIR_CODE_TTL_S, PROTOCOL_VERSION, commandAckBody, heartbeatBody, registerBody } from './protocol.js';
+import { MAX_ACK_BODY_BYTES, MAX_BODY_BYTES, MAX_HEARTBEAT_BODY_BYTES, MAX_LOGS_BODY_BYTES, PAIR_CODE_TTL_S, PROTOCOL_VERSION, commandAckBody, heartbeatBody, logsBody, registerBody } from './protocol.js';
+import { sweepDeviceLogs } from './logs.js';
 import { HttpProblem, clientIp, defaultRng, defer, envInt, nowSec, problem, type Rng } from './util.js';
 import { redeemPairingCode } from './pairing.js';
 import { CampaignRewardCfg, mountViewerRoutes, postViewRewards, viewerCors, viewerPolicyFromEnv, type ViewerOptions } from './viewer.js';
@@ -40,7 +41,7 @@ export interface Gateway {
   /** Xa bo dem telemetry heartbeat + last_seen xuong event store/DB (cron moi phut, hoac cuoi test). */
   flush(): Promise<void>;
   /** Quet lenh thiet bi (het han, giao qua nhieu lan, dung co hieu). Goi moi phut (cron Cloudflare / timer Node). */
-  sweep(): Promise<{ expired: number; failed: number; reflagged: number }>;
+  sweep(): Promise<{ expired: number; failed: number; reflagged: number; logs_deleted: number }>;
   manifests: ManifestService;
   devices: DeviceDirectory;
 }
@@ -113,11 +114,25 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   let hbRows: HbRow[] = [];
   let seenDirty = new Map<string, { ts: string; appVer: string | null }>();
   let hbCounter = 0;
+  // Signage Player: nguon dang phat / dung luong cache (telemetry, ghi theo lo khi doi hoac moi 30 phut) -> device_profiles
+  const PROFILE_REFRESH_S = 1800;
+  let profDirty = new Map<string, { source: string | null; cacheMb: number | null; ts: string }>();
+  const profSeen = new Map<string, { source: string | null; appVer: string | null; at: number }>();
+  const PROFILE_UPSERT = `INSERT INTO device_profiles (device_id, px_w, px_h, orientation, source, cache_mb, reported_at) VALUES (?,?,?,?,?,?,?)
+       ON CONFLICT (device_id) DO UPDATE SET px_w = COALESCE(excluded.px_w, device_profiles.px_w), px_h = COALESCE(excluded.px_h, device_profiles.px_h),
+         orientation = COALESCE(excluded.orientation, device_profiles.orientation), source = COALESCE(excluded.source, device_profiles.source),
+         cache_mb = COALESCE(excluded.cache_mb, device_profiles.cache_mb), reported_at = excluded.reported_at`;
   async function flush(): Promise<void> {
     const rows = hbRows;
     const dirty = seenDirty;
+    const prof = profDirty;
     hbRows = [];
     seenDirty = new Map();
+    profDirty = new Map();
+    if (prof.size > 0) {
+      const stmts = [...prof].map(([id, v]) => ({ sql: PROFILE_UPSERT, params: [id, null, null, null, v.source, v.cacheMb, v.ts] }));
+      for (let i = 0; i < stmts.length; i += 100) await rt.db.batch(stmts.slice(i, i + 100)).catch((e) => console.error('[gateway] ghi device_profiles loi:', (e as Error).message));
+    }
     if (rows.length > 0) await rt.events.append('heartbeat', rows as unknown as Record<string, unknown>[]);
     if (dirty.size > 0) {
       const stmts = [...dirty].map(([id, v]) => ({
@@ -216,11 +231,14 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     const body = await readBody(c, 2048);
     await rateLimit(`reg:${clientIp(c)}`, regLimit, 3600, 'dang ky theo IP');
     const input = registerBody.parse(parseJson(body));
+    if ((input.px_w === undefined) !== (input.px_h === undefined)) throw new HttpProblem('validation_failed', 'px_w va px_h phai di cung nhau.', [{ path: input.px_w === undefined ? 'px_w' : 'px_h', message: 'Thieu truong di kem.' }]);
     const env0 = readEnvelope(c);
     // bang chung so huu khoa: ky chinh yeu cau dang ky bang khoa rieng tuong ung
     await verifyEnvelope(c, deps, env0, body, input.pubkey, `reg:${input.pubkey.slice(0, 16)}`);
     const nowIso = rt.clock.now().toISOString();
-    let row = (await rt.db.query<{ id: string; trust_level: number; blocked: number }>('SELECT id, trust_level, blocked FROM devices WHERE pubkey_ed25519 = ?', [input.pubkey]))[0];
+    const region = input.region ? input.region : null;
+    // Idempotent THEO KHOA CONG KHAI: cung pubkey luon nhan lai cung device_id (uq_devices_pubkey + SELECT truoc + bat dua INSERT), khong tao thiet bi thu hai.
+    let row = (await rt.db.query<{ id: string; trust_level: number; blocked: number; region_id: string | null }>('SELECT id, trust_level, blocked, region_id FROM devices WHERE pubkey_ed25519 = ?', [input.pubkey]))[0];
     let created = false;
     if (!row) {
       const id = rt.id();
@@ -228,16 +246,27 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
         await rt.db.run(
           `INSERT INTO devices (id, kind, model, os, app_version, region_id, pubkey_ed25519, trust_level, status, blocked, shard, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'checking', 0, ?, ?)`,
-          [id, input.kind, input.model ?? null, input.os ?? null, input.app_version ?? null, input.region ?? null, input.pubkey, shardOf(id), nowIso],
+          [id, input.kind, input.model ?? null, input.os ?? null, input.app_version ?? null, region, input.pubkey, shardOf(id), nowIso],
         );
         created = true;
-        row = { id, trust_level: 0, blocked: 0 };
+        row = { id, trust_level: 0, blocked: 0, region_id: region };
       } catch {
-        row = (await rt.db.query<{ id: string; trust_level: number; blocked: number }>('SELECT id, trust_level, blocked FROM devices WHERE pubkey_ed25519 = ?', [input.pubkey]))[0];
+        row = (await rt.db.query<{ id: string; trust_level: number; blocked: number; region_id: string | null }>('SELECT id, trust_level, blocked, region_id FROM devices WHERE pubkey_ed25519 = ?', [input.pubkey]))[0];
         if (!row) throw new Error('khong tao duoc thiet bi');
       }
     }
     if (Number(row.blocked) === 1) throw new HttpProblem('device_blocked', 'Thiet bi bi khoa.');
+    // Signage Player: luu do phan giai/huong tu khai; dang ky lai (cung khoa) cap nhat thong tin app (khong doi trust/kind)
+    if (input.px_w !== undefined || input.orientation !== undefined) {
+      await rt.db.run(PROFILE_UPSERT, [row.id, input.px_w ?? null, input.px_h ?? null, input.orientation ?? null, null, null, nowIso]);
+    }
+    if (!created) {
+      const hasScreen = region ? (await rt.db.query('SELECT 1 AS x FROM screens WHERE device_id = ? LIMIT 1', [row.id])).length > 0 : true;
+      await rt.db.run('UPDATE devices SET model = COALESCE(?, model), os = COALESCE(?, os), app_version = COALESCE(?, app_version), region_id = ? WHERE id = ?', [
+        input.model ?? null, input.os ?? null, input.app_version ?? null, region && !hasScreen ? region : row.region_id, row.id,
+      ]);
+      await devices.invalidate(row.id);
+    }
     const attNonce = toBase64Url(randomBytes(16));
     await rt.db.run('INSERT INTO device_attestations (device_id, nonce, result, checked_at) VALUES (?, ?, NULL, NULL)', [row.id, attNonce]);
     return c.json(
@@ -273,14 +302,31 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   app.post('/v1/heartbeat', async (c) => {
     await shedCheck('hb');
     const body = await readBody(c, MAX_HEARTBEAT_BODY_BYTES);
-    const dev = await authenticateDevice(c, deps, body);
+    let dev = await authenticateDevice(c, deps, body);
     const hb = heartbeatBody.parse(body.length ? parseJson(body) : {});
+    if ((hb.px_w === undefined) !== (hb.px_h === undefined)) throw new HttpProblem('validation_failed', 'px_w va px_h phai di cung nhau.', [{ path: hb.px_w === undefined ? 'px_w' : 'px_h', message: 'Thieu truong di kem.' }]);
+    const appVer = hb.app_ver ?? hb.app_version ?? null;
+    const cacheMb = hb.cache_used_mb ?? hb.cache_mb ?? null;
     const now = rt.clock.now();
     const nowS = nowSec(now);
     const { prevTs } = await presence.touch(dev.id, { ts: nowS, state: hb.state, region: dev.region });
     if (prevTs !== null && nowS - prevTs < minGapS) {
       const ra = retryAfter(minGapS, rng);
       throw new HttpProblem('rate_limited', 'Heartbeat qua day.', { retry_after: ra }, { 'retry-after': String(ra) });
+    }
+    // Signage Player: do phan giai/huong/vung thay doi => ghi NGAY (anh huong nhom manifest) roi nap lai ban ghi thiet bi.
+    // Chi thang may/LED (TV khong doi nhom theo do phan giai); man hinh da gan thi vung va do phan giai do van hanh quyet dinh, bo qua tu khai.
+    if (dev.screenType !== 'tv' || dev.kind === 'elevator' || dev.kind === 'led_p5') {
+      const pxChanged = hb.px_w !== undefined && (hb.px_w !== (dev.profPxW ?? null) || hb.px_h !== (dev.profPxH ?? null));
+      const oriChanged = hb.orientation !== undefined && hb.orientation !== (dev.profOrientation ?? null);
+      const regionChanged = !!hb.region && !dev.screenId && hb.region !== dev.region;
+      if ((pxChanged || oriChanged || regionChanged) && (await rt.kv.incr(`profchg:${dev.id}:${Math.floor(nowS / 60)}`, 120).catch(() => 1)) <= 3) {
+        const stmts = [{ sql: PROFILE_UPSERT, params: [dev.id, hb.px_w ?? null, hb.px_h ?? null, hb.orientation ?? null, hb.source ?? null, cacheMb, now.toISOString()] }];
+        if (regionChanged) stmts.push({ sql: 'UPDATE devices SET region_id = ? WHERE id = ?', params: [hb.region!, dev.id] });
+        await rt.db.batch(stmts);
+        await devices.invalidate(dev.id);
+        dev = (await devices.get(dev.id)) ?? dev;
+      }
     }
     const cfg = await ctl.get();
     const monitored = cfg.monitored?.includes(dev.id) ?? false;
@@ -295,17 +341,33 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
 
     if (++hbCounter % sampleEvery === 0 || hb.state === 2) {
       hbRows.push({
-        ts: now.toISOString(), device_id: dev.id, shard: shardOf(dev.id), region: dev.region, app_ver: hb.app_ver ?? null, soc_temp: hb.soc_temp ?? null, rssi: hb.rssi ?? null,
-        dl_mbps: hb.dl_mbps ?? null, cache_used_mb: hb.cache_used_mb ?? null, cache_slots: hb.cache_slots ?? null, state: hb.state,
+        ts: now.toISOString(), device_id: dev.id, shard: shardOf(dev.id), region: dev.region, app_ver: appVer, soc_temp: hb.soc_temp ?? null, rssi: hb.rssi ?? null,
+        dl_mbps: hb.dl_mbps ?? null, cache_used_mb: cacheMb, cache_slots: hb.cache_slots ?? null, state: hb.state,
       });
     }
-    if (prevTs === null || nowS - prevTs > 600) seenDirty.set(dev.id, { ts: now.toISOString(), appVer: hb.app_ver ?? null });
-    if (hbRows.length >= flushSize) defer(c, flush());
+    const ps = profSeen.get(dev.id);
+    const appVerChanged = appVer !== null && (!ps || ps.appVer !== appVer);
+    if (prevTs === null || nowS - prevTs > 600 || appVerChanged) seenDirty.set(dev.id, { ts: now.toISOString(), appVer });
+    if (hb.source !== undefined || cacheMb !== null) {
+      const srcChanged = hb.source !== undefined && (!ps || ps.source !== hb.source);
+      if (!ps || srcChanged || nowS - ps.at >= PROFILE_REFRESH_S) {
+        profDirty.set(dev.id, { source: hb.source ?? ps?.source ?? null, cacheMb, ts: now.toISOString() });
+        if (profSeen.size >= 100_000) profSeen.clear();
+        profSeen.set(dev.id, { source: hb.source ?? ps?.source ?? null, appVer: appVer ?? ps?.appVer ?? null, at: nowS });
+      }
+    } else if (appVerChanged) {
+      if (profSeen.size >= 100_000) profSeen.clear();
+      profSeen.set(dev.id, { source: ps?.source ?? null, appVer, at: ps?.at ?? 0 });
+    }
+    if (hbRows.length >= flushSize || profDirty.size >= flushSize) defer(c, flush());
 
     // lenh thiet bi (bang device_commands): ack cu (cmd_ack trong heartbeat) -> acked; giao pending/delivered-qua-han, danh dau delivered
     let commands: Delivered[] = [];
     if (hb.cmd_ack?.length) await ackCommands(rt, dev.id, hb.cmd_ack.map((id) => ({ id })));
     if (hb.cmd_ack?.length || (await hasCommandFlag(rt, dev.id))) commands = await takeDeliverable(rt, dev.id, cmdRedeliverS);
+    // Signage Player (thang may/LED): hotline hien o man hinh logo + thong tin cap nhat app tu xa, cau hinh theo loai man (settings.signage_config)
+    const sg = dev.screenType === 'tv' ? null : await manifests.signage(dev.screenType).catch(() => null);
+    const minApp = sg?.min_app_version || cfg.min_app_version;
     return c.json({
       ok: true,
       server_time: now.toISOString(),
@@ -315,8 +377,39 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
       manifest_group: gs,
       manifest_url: `/v1/manifest/g/${encodeURIComponent(gs)}`,
       commands,
-      ...(cfg.min_app_version ? { min_app_version: cfg.min_app_version } : {}),
+      ...(minApp ? { min_app_version: minApp } : {}),
+      ...(sg?.hotline ? { hotline: sg.hotline } : {}),
+      ...(sg?.app_update_url && sg.app_update_sha256 ? { app_update_url: sg.app_update_url, app_update_sha256: sg.app_update_sha256 } : {}),
     });
+  });
+
+  // -------------------------------------------------------------------- logs
+  // Nhat ky thiet bi (Signage Player): <= 8 KB/lan, <= 100 dong, gioi han tan suat theo device_id, giu 7 ngay (sweepDeviceLogs). Ky nhu moi /v1/*.
+  const logsLimit = envInt(env, 'LOGS_LIMIT_PER_HOUR', 60);
+  const logsRowsPerDay = envInt(env, 'LOGS_ROWS_PER_DAY', 5000);
+  app.post('/v1/logs', async (c) => {
+    await shedCheck('events');
+    const body = await readBody(c, MAX_LOGS_BODY_BYTES);
+    const dev = await authenticateDevice(c, deps, body);
+    await rateLimit(`logs:${dev.id}`, logsLimit, 3600, 'nhat ky theo thiet bi');
+    const input = logsBody.parse(parseJson(body));
+    const nowMs = rt.clock.now().getTime();
+    const dayKey = new Date(nowMs).toISOString().slice(0, 10).replace(/\D/g, '');
+    const [dayRows] = await kvIncrMany(rt.kv, [{ k: `logrows:${dev.id}:${dayKey}`, by: input.entries.length, ttlSec: 2 * 86400 }]);
+    if ((dayRows ?? 0) > logsRowsPerDay) {
+      const ra = retryAfter(3600, rng);
+      throw new HttpProblem('rate_limited', 'Qua gioi han dong nhat ky moi ngay.', { retry_after: ra }, { 'retry-after': String(ra) });
+    }
+    const receivedAt = new Date(nowMs).toISOString();
+    // `ts` do thiet bi khai: kep vao [7 ngay truoc, +5 phut] de dong cu/tuong lai khong thoat khoi don dep 7 ngay hoac day len dau danh sach
+    const lo = nowMs - 7 * 86400_000;
+    const hi = nowMs + 5 * 60_000;
+    const stmts = input.entries.map((e) => {
+      const t = Math.min(hi, Math.max(lo, Date.parse(e.ts)));
+      return { sql: 'INSERT INTO device_logs (id, device_id, ts, received_at, level, tag, message) VALUES (?,?,?,?,?,?,?)', params: [rt.id(), dev.id, new Date(t).toISOString(), receivedAt, e.level, e.tag ?? null, e.msg] };
+    });
+    await rt.db.batch(stmts);
+    return c.json({ ok: true, stored: stmts.length });
   });
 
   // ------------------------------------------------------------ command ack
@@ -412,7 +505,16 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   }
 
   app.notFound((c) => problem(c, 'not_found', 'Khong tim thay duong dan.'));
-  return { app, flush, sweep: () => sweepCommands(rt), manifests, devices };
+  return {
+    app,
+    flush,
+    sweep: async () => {
+      const r = await sweepCommands(rt);
+      return { ...r, logs_deleted: await sweepDeviceLogs(rt) };
+    },
+    manifests,
+    devices,
+  };
 }
 
 export type { DeviceRec };

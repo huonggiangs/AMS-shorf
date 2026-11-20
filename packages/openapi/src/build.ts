@@ -6,7 +6,7 @@ import { z, type ZodTypeAny } from 'zod';
 import { createTestRuntime } from '@ams/runtime/test';
 import { createApp } from '@ams/api/app';
 import { createGateway } from '@ams/edge-gateway';
-import { heartbeatBody, registerBody, commandAckBody, eventsBody, HEADER, MAX_CLOCK_SKEW_S, MAX_EVENTS_PER_BATCH, PROTOCOL_VERSION, ERROR_CODES, viewerPairBody, phoneBody, taxAuthBody, withdrawBody, interactionsBody } from '@ams/edge-gateway/protocol';
+import { heartbeatBody, registerBody, commandAckBody, eventsBody, logsBody, MAX_LOGS_BODY_BYTES, HEADER, MAX_CLOCK_SKEW_S, MAX_EVENTS_PER_BATCH, PROTOCOL_VERSION, ERROR_CODES, viewerPairBody, phoneBody, taxAuthBody, withdrawBody, interactionsBody } from '@ams/edge-gateway/protocol';
 import { extractFile, type Extracted } from './extract.js';
 import * as W from '../../../apps/web-admin/src/api/schemas.js';
 import * as G from './gateway-schemas.js';
@@ -314,7 +314,7 @@ export function buildGatewayDoc(routes: RouteKey[]): Json {
   const defs: Record<string, Json> = {
     'POST /v1/register': {
       summary: 'Đăng ký thiết bị (idempotent theo pubkey)',
-      description: 'Ký bằng chính khóa riêng tương ứng `pubkey` trong body (không có X-Device-Id). Trả `attestation_nonce` để kiểm chứng. Giới hạn theo IP.',
+      description: 'Ký bằng chính khóa riêng tương ứng `pubkey` trong body (không có X-Device-Id). Trả `attestation_nonce` để kiểm chứng. Giới hạn theo IP. Cùng `pubkey` LUÔN nhận lại cùng `device_id` (200). Thang máy/LED gửi thêm `px_w`, `px_h`, `orientation`, `region` để vào đúng nhóm manifest `elevator_<w>x<h>`; chờ vận hành cấp quyền trên admin (không dùng mã 6 số).',
       parameters: sigHeaders(false),
       requestBody: { required: true, content: { 'application/json': { schema: c.add('RegisterRequest', registerBody) } } },
       responses: { '200': json('RegisterResponse', G.registerResponse, 'Đã đăng ký trước đó'), '201': { description: 'Thiết bị mới', content: { 'application/json': { schema: ref('RegisterResponse') } } }, ...common429 },
@@ -327,10 +327,17 @@ export function buildGatewayDoc(routes: RouteKey[]): Json {
     },
     'POST /v1/heartbeat': {
       summary: 'Nhịp sống + nhận lệnh',
-      description: `Thân tối đa 2 KB. Trả khoảng nghỉ kế tiếp có jitter, etag manifest và lệnh đang chờ (giao at-least-once; xác nhận qua \`cmd_ack\` hoặc /v1/commands/ack). 429/503 kèm \`Retry-After\`.`,
+      description: `Thân tối đa 2 KB. Trả khoảng nghỉ kế tiếp có jitter, etag manifest và lệnh đang chờ (giao at-least-once; xác nhận qua \`cmd_ack\` hoặc /v1/commands/ack). 429/503 kèm \`Retry-After\`. Thang máy/LED có thể gửi \`source\` (ams|usb|lan), \`app_version\`, \`cache_mb\`, \`px_w\`/\`px_h\`/\`orientation\`/\`region\` (tùy chọn); nhận thêm \`hotline\`, \`app_update_url\`, \`app_update_sha256\`, \`min_app_version\` khi có cấu hình.`,
       parameters: sigHeaders(true),
       requestBody: { required: false, content: { 'application/json': { schema: c.add('HeartbeatRequest', heartbeatBody) } } },
       responses: { '200': json('HeartbeatResponse', G.heartbeatResponse, 'OK'), ...common429 },
+    },
+    'POST /v1/logs': {
+      summary: 'Gửi nhật ký thiết bị (Signage Player)',
+      description: `Thân tối đa ${MAX_LOGS_BODY_BYTES / 1024} KB, tối đa 100 dòng. Giới hạn tần suất theo device_id (mặc định 60 lần/giờ, 5000 dòng/ngày; 429 + \`Retry-After\`). \`ts\` quá cũ bị kẹp về mốc 7 ngày, tương lai kẹp +5 phút. Lưu 7 ngày; quản trị xem ở ngăn chi tiết thiết bị.`,
+      parameters: sigHeaders(true),
+      requestBody: { required: true, content: { 'application/json': { schema: c.add('LogsRequest', logsBody) } } },
+      responses: { '200': json('LogsResponse', G.logsResponse, 'Đã lưu'), ...common429 },
     },
     'POST /v1/commands/ack': {
       summary: 'Báo kết quả lệnh',
@@ -371,7 +378,7 @@ export function buildGatewayDoc(routes: RouteKey[]): Json {
     },
     'POST /v1/events': {
       summary: `Gửi lô sự kiện (tối đa ${MAX_EVENTS_PER_BATCH}, idempotent theo event_id)`,
-      description: 'Thân tối đa 16 KB. Impression hợp lệ khi vcr_pct >= ngưỡng; sự kiện không có trong manifest bị từ chối từng cái (`rejected`).',
+      description: 'Thân tối đa 16 KB. Impression hợp lệ khi vcr_pct >= ngưỡng; sự kiện không có trong manifest bị từ chối từng cái (`rejected`). `proof_of_play` (thang máy/LED): thiết bị đã được cấp quyền => hợp lệ (`valid`); chưa cấp quyền => vẫn lưu với trạng thái `pending_trust` (đếm vào `flagged`, không bị loại, tính lại khi được cấp quyền); không bao giờ sinh doanh thu/thưởng ở gateway.',
       parameters: sigHeaders(true),
       requestBody: { required: true, content: { 'application/json': { schema: c.add('EventsRequest', eventsBody) } } },
       responses: { '202': json('EventsResponse', G.eventsResponse, 'Đã nhận'), ...common429 },

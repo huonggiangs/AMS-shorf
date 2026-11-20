@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { diffObjects } from '../lib/audit.js';
 import { dbTarget } from '../lib/creative.js';
+import { SIGNAGE_LIMITS, validateDisplayText, type FieldError } from '@ams/shared';
 import { conflict, notFound, unprocessable } from '../lib/errors.js';
 import { eq, getRt, jsonParse, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
@@ -11,8 +12,8 @@ import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv } from '../types.js';
 
 const S_SELECT = `s.id, s.campaign_id, s.partner_id, s.target_type, s.daypart, s.start_min, s.end_min, s.priority, s.reward_points, s.regions,
-  c.name AS campaign_name, c.state AS campaign_state, c.target_types, p.name AS partner_name`;
-const S_FROM = 'FROM schedule_slots s LEFT JOIN campaigns c ON c.id = s.campaign_id LEFT JOIN partners p ON p.id = s.partner_id';
+  c.name AS campaign_name, c.state AS campaign_state, c.target_types, p.name AS partner_name, t.header AS slot_header, t.footer AS slot_footer`;
+const S_FROM = 'FROM schedule_slots s LEFT JOIN campaigns c ON c.id = s.campaign_id LEFT JOIN partners p ON p.id = s.partner_id LEFT JOIN schedule_slot_text t ON t.slot_id = s.id';
 
 interface SlotRow {
   id: string;
@@ -29,6 +30,8 @@ interface SlotRow {
   campaign_state: string | null;
   target_types: string | null;
   partner_name: string | null;
+  slot_header: string | null;
+  slot_footer: string | null;
 }
 
 const present = (s: SlotRow) => ({
@@ -43,6 +46,9 @@ const present = (s: SlotRow) => ({
   priority: num(s.priority),
   reward_points: num(s.reward_points),
   regions: jsonParse<string[]>(s.regions, []),
+  // thang may/LED: chu ghi de theo lich (null = dung cau hinh chung theo loai man; chuoi rong = an)
+  header: s.slot_header ?? null,
+  footer: s.slot_footer ?? null,
   campaign_status: s.campaign_state === 'pending_review' ? 'pending' : s.campaign_state,
 });
 
@@ -111,10 +117,31 @@ export function scheduleRoutes(): Hono<AppEnv> {
     return c.json(present(await loadSlot(c, s.id)));
   });
 
+  // Chu header/footer ghi de theo lich phat (chi thang may/LED). null = bo ghi de; chuoi rong = an chu o lich nay.
+  r.put('/:id/text', requirePerm('schedule', 'write'), async (c) => {
+    const rt = getRt(c);
+    const s = await loadSlot(c, c.req.param('id'));
+    if (s.target_type !== 'elevator' && s.target_type !== 'led_p5') throw unprocessable('Chữ header/footer chỉ áp dụng cho lịch phát thang máy / LED.', 'slot_not_signage');
+    const b = await parseBody(c, z.object({ header: z.string().nullable().optional(), footer: z.string().nullable().optional() }).strict());
+    const errs: FieldError[] = [];
+    const header = b.header === undefined ? s.slot_header : b.header === null ? null : validateDisplayText(b.header, SIGNAGE_LIMITS.header, 'header', errs);
+    const footer = b.footer === undefined ? s.slot_footer : b.footer === null ? null : validateDisplayText(b.footer, SIGNAGE_LIMITS.footer, 'footer', errs);
+    if (errs.length) throw unprocessable(`Chữ không hợp lệ (${errs[0]!.path}): ${errs[0]!.message}`, 'validation_error', { errors: errs });
+    const now = rt.clock.now().toISOString();
+    await rt.db.tx(async (db) => {
+      if (header === null && footer === null) await db.run('DELETE FROM schedule_slot_text WHERE slot_id = ?', [s.id]);
+      else await db.run('INSERT INTO schedule_slot_text (slot_id, header, footer, updated_at) VALUES (?,?,?,?) ON CONFLICT (slot_id) DO UPDATE SET header = excluded.header, footer = excluded.footer, updated_at = excluded.updated_at', [s.id, header, footer, now]);
+      await auditCtx(c, db, { action: 'schedule.text', objectType: 'schedule_slot', objectId: s.id, diff: { header: { from: s.slot_header, to: header }, footer: { from: s.slot_footer, to: footer } } });
+    });
+    await bumpManifest(rt);
+    return c.json(present(await loadSlot(c, s.id)));
+  });
+
   r.delete('/:id', requirePerm('schedule', 'delete'), async (c) => {
     const rt = getRt(c);
     const s = await loadSlot(c, c.req.param('id'));
     await rt.db.tx(async (db) => {
+      await db.run('DELETE FROM schedule_slot_text WHERE slot_id = ?', [s.id]);
       await db.run('DELETE FROM schedule_slots WHERE id = ?', [s.id]);
       await auditCtx(c, db, { action: 'schedule.delete', objectType: 'schedule_slot', objectId: s.id, diff: { campaign_id: s.campaign_id } });
     });

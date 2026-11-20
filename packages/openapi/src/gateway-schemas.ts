@@ -26,10 +26,10 @@ export const pairResponse = z.union([
 export const deviceCommand = z
   .object({
     id: z.string().describe('id dong trong bang device_commands'),
-    type: z.string().regex(/^[a-z][a-z0-9_.-]{0,39}$/).describe('Ban dau: refresh_manifest, reboot, set_monitor. Type la: bo qua nhung VAN ack.'),
+    type: z.string().regex(/^[a-z][a-z0-9_.-]{0,39}$/).describe('refresh_manifest, reboot, set_monitor; Signage Player: reset_pin (args rong), set_volume {percent 0-100}, set_orientation {orientation landscape|portrait}, message {text <= 200, duration_s? 3-120}; TV: lock, unlock, message {text, seconds}... Type la: bo qua nhung VAN ack.'),
     args: z.record(z.unknown()).optional(),
   })
-  .describe('Vong doi: pending -> delivered -> acked|failed, hoac expired (TTL 7 ngay). Giao lai sau 120s neu chua ack, toi da 10 lan giao. At-least-once: thiet bi phai idempotent theo id.');
+  .describe('Vong doi: pending -> delivered -> acked|failed, hoac expired (TTL mac dinh 1 gio theo admin, toi da 7 ngay; reset_pin mac dinh 15 phut, toi da 1 gio). Giao lai sau 120s neu chua ack, toi da 10 lan giao; `id` KHONG DOI khi giao lai. At-least-once: thiet bi phai idempotent theo id.');
 
 export const heartbeatResponse = z.object({
   ok: z.literal(true),
@@ -41,9 +41,14 @@ export const heartbeatResponse = z.object({
   manifest_url: z.string().describe('duong tuong doi /v1/manifest/g/{group}'),
   commands: z.array(deviceCommand).describe('lenh cho thiet bi, giao at-least-once; ack bang cmd_ack trong heartbeat ke tiep hoac POST /v1/commands/ack'),
   min_app_version: z.string().optional(),
+  hotline: z.string().max(60).optional().describe('CHI thang may/LED, khi co cau hinh: hotline/Zalo hien o man hinh logo (luu de hien ca khi mat mang)'),
+  app_update_url: z.string().optional().describe('CHI thang may/LED, khi co cau hinh: URL HTTPS tai ban cap nhat app (di kem app_update_sha256)'),
+  app_update_sha256: z.string().regex(/^[0-9a-f]{64}$/).optional().describe('SHA-256 hex cua tep cap nhat; app PHAI kiem truoc khi cai'),
 });
 
-export const commandAckResponse = z.object({ ok: z.literal(true), acked: z.number().int(), known: z.number().int(), unknown: z.number().int() });
+export const commandAckResponse = z.object({ ok: z.literal(true), acked: z.number().int(), known: z.number().int(), unknown: z.array(z.string()).describe('id khong thuoc thiet bi nay (bo qua, khong loi)') });
+
+export const logsResponse = z.object({ ok: z.literal(true), stored: z.number().int().describe('so dong da luu') });
 
 export const eventsResponse = z.object({
   accepted: z.number().int(),
@@ -73,6 +78,7 @@ export const manifestCreative = z.object({
   overlay: overlay.optional(),
   media_type: z.enum(['video', 'image']),
   size_bytes: z.number().nullable(),
+  fit: z.enum(['fit', 'cover']).optional().describe('CHI thang may/LED: cach hien trong khung (mac dinh cover)'),
 });
 export const manifestSlot = z.object({
   slot_id: z.string(),
@@ -83,7 +89,15 @@ export const manifestSlot = z.object({
   end_min: z.number().int(),
   priority: z.number().int(),
   reward_points: z.number().int(),
+  header: z.string().optional().describe('CHI thang may/LED: ghi de header cap manifest cho lich nay (chuoi rong = an)'),
+  footer: z.string().optional().describe('CHI thang may/LED: ghi de footer cap manifest cho lich nay (chuoi rong = an)'),
 });
+const signageExtra = {
+  header: z.string().optional().describe('CHI thang may/LED: chu header (rong = an)'),
+  footer: z.string().optional().describe('CHI thang may/LED: chu footer (rong = an)'),
+  hotline: z.string().optional().describe('CHI thang may/LED: hotline/Zalo (dung khi mat mang)'),
+  rotation: z.object({ mode: z.literal('sequential') }).optional().describe('CHI thang may/LED: phat tuan tu theo priority tang dan, lap vo han; cung priority theo slot_id'),
+};
 export const manifest = z.object({
   version: z.number().int(),
   group: z.string(),
@@ -93,6 +107,7 @@ export const manifest = z.object({
   ttl_s: z.number().int(),
   creatives: z.array(manifestCreative),
   schedule: z.array(manifestSlot),
+  ...signageExtra,
 });
 export const manifestDelta = z.object({
   version: z.number().int(),
@@ -102,8 +117,9 @@ export const manifestDelta = z.object({
   generated_at: z.string().datetime(),
   ttl_s: z.number().int(),
   creatives_added: z.array(manifestCreative),
-  creatives_removed: z.array(z.string()),
+  creatives_removed: z.array(z.string()).describe('creative bi go; thang may/LED: ca id creative DOI noi dung (cung id xuat hien trong creatives_added) de client thay the'),
   schedule: z.array(manifestSlot),
+  ...signageExtra,
 });
 export const health = z.object({ ok: z.literal(true), service: z.string(), runtime: z.string(), time: z.string().optional() });
 

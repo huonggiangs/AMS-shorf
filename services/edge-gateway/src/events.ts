@@ -31,6 +31,10 @@ export const DEFAULT_POLICY: EventPolicy = {
   rewardPointToVnd: 1,
 };
 
+/** ev_proof_of_play.source: thiet bi da cap quyen / chua cap quyen (giu lai de tinh lai khi duoc cap quyen) */
+export const POP_SOURCE_TRUSTED = 'device';
+export const POP_SOURCE_PENDING = 'pending_trust';
+
 export interface EventResult {
   accepted: number;
   valid: number;
@@ -114,7 +118,10 @@ async function processEventsPass(
         rejected.push({ event_id: ev.event_id, reason: 'not_in_manifest' });
         continue;
       }
-      pops.push({ event_id: ev.event_id, ts, screen_id: dev.screenId ?? dev.id, creative_id: ev.creative_id, duration_ms: ev.duration_ms, source: 'device' });
+      // Hieu luc cua proof_of_play (DEVICE-PROTOCOL 8.2): thiet bi da duoc cap quyen (trust >= 1) => 'device'; chua duoc cap quyen (trust 0) =>
+      // 'pending_trust': VAN LUU (khong loai bo, khong mat), khong dung lam bang chung phat cho toi khi thiet bi duoc cap quyen — bao cao tinh lai
+      // theo trust_level HIEN TAI (api/routes/history.ts). Gateway khong bao gio ghi doanh thu hay thuong tu proof_of_play.
+      pops.push({ event_id: ev.event_id, ts, screen_id: dev.screenId ?? dev.id, creative_id: ev.creative_id, duration_ms: ev.duration_ms, source: dev.trust >= 1 ? POP_SOURCE_TRUSTED : POP_SOURCE_PENDING });
       continue;
     }
     const e = ev as ImpressionEvent;
@@ -160,7 +167,9 @@ async function processEventsPass(
       reward_vnd: reward,
     });
   }
-  const valid = impressions.filter((r) => r.valid === 1).length;
+  const popsTrusted = pops.filter((p) => p.source === POP_SOURCE_TRUSTED).length;
+  const valid = impressions.filter((r) => r.valid === 1).length + popsTrusted;
   const msg = impressions.length + pops.length > 0 ? ({ v: 1, device_id: dev.id, impressions, pops } as IngestMessage) : null;
-  return { result: { accepted: impressions.length + pops.length, valid, flagged: impressions.length - valid, rejected }, msg };
+  // proof_of_play: 'valid' = thiet bi da cap quyen; 'flagged' = dang cho cap quyen (van luu, tinh lai khi duoc cap quyen)
+  return { result: { accepted: impressions.length + pops.length, valid, flagged: impressions.length - impressions.filter((r) => r.valid === 1).length + (pops.length - popsTrusted), rejected }, msg };
 }

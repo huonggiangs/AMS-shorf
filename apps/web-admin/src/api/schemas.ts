@@ -219,6 +219,15 @@ export const deviceSchema = z
     last_seen_at: z.string().nullish(),
     views: z.coerce.number().default(0),
     recent_ads: z.array(z.string()).optional(),
+    // Signage Player (thang may / LED): cap quyen thay cho ma 6 so; cac cot nay chi co khi may chu da cap nhat
+    grant_state: z.string().nullish(), // awaiting | granted | blocked (null voi TV/dien thoai)
+    play_source: z.string().nullish(), // ams | usb | lan
+    cache_mb: z.coerce.number().nullish(),
+    px_w: z.coerce.number().nullish(),
+    px_h: z.coerce.number().nullish(),
+    orientation: z.string().nullish(),
+    approved_at: z.string().nullish(),
+    screen: z.object({ id: z.string(), venue_id: z.string().nullish(), venue_name: z.string().nullish() }).nullish(),
   })
   .passthrough();
 export type Device = z.infer<typeof deviceSchema>;
@@ -240,7 +249,7 @@ export const screenSchema = z
 export type Screen = z.infer<typeof screenSchema>;
 
 export const slotSchema = z
-  .object({ id: idStr, campaign_id: z.string().nullish(), name: z.string(), start_min: z.coerce.number(), end_min: z.coerce.number(), color: z.coerce.number().optional() })
+  .object({ id: idStr, campaign_id: z.string().nullish(), name: z.string(), start_min: z.coerce.number(), end_min: z.coerce.number(), color: z.coerce.number().optional(), target_type: z.string().nullish(), header: z.string().nullish(), footer: z.string().nullish() })
   .passthrough();
 export type Slot = z.infer<typeof slotSchema>;
 

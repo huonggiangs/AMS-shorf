@@ -21,6 +21,9 @@ export const PAIR_ERRORS: Record<string, string> = {
   validation_error: 'Mã ghép gồm đúng 6 chữ số.',
 };
 export const CMD_ERRORS: Record<string, string> = {
+  device_not_approved: 'Thiết bị chưa được cấp quyền. Bấm "Cấp quyền" trước khi gửi lệnh.',
+  command_not_for_kind: 'Lệnh này không áp dụng cho loại thiết bị này.',
+  command_ttl_too_long: 'Thời gian hết hạn của lệnh quá dài.',
   device_not_paired: 'TV chưa ghép mã. Hãy ghép mã hiển thị trên TV trước khi gửi lệnh.',
   device_blocked: 'Thiết bị đang bị chặn, không gửi lệnh được.',
   command_type_unsupported: 'Loại lệnh này chưa được hỗ trợ.',
@@ -111,7 +114,7 @@ const cmdSchema = z.object({
 const listSchema = z.object({
   items: z.array(cmdSchema),
   delivery: z.object({ mode: z.string(), realtime: z.boolean(), note: z.string(), paired_cap_s: z.number().nullable().optional() }),
-  types: z.array(z.object({ type: z.string(), label: z.string(), desc: z.string(), support: z.string(), risky: z.boolean() })),
+  types: z.array(z.object({ type: z.string(), label: z.string(), desc: z.string(), support: z.string(), risky: z.boolean(), default_ttl_s: z.number().optional() })),
 });
 export type CmdItem = z.infer<typeof cmdSchema>;
 
@@ -127,7 +130,7 @@ const EVENT: Record<string, string> = { created: 'Tạo lệnh', delivered: 'Gia
 const TTL_OPTS: [number, string][] = [[300, '5 phút'], [3600, '1 giờ'], [6 * 3600, '6 giờ'], [86400, '24 giờ'], [7 * 86400, '7 ngày']];
 const newKey = () => `ui-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
-export function DeviceCommands({ deviceId, paired, canWrite }: { deviceId: string; paired: boolean; canWrite: boolean }) {
+export function DeviceCommands({ deviceId, paired, canWrite, signage = false }: { deviceId: string; paired: boolean; canWrite: boolean; signage?: boolean }) {
   const { notify } = useUi();
   const qc = useQueryClient();
   const key = ['/admin/v1/devices', 'commands', deviceId];
@@ -136,6 +139,8 @@ export function DeviceCommands({ deviceId, paired, canWrite }: { deviceId: strin
   const [text, setText] = useState('');
   const [secs, setSecs] = useState('15');
   const [reason, setReason] = useState('');
+  const [vol, setVol] = useState('50');
+  const [orient, setOrient] = useState('portrait');
   const [ttl, setTtl] = useState(3600);
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -144,12 +149,14 @@ export function DeviceCommands({ deviceId, paired, canWrite }: { deviceId: strin
   if (q.isError || !q.data) return <ErrorBlock error={q.error} onRetry={() => void q.refetch()} />;
   const { items, delivery, types } = q.data;
   const def = types.find((t) => t.type === type);
-  const args = (): Record<string, unknown> => (type === 'message' ? { text: text.trim(), seconds: Number(secs) || 15 } : type === 'lock' && reason.trim() ? { reason: reason.trim() } : {});
+  // Thang may/LED: message{text, duration_s?}; TV: message{text, seconds}
+  const args = (): Record<string, unknown> => (type === 'message' ? (signage ? { text: text.trim(), ...(Number(secs) ? { duration_s: Number(secs) } : {}) } : { text: text.trim(), seconds: Number(secs) || 15 })
+    : type === 'set_volume' ? { percent: Number(vol) } : type === 'set_orientation' ? { orientation: orient } : type === 'lock' && reason.trim() ? { reason: reason.trim() } : {});
   const send = async () => {
     if (def?.risky && !window.confirm(`Gửi lệnh "${def.label}" tới TV? Lệnh sẽ được thực thi khi TV nhận ở heartbeat kế tiếp.`)) return;
     setBusy(true);
     try {
-      await api.post(`/admin/v1/devices/${deviceId}/commands`, { body: { type, args: args(), ttl_s: ttl, idempotency_key: idem } });
+      await api.post(`/admin/v1/devices/${deviceId}/commands`, { body: { type, args: args(), ...(def?.default_ttl_s && ttl === 3600 ? {} : { ttl_s: ttl }), idempotency_key: idem } });
       notify('Đã xếp lệnh. TV sẽ nhận ở lần heartbeat kế tiếp, chưa phải ngay lập tức.');
       setIdem(newKey()); setText('');
       await qc.invalidateQueries({ queryKey: key });
@@ -166,7 +173,7 @@ export function DeviceCommands({ deviceId, paired, canWrite }: { deviceId: strin
     <section aria-label="Lệnh thiết bị">
       <h3 style={{ margin: '18px 0 8px', fontSize: 15 }}>Lệnh gửi TV</h3>
       <Note warn>{delivery.note}</Note>
-      {!paired ? <p className="sub">TV chưa ghép mã nên chưa gửi lệnh được.</p> : canWrite ? (
+      {!paired ? <p className="sub">{signage ? 'Thiết bị chưa được cấp quyền nên chưa gửi lệnh được.' : 'TV chưa ghép mã nên chưa gửi lệnh được.'}</p> : canWrite ? (
         <div style={{ margin: '10px 0' }}>
           <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))' }}>
             <Field label="Loại lệnh">
@@ -180,9 +187,11 @@ export function DeviceCommands({ deviceId, paired, canWrite }: { deviceId: strin
           {type === 'message' ? (
             <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 110px' }}>
               <Field label="Nội dung (tối đa 200 ký tự)"><input value={text} maxLength={200} onChange={(e) => { setText(e.target.value); setIdem(newKey()); }} /></Field>
-              <Field label="Hiện (giây)"><input type="number" min={5} max={120} value={secs} onChange={(e) => { setSecs(e.target.value); setIdem(newKey()); }} /></Field>
+              <Field label="Hiện (giây)"><input type="number" min={signage ? 3 : 5} max={120} value={secs} onChange={(e) => { setSecs(e.target.value); setIdem(newKey()); }} /></Field>
             </div>
           ) : null}
+          {type === 'set_volume' ? <Field label="Âm lượng (0–100)"><input type="number" min={0} max={100} value={vol} onChange={(e) => { setVol(e.target.value); setIdem(newKey()); }} /></Field> : null}
+          {type === 'set_orientation' ? <Field label="Hướng màn hình"><select value={orient} onChange={(e) => { setOrient(e.target.value); setIdem(newKey()); }}><option value="portrait">Dọc (portrait)</option><option value="landscape">Ngang (landscape)</option></select></Field> : null}
           {type === 'lock' ? <Field label="Lý do (tùy chọn)"><input value={reason} maxLength={120} onChange={(e) => { setReason(e.target.value); setIdem(newKey()); }} /></Field> : null}
           <Btn tone="p" disabled={busy || (type === 'message' && !text.trim()) || type === 'display-settings'} onClick={() => void send()}>{busy ? 'Đang gửi…' : 'Gửi lệnh'}</Btn>
           {type === 'display-settings' ? <span className="sub" style={{ marginLeft: 8 }}>Cài đặt giao diện: dùng API (tham số do ứng dụng TV định nghĩa).</span> : null}

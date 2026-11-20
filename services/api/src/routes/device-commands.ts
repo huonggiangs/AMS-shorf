@@ -19,35 +19,69 @@ export const MAX_TTL_S = 7 * 24 * 3600;
 const okArgs = z.object({}).strict();
 const scalar = z.union([z.string().max(100), z.number(), z.boolean()]);
 
+const SIGNAGE = ['elevator', 'led_p5'];
+const TV_LIKE = ['tv', 'phone', 'virtual'];
+
 export interface CmdDef {
   type: string;
   label: string;
   desc: string;
   args: z.ZodTypeAny;
+  /** tham so rieng cho thang may/LED (neu khac TV) */
+  signageArgs?: z.ZodTypeAny;
+  /** loai thiet bi (devices.kind) nhan duoc lenh nay; vang mat = moi loai */
+  kinds?: string[];
+  /** TTL mac dinh/toi da cho loai lenh nay (giay); vang mat = DEFAULT_TTL_S / MAX_TTL_S */
+  defaultTtlS?: number;
+  maxTtlS?: number;
   /** 'protocol' = nam trong docs/DEVICE-PROTOCOL.md muc 6 (app TV da xu ly); 'brainrot' = ten lenh LAN cua Brain-rot, can xac nhan app map duoc tu heartbeat */
   support: 'protocol' | 'brainrot';
   risky?: boolean;
 }
 
 export const COMMANDS: CmdDef[] = [
-  { type: 'refresh_manifest', label: 'Tải lại lịch quảng cáo', desc: 'Buộc TV lấy manifest mới.', args: okArgs, support: 'protocol' },
-  { type: 'reboot', label: 'Khởi động lại ứng dụng', desc: 'TV khởi động lại ứng dụng Brain-rot (không tắt nguồn TV).', args: okArgs, support: 'protocol', risky: true },
+  { type: 'refresh_manifest', label: 'Tải lại lịch quảng cáo', desc: 'Buộc thiết bị lấy manifest mới.', args: okArgs, support: 'protocol' },
+  { type: 'reboot', label: 'Khởi động lại ứng dụng', desc: 'Khởi động lại ứng dụng trên thiết bị (không tắt nguồn màn hình).', args: okArgs, support: 'protocol', risky: true },
+  // ---- Signage Player (thang may / LED): DEVICE-PROTOCOL 6.2. App bo qua lenh la va van ack.
+  {
+    type: 'reset_pin',
+    label: 'Cấp lại mật khẩu',
+    desc: 'Xóa mật khẩu cài đặt trên màn hình: về 1234 và buộc đổi lại ở lần vào cài đặt kế tiếp. Lệnh có hạn ngắn (mặc định 15 phút, tối đa 1 giờ).',
+    args: okArgs,
+    kinds: SIGNAGE,
+    defaultTtlS: 900,
+    maxTtlS: 3600,
+    support: 'protocol',
+    risky: true,
+  },
+  { type: 'set_volume', label: 'Chỉnh âm lượng', desc: 'Đặt âm lượng 0-100%.', args: z.object({ percent: z.number().int().min(0, 'Âm lượng từ 0 đến 100').max(100, 'Âm lượng từ 0 đến 100') }).strict(), kinds: SIGNAGE, support: 'protocol' },
+  { type: 'set_orientation', label: 'Xoay màn hình', desc: 'Đặt hướng hiển thị: ngang (landscape) hoặc dọc (portrait).', args: z.object({ orientation: z.enum(['landscape', 'portrait']) }).strict(), kinds: SIGNAGE, support: 'protocol' },
   { type: 'set_monitor', label: 'Chế độ giám sát', desc: 'Bật chế độ giám sát (heartbeat dày, state=3) để theo dõi sát thiết bị.', args: z.object({ on: z.boolean().default(true) }).strict(), support: 'protocol' },
-  { type: 'lock', label: 'Khóa TV', desc: 'Khóa màn hình TV (màn khóa phụ huynh).', args: z.object({ reason: z.string().trim().max(120).optional() }).strict(), support: 'brainrot', risky: true },
-  { type: 'unlock', label: 'Mở khóa TV', desc: 'Mở khóa TV.', args: okArgs, support: 'brainrot' },
-  { type: 'message', label: 'Gửi thông báo lên TV', desc: 'Hiện một tin nhắn ngắn trên màn hình TV.', args: z.object({ text: z.string().trim().min(1, 'Nhập nội dung tin nhắn').max(200), seconds: z.number().int().min(5).max(120).default(15) }).strict(), support: 'brainrot' },
-  { type: 'pause', label: 'Tạm dừng phát', desc: 'Tạm dừng nội dung đang phát (tùy ứng dụng phát có hỗ trợ).', args: okArgs, support: 'brainrot' },
-  { type: 'resume', label: 'Tiếp tục phát', desc: 'Tiếp tục phát.', args: okArgs, support: 'brainrot' },
+  { type: 'lock', label: 'Khóa TV', desc: 'Khóa màn hình TV (màn khóa phụ huynh).', args: z.object({ reason: z.string().trim().max(120).optional() }).strict(), kinds: TV_LIKE, support: 'brainrot', risky: true },
+  { type: 'unlock', label: 'Mở khóa TV', desc: 'Mở khóa TV.', args: okArgs, kinds: TV_LIKE, support: 'brainrot' },
+  {
+    type: 'message',
+    label: 'Gửi thông báo lên màn hình',
+    desc: 'Hiện một tin nhắn ngắn (chữ chạy tạm thời) trên màn hình.',
+    args: z.object({ text: z.string().trim().min(1, 'Nhập nội dung tin nhắn').max(200), seconds: z.number().int().min(5).max(120).default(15) }).strict(),
+    signageArgs: z.object({ text: z.string().trim().min(1, 'Nhập nội dung tin nhắn').max(200, 'Tối đa 200 ký tự'), duration_s: z.number().int().min(3, 'Từ 3 đến 120 giây').max(120, 'Từ 3 đến 120 giây').optional() }).strict(),
+    support: 'brainrot',
+  },
+  { type: 'pause', label: 'Tạm dừng phát', desc: 'Tạm dừng nội dung đang phát (tùy ứng dụng phát có hỗ trợ).', args: okArgs, kinds: TV_LIKE, support: 'brainrot' },
+  { type: 'resume', label: 'Tiếp tục phát', desc: 'Tiếp tục phát.', args: okArgs, kinds: TV_LIKE, support: 'brainrot' },
   {
     type: 'display-settings',
     label: 'Cài đặt giao diện TV',
     desc: 'Gửi các cặp khóa/giá trị giao diện (tối đa 10). Ý nghĩa do ứng dụng TV quyết định.',
     args: z.object({ settings: z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/, 'Tên khóa không hợp lệ'), scalar).refine((o) => Object.keys(o).length >= 1 && Object.keys(o).length <= 10, 'Từ 1 đến 10 mục') }).strict(),
+    kinds: TV_LIKE,
     support: 'brainrot',
   },
 ];
 const canon = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : 1))) : x));
 const BY_TYPE = new Map(COMMANDS.map((c) => [c.type, c]));
+const allowedFor = (def: CmdDef, kind: string): boolean => !def.kinds || def.kinds.includes(kind);
+const argsSchemaFor = (def: CmdDef, kind: string): z.ZodTypeAny => (def.signageArgs && SIGNAGE.includes(kind) ? def.signageArgs : def.args);
 
 /** Trang thai hien thi: `cancelled` suy ra tu failed + result cancelled_by_admin (khong them gia tri CHECK moi). */
 export type CmdState = 'pending' | 'delivered' | 'acked' | 'failed' | 'expired' | 'cancelled';
@@ -105,7 +139,8 @@ const createBody = z
   .object({
     type: z.string().trim().min(1).max(40),
     args: z.record(z.unknown()).optional(),
-    ttl_s: z.number().int().min(MIN_TTL_S, `TTL tối thiểu ${MIN_TTL_S} giây`).max(MAX_TTL_S, 'TTL tối đa 7 ngày').default(DEFAULT_TTL_S),
+    // mac dinh theo loai lenh (reset_pin: 15 phut), xem COMMANDS[].defaultTtlS
+    ttl_s: z.number().int().min(MIN_TTL_S, `TTL tối thiểu ${MIN_TTL_S} giây`).max(MAX_TTL_S, 'TTL tối đa 7 ngày').optional(),
     idempotency_key: z.string().trim().regex(/^[A-Za-z0-9_.:-]{8,64}$/, 'Khóa chống trùng gồm 8-64 ký tự chữ, số, _ . : -').optional(),
   })
   .strict();
@@ -115,9 +150,9 @@ export function deviceCommandRoutes(): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
 
   /** Thiet bi phai ton tai (404 neu khong); moi lenh/lenh-theo-id deu bi rang buoc voi device_id tren duong dan (chong IDOR giua cac thiet bi). */
-  async function loadDevice(c: Ctx): Promise<{ id: string; blocked: number; trust_level: number; last_seen_at: string | null; status: string }> {
+  async function loadDevice(c: Ctx): Promise<{ id: string; kind: string; blocked: number; trust_level: number; last_seen_at: string | null; status: string }> {
     const rt = getRt(c);
-    const d = (await rt.db.query<{ id: string; blocked: number; trust_level: number; last_seen_at: string | null; status: string }>('SELECT id, blocked, trust_level, last_seen_at, status FROM devices WHERE id = ?', [c.req.param('id') ?? '']))[0];
+    const d = (await rt.db.query<{ id: string; kind: string; blocked: number; trust_level: number; last_seen_at: string | null; status: string }>('SELECT id, kind, blocked, trust_level, last_seen_at, status FROM devices WHERE id = ?', [c.req.param('id') ?? '']))[0];
     if (!d) throw notFound('Không tìm thấy thiết bị.');
     return d;
   }
@@ -128,7 +163,7 @@ export function deviceCommandRoutes(): Hono<AppEnv> {
     const st = c.req.query('status');
     const rows = await rt.db.query<Row>(`${SELECT} WHERE k.device_id = ?${st && ['pending', 'delivered', 'acked', 'failed', 'expired'].includes(st) ? ' AND k.status = ?' : ''} ORDER BY k.created_at DESC, k.id DESC LIMIT 100`, st && ['pending', 'delivered', 'acked', 'failed', 'expired'].includes(st) ? [d.id, st] : [d.id]);
     const nowIso = rt.clock.now().toISOString();
-    return c.json({ items: rows.map((x) => present(x, nowIso)), total: rows.length, delivery: deliveryInfo(rt.config.env), types: COMMANDS.map(({ type, label, desc, support, risky }) => ({ type, label, desc, support, risky: !!risky })) });
+    return c.json({ items: rows.map((x) => present(x, nowIso)), total: rows.length, delivery: deliveryInfo(rt.config.env), types: COMMANDS.filter((x) => allowedFor(x, d.kind)).map(({ type, label, desc, support, risky, defaultTtlS }) => ({ type, label, desc, support, risky: !!risky, ...(defaultTtlS ? { default_ttl_s: defaultTtlS } : {}) })) });
   });
 
   r.get('/:cid', requirePerm('devices', 'view'), async (c) => {
@@ -146,7 +181,10 @@ export function deviceCommandRoutes(): Hono<AppEnv> {
     const b = await parseBody(c, createBody);
     const def = BY_TYPE.get(b.type);
     if (!def) throw unprocessable(`Loại lệnh "${b.type}" không được hỗ trợ.`, 'command_type_unsupported', { allowed: COMMANDS.map((x) => x.type) });
-    const parsed = def.args.safeParse(b.args ?? {});
+    if (!allowedFor(def, d.kind)) throw unprocessable(`Loại lệnh "${b.type}" không áp dụng cho thiết bị loại "${d.kind}".`, 'command_not_for_kind', { kind: d.kind });
+    const ttlS = b.ttl_s ?? def.defaultTtlS ?? DEFAULT_TTL_S;
+    if (def.maxTtlS && ttlS > def.maxTtlS) throw unprocessable(`Lệnh "${def.label}" chỉ có hạn tối đa ${Math.round(def.maxTtlS / 60)} phút.`, 'command_ttl_too_long', { max_ttl_s: def.maxTtlS });
+    const parsed = argsSchemaFor(def, d.kind).safeParse(b.args ?? {});
     if (!parsed.success) throw unprocessable(`Tham số lệnh không hợp lệ: ${parsed.error.issues[0]?.message ?? 'sai định dạng'}.`, 'command_args_invalid', parsed.error.flatten());
     const args = parsed.data as Record<string, unknown>;
     const hasArgs = Object.keys(args).length > 0;
@@ -161,14 +199,17 @@ export function deviceCommandRoutes(): Hono<AppEnv> {
       }
     }
     if (Number(d.blocked) === 1) throw conflict('Thiết bị đang bị chặn, không gửi lệnh.', 'device_blocked');
-    if (num(d.trust_level) < 1) throw conflict('Thiết bị chưa ghép mã. Hãy ghép mã hiển thị trên TV trước khi gửi lệnh.', 'device_not_paired');
+    if (num(d.trust_level) < 1) {
+      if (SIGNAGE.includes(d.kind)) throw conflict('Thiết bị chưa được cấp quyền. Hãy bấm "Cấp quyền" cho thiết bị trước khi gửi lệnh.', 'device_not_approved');
+      throw conflict('Thiết bị chưa ghép mã. Hãy ghép mã hiển thị trên TV trước khi gửi lệnh.', 'device_not_paired');
+    }
     // han muc: theo nguoi dung (60 lenh/10 phut) va theo thiet bi (20 lenh/10 phut)
     const bucket = Math.floor(rt.clock.now().getTime() / 600_000);
     if ((await rt.kv.incr(`rl:devcmd:u:${u.id}:${bucket}`, 600)) > 60) throw tooMany('Bạn gửi lệnh quá nhiều, thử lại sau ít phút.', 300);
     if ((await rt.kv.incr(`rl:devcmd:d:${d.id}:${bucket}`, 600)) > 20) throw tooMany('Thiết bị này nhận quá nhiều lệnh trong thời gian ngắn, thử lại sau ít phút.', 300);
     let id: string;
     try {
-      id = await enqueueCommand(rt, d.id, { type: b.type, ...(hasArgs ? { args } : {}) }, { ttlS: b.ttl_s, createdBy: u.id, ip: c.get('ip') ?? null, ...(key ? { idempotencyKey: key } : {}) });
+      id = await enqueueCommand(rt, d.id, { type: b.type, ...(hasArgs ? { args } : {}) }, { ttlS, createdBy: u.id, ip: c.get('ip') ?? null, ...(key ? { idempotencyKey: key } : {}) });
     } catch (e) {
       if (e instanceof CommandError) {
         if (e.code === 'queue_full') throw tooMany('Thiết bị đang có quá nhiều lệnh chờ. Hủy bớt lệnh cũ hoặc chờ TV xử lý.', 300, 'queue_full');

@@ -94,6 +94,9 @@ function presentImp(r: ImpRow, internal: boolean, finance: boolean) {
   };
 }
 
+// Hieu luc proof_of_play (DEVICE-PROTOCOL 8.2): gateway danh dau `source='pending_trust'` khi thiet bi CHUA duoc cap quyen luc gui. Bao cao tinh lai theo
+// quyen HIEN TAI: neu thiet bi (screen_id cua dong = device_id, hoac man hinh da gan thiet bi) nay co trust_level >= 1 va khong bi chan thi dong do HOP LE.
+const POP_PENDING = `(COALESCE(p.source, '') = 'pending_trust' AND NOT EXISTS (SELECT 1 FROM devices dv WHERE dv.trust_level >= 1 AND dv.blocked = 0 AND (dv.id = p.screen_id OR dv.id IN (SELECT sc.device_id FROM screens sc WHERE sc.id = p.screen_id))))`;
 const POP_FROM = `FROM ev_proof_of_play p JOIN creatives cr ON cr.id = p.creative_id LEFT JOIN campaigns c ON c.id = cr.campaign_id`;
 interface PopRow {
   ts: string;
@@ -104,17 +107,20 @@ interface PopRow {
   campaign_name: string | null;
   duration_ms: number;
   source: string | null;
+  status: 'valid' | 'pending_trust';
 }
 function popSpec(external: boolean, scope: SqlFrag | null): ListSpec {
   const filters: Record<string, FilterDef> = { creative_id: eq('p.creative_id'), campaign_id: eq('cr.campaign_id'), from: dateFilter('>=', 'p.ts'), to: dateFilter('<', 'p.ts') };
   if (!external) {
     filters['screen_id'] = eq('p.screen_id');
     filters['customer_id'] = eq('cr.customer_id');
+    // status=valid | pending_trust (noi bo xem ca hai; khach hang CHI thay dong hop le)
+    filters['status'] = (v) => (v === 'valid' ? { sql: `NOT ${POP_PENDING}`, params: [] } : v === 'pending_trust' ? { sql: POP_PENDING, params: [] } : null);
   }
   return {
     from: POP_FROM,
-    select: 'p.ts, p.screen_id, p.creative_id, cr.name AS creative_name, cr.campaign_id, c.name AS campaign_name, p.duration_ms, p.source',
-    where: scope ? [scope] : [],
+    select: `p.ts, p.screen_id, p.creative_id, cr.name AS creative_name, cr.campaign_id, c.name AS campaign_name, p.duration_ms, p.source, CASE WHEN ${POP_PENDING} THEN 'pending_trust' ELSE 'valid' END AS status`,
+    where: [...(scope ? [scope] : []), ...(external ? [{ sql: `NOT ${POP_PENDING}`, params: [] as unknown[] }] : [])],
     search: ['cr.name', 'c.name'],
     sorts: { ts: 'p.ts', duration_ms: 'p.duration_ms' },
     defaultSort: 'ts:desc',
@@ -145,7 +151,7 @@ function build(external: boolean): Hono<AppEnv> {
         creative: { id: x.creative_id, name: x.creative_name },
         campaign: x.campaign_id ? { id: x.campaign_id, name: x.campaign_name } : null,
         duration_ms: num(x.duration_ms),
-        ...(external ? {} : { screen_id: x.screen_id, source: x.source }),
+        ...(external ? {} : { screen_id: x.screen_id, source: x.source, status: x.status }),
       })),
     });
   });

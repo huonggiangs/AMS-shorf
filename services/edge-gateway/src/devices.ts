@@ -15,6 +15,10 @@ export interface DeviceRec {
   pxW: number | null;
   pxH: number | null;
   modelClass: string;
+  /** do phan giai/huong thiet bi TU KHAI (device_profiles); pxW/pxH uu tien screens.px_* khi da gan man hinh */
+  profPxW?: number | null;
+  profPxH?: number | null;
+  profOrientation?: string | null;
 }
 
 export function modelClassOf(r: { kind: string; screenType?: string | null; pxW?: number | null; pxH?: number | null }): { type: 'tv' | 'elevator' | 'led_p5'; cls: string } {
@@ -36,6 +40,9 @@ interface Row {
   screen_type: string | null;
   px_w: number | null;
   px_h: number | null;
+  prof_px_w: number | null;
+  prof_px_h: number | null;
+  prof_orientation: string | null;
 }
 
 /**
@@ -81,13 +88,17 @@ export class DeviceDirectory {
   private async load(id: string): Promise<DeviceRec | null> {
     const rows = await this.rt.db.query<Row>(
       `SELECT d.id, d.pubkey_ed25519, d.trust_level, d.blocked, d.region_id, d.kind, d.model, d.user_id,
-              s.id AS screen_id, s.type AS screen_type, s.px_w, s.px_h
-         FROM devices d LEFT JOIN screens s ON s.device_id = d.id WHERE d.id = ? LIMIT 1`,
+              s.id AS screen_id, s.type AS screen_type, s.px_w, s.px_h,
+              p.px_w AS prof_px_w, p.px_h AS prof_px_h, p.orientation AS prof_orientation
+         FROM devices d LEFT JOIN screens s ON s.device_id = d.id LEFT JOIN device_profiles p ON p.device_id = d.id WHERE d.id = ? ORDER BY s.id LIMIT 1`,
       [id],
     );
     const r = rows[0];
     if (!r || !r.pubkey_ed25519) return null;
-    const mc = modelClassOf({ kind: r.kind, screenType: r.screen_type, pxW: r.px_w, pxH: r.px_h });
+    const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+    // man hinh da gan (do van hanh) uu tien; chua gan thi dung do phan giai thiet bi tu khai (Signage Player)
+    const px = r.px_w && r.px_h ? { w: Number(r.px_w), h: Number(r.px_h) } : r.prof_px_w && r.prof_px_h ? { w: Number(r.prof_px_w), h: Number(r.prof_px_h) } : null;
+    const mc = modelClassOf({ kind: r.kind, screenType: r.screen_type, pxW: px?.w ?? null, pxH: px?.h ?? null });
     return {
       id: r.id,
       pubkey: r.pubkey_ed25519,
@@ -99,9 +110,12 @@ export class DeviceDirectory {
       userId: r.user_id,
       screenId: r.screen_id,
       screenType: mc.type,
-      pxW: r.px_w === null ? null : Number(r.px_w),
-      pxH: r.px_h === null ? null : Number(r.px_h),
+      pxW: px?.w ?? null,
+      pxH: px?.h ?? null,
       modelClass: mc.cls,
+      profPxW: num(r.prof_px_w),
+      profPxH: num(r.prof_px_h),
+      profOrientation: r.prof_orientation ?? null,
     };
   }
 }

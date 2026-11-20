@@ -103,6 +103,7 @@ async function deleteCampaignRows(rt: Runtime, p: CampaignReleasePayload): Promi
   await rt.db.tx(async (db) => {
     const row = (await db.query<{ state: string; customer_id: string; name: string }>('SELECT state, customer_id, name FROM campaigns WHERE id = ?', [p.campaignId]))[0];
     if (!row || !states.includes(row.state)) return;
+    await db.run('DELETE FROM schedule_slot_text WHERE slot_id IN (SELECT id FROM schedule_slots WHERE campaign_id = ?)', [p.campaignId]);
     await db.run('DELETE FROM schedule_slots WHERE campaign_id = ?', [p.campaignId]);
     await db.run('DELETE FROM campaign_grants WHERE campaign_id = ?', [p.campaignId]);
     await db.run('UPDATE creatives SET campaign_id = NULL WHERE campaign_id = ?', [p.campaignId]);

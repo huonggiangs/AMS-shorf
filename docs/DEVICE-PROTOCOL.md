@@ -120,7 +120,9 @@ Yêu cầu:
 | `pubkey` | có | base64url 43 ký tự |
 | `kind` | không (mặc định `tv`) | `tv`, `elevator`, `led_p5`, `phone`, `virtual` |
 | `model`, `os`, `app_version` | không | chuỗi ngắn (<=80/40/20 ký tự) |
-| `region` | không | mã vùng (`HN`, `HCM`, `DN`...). Quyết định nhóm manifest. Chưa gửi thì nhóm `ALL` |
+| `region` | không | mã vùng (`HN`, `HCM`, `DN`...; chỉ `A-Z a-z 0-9 _ -`, tối đa 16 ký tự). Quyết định nhóm manifest. Chưa gửi thì nhóm `ALL`. Thang máy/LED đã gán vị trí thì vùng lấy theo địa điểm |
+| `px_w`, `px_h` | không (nên gửi với `elevator`/`led_p5`) | độ phân giải thật của màn hình, số nguyên 64..16384, gửi **cả hai** hoặc không gửi (`400 validation_error`). Gateway dùng để chọn nhóm manifest `elevator_<w>x<h>` khi admin chưa khai độ phân giải cho vị trí |
+| `orientation` | không | `portrait` hoặc `landscape` |
 
 Phản hồi `201` (mới) hoặc `200` (đã đăng ký cùng `pubkey`, trả lại cùng `device_id`):
 
@@ -130,7 +132,8 @@ Phản hồi `201` (mới) hoặc `200` (đã đăng ký cùng `pubkey`, trả l
 
 - `attestation_nonce`: nonce để nối với chứng thực thiết bị thật (Play Integrity/Widevine L1). **Server chưa kiểm chứng chứng thực** (chưa có endpoint nộp token); trust_level tăng lên 1 khi ghép đôi, bậc 2 dành cho chứng thực (chưa làm).
 - Giới hạn: 20 lần/giờ/IP (`429 rate_limited` + `Retry-After`). Trùng khóa cho thiết bị đã bị khóa: `403 device_blocked`.
-- App lưu `device_id` bền vững. Mất `device_id` nhưng còn khóa: gọi lại `register` với cùng khóa để lấy lại.
+- App lưu `device_id` bền vững. Mất `device_id` nhưng còn khóa: gọi lại `register` với cùng khóa để lấy lại. **Cùng `pubkey` luôn nhận lại cùng `device_id`** (khóa duy nhất trong CSDL; có kiểm thử). Đăng ký lại cập nhật `model/os/app_version/px/orientation`; `region` chỉ đổi khi thiết bị chưa gắn vị trí.
+- **Thang máy/LED (`kind` = `elevator`/`led_p5`) không dùng mã 6 số.** Sau `register` thiết bị ở `trust_level` 0 (trạng thái "Chờ cấp quyền" trên admin). Vận hành bấm **Cấp quyền** (`POST /admin/v1/devices/{id}/approve`, cần quyền `devices:approve`) và chọn địa điểm/màn hình; thiết bị lên `trust_level` 1 và nhận manifest đúng độ phân giải. App chỉ cần hiển thị `device_id` rút gọn (mã thiết bị) trong lúc chờ và tiếp tục heartbeat. Xem `docs/SIGNAGE-PLAYER-AMS.md`.
 
 ## 5. `POST /v1/pair`
 
@@ -165,6 +168,10 @@ Chữ ký thiết bị. Thân JSON nhỏ (mục tiêu <512 byte, **tối đa c�
 | `app_ver` | string | cập nhật `devices.app_version` |
 | `soc_temp` (độ C), `rssi` (dBm, <=0), `dl_mbps`, `cache_used_mb`, `cache_slots` | số | telemetry; có thể bị lấy mẫu phía server (không ảnh hưởng phản hồi) |
 | `manifest_etag` | string | etag đang giữ (thông tin) |
+| `app_version` | string | bí danh của `app_ver` (Signage Player) |
+| `source` | `ams`\|`usb`\|`lan` | nguồn đang phát; hiện ở cột "Nguồn phát" trên admin |
+| `cache_mb` | số >= 0 | dung lượng cache (MB) đang dùng; hiện trên admin (nếu có `cache_used_mb` mà không có `cache_mb` thì dùng giá trị đó) |
+| `px_w`, `px_h`, `orientation`, `region` | tùy chọn | như `register`; đổi giá trị thì gateway cập nhật nhóm manifest ngay (không quá 1 lần/phút/thiết bị) |
 | `cmd_ack` | string[] <=20 | (cũ, vẫn nhận) id lệnh đã thực thi; nên dùng `POST /v1/commands/ack` (mục 6.1) |
 
 Phản hồi `200`:
@@ -177,9 +184,25 @@ Phản hồi `200`:
 - Online suy diễn: coi thiết bị online nếu `last_seen < 2,5 x chu kỳ` (phía hiển thị).
 - `manifest_etag`: nếu khác etag đang giữ, gọi `GET /v1/manifest`. `manifest_group`/`manifest_url`: dạng công khai để CDN cache (mục 7.3).
 - `commands`: mảng `{id, type, args?}` lấy từ bảng `device_commands` (vòng đời `pending -> delivered -> acked|failed`, hoặc `expired`). Heartbeat trả các lệnh đang chờ và đánh dấu `delivered`; nếu chưa ack sau **120 giây** (`CMD_REDELIVER_S`) thì được giao lại ở heartbeat kế tiếp, tối đa **10 lần giao** (`MAX_DELIVERIES`) rồi chuyển `failed`. Lệnh quá hạn (TTL mặc định 7 ngày) bị sweeper chuyển `expired`, không giao nữa. Tối đa 50 lệnh mở/thiết bị (`queue_full`). Ít nhất một lần: lệnh phải **idempotent** (app nhớ id đã thực thi). `type` ban đầu: `refresh_manifest`, `reboot`, `set_monitor` (đặt `state` 3). `type` lạ thì bỏ qua và vẫn ack. Lệnh enqueue có `audit_log` (`device.command.enqueue`) và `idempotency_key` (UNIQUE theo thiết bị). Admin tạo/liệt kê/hủy lệnh qua `/admin/v1/devices/{id}/commands` (danh mục loại lệnh, TTL, hạn mức: xem `TV-CONNECT-AMS.md` mục 3.2). Biến `HB_PAIRED_S` (tùy chọn, mặc định tắt, tối thiểu 30) rút ngắn chu kỳ cơ sở của thiết bị trust >= 1 để lệnh tới nhanh hơn; vẫn là polling.
-- `min_app_version` (tùy chọn, chỉ có khi vận hành đặt công tắc, ví dụ `"2.4.0"`): bản tối thiểu server chấp nhận; thấp hơn thì app nên tự cập nhật.
+- `min_app_version` (tùy chọn, ví dụ `"2.4.0"`): bản tối thiểu server chấp nhận; thấp hơn thì app nên tự cập nhật. Thang máy/LED: đặt theo từng loại ở admin (Màn hình > Cấu hình Signage Player), ưu tiên hơn công tắc toàn hệ thống.
+- **Chỉ thang máy/LED**, có khi vận hành đã cấu hình (trường vắng mặt = không có): `hotline` (chuỗi <= 60, hiện ở màn logo, lưu để hiện cả khi mất mạng), `app_update_url` (HTTPS, <= 300 ký tự) và `app_update_sha256` (64 hex): box không có kho ứng dụng tải tệp, **kiểm SHA-256 trước khi cài**, chỉ cài khi `app_ver` < `min_app_version`. Cả ba chỉ có hiệu lực sau <= 15 giây từ lúc đổi cấu hình (cache cấu hình ngắn). Đổi `app_update_*` cần quyền `devices:approve` và được ghi `audit_log` (`signage.config`).
+- Lệnh thêm (mục 6.2): `reset_pin`, `set_volume`, `set_orientation`, `message`. **`id` lệnh KHÔNG ĐỔI khi giao lại** (ack chậm, quá 120 giây): app nhớ id đã xử lý và bỏ qua lần giao lại nhưng vẫn ack.
 - Heartbeat gần nhau hơn 5 giây: `429 rate_limited` + `Retry-After`.
 - **Giảm tải:** khi quá tải server trả `503 overloaded` kèm `Retry-After` (giây, đã jitter ±20%) trước khi tốn CPU xác thực. App ngủ đúng `Retry-After` rồi thử lại, không tự rút ngắn.
+
+### 6.2 Lệnh Signage Player (thang máy / LED)
+
+Lệnh tạo ở admin (`POST /admin/v1/devices/{id}/commands`), thiết bị phải ở `trust_level` >= 1 (đã cấp quyền), loại lệnh phải hợp với loại thiết bị. Mọi lệnh ghi `audit_log`; `idempotency_key` chống tạo trùng.
+
+| `type` | `args` | TTL mặc định / tối đa | Ghi chú |
+|---|---|---|---|
+| `reset_pin` | `{}` | 15 phút / 1 giờ | xóa mật khẩu cài đặt của app: về `1234` và buộc đổi lại ở lần vào cài đặt kế tiếp; lệnh nhạy cảm nên hết hạn nhanh. **Không chứa mã PIN** (không có bí mật trong lệnh) |
+| `set_volume` | `{"percent":0..100}` | 1 giờ / 7 ngày | âm lượng |
+| `set_orientation` | `{"orientation":"landscape"\|"portrait"}` | 1 giờ / 7 ngày | xoay hướng |
+| `message` | `{"text":<=200 ký tự,"duration_s"?:3..120}` | 1 giờ / 7 ngày | chữ chạy tạm thời; thiếu `duration_s` thì app tự chọn (gợi ý 15 giây). (TV dùng `seconds`, không phải `duration_s`) |
+| `refresh_manifest`, `reboot`, `set_monitor` | như cũ | | như mục 6 |
+
+App bỏ qua `type` lạ và **vẫn ack**.
 
 ### 6.1 `POST /v1/commands/ack`
 
@@ -189,7 +212,7 @@ Chữ ký thiết bị. Thân: `{"acks":[{"id":"<command id>","status":"ok"|"fai
 
 ### 7.1 `GET /v1/manifest?etag=<etag đang giữ>` (có ký, thân rỗng)
 
-- Chọn nhóm theo thiết bị: `region x model_class` (daypart `all`: một manifest chứa mọi khung giờ). `model_class`: `tv` cho TV; `elevator_<w>x<h>` / `led_p5_<w>x<h>` khi thiết bị gắn với một `screens` có độ phân giải (admin gắn); ngược lại `elevator`, `led_p5`.
+- Chọn nhóm theo thiết bị: `region x model_class` (daypart `all`: một manifest chứa mọi khung giờ). `model_class`: `tv` cho TV; `elevator_<w>x<h>` / `led_p5_<w>x<h>` theo độ phân giải thật của màn hình: lấy từ `screens` (admin gắn) nếu có, nếu không thì từ `px_w`/`px_h` thiết bị khai ở `register`/`heartbeat`; chỉ khi không có cả hai mới là `elevator`, `led_p5` (nhóm này phục vụ mọi độ phân giải, nên khai `px_w`/`px_h`).
 - `?daypart=<tên>` (tùy chọn): chỉ các slot của khung giờ đó (nhóm riêng, etag riêng). Bỏ qua nếu không cần.
 - Nếu `etag` (hoặc `If-None-Match`) trùng bản hiện hành: `304` thân rỗng. Phản hồi luôn có `ETag: "<etag>"`; `Cache-Control: private, no-cache` (không cache dùng chung).
 - `?etag=<cũ>&delta=1`: nếu server còn bản `<cũ>` (giữ 1 giờ) trả **delta** (tiêu đề `X-Manifest-Kind: delta`), ngược lại trả bản đầy đủ (`X-Manifest-Kind: full`).
@@ -202,13 +225,24 @@ Phản hồi đầy đủ `200`:
  "schedule":[{"slot_id":"01M7799CBSK3S99KH0R0ZMB62S","campaign_id":"01M7799CBSK3S99KH0R0ZMB62R","creative_ids":["01M7799CBSK3S99KH0R0ZMB62T"],"daypart":"all_day","start_min":0,"end_min":1440,"priority":2,"reward_points":10}]}
 ```
 
+**Chỉ thang máy/LED**, thêm vào manifest (và delta):
+
+| Trường | Ý nghĩa |
+|---|---|
+| `header`, `footer` | chuỗi; rỗng hoặc vắng mặt = ẩn. Cấu hình theo loại màn ở admin, tối đa 120/200 ký tự. Tính vào `etag` |
+| `hotline` | chuỗi <= 60 (cũng có ở heartbeat) |
+| `rotation` | `{"mode":"sequential"}`: quy tắc xoay vòng (mục 7.5) |
+| `schedule[].header`, `schedule[].footer` | ghi đè cấp slot **nếu có** (kể cả chuỗi rỗng = ẩn); vắng mặt = dùng cấp manifest |
+| `creatives[].fit` | `cover` (mặc định, phủ kín khung) hoặc `fit` (vừa khung) |
+| `creatives[].duration_s` | ảnh LUÔN có số nguyên giây (3..120; mặc định 10, đổi ở admin); video là thời lượng thật |
+
 **Creative** `{id, campaign_id, url, sha256, duration_s, px_w, px_h, format, media_type, size_bytes}`
 
 | Trường | Ý nghĩa |
 |---|---|
 | `url` | URL công khai (CDN/R2), ổn định, không chữ ký ngắn hạn; tải bằng HTTP GET thường, hỗ trợ `Range` |
 | `sha256` | hex chữ thường của tệp; **bắt buộc kiểm sau khi tải**, sai thì xóa tệp và không phát |
-| `duration_s` | thời lượng (giây); `null` với ảnh tĩnh chưa khai báo (dùng thời lượng slot/mặc định của app) |
+| `duration_s` | thời lượng (giây); TV: `null` với ảnh tĩnh chưa khai báo (dùng thời lượng slot/mặc định của app). Thang máy/LED: luôn có giá trị với ảnh (mặc định 10) |
 | `px_w`, `px_h` | độ phân giải tệp |
 | `format` | `fullscreen`, `menu_banner`, `l_banner`, `pause_ad`, `qr_corner`, `reward`. **Hiện server chỉ phát ra `fullscreen`** trừ khi dữ liệu creative ghi định dạng khác (cột riêng chưa có: xem yêu cầu cho f1) |
 | `media_type` | `video` hoặc `image` |
@@ -219,7 +253,7 @@ Phản hồi đầy đủ `200`:
 - `priority`: số **nhỏ hơn = ưu tiên cao hơn** (quy ước tạm của gateway, hạt giống dữ liệu dùng 2-3). Cần a1/a2 chốt lại nếu khác.
 - `creative_ids`: các bản creative của chiến dịch cho nhóm này. TV (tự co giãn): chọn bản có `px_w` lớn nhất không vượt độ phân giải màn hình, nếu không có thì bản nhỏ nhất. Thang máy/LED: manifest chỉ chứa bản **đúng** độ phân giải màn hình, dùng nguyên.
 - `reward_points`: điểm thưởng nếu người xem xem đủ (chỉ TV có tài khoản; `format = reward` hiển thị lời nhắc).
-- Quy tắc xoay vòng/tần suất **chưa nằm trong giao thức này** (đặc tả gốc chưa ghi). Đề xuất mặc định cho app: trong các slot đang hiệu lực, chọn theo `priority` tăng dần, cùng mức thì xoay vòng đều; chuyển sang bản đầy đủ khi `etag` đổi chỉ sau khi tải xong mọi creative mới.
+- Quy tắc xoay vòng: xem mục 7.5 (thang máy/LED đã chốt; TV vẫn là gợi ý). Chuyển sang bản đầy đủ khi `etag` đổi chỉ sau khi tải xong mọi creative mới.
 
 Chỉ đưa vào manifest: chiến dịch `active` trong `[start_at, end_at]`, slot khớp loại màn hình và vùng (slot để trống vùng = mọi vùng), creative `review_state=approved`, `state=ready`, không nhiễm mã độc, và **tệp đã xác minh được sha256** ở kho đối tượng. Nhóm chưa có chiến dịch: `creatives` và `schedule` rỗng (hợp lệ).
 
@@ -231,6 +265,12 @@ Chỉ đưa vào manifest: chiến dịch `active` trong `[start_at, end_at]`, s
 ```
 
 Áp dụng: `creatives = (creatives_cũ - creatives_removed) + creatives_added`; `schedule` thay thế hoàn toàn. Sau khi áp dụng, **giữ `etag` mới**; nếu có nghi ngờ lệch (thiếu creative được lịch tham chiếu), bỏ bản cục bộ và gọi lại không kèm `etag` để lấy bản đầy đủ. Giá trị `etag` chính là chữ ký của nội dung (16 ký tự đầu của SHA-256 trên `{version, group, tz, creatives, schedule}` đã sắp xếp theo `id`), nên không có checksum riêng.
+
+Thang máy/LED: delta cũng mang `header`, `footer`, `hotline`, `rotation` (giá trị hiện hành, thay thế hoàn toàn) và đưa **cả creative đổi nội dung** (cùng `id`, `sha256`/`fit`/`duration_s` khác) vào `creatives_added`; app thay thế theo `id`.
+
+### 7.5 Quy tắc xoay vòng (thang máy/LED)
+
+Có trong manifest dưới dạng `"rotation":{"mode":"sequential"}`. App phát **tuần tự theo `priority` tăng dần** (số nhỏ = phát trước), rồi lặp lại từ đầu, **vô hạn**; cùng `priority` thì theo `slot_id` tăng dần (thứ tự ổn định, cùng kết quả trên mọi màn). Chỉ tính các slot có giờ địa phương trong `[start_min, end_min)`; trong một slot có nhiều `creative_ids` thì phát lần lượt theo thứ tự mảng. Không có tần suất/trọng số. Gặp `mode` lạ thì dùng `sequential`.
 
 ### 7.3 Đường công khai cho CDN: `GET /v1/manifest/g/{group}`
 
@@ -273,6 +313,8 @@ Phản hồi `202`:
 
 `{"type":"proof_of_play","event_id":"<uuidv7>","ts":"<ISO>","creative_id":"...","duration_ms":15000}`. Ghi vào `ev_proof_of_play`, khử trùng theo `event_id`; không tính hoa hồng.
 
+**Hợp lệ khi nào:** `creative_id` có trong manifest hiện hành của thiết bị (nếu không: bị từ chối từng cái), `ts` trong 48 giờ quá khứ và tối đa 5 phút tương lai, và thiết bị đã được cấp quyền (`trust_level` >= 1, không bị chặn). Lượt phát của thiết bị CHƯA cấp quyền vẫn được lưu nhưng ở trạng thái `pending_trust` (phản hồi tính vào `flagged`, không bị loại); khi được cấp quyền thì hợp lệ (`valid`) và báo cáo khách hàng chỉ thấy lượt hợp lệ; thu hồi quyền thì quay lại chờ. Trạng thái tính theo quyền hiện tại của thiết bị, không phải lúc gửi. Thang máy/LED không có điểm thưởng người xem.
+
 ### 8.3 Idempotent và gửi lại
 
 - Gateway **không** báo trùng ở phản hồi: sự kiện trùng `event_id` (kể cả gửi lại cả lô sau timeout, hoặc hai lô chồng lấn) được hấp thụ im lặng ở hàng đợi/ingest và **không bao giờ đếm hai lần** (cả sự kiện, `impression_hourly` lẫn chi tiêu chiến dịch).
@@ -302,6 +344,23 @@ Lưu nhưng đánh dấu không hợp lệ (`accepted` đếm, `flagged` đếm,
 Sự kiện hợp lệ: ghi doanh thu `revenue_micro_vnd` (đơn giá **tạm** 20 ₫/impression, `IMPRESSION_PRICE_MICRO_VND`; chủ dự án phải thay bằng bảng giá thật) và `reward_vnd = reward_points của slot` chỉ khi thiết bị là TV có `trust_level >= 1` (quy đổi 1 điểm = 1 ₫, tạm, `REWARD_POINT_VND`). Các con số tiền này là tham số cấu hình chứ không phải quyết định thương mại.
 
 Bậc tin cậy: `0` chưa ghép/chưa xác minh (không hoa hồng, không tính tiền quảng cáo); `1` đã ghép tài khoản hoặc do vận hành cấp; `2` đã chứng thực thiết bị thật (**chưa hiện thực**).
+
+### 8.5 `POST /v1/logs` (nhật ký thiết bị, Signage Player)
+
+Chữ ký thiết bị như `/v1/*`. Thân JSON **<= 8 KB** (`413 payload_too_large`), tối đa 100 dòng:
+
+```json
+{"entries":[{"ts":"2026-11-20T03:00:00.000Z","level":"error","tag":"player","msg":"khong tai duoc creative 01M..."}]}
+```
+
+| Trường | Ghi chú |
+|---|---|
+| `ts` | ISO 8601; ngoài khoảng [hiện tại - 7 ngày, hiện tại + 5 phút] thì gateway kẹp về mốc gần nhất |
+| `level` | `debug`, `info`, `warn`, `error` |
+| `tag` | tùy chọn, <= 32 ký tự (ví dụ `player`, `net`, `usb`, `source`) |
+| `msg` | 1..500 ký tự. **Không ghi bí mật** (PIN, khóa, token) |
+
+Phản hồi `200 {"ok":true,"stored":N}`. Giới hạn theo `device_id`: **60 lần/giờ** và **5000 dòng/ngày** (`429 rate_limited` + `Retry-After`). Thiết bị chưa đăng ký/bị chặn: như các đường khác. Lưu bảng `device_logs` **7 ngày** (dọn trong vòng quét mỗi phút của gateway, tối đa 10 phút/lần). Admin xem ở ngăn chi tiết thiết bị (`GET /admin/v1/devices/{id}/logs`, quyền `devices:view`, phân trang, lọc mức/tag). Nên gửi gộp (5-15 phút/lần hoặc khi lỗi nặng), giữ nhật ký chưa gửi trên đĩa.
 
 ## 9. Bảng mã lỗi
 
@@ -344,6 +403,7 @@ Bậc tin cậy: `0` chưa ghép/chưa xác minh (không hoa hồng, không tín
 | Lô sự kiện | 30 lô/phút/thiết bị; <=50 sự kiện/lô; <=16 KB |
 | Thân heartbeat | <=2 KB (mục tiêu <512 B) |
 | Trần impression hợp lệ | 120/thiết bị/giờ |
+| Nhật ký `/v1/logs` | <=8 KB, <=100 dòng; 60 lần/giờ và 5000 dòng/ngày/thiết bị |
 | Nonce nhớ | 10 phút |
 | Lệch đồng hồ | ±300 giây |
 
@@ -356,7 +416,7 @@ Bậc tin cậy: `0` chưa ghép/chưa xác minh (không hoa hồng, không tín
 - **Docker/Node:** presence và nonce nằm ở Redis (kv); `incr` của Redis nguyên tử nên chống phát lại chặt. **Cloudflare:** presence và nonce nằm ở Durable Object `PresenceShard` (SQLite, nguyên tử, chia 16 shard); KV không nguyên tử nên **không** dùng để chống phát lại ở production. Code Cloudflare chỉ mới qua `tsc`, chưa chạy thật.
 - Telemetry heartbeat gộp lô ở gateway (không qua Queue từng heartbeat); mất heartbeat khi tiến trình khởi động lại là chấp nhận được. Impression đi qua Queue (`ingest.events`) vì liên quan tiền.
 - Đã có và đã kiểm chứng: ký/nonce/skew, đăng ký/ghép đôi, heartbeat (jitter, giảm tải, lệnh), manifest (nhóm, 304, delta, CDN), sự kiện (idempotent, kiểm hợp lệ).
-- **Chưa làm:** xác minh chứng thực thiết bị (Play Integrity/Widevine), push FCM, WebSocket cho nhóm giám sát, CBOR/protobuf, lấy mẫu telemetry theo thiết bị (chỉ có lấy mẫu toàn cục `TELEMETRY_SAMPLE_EVERY`), kiểm tra cụm thiết bị cùng IP/ASN, định dạng quảng cáo khác `fullscreen` (cần cột riêng), quy tắc xoay vòng/tần suất.
+- **Chưa làm:** xác minh chứng thực thiết bị (Play Integrity/Widevine), push FCM, WebSocket cho nhóm giám sát, CBOR/protobuf, lấy mẫu telemetry theo thiết bị (chỉ có lấy mẫu toàn cục `TELEMETRY_SAMPLE_EVERY`), kiểm tra cụm thiết bị cùng IP/ASN, định dạng quảng cáo khác `fullscreen` (cần cột riêng), tần suất/trọng số khi xoay vòng, **phát đồng bộ nhiều màn (yêu cầu 13: chưa làm; nếu cần, đề xuất `sync_group` và mốc bắt đầu chung trong manifest)**.
 
 ## 13. Checklist ánh xạ cho app TV Brain-rot (a4)
 
@@ -367,3 +427,9 @@ Bậc tin cậy: `0` chưa ghép/chưa xác minh (không hoa hồng, không tín
 5. Bộ tải creative: tải trước, kiểm `sha256`, chuyển lịch nguyên tử, dọn cache an toàn.
 6. Bộ phát: lọc slot theo giờ `Asia/Ho_Chi_Minh` và `priority`; đo `vcr_pct`/`played_ms` thật; sinh UUIDv7; xả lô 5-10 phút.
 7. Xử lý đủ bảng lỗi mục 9 và quy tắc thử lại mục 10; không đếm sự kiện lại sau khi gửi lỗi.
+
+## 14. Trả lời câu hỏi của đội app Signage Player
+
+1. **Gateway production** là `https://gw-ams.anio.vn` (đúng; admin ở `https://ams.anio.vn`). Dùng làm mặc định `Prefs.gwBase` là phù hợp.
+2. **Đăng ký lại cùng khóa**: luôn nhận lại **cùng `device_id`** (`200`, `created:false`); an toàn khi xóa dữ liệu app mà giữ khóa. Nếu mất cả khóa thì là thiết bị mới.
+3. **`id` lệnh không đổi khi giao lại** (ack chậm, mỗi 120 giây, tối đa 10 lần giao, rồi `failed`). App bỏ qua id đã xử lý trong phiên và vẫn nên ack.

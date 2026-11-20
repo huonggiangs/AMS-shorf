@@ -4504,7 +4504,7 @@
           "module": "devices",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:99",
+        "x-ams-source": "services/api/src/routes/devices.ts:146",
         "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -4543,7 +4543,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:105",
+        "x-ams-source": "services/api/src/routes/devices.ts:152",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -4593,7 +4593,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:128",
+        "x-ams-source": "services/api/src/routes/devices.ts:177",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -4652,7 +4652,7 @@
           "module": "devices",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:200",
+        "x-ams-source": "services/api/src/routes/devices.ts:338",
         "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -4679,6 +4679,65 @@
         ]
       }
     },
+    "/admin/v1/devices/{id}/approve": {
+      "post": {
+        "operationId": "adminPostDevicesByIdApprove",
+        "tags": [
+          "devices"
+        ],
+        "summary": "POST /admin/v1/devices/{id}/approve",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/routes/devices.ts:250",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostDevicesByIdApproveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
     "/admin/v1/devices/{id}/commands": {
       "get": {
         "operationId": "adminGetDevicesByIdCommands",
@@ -4700,7 +4759,7 @@
           "module": "devices",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/device-commands.ts:125",
+        "x-ams-source": "services/api/src/routes/device-commands.ts:160",
         "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4746,7 +4805,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/device-commands.ts:142",
+        "x-ams-source": "services/api/src/routes/device-commands.ts:177",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -4813,7 +4872,7 @@
           "module": "devices",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/device-commands.ts:134",
+        "x-ams-source": "services/api/src/routes/device-commands.ts:169",
         "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4869,7 +4928,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/device-commands.ts:185",
+        "x-ams-source": "services/api/src/routes/device-commands.ts:226",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4897,6 +4956,97 @@
         ]
       }
     },
+    "/admin/v1/devices/{id}/logs": {
+      "get": {
+        "operationId": "adminGetDevicesByIdLogs",
+        "tags": [
+          "devices"
+        ],
+        "summary": "GET /admin/v1/devices/{id}/logs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/routes/devices.ts:315",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/admin/v1/devices/{id}/owner": {
       "put": {
         "operationId": "adminPutDevicesByIdOwner",
@@ -4918,7 +5068,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:179",
+        "x-ams-source": "services/api/src/routes/devices.ts:228",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -4930,6 +5080,55 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/devices/{id}/revoke-approval": {
+      "post": {
+        "operationId": "adminPostDevicesByIdRevokeApproval",
+        "tags": [
+          "devices"
+        ],
+        "summary": "POST /admin/v1/devices/{id}/revoke-approval",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/routes/devices.ts:295",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -5547,7 +5746,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:131",
+        "x-ams-source": "services/api/src/routes/history.ts:137",
         "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -5626,7 +5825,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:138",
+        "x-ams-source": "services/api/src/routes/history.ts:144",
         "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -5670,7 +5869,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:153",
+        "x-ams-source": "services/api/src/routes/history.ts:159",
         "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -9351,7 +9550,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/schedule.ts:72",
+        "x-ams-source": "services/api/src/routes/schedule.ts:78",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -9388,7 +9587,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/schedule.ts:79",
+        "x-ams-source": "services/api/src/routes/schedule.ts:85",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "requestBody": {
           "required": true,
@@ -9447,7 +9646,7 @@
           "module": "schedule",
           "action": "delete"
         },
-        "x-ams-source": "services/api/src/routes/schedule.ts:114",
+        "x-ams-source": "services/api/src/routes/schedule.ts:140",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -9494,7 +9693,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/schedule.ts:77",
+        "x-ams-source": "services/api/src/routes/schedule.ts:83",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -9540,7 +9739,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/schedule.ts:99",
+        "x-ams-source": "services/api/src/routes/schedule.ts:105",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "requestBody": {
           "required": true,
@@ -9559,6 +9758,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScheduleSlot"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/schedule/{id}/text": {
+      "put": {
+        "operationId": "adminPutScheduleByIdText",
+        "tags": [
+          "schedule"
+        ],
+        "summary": "PUT /admin/v1/schedule/{id}/text",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "schedule",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/schedule.ts:121",
+        "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutScheduleByIdTextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
                 }
               }
             }
@@ -9634,7 +9892,7 @@
           "module": "screens",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/screens.ts:95",
+        "x-ams-source": "services/api/src/routes/screens.ts:96",
         "description": "Quyền cần có: mô-đun `screens`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -9671,7 +9929,7 @@
           "module": "screens",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/screens.ts:107",
+        "x-ams-source": "services/api/src/routes/screens.ts:144",
         "description": "Quyền cần có: mô-đun `screens`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "requestBody": {
           "required": true,
@@ -9690,6 +9948,94 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Screen"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/screens/signage-config": {
+      "get": {
+        "operationId": "adminGetScreensSignageConfig",
+        "tags": [
+          "screens"
+        ],
+        "summary": "GET /admin/v1/screens/signage-config",
+        "parameters": [],
+        "x-ams-permission": {
+          "module": "screens",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/routes/screens.ts:110",
+        "description": "Quyền cần có: mô-đun `screens`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/screens/signage-config/{kind}": {
+      "put": {
+        "operationId": "adminPutScreensSignageConfigByKind",
+        "tags": [
+          "screens"
+        ],
+        "summary": "PUT /admin/v1/screens/signage-config/{kind}",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "screens",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/screens.ts:114",
+        "description": "Quyền cần có: mô-đun `screens`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
                 }
               }
             }
@@ -9730,7 +10076,7 @@
           "module": "screens",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/screens.ts:100",
+        "x-ams-source": "services/api/src/routes/screens.ts:137",
         "description": "Quyền cần có: mô-đun `screens`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -9776,7 +10122,7 @@
           "module": "screens",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/screens.ts:150",
+        "x-ams-source": "services/api/src/routes/screens.ts:187",
         "description": "Quyền cần có: mô-đun `screens`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "requestBody": {
           "required": true,
@@ -12154,7 +12500,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:131",
+        "x-ams-source": "services/api/src/routes/history.ts:137",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -12233,7 +12579,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:138",
+        "x-ams-source": "services/api/src/routes/history.ts:144",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -12277,7 +12623,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:153",
+        "x-ams-source": "services/api/src/routes/history.ts:159",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -14788,6 +15134,27 @@
         ],
         "additionalProperties": true
       },
+      "AdminPostDevicesByIdApproveRequest": {
+        "type": "object",
+        "properties": {
+          "screen_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "venue_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "additionalProperties": false
+      },
       "AdminPostDevicesByIdCommandsRequest": {
         "type": "object",
         "properties": {
@@ -14803,8 +15170,7 @@
           "ttl_s": {
             "type": "integer",
             "minimum": 60,
-            "maximum": 604800,
-            "default": 3600
+            "maximum": 604800
           },
           "idempotency_key": {
             "type": "string",
@@ -17011,6 +17377,24 @@
         },
         "additionalProperties": true
       },
+      "AdminPutScheduleByIdTextRequest": {
+        "type": "object",
+        "properties": {
+          "header": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "footer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "AdminPutScreensByIdRequest": {
         "type": "object",
         "properties": {
@@ -18040,6 +18424,79 @@
             "items": {
               "type": "string"
             }
+          },
+          "grant_state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "play_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cache_mb": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "px_w": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "px_h": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "orientation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "approved_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "screen": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "venue_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "venue_name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -19959,6 +20416,24 @@
           },
           "color": {
             "type": "number"
+          },
+          "target_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "header": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "footer": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [

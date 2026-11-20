@@ -61,13 +61,27 @@ export const NONCE_RE = /^[A-Za-z0-9_-]{16,64}$/;
 export const B64URL_RE = /^[A-Za-z0-9_-]+$/;
 export const UUID_V7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Ma vung: chu/so/_/- (<= 16). Dau '.' bi cam vi nhom manifest la `<region>.<daypart>.<model_class>`. Chuoi rong = chua cau hinh. */
+export const REGION_RE = /^[A-Za-z0-9_-]{0,16}$/;
+/** Do phan giai khung hinh dang hien thi (da tinh xoay), pixel. Gioi han chong gia tri vo ly lam bung nhom manifest. */
+export const PX_MIN = 64;
+export const PX_MAX = 16384;
+const pxField = z.number().int().min(PX_MIN).max(PX_MAX);
+export const SCREEN_ORIENTATIONS = ['landscape', 'portrait'] as const;
+/** Nguon dang phat (Signage Player): ams (manifest tu may chu), usb, lan. */
+export const PLAY_SOURCES = ['ams', 'usb', 'lan'] as const;
+
 export const registerBody = z.object({
   pubkey: z.string().regex(B64URL_RE).length(43), // 32 byte base64url khong padding
   kind: z.enum(DEVICE_KINDS).default('tv'),
   model: z.string().max(80).optional(),
   os: z.string().max(40).optional(),
   app_version: z.string().max(20).optional(),
-  region: z.string().max(16).optional(),
+  region: z.string().regex(REGION_RE).optional(),
+  /** thang may/LED: do phan giai de chon nhom manifest `elevator_<w>x<h>` khi chua gan screen */
+  px_w: pxField.optional(),
+  px_h: pxField.optional(),
+  orientation: z.enum(SCREEN_ORIENTATIONS).optional(),
 });
 export type RegisterBody = z.infer<typeof registerBody>;
 
@@ -81,6 +95,17 @@ export const heartbeatBody = z.object({
   cache_slots: z.number().int().min(0).optional(),
   manifest_etag: z.string().max(64).optional(),
   cmd_ack: z.array(z.string().max(40)).max(20).optional(),
+  // ---- Signage Player (tuy chon; TV khong can gui). Than heartbeat van <= 2 KB.
+  /** ten khac cua app_ver */
+  app_version: z.string().max(20).optional(),
+  /** ten khac cua cache_used_mb */
+  cache_mb: z.number().int().min(0).max(100_000_000).optional(),
+  /** nguon dang phat: ams | usb | lan */
+  source: z.enum(PLAY_SOURCES).optional(),
+  px_w: pxField.optional(),
+  px_h: pxField.optional(),
+  orientation: z.enum(SCREEN_ORIENTATIONS).optional(),
+  region: z.string().regex(REGION_RE).optional(),
 });
 export type HeartbeatBody = z.infer<typeof heartbeatBody>;
 
@@ -93,6 +118,25 @@ export const commandAckBody = z.object({
     .max(20),
 });
 export type CommandAckBody = z.infer<typeof commandAckBody>;
+
+/** POST /v1/logs: nhat ky thiet bi (toi da 8 KB). */
+export const MAX_LOGS_BODY_BYTES = 8 * 1024;
+export const MAX_LOG_ENTRIES = 100;
+export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
+export const logsBody = z.object({
+  entries: z
+    .array(
+      z.object({
+        ts: z.string().datetime(), // ISO-8601 UTC luc xay ra
+        level: z.enum(LOG_LEVELS).default('info'),
+        tag: z.string().max(32).optional(), // vd play_error, source_switch, net_lost, usb_removed
+        msg: z.string().min(1).max(500),
+      }),
+    )
+    .min(1)
+    .max(MAX_LOG_ENTRIES),
+});
+export type LogsBody = z.infer<typeof logsBody>;
 
 export const impressionEvent = z.object({
   type: z.literal('impression').default('impression'),
@@ -130,6 +174,8 @@ export interface ManifestCreative {
   overlay?: CreativeOverlay;
   media_type: 'video' | 'image';
   size_bytes: number | null;
+  /** CHI thang may/LED: 'cover' (mac dinh) hoac 'fit' */
+  fit?: 'fit' | 'cover';
 }
 export interface ManifestSlot {
   slot_id: string;
@@ -140,6 +186,13 @@ export interface ManifestSlot {
   end_min: number;
   priority: number;
   reward_points: number;
+  /** CHI thang may/LED va CHI khi lich co ghi de: chuoi rong = an; vang mat = dung gia tri cap manifest */
+  header?: string;
+  footer?: string;
+}
+/** Quy tac xoay vong (thang may/LED). Hien chi 'sequential': theo priority tang dan, lap vo han, cung priority theo slot_id. */
+export interface ManifestRotation {
+  mode: 'sequential';
 }
 export const MANIFEST_TZ = 'Asia/Ho_Chi_Minh';
 
@@ -152,6 +205,11 @@ export interface Manifest {
   ttl_s: number;
   creatives: ManifestCreative[];
   schedule: ManifestSlot[];
+  /** ---- CHI thang may/LED (TV khong co cac truong nay) ---- */
+  header?: string;
+  footer?: string;
+  hotline?: string;
+  rotation?: ManifestRotation;
 }
 export interface ManifestDelta {
   version: number;
@@ -163,6 +221,11 @@ export interface ManifestDelta {
   creatives_added: ManifestCreative[];
   creatives_removed: string[];
   schedule: ManifestSlot[]; // lich luon gui day du (nho)
+  /** thang may/LED: cac truong cap manifest luon gui day du (nho), giong ban day du */
+  header?: string;
+  footer?: string;
+  hotline?: string;
+  rotation?: ManifestRotation;
 }
 
 export interface Problem {

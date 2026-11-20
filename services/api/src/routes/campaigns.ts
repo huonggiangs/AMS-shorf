@@ -593,6 +593,7 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       return gone ? c.json({ ok: true }) : c.json({ ok: true, pending: true }, 202);
     }
     await rt.db.tx(async (db) => {
+      await db.run('DELETE FROM schedule_slot_text WHERE slot_id IN (SELECT id FROM schedule_slots WHERE campaign_id = ?)', [row.id]);
       await db.run('DELETE FROM schedule_slots WHERE campaign_id = ?', [row.id]);
       await db.run('DELETE FROM campaign_grants WHERE campaign_id = ?', [row.id]);
       await db.run('UPDATE creatives SET campaign_id = NULL WHERE campaign_id = ?', [row.id]); // giu lai thu vien media

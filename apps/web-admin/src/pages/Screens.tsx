@@ -9,6 +9,7 @@ import type { Col } from '../components/DataTable';
 import { Btn, Field, Kpi, NameCell, Note, PageHead, StatusTag, Tabs, Tag } from '../components/ui';
 import { Dialog } from '../components/Dialog';
 import { useT } from '../i18n';
+import { SignageConfigCard } from '../components/SignageOps';
 
 const EL: Record<string, [number, number, number]> = { '18.5': [18.5, 768, 1366], '21.5': [21.5, 1080, 1920], '23.8': [23.8, 1080, 1920] };
 const LD: Record<string, [number, number]> = { '1.28': [1.28, 0.64], '2.56': [2.56, 1.28], '3.84': [3.84, 1.92], '0.96': [0.96, 1.92] };
@@ -99,6 +100,7 @@ export default function Screens() {
         ) : null}
       </div>
       <Note>Mỗi loại màn hình dùng tệp creative riêng đúng độ phân giải gốc. Màn hình dọc không dùng lại video ngang 16:9; bảng LED không co giãn tự động, hệ thống từ chối tệp sai kích thước. Ảnh thả vào khung chỉ lưu trong phiên trình duyệt.</Note>
+      {can('screens', 'view') ? <SignageConfigCard canWrite={can('screens', 'write')} /> : null}
       <ServerTable id="vn" endpoint="/admin/v1/screens" itemSchema={screenSchema} cols={cols} title="Vị trí lắp đặt" sub="Chung cư, thang máy và bãi đỗ xe" exportName="vi-tri-man-hinh"
         extra={useMemo(() => (T === 'all' ? undefined : { type: T }), [T])}
         filters={[{ key: 'region', label: 'Khu vực', options: ['Hà Nội', 'TP.HCM', 'Đà Nẵng'].map((v) => ({ value: v, label: v })) }]} />

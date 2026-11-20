@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, Note, PageHead } from '../components/ui';
 import { Dialog } from '../components/Dialog';
 import { useT } from '../i18n';
+import { SlotTextDialog } from '../components/SignageOps';
 import { fmtMin, num } from '../lib/format';
 
 const COLORS = ['#005BBF', '#059669', '#D97706', '#0284C7', '#0F172A', '#64748B'];
@@ -25,6 +26,7 @@ export default function Schedule() {
   const act = useAct();
   const qc = useQueryClient();
   const [add, setAdd] = useState(false);
+  const [textSlot, setTextSlot] = useState<Slot | null>(null);
   const slots = useQuery({ queryKey: ['/admin/v1/schedule'], queryFn: () => api.get('/admin/v1/schedule', { query: { page_size: 200 }, schema: listOf(slotSchema) }) });
   const partners = useQuery({ queryKey: ['/admin/v1/partners', 'cards'], queryFn: () => api.get('/admin/v1/partners', { query: { page_size: 50 }, schema: listOf(partnerSchema) }) });
   const canWrite = can('schedule', 'write');
@@ -62,16 +64,17 @@ export default function Schedule() {
       <div className="card cp" style={{ marginBottom: 18 }}>
         <div className="ch"><div><h2>Timeline kéo thả</h2><p>{t('Kéo khối để đổi giờ phát')} · bước 30 phút · Asia/Ho_Chi_Minh</p></div></div>
         {slots.isLoading ? <LoadingBlock /> : slots.isError ? <ErrorBlock error={slots.error} onRetry={() => void slots.refetch()} /> : !slots.data?.items.length ? <EmptyBlock>Chưa có lịch phát nào.</EmptyBlock> : (
-          <Timeline slots={slots.data.items} canWrite={canWrite} onCommit={(s, a, b) => void save(s, a, b)} onPreview={(id, a, b) => qc.setQueryData<{ items: Slot[] }>(['/admin/v1/schedule'], (o) => { return o ? { ...o, items: o.items.map((x) => (x.id === id ? { ...x, start_min: a, end_min: b } : x)) } : o; })} />
+          <Timeline slots={slots.data.items} canWrite={canWrite} onEditText={(s) => setTextSlot(s)} onCommit={(s, a, b) => void save(s, a, b)} onPreview={(id, a, b) => qc.setQueryData<{ items: Slot[] }>(['/admin/v1/schedule'], (o) => { return o ? { ...o, items: o.items.map((x) => (x.id === id ? { ...x, start_min: a, end_min: b } : x)) } : o; })} />
         )}
       </div>
       <Note>Doanh thu theo giờ và giám sát thiết bị trực tiếp sẽ hiện khi máy chủ cung cấp điểm cuối tương ứng.</Note>
       <NewSlot open={add} onClose={() => setAdd(false)} />
+      {textSlot ? <SlotTextDialog key={textSlot.id} slot={textSlot} onClose={() => setTextSlot(null)} /> : null}
     </>
   );
 }
 
-export function Timeline({ slots, canWrite, onCommit, onPreview }: { slots: Slot[]; canWrite: boolean; onCommit: (s: Slot, a: number, b: number) => void; onPreview: (id: string, a: number, b: number) => void }) {
+export function Timeline({ slots, canWrite, onCommit, onPreview, onEditText }: { slots: Slot[]; canWrite: boolean; onCommit: (s: Slot, a: number, b: number) => void; onPreview: (id: string, a: number, b: number) => void; onEditText?: (s: Slot) => void }) {
   const drag = useRef<{ s: Slot; x0: number; w: number; a0: number; b0: number; cur: [number, number] } | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   return (
@@ -79,7 +82,8 @@ export function Timeline({ slots, canWrite, onCommit, onPreview }: { slots: Slot
       <div className="tlh"><span /><div className="tlt">{Array.from({ length: 24 }, (_, i) => <span key={i}>{i}h</span>)}</div></div>
       {slots.map((s, i) => (
         <div className="tlr" key={s.id}>
-          <div style={{ fontSize: 14, paddingRight: 10 }}>{s.name}</div>
+          <div style={{ fontSize: 14, paddingRight: 10 }}>{s.name}
+            {canWrite && onEditText && (s.target_type === 'elevator' || s.target_type === 'led_p5') ? <div><button type="button" className="btn sm" aria-label={`Chữ riêng ${s.name}`} onClick={() => onEditText(s)}>Chữ riêng{s.header != null || s.footer != null ? ' •' : ''}</button></div> : null}</div>
           <div className="lane" data-lane>
             <div
               className={`blk ${dragging === s.id ? 'drag' : ''}`}

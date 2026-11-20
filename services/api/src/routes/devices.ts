@@ -1,18 +1,28 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { REGIONS } from '@ams/shared';
+import { DEVICE_LOG_RETENTION_DAYS, REGIONS } from '@ams/shared';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { conflict, forbidden, notFound, tooMany, unprocessable } from '../lib/errors.js';
 import { redeemPairingCode } from '@ams/edge-gateway/pairing';
-import { dropDeviceCache } from '../lib/manifest.js';
-import { getRt, num, parseBody, placeholders, runList } from '../lib/http.js';
+import { bumpManifest, dropDeviceCache } from '../lib/manifest.js';
+import { eq, getRt, num, parseBody, placeholders, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { hasPerm, requirePerm } from '../auth/middleware.js';
 import { deviceCommandRoutes, deliveryInfo } from './device-commands.js';
 import type { AppEnv } from '../types.js';
 
-const D_SELECT = `d.id, d.name, d.kind, d.model, d.os, d.app_version, d.region_id, d.status, d.last_seen_at, d.views_30d, d.blocked, d.trust_level, d.paired_at, d.created_at, eu.display_name AS owner_name`;
-const D_FROM = 'FROM devices d LEFT JOIN end_users eu ON eu.id = d.user_id';
+// Signage Player: device_profiles (1-1 theo khoa chinh) + man hinh/dia diem da gan (subquery co ORDER BY ... LIMIT 1 de khong nhan doi dong khi du lieu cu co 2 man cung device_id)
+const SCR_ID = '(SELECT sc.id FROM screens sc WHERE sc.device_id = d.id ORDER BY sc.id LIMIT 1)';
+const D_SELECT = `d.id, d.name, d.kind, d.model, d.os, d.app_version, d.region_id, d.status, d.last_seen_at, d.views_30d, d.blocked, d.trust_level, d.paired_at, d.created_at, eu.display_name AS owner_name,
+  p.px_w AS prof_px_w, p.px_h AS prof_px_h, p.orientation AS prof_orientation, p.source AS play_source, p.cache_mb, p.reported_at, p.approved_at, p.approved_by,
+  ${SCR_ID} AS screen_id,
+  (SELECT sc.venue_id FROM screens sc WHERE sc.device_id = d.id ORDER BY sc.id LIMIT 1) AS venue_id,
+  (SELECT v.name FROM screens sc JOIN venues v ON v.id = sc.venue_id WHERE sc.device_id = d.id ORDER BY sc.id LIMIT 1) AS venue_name,
+  (SELECT sc.px_w FROM screens sc WHERE sc.device_id = d.id ORDER BY sc.id LIMIT 1) AS screen_px_w,
+  (SELECT sc.px_h FROM screens sc WHERE sc.device_id = d.id ORDER BY sc.id LIMIT 1) AS screen_px_h`;
+const D_FROM = 'FROM devices d LEFT JOIN end_users eu ON eu.id = d.user_id LEFT JOIN device_profiles p ON p.device_id = d.id';
+export const SIGNAGE_KINDS_SQL = "('elevator','led_p5')";
+const isSignage = (kind: string): boolean => kind === 'elevator' || kind === 'led_p5';
 
 interface DevRow {
   id: string;
@@ -30,6 +40,19 @@ interface DevRow {
   paired_at: string | null;
   created_at: string;
   owner_name: string | null;
+  prof_px_w: number | null;
+  prof_px_h: number | null;
+  prof_orientation: string | null;
+  play_source: string | null;
+  cache_mb: number | null;
+  reported_at: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  screen_id: string | null;
+  venue_id: string | null;
+  venue_name: string | null;
+  screen_px_w: number | null;
+  screen_px_h: number | null;
 }
 
 const REGION_BY_NAME = Object.fromEntries(Object.entries(REGIONS).map(([k, v]) => [v.toLowerCase(), k]));
@@ -41,20 +64,32 @@ const spec: ListSpec = {
   from: D_FROM,
   select: D_SELECT,
   search: ['d.name', 'd.model', 'eu.display_name', 'd.id'],
-  sorts: { name: 'd.name', owner_name: 'eu.display_name', region: 'd.region_id', views: 'd.views_30d', last_seen_at: 'd.last_seen_at', status: 'd.status', created_at: 'd.created_at' },
+  sorts: { name: 'd.name', owner_name: 'eu.display_name', region: 'd.region_id', views: 'd.views_30d', last_seen_at: 'd.last_seen_at', status: 'd.status', created_at: 'd.created_at', app_version: 'd.app_version', trust_level: 'd.trust_level', cache_mb: 'p.cache_mb', source: 'p.source' },
   defaultSort: 'created_at:desc',
   tiebreak: 'd.id',
   filters: {
-    kind: (v) => ({ sql: 'd.kind = ?', params: [v === 'unknown' ? 'virtual' : v] }),
+    // 'signage' = thang may + LED (Signage Player); con lai khop dung kind
+    kind: (v) => (v === 'signage' ? { sql: `d.kind IN ${SIGNAGE_KINDS_SQL}`, params: [] } : { sql: 'd.kind = ?', params: [v === 'unknown' ? 'virtual' : v] }),
+    source: eq('p.source'),
     region: (v) => ({ sql: 'd.region_id = ?', params: [regionCode(v)] }),
     status: (v) => {
       if (v === 'blocked') return { sql: 'd.blocked = 1', params: [] };
-      if (v === 'unpaired') return { sql: 'd.blocked = 0 AND d.paired_at IS NULL', params: [] };
+      // 'unpaired' = TV cho nhap ma 6 so; thang may/LED khong ghep ma ma cho CAP QUYEN ('awaiting_approval')
+      if (v === 'unpaired') return { sql: `d.blocked = 0 AND d.paired_at IS NULL AND d.kind NOT IN ${SIGNAGE_KINDS_SQL}`, params: [] };
+      if (v === 'awaiting_approval') return { sql: `d.blocked = 0 AND d.trust_level = 0 AND d.kind IN ${SIGNAGE_KINDS_SQL}`, params: [] };
       if (v === 'online') return { sql: "d.status = 'active' AND d.blocked = 0", params: [] };
       return { sql: 'd.status = ? AND d.blocked = 0', params: [v] };
     },
   },
 };
+
+/** Cung quy tac voi gateway modelClassOf: TV = 'tv'; thang may/LED = `<loai>_<w>x<h>` neu biet do phan giai, nguoc lai `<loai>`. */
+function classOf(d: DevRow): string {
+  if (!isSignage(d.kind)) return 'tv';
+  const w = num(d.screen_px_w ?? d.prof_px_w, 0);
+  const h = num(d.screen_px_h ?? d.prof_px_h, 0);
+  return w && h ? `${d.kind}_${w}x${h}` : d.kind;
+}
 
 async function present(c: Ctx, rows: DevRow[]): Promise<Record<string, unknown>[]> {
   const rt = getRt(c);
@@ -85,7 +120,19 @@ async function present(c: Ctx, rows: DevRow[]): Promise<Record<string, unknown>[
     status: apiStatus(d),
     trust_level: num(d.trust_level),
     // w-dev: ghep ma (trust 1) tach khoi Xac minh (trust 2): blocked > verified > paired > pending (TV da dang ky, chua nhap ma)
-    pairing_state: d.blocked ? 'blocked' : num(d.trust_level) >= 2 ? 'verified' : d.paired_at ? 'paired' : 'pending',
+    // Thang may/LED (Signage Player): khong ghep ma; blocked > verified > approved (van hanh da cap quyen) > awaiting_approval
+    pairing_state: d.blocked ? 'blocked' : num(d.trust_level) >= 2 ? 'verified' : isSignage(d.kind) ? (num(d.trust_level) >= 1 ? 'approved' : 'awaiting_approval') : d.paired_at ? 'paired' : 'pending',
+    grant_state: isSignage(d.kind) ? (d.blocked ? 'blocked' : num(d.trust_level) >= 1 ? 'granted' : 'awaiting') : null,
+    approved_at: d.approved_at,
+    // nhom manifest: man hinh da gan uu tien, chua gan thi do phan giai thiet bi tu khai
+    model_class: classOf(d),
+    px_w: num(d.screen_px_w ?? d.prof_px_w, 0) || null,
+    px_h: num(d.screen_px_h ?? d.prof_px_h, 0) || null,
+    orientation: d.prof_orientation,
+    play_source: d.play_source,
+    cache_mb: d.cache_mb === null || d.cache_mb === undefined ? null : num(d.cache_mb),
+    reported_at: d.reported_at,
+    screen: d.screen_id ? { id: d.screen_id, venue_id: d.venue_id, venue_name: d.venue_name } : null,
     last_seen_at: d.last_seen_at,
     paired_at: d.paired_at,
     views: num(d.views_30d),
@@ -113,10 +160,12 @@ export function deviceRoutes(): Hono<AppEnv> {
         ? `UPDATE devices SET trust_level = 2, blocked = 0, status = CASE WHEN status = 'checking' THEN 'active' ELSE status END WHERE id IN (${placeholders(ids.length)})`
         : b.action === 'block'
           ? `UPDATE devices SET blocked = 1, trust_level = 0 WHERE id IN (${placeholders(ids.length)})`
-          : `UPDATE devices SET blocked = 0, trust_level = CASE WHEN trust_level = 0 THEN 1 ELSE trust_level END WHERE id IN (${placeholders(ids.length)})`;
+          // mo chan: TV 0 -> 1 nhu cu; thang may/LED KHONG tu len muc 1 (phai qua "Cap quyen" co quyen devices:approve)
+          : `UPDATE devices SET blocked = 0, trust_level = CASE WHEN trust_level = 0 AND kind NOT IN ${SIGNAGE_KINDS_SQL} THEN 1 ELSE trust_level END WHERE id IN (${placeholders(ids.length)})`;
     let updated = 0;
     await rt.db.tx(async (db) => {
       updated = (await db.run(sql, ids)).changes;
+      if (b.action === 'block') await db.run(`UPDATE device_profiles SET approved_at = NULL, approved_by = NULL WHERE device_id IN (${placeholders(ids.length)})`, ids); // chan = thu hoi cap quyen
       await auditCtx(c, db, { action: `device.bulk_${b.action}`, objectType: 'device', objectId: ids.length === 1 ? ids[0]! : null, diff: { requested: ids.length, updated, ids: ids.slice(0, 50) } });
     });
     // gateway cache thiet bi o kv `dev:<id>` (5 phut): xoa de khoa/mo/xac minh co hieu luc ngay
@@ -193,6 +242,95 @@ export function deviceRoutes(): Hono<AppEnv> {
     });
     await dropDeviceCache(rt, [id]);
     return c.json({ device_id: id, owner_name: b.owner_name });
+  });
+
+  // ---------------------------------------------------------------- Cap quyen thiet bi thang may / LED (Signage Player)
+  // Thiet bi khong-TV KHONG ghep bang ma 6 so: tu dang ky (trust 0), hien o trang Thiet bi "Cho cap quyen"; van hanh co quyen devices:approve
+  // bam "Cap quyen" (trust >= 1), tuy chon gan vao mot man hinh (screens) + dia diem (venues). TV van ghep bang ma 6 so (POST /pair).
+  r.post('/:id/approve', requirePerm('devices', 'approve'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const id = c.req.param('id');
+    const b = await parseBody(c, z.object({ screen_id: z.string().trim().min(1).max(64).optional(), venue_id: z.string().trim().min(1).max(64).optional(), name: z.string().trim().min(1).max(100).optional() }).strict());
+    const d = (await rt.db.query<{ id: string; kind: string; blocked: number; trust_level: number; region_id: string | null }>('SELECT id, kind, blocked, trust_level, region_id FROM devices WHERE id = ?', [id]))[0];
+    if (!d) throw notFound('Không tìm thấy thiết bị.');
+    if (!isSignage(d.kind)) throw conflict('Chỉ cấp quyền cho thiết bị thang máy / LED. TV được ghép bằng mã 6 số hiện trên màn hình.', 'use_pairing_code');
+    if (Number(d.blocked) === 1) throw conflict('Thiết bị đang bị chặn. Bỏ chặn trước khi cấp quyền.', 'device_blocked');
+    // man hinh: phai cung loai (thang may <-> elevator, LED <-> led_p5), chua gan cho thiet bi KHAC; neu co venue_id thi phai thuoc dia diem do
+    let screen: { id: string; venue_id: string; type: string; device_id: string | null; region_id: string | null } | undefined;
+    if (b.screen_id || b.venue_id) {
+      const rows = await rt.db.query<{ id: string; venue_id: string; type: string; device_id: string | null; region_id: string | null }>(
+        `SELECT sc.id, sc.venue_id, sc.type, sc.device_id, v.region_id FROM screens sc JOIN venues v ON v.id = sc.venue_id
+          WHERE ${b.screen_id ? 'sc.id = ?' : 'sc.venue_id = ? AND sc.type = ? AND (sc.device_id IS NULL OR sc.device_id = ?)'} ORDER BY CASE WHEN sc.device_id = ? THEN 0 ELSE 1 END, sc.id`,
+        b.screen_id ? [b.screen_id, d.id] : [b.venue_id, d.kind, d.id, d.id],
+      );
+      screen = rows[0];
+      if (!screen) throw b.screen_id ? notFound('Không tìm thấy màn hình.') : conflict('Địa điểm này không còn màn hình trống đúng loại.', 'no_free_screen');
+      if (b.venue_id && screen.venue_id !== b.venue_id) throw unprocessable('Màn hình không thuộc địa điểm đã chọn.', 'screen_venue_mismatch');
+      if (screen.type !== d.kind) throw unprocessable(`Màn hình loại "${screen.type}" không khớp thiết bị loại "${d.kind}".`, 'screen_kind_mismatch');
+      if (screen.device_id && screen.device_id !== d.id) throw conflict('Màn hình này đã gắn với thiết bị khác.', 'screen_taken');
+    }
+    const nowIso = rt.clock.now().toISOString();
+    const prevTrust = num(d.trust_level);
+    await rt.db.tx(async (db) => {
+      await db.run('UPDATE devices SET trust_level = CASE WHEN trust_level >= 1 THEN trust_level ELSE 1 END, status = CASE WHEN status = \'checking\' THEN \'active\' ELSE status END, name = COALESCE(?, name), region_id = ? WHERE id = ?', [b.name ?? null, screen?.region_id ?? d.region_id, d.id]);
+      if (screen) {
+        await db.run('UPDATE screens SET device_id = NULL WHERE device_id = ? AND id <> ?', [d.id, screen.id]); // moi thiet bi mot man hinh
+        await db.run('UPDATE screens SET device_id = ?, state = CASE WHEN state = \'checking\' THEN \'active\' ELSE state END WHERE id = ?', [d.id, screen.id]);
+      }
+      await db.run(
+        `INSERT INTO device_profiles (device_id, approved_at, approved_by) VALUES (?,?,?)
+         ON CONFLICT (device_id) DO UPDATE SET approved_at = excluded.approved_at, approved_by = excluded.approved_by`,
+        [d.id, nowIso, u.id],
+      );
+      await auditCtx(c, db, { action: 'device.approve', objectType: 'device', objectId: d.id, diff: { kind: d.kind, previous_trust: prevTrust, trust_level: Math.max(prevTrust, 1), screen_id: screen?.id ?? null, venue_id: screen?.venue_id ?? null, name: b.name ?? null } });
+    });
+    await dropDeviceCache(rt, [d.id]); // gateway doc trust/man hinh moi ngay (khong cho het bo nho dem)
+    await bumpManifest(rt);
+    const row = (await rt.db.query<DevRow>(`SELECT ${D_SELECT} ${D_FROM} WHERE d.id = ?`, [d.id]))[0]!;
+    return c.json((await present(c, [row]))[0]);
+  });
+
+  // Thu hoi cap quyen: ve trust 0 (proof_of_play moi => pending_trust), go khoi man hinh. Khong xoa du lieu da ghi.
+  r.post('/:id/revoke-approval', requirePerm('devices', 'approve'), async (c) => {
+    const rt = getRt(c);
+    const id = c.req.param('id');
+    const d = (await rt.db.query<{ id: string; kind: string; trust_level: number }>('SELECT id, kind, trust_level FROM devices WHERE id = ?', [id]))[0];
+    if (!d) throw notFound('Không tìm thấy thiết bị.');
+    if (!isSignage(d.kind)) throw conflict('Chỉ thu hồi quyền của thiết bị thang máy / LED.', 'use_pairing_code');
+    let unassigned = 0;
+    await rt.db.tx(async (db) => {
+      await db.run('UPDATE devices SET trust_level = 0 WHERE id = ?', [d.id]);
+      unassigned = (await db.run('UPDATE screens SET device_id = NULL WHERE device_id = ?', [d.id])).changes;
+      await db.run('UPDATE device_profiles SET approved_at = NULL, approved_by = NULL WHERE device_id = ?', [d.id]);
+      await auditCtx(c, db, { action: 'device.revoke_approval', objectType: 'device', objectId: d.id, diff: { previous_trust: num(d.trust_level), screens_unassigned: unassigned } });
+    });
+    await dropDeviceCache(rt, [d.id]);
+    await bumpManifest(rt);
+    const row = (await rt.db.query<DevRow>(`SELECT ${D_SELECT} ${D_FROM} WHERE d.id = ?`, [d.id]))[0]!;
+    return c.json((await present(c, [row]))[0]);
+  });
+
+  // Nhat ky thiet bi (POST /v1/logs cua gateway), giu 7 ngay. Chi doc: devices:view.
+  r.get('/:id/logs', requirePerm('devices', 'view'), async (c) => {
+    const rt = getRt(c);
+    const id = c.req.param('id');
+    if (!(await rt.db.query('SELECT 1 AS x FROM devices WHERE id = ?', [id]))[0]) throw notFound('Không tìm thấy thiết bị.');
+    const cutoff = new Date(rt.clock.now().getTime() - DEVICE_LOG_RETENTION_DAYS * 86400_000).toISOString();
+    const res = await runList<{ id: string; ts: string; received_at: string; level: string; tag: string | null; message: string }>(
+      c,
+      {
+        from: 'FROM device_logs l',
+        select: 'l.id, l.ts, l.received_at, l.level, l.tag, l.message',
+        where: [{ sql: 'l.device_id = ?', params: [id] }, { sql: 'l.ts >= ?', params: [cutoff] }], // chi ma thiet bi nay (khong the doc log thiet bi khac qua id trong URL)
+        search: ['l.message', 'l.tag'],
+        sorts: { ts: 'l.ts' },
+        defaultSort: 'ts:desc',
+        tiebreak: 'l.id',
+        filters: { level: eq('l.level'), tag: eq('l.tag') },
+      },
+    );
+    return c.json({ ...res, retention_days: DEVICE_LOG_RETENTION_DAYS });
   });
 
   r.route('/:id/commands', deviceCommandRoutes());

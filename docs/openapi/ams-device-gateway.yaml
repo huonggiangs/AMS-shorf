@@ -113,7 +113,7 @@ paths:
       security: *a1
       x-ams-source: services/edge-gateway/src/gateway.ts
       summary: Gửi lô sự kiện (tối đa 50, idempotent theo event_id)
-      description: Thân tối đa 16 KB. Impression hợp lệ khi vcr_pct >= ngưỡng; sự kiện không có trong manifest bị từ chối từng cái (`rejected`).
+      description: "Thân tối đa 16 KB. Impression hợp lệ khi vcr_pct >= ngưỡng; sự kiện không có trong manifest bị từ chối từng cái (`rejected`). `proof_of_play` (thang máy/LED): thiết bị đã được cấp quyền => hợp lệ (`valid`); chưa cấp quyền => vẫn lưu với trạng thái `pending_trust` (đếm vào `flagged`, không bị loại, tính lại khi được cấp quyền); không bao giờ sinh doanh thu/thưởng ở gateway."
       parameters:
         - name: x-device-id
           in: header
@@ -169,7 +169,7 @@ paths:
       security: *a1
       x-ams-source: services/edge-gateway/src/gateway.ts
       summary: Nhịp sống + nhận lệnh
-      description: Thân tối đa 2 KB. Trả khoảng nghỉ kế tiếp có jitter, etag manifest và lệnh đang chờ (giao at-least-once; xác nhận qua `cmd_ack` hoặc /v1/commands/ack). 429/503 kèm `Retry-After`.
+      description: Thân tối đa 2 KB. Trả khoảng nghỉ kế tiếp có jitter, etag manifest và lệnh đang chờ (giao at-least-once; xác nhận qua `cmd_ack` hoặc /v1/commands/ack). 429/503 kèm `Retry-After`. Thang máy/LED có thể gửi `source` (ams|usb|lan), `app_version`, `cache_mb`, `px_w`/`px_h`/`orientation`/`region` (tùy chọn); nhận thêm `hotline`, `app_update_url`, `app_update_sha256`, `min_app_version` khi có cấu hình.
       parameters:
         - name: x-device-id
           in: header
@@ -266,6 +266,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InteractionsResponse"
+        "401": *a2
+        "403": *a3
+        "409": *a4
+        "413": *a5
+        "422": *a6
+        "429": *a7
+        "503": *a8
+  /v1/logs:
+    post:
+      operationId: gatewayPostLogs
+      tags:
+        - device
+      security: *a1
+      x-ams-source: services/edge-gateway/src/gateway.ts
+      summary: Gửi nhật ký thiết bị (Signage Player)
+      description: Thân tối đa 8 KB, tối đa 100 dòng. Giới hạn tần suất theo device_id (mặc định 60 lần/giờ, 5000 dòng/ngày; 429 + `Retry-After`). `ts` quá cũ bị kẹp về mốc 7 ngày, tương lai kẹp +5 phút. Lưu 7 ngày; quản trị xem ở ngăn chi tiết thiết bị.
+      parameters:
+        - name: x-device-id
+          in: header
+          required: true
+          schema:
+            type: string
+          description: device_id từ /v1/register
+        - name: x-timestamp
+          in: header
+          required: true
+          schema:
+            type: integer
+          description: epoch giây; lệch máy chủ tối đa 300s
+        - name: x-nonce
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16,64}$
+          description: dùng một lần (chống phát lại)
+        - name: x-signature
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{86}$
+          description: Ed25519, base64url không padding (64 byte)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogsRequest"
+      responses:
+        "200":
+          description: Đã lưu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogsResponse"
         "401": *a2
         "403": *a3
         "409": *a4
@@ -449,7 +505,7 @@ paths:
       security: *a1
       x-ams-source: services/edge-gateway/src/gateway.ts
       summary: Đăng ký thiết bị (idempotent theo pubkey)
-      description: Ký bằng chính khóa riêng tương ứng `pubkey` trong body (không có X-Device-Id). Trả `attestation_nonce` để kiểm chứng. Giới hạn theo IP.
+      description: Ký bằng chính khóa riêng tương ứng `pubkey` trong body (không có X-Device-Id). Trả `attestation_nonce` để kiểm chứng. Giới hạn theo IP. Cùng `pubkey` LUÔN nhận lại cùng `device_id` (200). Thang máy/LED gửi thêm `px_w`, `px_h`, `orientation`, `region` để vào đúng nhóm manifest `elevator_<w>x<h>`; chờ vận hành cấp quyền trên admin (không dùng mã 6 số).
       parameters:
         - name: x-timestamp
           in: header
@@ -942,7 +998,10 @@ components:
         known:
           type: integer
         unknown:
-          type: integer
+          type: array
+          items:
+            type: string
+          description: id khong thuoc thiet bi nay (bo qua, khong loi)
       required:
         - ok
         - acked
@@ -1132,6 +1191,35 @@ components:
             type: string
             maxLength: 40
           maxItems: 20
+        app_version:
+          type: string
+          maxLength: 20
+        cache_mb:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+        source:
+          type: string
+          enum:
+            - ams
+            - usb
+            - lan
+        px_w:
+          type: integer
+          minimum: 64
+          maximum: 16384
+        px_h:
+          type: integer
+          minimum: 64
+          maximum: 16384
+        orientation:
+          type: string
+          enum:
+            - landscape
+            - portrait
+        region:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{0,16}$
       additionalProperties: true
     HeartbeatResponse:
       type: object
@@ -1165,7 +1253,7 @@ components:
               type:
                 type: string
                 pattern: ^[a-z][a-z0-9_.-]{0,39}$
-                description: "Ban dau: refresh_manifest, reboot, set_monitor. Type la: bo qua nhung VAN ack."
+                description: "refresh_manifest, reboot, set_monitor; Signage Player: reset_pin (args rong), set_volume {percent 0-100}, set_orientation {orientation landscape|portrait}, message {text <= 200, duration_s? 3-120}; TV: lock, unlock, message {text, seconds}... Type la: bo qua nhung VAN ack."
               args:
                 type: object
                 additionalProperties: {}
@@ -1173,10 +1261,21 @@ components:
               - id
               - type
             additionalProperties: true
-            description: "Vong doi: pending -> delivered -> acked|failed, hoac expired (TTL 7 ngay). Giao lai sau 120s neu chua ack, toi da 10 lan giao. At-least-once: thiet bi phai idempotent theo id."
+            description: "Vong doi: pending -> delivered -> acked|failed, hoac expired (TTL mac dinh 1 gio theo admin, toi da 7 ngay; reset_pin mac dinh 15 phut, toi da 1 gio). Giao lai sau 120s neu chua ack, toi da 10 lan giao; `id` KHONG DOI khi giao lai. At-least-once: thiet bi phai idempotent theo id."
           description: lenh cho thiet bi, giao at-least-once; ack bang cmd_ack trong heartbeat ke tiep hoac POST /v1/commands/ack
         min_app_version:
           type: string
+        hotline:
+          type: string
+          maxLength: 60
+          description: "CHI thang may/LED, khi co cau hinh: hotline/Zalo hien o man hinh logo (luu de hien ca khi mat mang)"
+        app_update_url:
+          type: string
+          description: "CHI thang may/LED, khi co cau hinh: URL HTTPS tai ban cap nhat app (di kem app_update_sha256)"
+        app_update_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: SHA-256 hex cua tep cap nhat; app PHAI kiem truoc khi cai
       required:
         - ok
         - server_time
@@ -1323,6 +1422,54 @@ components:
       required:
         - items
       additionalProperties: true
+    LogsRequest:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              ts:
+                type: string
+                format: date-time
+              level:
+                type: string
+                enum:
+                  - debug
+                  - info
+                  - warn
+                  - error
+                default: info
+              tag:
+                type: string
+                maxLength: 32
+              msg:
+                type: string
+                minLength: 1
+                maxLength: 500
+            required:
+              - ts
+              - msg
+            additionalProperties: true
+          minItems: 1
+          maxItems: 100
+      required:
+        - entries
+      additionalProperties: true
+    LogsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        stored:
+          type: integer
+          description: so dong da luu
+      required:
+        - ok
+        - stored
+      additionalProperties: true
     Manifest:
       type: object
       properties:
@@ -1435,6 +1582,12 @@ components:
                 type:
                   - number
                   - "null"
+              fit:
+                type: string
+                enum:
+                  - fit
+                  - cover
+                description: "CHI thang may/LED: cach hien trong khung (mac dinh cover)"
             required:
               - id
               - campaign_id
@@ -1470,6 +1623,12 @@ components:
                 type: integer
               reward_points:
                 type: integer
+              header:
+                type: string
+                description: "CHI thang may/LED: ghi de header cap manifest cho lich nay (chuoi rong = an)"
+              footer:
+                type: string
+                description: "CHI thang may/LED: ghi de footer cap manifest cho lich nay (chuoi rong = an)"
             required:
               - slot_id
               - campaign_id
@@ -1480,6 +1639,25 @@ components:
               - priority
               - reward_points
             additionalProperties: true
+        header:
+          type: string
+          description: "CHI thang may/LED: chu header (rong = an)"
+        footer:
+          type: string
+          description: "CHI thang may/LED: chu footer (rong = an)"
+        hotline:
+          type: string
+          description: "CHI thang may/LED: hotline/Zalo (dung khi mat mang)"
+        rotation:
+          type: object
+          properties:
+            mode:
+              type: string
+              const: sequential
+          required:
+            - mode
+          additionalProperties: true
+          description: "CHI thang may/LED: phat tuan tu theo priority tang dan, lap vo han; cung priority theo slot_id"
       required:
         - version
         - group
@@ -1601,6 +1779,12 @@ components:
                 type:
                   - number
                   - "null"
+              fit:
+                type: string
+                enum:
+                  - fit
+                  - cover
+                description: "CHI thang may/LED: cach hien trong khung (mac dinh cover)"
             required:
               - id
               - campaign_id
@@ -1617,6 +1801,7 @@ components:
           type: array
           items:
             type: string
+          description: "creative bi go; thang may/LED: ca id creative DOI noi dung (cung id xuat hien trong creatives_added) de client thay the"
         schedule:
           type: array
           items:
@@ -1640,6 +1825,12 @@ components:
                 type: integer
               reward_points:
                 type: integer
+              header:
+                type: string
+                description: "CHI thang may/LED: ghi de header cap manifest cho lich nay (chuoi rong = an)"
+              footer:
+                type: string
+                description: "CHI thang may/LED: ghi de footer cap manifest cho lich nay (chuoi rong = an)"
             required:
               - slot_id
               - campaign_id
@@ -1650,6 +1841,25 @@ components:
               - priority
               - reward_points
             additionalProperties: true
+        header:
+          type: string
+          description: "CHI thang may/LED: chu header (rong = an)"
+        footer:
+          type: string
+          description: "CHI thang may/LED: chu footer (rong = an)"
+        hotline:
+          type: string
+          description: "CHI thang may/LED: hotline/Zalo (dung khi mat mang)"
+        rotation:
+          type: object
+          properties:
+            mode:
+              type: string
+              const: sequential
+          required:
+            - mode
+          additionalProperties: true
+          description: "CHI thang may/LED: phat tuan tu theo priority tang dan, lap vo han; cung priority theo slot_id"
       required:
         - version
         - group
@@ -1724,7 +1934,20 @@ components:
           maxLength: 20
         region:
           type: string
-          maxLength: 16
+          pattern: ^[A-Za-z0-9_-]{0,16}$
+        px_w:
+          type: integer
+          minimum: 64
+          maximum: 16384
+        px_h:
+          type: integer
+          minimum: 64
+          maximum: 16384
+        orientation:
+          type: string
+          enum:
+            - landscape
+            - portrait
       required:
         - pubkey
       additionalProperties: true

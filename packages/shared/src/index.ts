@@ -12,3 +12,4 @@ export * from './campaign-state.js';
 export * from './pricing.js';
 export * from './compliance.js';
 export * from './contract-doc.js';
+export * from './signage.js';
