@@ -32,12 +32,12 @@ Quy tắc đã mã hóa (`services/api/src/lib/creative.ts`: `VIDEO_RULES`, `DUR
 
 | | Quy tắc | Lỗi (mã) |
 |---|---|---|
-| Codec hình | TV/LED: H.264 (`avc1`/`avc3`) + AAC. **Thang máy: H.264 hoặc H.265 (`hvc1`/`hev1`) + AAC** (bitrate khuyến nghị <= 16 Mbps). AV1, VP9... và H.265 cho TV/LED bị từ chối, tệp bị xóa khỏi kho | 422 `unsupported_codec` |
+| Codec hình | TV/LED: H.264 (`avc1`/`avc3`) + AAC. **Thang máy: H.264 hoặc H.265 (`hvc1`/`hev1`) + AAC; VP9 (`vp09`) được nhận KÈM CẢNH BÁO** (bitrate khuyến nghị <= 16 Mbps). AV1, VP8, MPEG-4 Part 2... bị từ chối (và VP9/H.265 cho TV/LED), tệp bị xóa khỏi kho; thông báo dẫn người dùng tới nút "Tự động chuyển sang chuẩn phát được" ở hộp tải lên | 422 `unsupported_codec` |
 | Độ phân giải video | TV/LED: cạnh dài <= 1920, cạnh ngắn <= 1080 (Full HD). Thang máy: dọc 9:16 từ 720×1280 đến 2160×3840 (4K) | 422 `video_resolution_too_high` / `creative_size_mismatch` |
 | Dung lượng video | **thang máy <= 200 MB (mọi cỡ HD–4K)**, TV <= 100 MB, LED <= 50 MB; khách còn hạn mức tài khoản (mặc định 30 MB/tệp) | 422 `file_too_large` |
 | Thời lượng | TV 5-60 s, thang máy 10-30 s, LED 5-15 s | 422 `duration_out_of_range` |
 | Ảnh | PNG/JPG <= 500 MB (TV) | |
-| Định dạng | MP4 (khuyến nghị), MOV, WebM, PNG, JPG; magic bytes + MIME + kích thước thật | |
+| Định dạng | MP4 (khuyến nghị), MOV, WebM, PNG, JPG; magic bytes + MIME + kích thước thật. MP4/MOV đọc `moov`, WebM đọc EBML (`webm-probe.ts`) để biết codec/kích thước/thời lượng thật | |
 
 Khuyến nghị xuất video: H.264 High, 1920x1080, 24-30 fps, 6-10 Mbps, AAC 128 kbps, `-movflags +faststart`, 15-60 s (ffmpeg: `ffmpeg -i in.mp4 -vf scale=1920:-2 -c:v libx264 -crf 23 -c:a aac -b:a 128k -movflags +faststart out.mp4`).
 
@@ -103,3 +103,22 @@ Khuyến nghị: khách trả tiền, đặc biệt tệp lớn và video, nên 
 - An toàn: danh sách miền cho phép (drive.google.com, docs.google.com, drive.usercontent.google.com, *.googleusercontent.com, dropbox), chặn SSRF, chuyển hướng thủ công và kiểm lại danh sách ở mỗi bước; kiểm Content-Type/magic bytes; URL trực tiếp chỉ bật trên Cloudflare (và test). YouTube: 422 `youtube_unsupported` "Chưa hỗ trợ tải từ YouTube, hãy dùng tệp hoặc Drive".
 - Tiếp tục bằng Range khi bị cắt, tối đa 3 lần thử; cron quét lại tác vụ kẹt. Xong thì dùng chung `finalizeUpload` (head, dò MP4, kiểm quy cách, outbox, tự duyệt nếu đủ điều kiện). Lỗi cụ thể + nút "Thử lại" (`POST /media/:id/import/retry`, audit `media.import_retry`).
 - **Giới hạn đã biết**: nhập 200 MB từ Drive trong Worker tốn nhiều CPU và subrequest; gói **Workers Free** (CPU 10 ms/lần gọi, 50 subrequest) rất có thể không đủ; cần gói **Workers Paid**. Mỗi lần chạy có ngân sách thời gian, hết thì tự xếp hàng lại và tiếp tục bằng Range. Chưa kiểm thử trên production.
+
+## Chuyển mã trên trình duyệt, Drive chẩn đoán, dọn tệp kẹt (20/11/2026)
+
+**Vì sao**: Cloudflare không có ffmpeg nên máy chủ không chuyển mã được; người dùng cơ bản cũng không tự xuất lại H.264. Giải pháp: hộp "Tải nội dung mới" (`apps/web-admin/src/components/UploadDialog.tsx`) tự chuyển ngay trên máy người dùng.
+
+**Chuyển mã (web-admin, nạp lười)**: `lib/transcode-plan.ts` (thuần: đánh giá tệp, chọn thông số), `transcode-core.ts` + `transcode.worker.ts` (mediabunny 1.66.2, MPL-2.0, dùng nguyên bản không sửa: đọc MP4/MOV/WebM/MKV, WebCodecs giải mã AV1/VP9/HEVC/H.264, mã hóa H.264 + AAC, ghi MP4 `fastStart: 'in-memory'` = moov ở đầu tệp), `transcode.ts` (giao diện, huỷ, tiến độ). Chạy trong Web Worker. Không có WebCodecs (Safari cũ, Firefox cũ) thì báo "Hãy dùng Chrome hoặc Edge mới nhất trên máy tính".
+- Tự chọn thông số theo loại màn: thang máy 9:16 mặc định 1080×1920 (tùy chọn HD/2K/4K trong "Chi tiết"), bitrate 4,5/7/11/15 Mbps theo bậc, TV 1920×1080 6 Mbps; ≤ 30 khung/giây, khung chính mỗi 2 giây, AAC 128 kbps; hạ bitrate nếu cần để kết quả ≤ 92% trần dung lượng (200 MB thang máy, 100 MB TV). Video ngang vào màn dọc (hoặc ngược lại): `fit = contain` (vừa khung, viền đen, không cắt, không méo).
+- Bắt buộc chuyển: AV1/VP8/codec lạ, H.265/VP9 cho TV, quá dung lượng, quá độ phân giải, sai tỉ lệ, quá nhỏ. Nên chuyển (mặc định bật, bỏ tích được): VP9 thang máy, tệp không phải MP4, bitrate > 16 Mbps. Video dài hơn trần thời lượng (30 giây thang máy, 60 giây TV): người dùng phải tích "Cắt lấy N giây đầu" (không tự cắt ngầm).
+- Máy chủ KHÔNG tin trình duyệt: mọi tệp vẫn qua `finalizeUpload` (codec, kích thước, thời lượng, dung lượng).
+- Một thanh tiến độ chung: chuyển 0-60% (nếu có), tải lên 60-97%, xác nhận 97-100%. Có Hủy; cảnh báo `beforeunload`.
+
+**Quy tắc codec thang máy** (`videoSpecProblem`, `videoSpecWarnings`): H.264, H.265 nhận; VP9 nhận kèm cảnh báo (`warnings` trong phản hồi `confirm`/`GET /media`, hiện ở thẻ tệp); AV1/VP8/khác chặn. Quyết định này là suy luận từ tài liệu Signage Player (chỉ ghi "H.264 hoặc H.265", từng ghi "AV1/VP9 không phát được trên đa số box"); VP9 chưa được thử trên thiết bị thật. Muốn chặn lại VP9: bỏ `'vp09'` khỏi `VIDEO_RULES.elevatorCodecs`.
+
+**WebM/MOV**: trước đây `finalizeUpload` chỉ kiểm codec MP4; nay MP4, MOV (`probeMp4`) và WebM (`probeWebm`, EBML) đều kiểm codec/kích thước/thời lượng. Nhập liên kết nhận ra WebM (`1A45DFA3`) và MOV (`ftyp qt`). Đây là nguyên nhân thật của lỗi `not_media` với tệp Drive `.webm`: bộ nhận dạng cũ chỉ biết MP4/PNG/JPG nên coi tệp WebM hợp lệ là "không phải video" rồi báo nhầm "không chia sẻ công khai".
+
+**Nhập từ Google Drive** (`lib/media-import.ts`, `lib/drive-resolver.ts`): thử lần lượt `drive.usercontent.google.com/download?id=…&export=download&confirm=t`; nếu nhận HTML thì phân tích (form `download-form` hoặc form tải bất kỳ, mọi `<input name>` kể cả `uuid`, `at`; liên kết `href` có `confirm=`; `downloadUrl` nhúng trong script); rồi `drive.google.com/uc?export=download&id=…` (+ cookie `download_warning_*` thành `confirm=`). Cookie giữ giữa các lần gọi và qua chuyển hướng; User-Agent trình duyệt phổ thông; tối đa 7 lần gọi. Mã lỗi: `drive_login_required` (302 tới accounts.google.com / tiêu đề đăng nhập), `drive_quota` ("Too many users", "quota"), `drive_blocked` (401/403/429), `drive_page_unrecognized` (trang xác nhận không đọc được), `drive_html_unknown`, `source_not_found`, `not_media`, `file_too_large`; khi có nhiều nguyên nhân, ưu tiên quota > đăng nhập > bị chặn > trang không đọc được. Tệp tải được nhưng sai quy cách báo đúng lý do kèm "Tệp này cần chuyển sang H.264. Hãy tải tệp về máy rồi kéo vào ô tải lên, hệ thống sẽ tự chuyển." và nút "Chọn tệp từ máy" ở thẻ.
+- **Chẩn đoán an toàn** (bảng `creative_diag`, migration 0019, và audit `media.import_failed.diff.diag`): mã HTTP, content-type, `<title>`, 200 ký tự đầu đã làm sạch (bỏ script/thẻ, che chuỗi giống token), URL bước cuối và các bước (chỉ tên miền + đường dẫn + TÊN tham số, không giá trị), không cookie. Chỉ trả về cho tài khoản nội bộ (`diag` trong `GET /admin/v1/media`); cổng khách `/portal` không có trường này.
+
+**Dọn tệp kẹt `uploading`**: tệp quá 1 giờ chưa xác nhận (và không có phiên multipart đang mở) tự chuyển `rejected`/`invalid` với lý do "Tải lên không hoàn tất, hãy tải lại.", xóa mảnh trong kho, audit `media.upload_stale`. Chạy bởi cron (Worker mỗi phút, API Node mỗi phút) và đọc lười khi liệt kê (`GET /media`, tối đa 1 lần/60 giây). Phiên multipart đang mở vẫn do `sweepMultipart` (3 giờ). Trang Media: bộ lọc "Đang xử lý" và "Cần chỉnh sửa" có nút "Xóa tất cả tệp bị kẹt/lỗi" (qua `POST /media/bulk-delete`, có hộp xác nhận, gõ XOA khi > 5 tệp; "Đang xử lý" chỉ chọn tệp quá 30 phút hoặc nhập liên kết đã thất bại).

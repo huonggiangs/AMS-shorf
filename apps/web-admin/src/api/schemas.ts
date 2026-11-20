@@ -211,6 +211,11 @@ export const mediaSchema = z
         error_message: z.string().nullish(),
       })
       .nullish(),
+    created_at: z.string().nullish(),
+    /** cảnh báo đơn giản (codec chấp nhận nhưng không tối ưu), mọi người dùng thấy */
+    warnings: z.array(z.string()).default([]),
+    /** chẩn đoán kỹ thuật của lần nhập liên kết thất bại: CHỈ tài khoản nội bộ (admin) nhận được */
+    diag: z.object({ code: z.string().optional(), http: z.number().nullish(), content_type: z.string().nullish(), title: z.string().nullish(), snippet: z.string().nullish(), final_url: z.string().nullish() }).passthrough().nullish(),
   })
   .passthrough();
 export type Media = z.infer<typeof mediaSchema>;

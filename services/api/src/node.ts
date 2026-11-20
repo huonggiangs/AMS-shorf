@@ -5,7 +5,7 @@ import type { Runtime } from '@ams/runtime';
 import { createApp } from './app.js';
 import { sweepAutoApprove } from './lib/auto-approve.js';
 import { createMediaImporter } from './lib/media-import.js';
-import { sweepMultipart } from './lib/transfers.js';
+import { sweepMultipart, sweepStaleUploads } from './lib/transfers.js';
 import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import { mountFinanceRoutes } from './finance-mount.js';
 import type { FinancePort } from './ports.js';
@@ -83,6 +83,7 @@ function startOutboxWorker(rt: Runtime, port: () => FinancePort | undefined, env
         lastMedia = Date.now();
         await importer.sweep(); // nhap tu lien ket bi ket -> dat lai viec
         await sweepMultipart(rt); // phien tai tung phan het han -> huy
+        await sweepStaleUploads(rt); // tep ket 'uploading' qua 1 gio
       })
       .catch((e) => console.error('[api] outbox loi:', (e as Error).message))
       .finally(() => (busy = false));

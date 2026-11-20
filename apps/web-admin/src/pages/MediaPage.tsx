@@ -1,20 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_BASE, api, errMsg, putBlob } from '../api/client';
-import { bulkDeleteResultSchema, customerSchema, listOf, mediaSchema, uploadUrlSchema, type BulkDeleteResult, type Media } from '../api/schemas';
+import { bulkDeleteResultSchema, listOf, mediaSchema, type BulkDeleteResult, type Media } from '../api/schemas';
 import { useAct, useBase } from '../api/hooks';
 import { useAuth } from '../auth/AuthProvider';
 import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, PageHead, StatusTag, Tabs } from '../components/ui';
 import { Dialog } from '../components/Dialog';
 import { PromptDialog } from '../components/Prompt';
 import { reasonText } from './CreativeReview';
-import { OverlayForm, emptyOverlay, overlayError, overlayPayload, AD_FORMAT_OPTIONS } from '../components/OverlayForm';
+import { AD_FORMAT_OPTIONS } from '../components/OverlayForm';
 import { useT } from '../i18n';
-import { checkMediaUrl, isElevatorDims, videoLimitMb, type LinkSource } from '../lib/creative';
-import { UploadError, uploadMultipart, type MultipartOptions, type UploadProgress } from '../lib/multipart';
-import { captureThumbnail, pickBackfill, resolveThumbUrl, thumbSupported, uploadDoneMessage } from '../lib/thumbnail';
+import { fmtBytes, redactUrl, uploadToStore } from '../lib/upload';
+import { UploadDialog, UPLOAD_LIMIT_TEXT } from '../components/UploadDialog';
+export { fmtBytes, redactUrl, uploadToStore, UploadDialog, UPLOAD_LIMIT_TEXT };
+import { captureThumbnail, pickBackfill, resolveThumbUrl, thumbSupported } from '../lib/thumbnail';
 
 const PAGE = 9;
+/** Tệp 'Đang xử lý' coi là kẹt: tạo hơn 30 phút trước mà không còn tiến độ chạy, hoặc nhập liên kết đã thất bại. */
+export const STUCK_AFTER_MS = 30 * 60_000;
+export function isStuck(m: Pick<Media, 'status' | 'created_at' | 'transfer'>, nowMs: number): boolean {
+  if (m.status !== 'processing') return false;
+  if (m.transfer?.status === 'failed') return true;
+  const t = m.created_at ? Date.parse(m.created_at) : NaN;
+  return Number.isFinite(t) && nowMs - t > STUCK_AFTER_MS && !(m.transfer && ['queued', 'running', 'open'].includes(m.transfer.status));
+}
+/** Mã lỗi nhập liên kết mà việc chuyển sang H.264 trên máy tính sửa được (máy chủ không chuyển mã được). */
+export const CONVERT_ERROR_CODES = ['unsupported_codec', 'video_resolution_too_high', 'file_too_large', 'creative_size_mismatch'];
 /** Xóa hàng loạt: tối đa 200 tệp mỗi lần gọi API (máy chủ giới hạn), quá 5 tệp phải gõ XOA để xác nhận. */
 export const BULK_DELETE_MAX = 200;
 export const BULK_CONFIRM_ABOVE = 5;
@@ -25,54 +36,7 @@ export const chunkIds = (ids: string[], n = BULK_DELETE_MAX): string[][] => {
   for (let i = 0; i < ids.length; i += n) out.push(ids.slice(i, i + n));
   return out;
 };
-export const fmtBytes = (n: number): string => (n >= 1073741824 ? `${(n / 1073741824).toFixed(2)} GB` : `${(n / 1048576).toFixed(1)} MB`);
 type Picked = Record<string, { name: string; size: number }>;
-const MAX_IMAGE_BYTES = 500 * 1024 * 1024;
-/** Giới hạn tải lên hiển thị cho người dùng (khớp services/api/src/lib/creative.ts + docs/CLOUDFLARE-MEDIA-LIMITS.md). Tệp > 90 MB tải từng phần (32 MiB/phần) qua Worker khi kho chưa có khóa S3. */
-export const UPLOAD_LIMIT_TEXT = 'Video TV/LED: H.264 + AAC, tối đa 1920×1080 (Full HD), tối đa 100 MB; không nhận AV1/H.265/4K cho TV vì TV không phát ổn định và hệ thống không chuyển mã được. TV: 16:9, 5–60 giây. Thang máy: dọc 9:16 từ HD 720×1280 đến 4K 2160×3840 (gồm 768×1366, 1080×1920, 1440×2560), video H.264 hoặc H.265 + AAC, bitrate khuyến nghị ≤ 16 Mbps, 10–30 giây, tối đa 200 MB. LED: đúng kích thước bảng, 5–15 giây, tối đa 50 MB. Ảnh PNG/JPG tối đa 500 MB. Tệp lớn hơn 90 MB được tải lên từng phần (hiện % tiến độ, có thể hủy). Khách hàng còn bị giới hạn theo hạn mức tải lên của tài khoản.';
-
-/** Che chu ky/tham so cua URL ky truoc khi ghi console (chi giu origin + duong dan). */
-export function redactUrl(raw: string): string {
-  try {
-    const x = new URL(raw, window.location.origin);
-    return `${x.origin}${x.pathname}${x.search ? '?…' : ''}`;
-  } catch {
-    return '(url?)';
-  }
-}
-
-/**
- * Gui tep len kho. `via='proxy'` (mac dinh tren Cloudflare khi chua co khoa S3): PUT cung origin toi API (phien + CSRF), khong can CORS.
- * `via='multipart'`: tep > 90 MB, tai TUNG PHAN (<= 32 MiB) tuan tu qua API, thu lai 3 lan/phan, hien tien do, huy duoc (lib/multipart.ts).
- * `via='direct'`: PUT toi URL ky cua R2. Loi co ma ngan de chan doan: UP-NET (mang/CORS), UP-403 (kho tu choi chu ky/khoa), UP-<status>, UP-PART-<n>-<status>, hoac ma loi cua API.
- */
-export async function uploadToStore(mediaBase: string, u: { id: string; url: string; method?: string | undefined; headers?: Record<string, string> | undefined; via?: 'direct' | 'proxy' | 'multipart' | undefined }, file: File, opts: MultipartOptions = {}): Promise<void> {
-  if (u.via === 'multipart') {
-    await uploadMultipart(mediaBase, u.id, file, opts);
-    return;
-  }
-  if (u.via === 'proxy') {
-    try {
-      await putBlob(`${mediaBase}/${u.id}/content`, file);
-    } catch (e) {
-      console.error('[upload] proxy that bai', { via: 'proxy', target: `${mediaBase}/${u.id}/content`, status: (e as { status?: number }).status, code: (e as { code?: string }).code });
-      const code = (e as { code?: string }).code ?? 'UP-NET';
-      throw new Error(`${errMsg(e)} (mã ${code})`);
-    }
-    return;
-  }
-  let put: Response;
-  try {
-    put = await fetch(u.url, { method: u.method ?? 'PUT', headers: { 'Content-Type': file.type, ...(u.headers ?? {}) }, body: file });
-  } catch (e) {
-    console.error('[upload] khong ket noi duoc kho', { via: 'direct', target: redactUrl(u.url), error: (e as Error).message });
-    throw new Error('Không tải được tệp lên kho lưu trữ (mất kết nối hoặc kho chưa cho phép tải từ trình duyệt: CORS). Kiểm tra mạng và thử lại; nếu vẫn lỗi, báo quản trị cấu hình CORS cho kho R2. (mã UP-NET)');
-  }
-  if (!put.ok) {
-    console.error('[upload] kho tu choi', { via: 'direct', target: redactUrl(u.url), status: put.status });
-    throw new Error(put.status === 403 ? 'Kho từ chối chữ ký/khóa tải lên (mã UP-403). Nếu bạn chọn tệp từ hơn 15 phút trước, hãy tải lại; nếu vẫn lỗi, báo quản trị kiểm tra khóa R2.' : `Tải lên kho lưu trữ thất bại (mã UP-${put.status}).`);
-  }
-}
 
 /** Tao anh dai dien cho tep da tai truoc day: lay URL ky GET -> canvas -> PUT. Tra ve true neu thanh cong. Khong nem loi. */
 async function backfillThumb(base: string, m: { id: string; mime?: string | null; duration_sec?: number | null }): Promise<boolean> {
@@ -97,6 +61,7 @@ export default function MediaPage() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [up, setUp] = useState(false);
+  const [autoPick, setAutoPick] = useState(false);
   const [rej, setRej] = useState<string | null>(null);
   const [rev, setRev] = useState<string | null>(null);
   const canDelete = can('media', 'delete') && !base.isExternal;
@@ -142,25 +107,34 @@ export default function MediaPage() {
   const toggle = (m: Media) => setPicked((p) => { const n = { ...p }; if (n[m.id]) delete n[m.id]; else n[m.id] = { name: m.name, size: m.size_bytes ?? 0 }; return n; });
   const togglePage = () => setPicked((p) => { const n = { ...p }; for (const m of pageItems) { if (pageAllOn) delete n[m.id]; else n[m.id] = { name: m.name, size: m.size_bytes ?? 0 }; } return n; });
   // "Chọn tất cả" theo bộ lọc hiện tại: lấy mọi trang khớp bộ lọc/ô tìm (tối đa SELECT_ALL_CAP tệp)
-  const pickAllFiltered = async () => {
+  const pickAllFiltered = async (keep?: (m: Media) => boolean): Promise<number> => {
     setAllBusy(true);
     try {
       const n: Picked = {};
       for (let pg = 1; Object.keys(n).length < SELECT_ALL_CAP; pg++) {
         const r = await api.get(base.media, { query: { page: pg, page_size: 200, q, filter: status ? `status:${status}` : undefined }, schema: listOf(mediaSchema) });
-        for (const m of r.items) n[m.id] = { name: m.name, size: m.size_bytes ?? 0 };
+        for (const m of r.items) if (!keep || keep(m)) n[m.id] = { name: m.name, size: m.size_bytes ?? 0 };
         if (r.items.length < 200 || pg * 200 >= r.total) break;
       }
       setPicked(n);
+      return Object.keys(n).length;
     } catch (e) {
       await act(async () => { throw e; });
+      return 0;
     } finally {
       setAllBusy(false);
     }
   };
+  // "Xóa tất cả tệp lỗi/kẹt": chỉ ở bộ lọc "Đang xử lý" (tệp đã kẹt quá 30 phút hoặc nhập liên kết thất bại) và "Cần chỉnh sửa" (mọi tệp bị từ chối); luôn qua hộp xác nhận
+  const stuckFilter = status === 'processing' || status === 'rejected';
+  const deleteStuck = async () => {
+    const n = await pickAllFiltered(status === 'processing' ? (m) => isStuck(m, Date.now()) : undefined);
+    if (n > 0) setDelOpen(true);
+    else await act(async () => undefined, status === 'processing' ? 'Không có tệp nào bị kẹt (các tệp đang xử lý còn mới).' : 'Không có tệp lỗi nào.');
+  };
   return (
     <>
-      <PageHead title="Nội dung & Media" sub="Kho tệp quảng cáo và trạng thái kiểm duyệt." actions={can('media', 'write') ? <Btn tone="p" icon="plus" onClick={() => setUp(true)}>{t('Tải nội dung mới')}</Btn> : null} />
+      <PageHead title="Nội dung & Media" sub="Kho tệp quảng cáo và trạng thái kiểm duyệt." actions={can('media', 'write') ? <Btn tone="p" icon="plus" onClick={() => { setAutoPick(false); setUp(true); }}>{t('Tải nội dung mới')}</Btn> : null} />
       <div className="tb" style={{ marginBottom: 12, background: 'none', padding: 0 }}>
         <label className="sr"><input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder={t('Tìm…')} aria-label={t('Tìm…')} /></label>
         <Tabs value={status} onChange={(v) => { setStatus(v); setPage(1); }} items={[{ id: '', label: 'Tất cả' }, { id: 'processing', label: 'Đang xử lý' }, { id: 'pending', label: 'Chờ duyệt' }, { id: 'approved', label: 'Đã duyệt' }, { id: 'rejected', label: 'Cần chỉnh sửa' }]} />
@@ -170,20 +144,21 @@ export default function MediaPage() {
           <Btn className="sm" onClick={togglePage}>{pageAllOn ? 'Bỏ chọn trang này' : 'Chọn tất cả trang này'}</Btn>
           {(query.data?.total ?? 0) > pageItems.length ? <Btn className="sm" disabled={allBusy} onClick={() => void pickAllFiltered()}>{allBusy ? 'Đang chọn…' : `Chọn tất cả ${query.data?.total} tệp (theo bộ lọc hiện tại)`}</Btn> : null}
           {pickedIds.length ? <Btn className="sm" onClick={() => setPicked({})}>Bỏ chọn tất cả</Btn> : null}
+          {stuckFilter ? <Btn tone="d" className="sm" disabled={allBusy} onClick={() => void deleteStuck()}>{status === 'processing' ? 'Xóa tất cả tệp bị kẹt' : 'Xóa tất cả tệp lỗi'}</Btn> : null}
           <span aria-live="polite" style={{ color: 'var(--mut)', fontSize: 13 }}>{pickedIds.length ? `Đã chọn ${pickedIds.length} tệp` : 'Chưa chọn tệp nào'}</span>
           <Btn tone="d" className="sm" disabled={!pickedIds.length} onClick={() => setDelOpen(true)}>{`Xóa đã chọn${pickedIds.length ? ` (${pickedIds.length})` : ''}`}</Btn>
         </div>
       ) : null}
       {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.items.length ? <EmptyBlock /> : (
         <div className="g g3">
-          {query.data.items.map((m) => <MediaCard key={m.id} m={m} canApprove={canApprove} selectable={canDelete} selected={!!picked[m.id]} onToggle={() => toggle(m)} onMakeThumb={canWrite && thumbSupported() ? () => void makeThumb(m) : undefined} onReview={() => setRev(m.id)} onAction={(a) => void act(() => api.post(`${base.media}/${m.id}/${a === 'retry' ? 'import/retry' : a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : a === 'retry' ? 'Đã xếp lại việc tải từ liên kết.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.')} onApprove={() => void act(() => api.post(`${base.media}/${m.id}/approve`), 'Đã duyệt media.')} onReject={() => setRej(m.id)} />)}
+          {query.data.items.map((m) => <MediaCard key={m.id} m={m} canApprove={canApprove} internal={!base.isExternal} onPickFile={canWrite ? () => { setAutoPick(true); setUp(true); } : undefined} selectable={canDelete} selected={!!picked[m.id]} onToggle={() => toggle(m)} onMakeThumb={canWrite && thumbSupported() ? () => void makeThumb(m) : undefined} onReview={() => setRev(m.id)} onAction={(a) => void act(() => api.post(`${base.media}/${m.id}/${a === 'retry' ? 'import/retry' : a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : a === 'retry' ? 'Đã xếp lại việc tải từ liên kết.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.')} onApprove={() => void act(() => api.post(`${base.media}/${m.id}/approve`), 'Đã duyệt media.')} onReject={() => setRej(m.id)} />)}
         </div>
       )}
       <div className="tf" style={{ background: 'none' }}>
         <span>{query.data?.total ?? 0} tệp</span>
         <div className="pg">{Array.from({ length: pages }, (_, i) => <button key={i} type="button" className={i + 1 === page ? 'on' : ''} onClick={() => setPage(i + 1)}>{i + 1}</button>)}</div>
       </div>
-      <UploadDialog open={up} onClose={() => setUp(false)} />
+      <UploadDialog open={up} autoPick={autoPick} onClose={() => { setUp(false); setAutoPick(false); }} />
       {delOpen ? <DeleteSelectedDialog items={Object.entries(picked).map(([id, v]) => ({ id, ...v }))} onClose={() => setDelOpen(false)} onDone={(ids) => setPicked((p) => { const n = { ...p }; for (const id of ids) delete n[id]; return n; })} /> : null}
       {rev ? <ReviewDialog id={rev} onClose={() => setRev(null)} /> : null}
       <PromptDialog open={!!rej} title="Trả lại media" label="Lý do (khách hàng nhận email kèm lý do)" onClose={() => setRej(null)} onSubmit={async (reason) => { if (rej) await act(() => api.post(`${base.media}/${rej}/reject`, { body: { reason } }), 'Đã trả lại.'); }} />
@@ -191,7 +166,7 @@ export default function MediaPage() {
   );
 }
 
-function MediaCard({ m, canApprove, selectable, selected, onToggle, onMakeThumb, onApprove, onReject, onReview, onAction }: { m: Media; canApprove: boolean; selectable?: boolean; selected?: boolean; onToggle?: () => void; onMakeThumb?: (() => void) | undefined; onApprove: () => void; onReject: () => void; onReview: () => void; onAction: (a: 'confirm' | 'recheck' | 'retry') => void }) {
+function MediaCard({ m, canApprove, internal, selectable, selected, onToggle, onMakeThumb, onApprove, onReject, onReview, onAction, onPickFile }: { m: Media; canApprove: boolean; internal?: boolean; onPickFile?: () => void; selectable?: boolean; selected?: boolean; onToggle?: () => void; onMakeThumb?: (() => void) | undefined; onApprove: () => void; onReject: () => void; onReview: () => void; onAction: (a: 'confirm' | 'recheck' | 'retry') => void }) {
   const t = useT();
   const fmtLabel = m.format && m.format !== 'fullscreen' ? AD_FORMAT_OPTIONS.find((o) => o.id === m.format)?.label : null;
   const meta = [m.mime?.split('/')[1]?.toUpperCase(), fmtLabel, m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_sec ? `${m.duration_sec} giây` : null].filter(Boolean).join(' · ');
@@ -210,7 +185,9 @@ function MediaCard({ m, canApprove, selectable, selected, onToggle, onMakeThumb,
           <StatusTag status={m.status} />
           {m.status === 'pending' && canApprove && !m.blocker ? <span><Btn tone="p" className="sm" onClick={onApprove}>{t('Duyệt')}</Btn> <Btn className="sm" onClick={onReject}>{t('Trả lại')}</Btn></span> : null}
         </div>
-        {m.status !== 'approved' && m.blocker ? <Blocker m={m} canApprove={canApprove} onReview={onReview} onAction={onAction} onReject={onReject} /> : null}
+        {m.warnings?.length ? <ul aria-label="Lưu ý về tệp" style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12.5, color: 'var(--warn, #B45309)' }}>{m.warnings.map((w) => <li key={w}>{w}</li>)}</ul> : null}
+        {m.status !== 'approved' && m.blocker ? <Blocker m={m} canApprove={canApprove} onReview={onReview} onAction={onAction} onReject={onReject} onPickFile={onPickFile} /> : null}
+        {internal && m.diag ? <DiagBox d={m.diag} /> : null}
       </div>
     </div>
   );
@@ -304,8 +281,24 @@ export function TransferBar({ m }: { m: Media }) {
   );
 }
 
+/** Chẩn đoán kỹ thuật của lần nhập liên kết thất bại (CHỈ nhân viên nội bộ; máy chủ không gửi cho khách). */
+function DiagBox({ d }: { d: NonNullable<Media['diag']> }) {
+  return (
+    <details style={{ marginTop: 8, fontSize: 12.5 }}>
+      <summary style={{ cursor: 'pointer' }}>Chi tiết kỹ thuật (quản trị)</summary>
+      <dl style={{ margin: '6px 0 0', color: 'var(--mut)' }}>
+        <div>Mã: {d.code ?? '—'} · HTTP: {d.http ?? '—'}</div>
+        <div>Loại nội dung: {d.content_type ?? '—'}</div>
+        <div>Tiêu đề trang: {d.title ?? '—'}</div>
+        <div>Đoạn đầu: {d.snippet ?? '—'}</div>
+        <div>Địa chỉ cuối: {d.final_url ?? '—'}</div>
+      </dl>
+    </details>
+  );
+}
+
 /** Giải thích vì sao tệp chưa duyệt được + nút việc cần làm (xác nhận lại / kiểm tra lại / xem và duyệt tay). */
-function Blocker({ m, canApprove, onReview, onAction, onReject }: { m: Media; canApprove: boolean; onReview: () => void; onAction: (a: 'confirm' | 'recheck' | 'retry') => void; onReject: () => void }) {
+function Blocker({ m, canApprove, onReview, onAction, onReject, onPickFile }: { m: Media; canApprove: boolean; onReview: () => void; onAction: (a: 'confirm' | 'recheck' | 'retry') => void; onReject: () => void; onPickFile?: (() => void) | undefined }) {
   const b = m.blocker!;
   return (
     <div role="status" aria-label="Vì sao chưa duyệt được" style={{ marginTop: 10, padding: '10px 12px', borderRadius: 12, background: 'var(--warn-t, #FEF3C7)', fontSize: 13 }}>
@@ -314,7 +307,8 @@ function Blocker({ m, canApprove, onReview, onAction, onReject }: { m: Media; ca
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
         {b.action === 'manual_review' && canApprove ? <Btn tone="p" className="sm" onClick={onReview}>Xem và duyệt</Btn> : null}
         {b.action === 'manual_review' && !canApprove ? <span>Cần người có quyền duyệt xem tệp.</span> : null}
-        {b.action === 'retry' ? <Btn tone="p" className="sm" onClick={() => onAction('retry')}>Thử lại</Btn> : null}
+        {b.action === 'retry' && onPickFile && CONVERT_ERROR_CODES.includes(m.transfer?.error_code ?? '') ? <Btn tone="p" className="sm" onClick={onPickFile}>Chọn tệp từ máy</Btn> : null}
+        {b.action === 'retry' && !CONVERT_ERROR_CODES.includes(m.transfer?.error_code ?? '') ? <Btn tone="p" className="sm" onClick={() => onAction('retry')}>Thử lại</Btn> : null}
         {b.action === 'confirm' ? <Btn className="sm" onClick={() => onAction('confirm')}>Xác nhận lại</Btn> : null}
         {b.action === 'recheck' || b.action === 'manual_review' ? <Btn className="sm" onClick={() => onAction('recheck')}>Kiểm tra lại</Btn> : null}
         {b.action === 'recheck' && canApprove ? <Btn className="sm" onClick={onReject}>Trả lại</Btn> : null}
@@ -376,144 +370,6 @@ function ReviewDialog({ id, onClose }: { id: string; onClose: () => void }) {
         <div className="da" style={{ marginTop: 14 }}>
           <button type="button" className="btn" onClick={onClose}>Đóng</button>
           <button type="submit" className={`btn ${mode === 'approve' ? 'p' : 'd'}`} disabled={busy || !m}>{mode === 'approve' ? 'Duyệt tệp' : 'Trả lại'}</button>
-        </div>
-      </form>
-    </Dialog>
-  );
-}
-
-const readDims = (f: File): Promise<{ width?: number; height?: number; duration_sec?: number }> =>
-  new Promise((res) => {
-    const url = URL.createObjectURL(f);
-    const done = (v: { width?: number; height?: number; duration_sec?: number }) => { URL.revokeObjectURL(url); res(v); };
-    if (f.type.startsWith('image/')) {
-      const i = new Image();
-      i.onload = () => done({ width: i.naturalWidth, height: i.naturalHeight });
-      i.onerror = () => done({});
-      i.src = url;
-    } else if (f.type.startsWith('video/')) {
-      const v = document.createElement('video');
-      v.preload = 'metadata';
-      v.onloadedmetadata = () => done({ width: v.videoWidth, height: v.videoHeight, duration_sec: Math.round(v.duration) });
-      v.onerror = () => done({});
-      v.src = url;
-    } else done({});
-  });
-
-export function UploadDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const t = useT();
-  const base = useBase();
-  const act = useAct();
-  const [mode, setMode] = useState<'file' | LinkSource>('file');
-  const [file, setFile] = useState<File | null>(null);
-  const [url, setUrl] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const [customerId, setCustomerId] = useState('');
-  const [ov, setOv] = useState(emptyOverlay());
-  const [progress, setProgress] = useState<UploadProgress | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  // phien tai tung phan dang do (mat mang/loi phan): bam Tai len lai voi CUNG tep thi tiep tuc tu phan do, khong tao tep moi
-  const resumeRef = useRef<{ key: string; u: { id: string; url: string; via?: 'direct' | 'proxy' | 'multipart' | undefined } } | null>(null);
-  const custs = useQuery({ queryKey: ['/admin/v1/customers', 'pick'], enabled: open && !base.isExternal, queryFn: () => api.get('/admin/v1/customers', { query: { page_size: 200 }, schema: listOf(customerSchema) }) });
-  const linkCheck = mode !== 'file' && url ? checkMediaUrl(mode, url) : null;
-
-  const submit = async () => {
-    setErr('');
-    if (!base.isExternal && !customerId) return setErr('Chọn khách hàng sở hữu nội dung này.');
-    const oe = overlayError(ov);
-    if (oe) return setErr(oe);
-    setBusy(true);
-    let doneStatus: string | null = null;
-    try {
-      if (mode === 'file') {
-        if (!file) throw new Error('Chọn một tệp.');
-        const isVideoFile = file.type.startsWith('video/');
-        if (!/^(video\/(mp4|quicktime|webm)|image\/(png|jpeg))$/.test(file.type)) throw new Error('Chỉ nhận MP4, MOV, WebM, PNG hoặc JPG.');
-        const dims = await readDims(file);
-        const elevator = isElevatorDims(dims.width, dims.height);
-        const limitMb = isVideoFile ? videoLimitMb(dims.width, dims.height) : MAX_IMAGE_BYTES / 1048576;
-        if (file.size > limitMb * 1048576) throw new Error(`Tệp ${(file.size / 1048576).toFixed(0)} MB lớn hơn giới hạn ${limitMb} MB${isVideoFile ? (elevator ? ' cho video thang máy' : ' cho video TV/LED') : ''}. Hãy xuất lại video H.264/H.265 với bitrate thấp hơn (khoảng 8–16 Mbps), cắt ngắn rồi tải lên.`);
-        if (isVideoFile && !elevator && dims.width && dims.height && (Math.max(dims.width, dims.height) > 1920 || Math.min(dims.width, dims.height) > 1080)) throw new Error(`Video ${dims.width}×${dims.height} vượt Full HD 1920×1080 (TV/LED). Thang máy nhận video dọc 9:16 từ 720×1280 đến 2160×3840. Hãy xuất lại ở 1080p (H.264 + AAC) rồi tải lên.`);
-        const fkey = `${file.name}|${file.size}|${file.lastModified}`;
-        let u = resumeRef.current?.key === fkey ? resumeRef.current.u : null;
-        if (!u) {
-          u = await api.post(`${base.media}/upload-url`, { body: { name: file.name, content_type: file.type, size_bytes: file.size, ...dims, ...(customerId ? { customer_id: customerId } : {}), format: ov.format, ...(overlayPayload(ov) ? { overlay: overlayPayload(ov) } : {}) }, schema: uploadUrlSchema });
-        }
-        const ctl = new AbortController();
-        abortRef.current = ctl;
-        setProgress(u.via === 'multipart' ? { loaded: 0, total: file.size, percent: 0, part: 1, totalParts: 0 } : null);
-        try {
-          await uploadToStore(base.media, u, file, { signal: ctl.signal, onProgress: setProgress });
-          resumeRef.current = null;
-        } catch (e) {
-          // loi mang/phan: giu phien de tai lai tiep tuc; het han/da huy/khong con quyen: bo phien
-          const code = e instanceof UploadError ? e.code : '';
-          resumeRef.current = u.via === 'multipart' && /^UP-(PART|COMPLETE)-/.test(code) && !/-(401|403|404|409|422)$/.test(code) ? { key: fkey, u } : null;
-          throw e;
-        } finally {
-          abortRef.current = null;
-          setProgress(null);
-        }
-        const confirmed = (await api.post(`${base.media}/${u.id}/confirm`, { body: { ...dims } })) as { status?: string } | null;
-        doneStatus = confirmed?.status ?? null;
-        // Anh dai dien tao tai trinh duyet (khung ~1 s, rong 320 px, JPEG ~0,7); loi o day KHONG lam hong viec tai len.
-        if (thumbSupported()) {
-          try {
-            const tb = await captureThumbnail(file, file.type, { durationSec: dims.duration_sec });
-            if (tb) await putBlob(`${base.media}/${u.id}/thumbnail`, tb);
-          } catch { /* im lang: se tu tao lai khi mo trang Media */ }
-        }
-      } else {
-        const c = checkMediaUrl(mode, url);
-        if (!c.ok) throw new Error(c.message);
-        await api.post(`${base.media}/import`, { body: { source: mode, url: url.trim(), ...(customerId ? { customer_id: customerId } : {}) } });
-        doneStatus = 'importing';
-      }
-      await act(async () => undefined, doneStatus === 'importing' ? 'Đã gửi yêu cầu tải từ liên kết. Tiến độ hiện ở thẻ tệp (tự cập nhật); nếu lỗi sẽ có nút Thử lại.' : uploadDoneMessage(doneStatus), [base.media, '/admin/v1/media', '/portal/v1/media']);
-      setFile(null); setUrl(''); setOv(emptyOverlay());
-      onClose();
-    } catch (e) {
-      setErr(e instanceof UploadError && e.code === 'UP-ABORT' ? 'Đã hủy tải lên.' : errMsg(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const cancel = () => abortRef.current?.abort();
-  return (
-    <Dialog open={open} onClose={() => { if (!busy) onClose(); }} size="lg" label="Tải nội dung">
-      <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>{t('Tải nội dung mới')}</h2>
-        {!base.isExternal ? (
-          <Field label="Khách hàng sở hữu nội dung" hint="Nội dung do nhân viên tải lên được gắn vào ví và hợp đồng của khách hàng này.">
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required aria-label="Khách hàng sở hữu nội dung">
-              <option value="">— Chọn khách hàng —</option>
-              {(custs.data?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.short_name || c.legal_name}{c.code ? ` (${c.code})` : ''}</option>)}
-            </select>
-          </Field>
-        ) : null}
-        <Tabs value={mode} onChange={(v) => { setMode(v); setErr(''); }} items={[{ id: 'file', label: 'Từ máy' }, { id: 'youtube', label: 'YouTube' }, { id: 'drive', label: 'Google Drive' }, { id: 'dropbox', label: 'Dropbox' }, { id: 'url', label: 'Liên kết trực tiếp' }]} />
-        {mode === 'file' ? (
-          <Field label="Tệp (MP4, MOV, WebM, PNG, JPG · video thang máy tối đa 200 MB)" hint={`Tệp được tải lên kho lưu trữ (tệp trên 90 MB tải từng phần, có tiến độ), rồi được kiểm tra định dạng, kích thước, thời lượng và chuyển vào hàng chờ duyệt. ${UPLOAD_LIMIT_TEXT}`}>
-            <input type="file" accept="video/mp4,video/quicktime,video/webm,image/png,image/jpeg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </Field>
-        ) : (
-          <Field label="Liên kết" hint={mode === 'youtube' ? 'Chưa hỗ trợ tải từ YouTube. Hãy dùng tệp tải lên hoặc liên kết Google Drive.' : 'Hệ thống tải tệp từ liên kết về kho (tối đa 200 MB), rồi kiểm tra như tệp tải lên; trạng thái hiện ở trang Media. Chỉ dùng nội dung có quyền sử dụng.'}>
-            <input type="url" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} required disabled={mode === 'youtube'} />
-          </Field>
-        )}
-        {mode === 'file' ? <OverlayForm value={ov} onChange={setOv} /> : null}
-        {progress ? (
-          <div role="progressbar" aria-label="Tiến độ tải lên" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent} style={{ marginTop: 10 }}>
-            <div style={{ height: 8, borderRadius: 4, background: 'var(--line, #E5E7EB)', overflow: 'hidden' }}><div style={{ width: `${progress.percent}%`, height: '100%', background: 'var(--pri, #2563EB)', transition: 'width .2s' }} /></div>
-            <div style={{ fontSize: 13, color: 'var(--mut)', marginTop: 4 }}>{`Đang tải lên ${progress.percent}% · ${fmtBytes(progress.loaded)} / ${fmtBytes(progress.total)}${progress.totalParts ? ` · phần ${progress.part}/${progress.totalParts}` : ''}`}</div>
-          </div>
-        ) : null}
-        {linkCheck ? <p role="status" style={{ margin: '6px 0 0', fontSize: 13, color: linkCheck.ok ? 'var(--mut)' : 'var(--bad)' }}>{linkCheck.message}</p> : null}
-        {err ? <p role="alert" style={{ color: 'var(--bad)', margin: '8px 0 0' }}>{err}</p> : null}
-        <div className="da" style={{ marginTop: 14 }}>
-          <button type="button" className="btn" onClick={busy ? cancel : onClose} disabled={busy && !progress}>{busy ? 'Hủy tải lên' : t('Hủy')}</button>
-          <button type="submit" className="btn p" disabled={busy || mode === 'youtube'}>{busy ? t('Đang tải…') : mode === 'file' ? 'Tải lên' : 'Nhập từ liên kết'}</button>
         </div>
       </form>
     </Dialog>

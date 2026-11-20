@@ -84,3 +84,46 @@ export async function sweepMultipart(rt: Runtime, limit = 20): Promise<number> {
   }
   return n;
 }
+
+/** Tep 'uploading' qua han (do loi cu nhu 413, dong tab, mat mang) khong bao gio tu xong: sau 1 gio chuyen thanh "can chinh sua" voi ly do ro rang (phien multipart dang mo thi do sweepMultipart xu ly sau 3 gio). */
+export const STALE_UPLOAD_MS = 3600_000;
+export const STALE_UPLOAD_MSG = 'Tải lên không hoàn tất, hãy tải lại.';
+export async function sweepStaleUploads(rt: Runtime, limit = 100): Promise<number> {
+  const cutoff = new Date(rt.clock.now().getTime() - STALE_UPLOAD_MS).toISOString();
+  const rows = await rt.db.query<{ id: string; customer_id: string; storage_key: string | null }>(
+    `SELECT c.id, c.customer_id, c.storage_key FROM creatives c
+      WHERE c.state = 'uploading' AND c.source = 'upload' AND c.created_at < ?
+        AND NOT EXISTS (SELECT 1 FROM creative_transfers t WHERE t.creative_id = c.id AND t.kind = 'multipart' AND t.status = 'open')
+      ORDER BY c.created_at LIMIT ?`,
+    [cutoff, limit],
+  );
+  let n = 0;
+  for (const r of rows) {
+    try {
+      const done = await rt.db.tx(async (db) => {
+        const u = await db.run("UPDATE creatives SET review_state = 'rejected', review_note = ?, state = 'invalid' WHERE id = ? AND state = 'uploading'", [STALE_UPLOAD_MSG, r.id]);
+        if (u.changes === 0) return false;
+        await writeAudit(db, { rt, ip: 'cron', actorId: null }, { action: 'media.upload_stale', objectType: 'creative', objectId: r.id, customerId: r.customer_id, diff: { reason: 'quá 1 giờ chưa xác nhận tải lên' } });
+        return true;
+      });
+      if (done) {
+        n++;
+        if (r.storage_key) {
+          try { await rt.objects.delete?.(r.storage_key); } catch { /* ruot mo coi khong anh huong */ }
+        }
+      }
+    } catch (e) {
+      console.error('[media] don tep ket loi:', (e as Error).name);
+    }
+  }
+  return n;
+}
+
+/** Doc luoi khi liet ke: chay don dep toi da 1 lan/60 giay (khong lam cham moi lan mo trang). Khong nem loi. */
+export async function lazySweepStaleUploads(rt: Runtime): Promise<void> {
+  try {
+    if ((await rt.kv.incr('sweep:stale-uploads', 60)) === 1) await sweepStaleUploads(rt, 50);
+  } catch {
+    /* khong chan viec liet ke */
+  }
+}

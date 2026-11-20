@@ -5,7 +5,7 @@ import { createCfCreativeValidator } from './lib/cf-creative-validate.js';
 import { mountFinanceRoutes } from './finance-mount.js';
 import { sweepAutoApprove } from './lib/auto-approve.js';
 import { createMediaImporter } from './lib/media-import.js';
-import { sweepMultipart } from './lib/transfers.js';
+import { sweepMultipart, sweepStaleUploads } from './lib/transfers.js';
 import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import type { FinancePort } from './ports.js';
 import { opsTick } from './ops/index.js';
@@ -61,6 +61,7 @@ export default {
     ctx.waitUntil(r.media.sweep(5).then(() => undefined, () => undefined)); // creative con 'pending' (mat tin nhan)
     ctx.waitUntil(r.importer.sweep().then(() => undefined, () => undefined)); // nhap tu lien ket bi ket/loi tam thoi -> dat lai viec
     ctx.waitUntil(sweepMultipart(r.rt).then(() => undefined, () => undefined)); // phien tai tung phan het han (> 3 gio) -> huy tren R2
+    ctx.waitUntil(sweepStaleUploads(r.rt).then(() => undefined, () => undefined)); // tep 'uploading' qua 1 gio (loi 413 cu...) -> 'can chinh sua'
     ctx.waitUntil(r.rt.kv.purgeExpiredCounters().then(() => undefined, () => undefined)); // don bo dem D1 het han
     if (event.cron === '* * * * *') return; // cron moi phut chi de outbox + kiem tra creative
     ctx.waitUntil(pruneOutboxAll(r.rt).then(() => undefined, () => undefined));

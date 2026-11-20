@@ -8,18 +8,20 @@ import { eq, getRt, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { mediaScope } from '../lib/scope.js';
 import {
-  ALLOWED_MIME, DURATION_RANGE, MULTIPART_SESSION_MS, MULTIPART_THRESHOLD_BYTES, PROXY_UPLOAD_MAX_BYTES, multipartPartSize, videoSpecProblem, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
+  ALLOWED_MIME, DURATION_RANGE, MULTIPART_SESSION_MS, MULTIPART_THRESHOLD_BYTES, PROXY_UPLOAD_MAX_BYTES, multipartPartSize, videoSpecProblem, videoSpecWarnings, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
 } from '../lib/creative.js';
 import { todayVn } from '../lib/dates.js';
 import { bumpManifest } from '../lib/manifest.js';
 import { enqueueMediaImport, enqueueMediaUploaded, runOutbox } from '../outbox.js';
 import { ImportError, YOUTUBE_MSG, planImport } from '../lib/media-import.js';
-import { abortOpenMultipart, getTransfer, partsOf } from '../lib/transfers.js';
+import { abortOpenMultipart, getTransfer, lazySweepStaleUploads, partsOf } from '../lib/transfers.js';
 import { mediaMultipartRoutes } from './media-multipart.js';
 import { assertContentVersion, assertLockPolicy, bumpContentVersion, recordApproval, syncKidFlags } from '../lib/creative-security.js';
 import { NEEDS_MANUAL_REVIEW, mediaScanReviewRoutes } from './media-scan-review.js';
 import { UNSCANNED_STATES, allowUnscannedCreatives, assertScanOk, scanVerdict } from './creatives-scan.js';
 import { probeMp4, rangeReaderFor } from '../lib/mp4-probe.js';
+import { probeWebm } from '../lib/webm-probe.js';
+import { parseDiag, saveDiag } from '../lib/creative-diag.js';
 import { requirePerm } from '../auth/middleware.js';
 import { can } from '@ams/config';
 import { autoApprovePrivileged } from '../lib/auto-approve.js';
@@ -30,8 +32,8 @@ import type { AppEnv, AuthUser } from '../types.js';
 
 const M_SELECT = `m.id, m.campaign_id, m.customer_id, m.name, m.target_type, m.px_w, m.px_h, m.kind, m.source, m.source_url, m.storage_key, m.mime, m.size_bytes, m.duration_s,
   m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code, COALESCE(sec.content_version, 1) AS content_version, cv.detail AS scan_detail, th.created_at AS thumb_at,
-  tr.kind AS tr_kind, tr.status AS tr_status, tr.bytes_done AS tr_done, tr.bytes_total AS tr_total, tr.error_code AS tr_error_code, tr.error_message AS tr_error, tr.total_parts AS tr_total_parts, tr.parts AS tr_parts`;
-const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_validation cv ON cv.creative_id = m.id LEFT JOIN creative_thumbnails th ON th.creative_id = m.id LEFT JOIN creative_transfers tr ON tr.creative_id = m.id';
+  tr.kind AS tr_kind, tr.status AS tr_status, tr.bytes_done AS tr_done, tr.bytes_total AS tr_total, tr.error_code AS tr_error_code, tr.error_message AS tr_error, tr.total_parts AS tr_total_parts, tr.parts AS tr_parts, dg.diag AS diag_json`;
+const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_validation cv ON cv.creative_id = m.id LEFT JOIN creative_thumbnails th ON th.creative_id = m.id LEFT JOIN creative_transfers tr ON tr.creative_id = m.id LEFT JOIN creative_diag dg ON dg.creative_id = m.id';
 
 interface MediaRow {
   id: string;
@@ -71,6 +73,7 @@ interface MediaRow {
   tr_error?: string | null;
   tr_total_parts?: number | null;
   tr_parts?: string | null;
+  diag_json?: string | null;
 }
 
 function overlayOf(raw: string | null | undefined): CreativeOverlay | null {
@@ -161,7 +164,17 @@ function transferView(m: MediaRow): Record<string, unknown> {
   };
 }
 
+/** `warnings`: cau tieng Viet don gian cho moi nguoi dung (codec chap nhan nhung khong toi uu). `diag`: chi tiet ky thuat, CHI tai khoan noi bo (admin). */
+function diagFields(m: MediaRow, external: boolean): Record<string, unknown> {
+  const d = parseDiag(m.diag_json);
+  const warnings = d?.warnings ?? [];
+  if (external || !d) return { warnings };
+  const { warnings: _w, ...tech } = d;
+  return { warnings, ...(d.code === 'warning' ? {} : { diag: tech }) };
+}
+
 export const present = (m: MediaRow, external = false): Record<string, unknown> => ({
+  ...diagFields(m, external),
   id: m.id,
   name: m.name ?? m.id,
   kind: m.source !== 'upload' ? 'link' : (m.kind ?? (m.mime?.startsWith('image/') ? 'image' : 'video')),
@@ -309,7 +322,7 @@ export interface FinalizeOpts {
  * kiem tra spec/dung luong/thoi luong theo loai man, bam SHA-256 (CHI tep <= SHA_MAX_BYTES = 32 MB; tep lon hon de sha256 = NULL, gateway/thiet bi doi chieu khi tai),
  * chep sang khoa cuoi (cung gioi han 32 MB), ghi outbox `media.uploaded`, audit, tu duyet. Spec sai: danh dau 'invalid', xoa tep, nem 422 (tieng Viet).
  */
-export async function finalizeUpload(o: FinalizeOpts): Promise<void> {
+export async function finalizeUpload(o: FinalizeOpts): Promise<{ warnings: string[] }> {
   const { rt, m, hints } = o;
   const actx = { rt, ip: o.actor.ip, actorId: o.actor.id };
   if (!m.storage_key) throw conflict('Tệp chưa có nội dung trên kho lưu trữ.', 'upload_missing');
@@ -343,8 +356,22 @@ export async function finalizeUpload(o: FinalizeOpts): Promise<void> {
   }
   let probedDuration: number | undefined;
   let probedCodec: string | null | undefined;
-  if (declared === 'video/mp4') {
-    // doc header MP4 (range read, khong doc ca tep): dung thoi luong/kich thuoc doc tu chinh tep, khong tin khai bao cua client
+  if (declared === 'video/webm') {
+    // WebM (Matroska): doc codec/kich thuoc/thoi luong tu EBML dau tep (vd AV1/VP9 4K) de bao DUNG ly do thay vi bo qua kiem tra
+    try {
+      const p = await probeWebm(rangeReaderFor(rt.objects, m.storage_key), head.size);
+      if (p.recognized && p.w && p.h) {
+        w = p.w;
+        h = p.h;
+      }
+      if (p.recognized && p.durationS !== null && p.durationS > 0) probedDuration = p.durationS;
+      if (p.recognized) probedCodec = p.videoCodec;
+    } catch (e) {
+      console.error('[media] doc header webm loi:', (e as Error).name);
+    }
+  }
+  if (declared === 'video/mp4' || declared === 'video/quicktime') {
+    // doc header MP4/MOV (range read, khong doc ca tep): dung thoi luong/kich thuoc doc tu chinh tep, khong tin khai bao cua client
     try {
       const p = await probeMp4(rangeReaderFor(rt.objects, m.storage_key), head.size);
       if (p.recognized && p.w && p.h) {
@@ -359,11 +386,12 @@ export async function finalizeUpload(o: FinalizeOpts): Promise<void> {
   }
   const led = await knownLedPx(rt);
   const target: TargetType | null = m.target_type ? dbTarget(m.target_type) : w && h ? inferTarget(w, h, led) : null;
-  if (declared === 'video/mp4') {
+  if (declared.startsWith('video/')) {
     // codec/độ phân giải màn không phát được: từ chối ngay, xóa tệp (thang máy được H.265 và tới 4K, loại khác H.264 <= Full HD)
     const specProblem = videoSpecProblem({ w, h, codec: probedCodec }, target);
     if (specProblem) await reject(specProblem.code, specProblem.message);
   }
+  const warnings = declared.startsWith('video/') ? videoSpecWarnings({ codec: probedCodec }, target) : [];
   if (!w || !h) throw unprocessable('Chưa đọc được kích thước video. Hãy dùng tệp MP4 (H.264) chuẩn hoặc gửi width/height khi xác nhận.', 'dimensions_required');
 
   if (!target) await reject('unsupported_resolution', `Độ phân giải ${w}×${h} không khớp loại màn hình nào.`);
@@ -409,7 +437,8 @@ export async function finalizeUpload(o: FinalizeOpts): Promise<void> {
       console.error('[media] xu ly outbox loi:', (e as Error).name);
     }
   }
-if (o.autoApprove) await autoApprovePrivileged(rt, m.id, o.actor.ip);
+  if (o.autoApprove) await autoApprovePrivileged(rt, m.id, o.actor.ip);
+  return { warnings };
 }
 
 export function mediaRoutes(external: boolean): Hono<AppEnv> {
@@ -417,6 +446,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
 
   r.get('/', requirePerm('media', 'view'), async (c) => {
     const rt = getRt(c);
+    await lazySweepStaleUploads(rt); // tep 'uploading' qua 1 gio (loi cu) -> "can chinh sua", khong con the "Dang xu ly" vinh vien
     const res = await runList<MediaRow>(c, mediaSpec(c.get('user'), rt.clock.now().toISOString()));
     return c.json({ ...res, items: res.items.map((x) => present(x, external)) });
   });
@@ -548,13 +578,14 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     if (m.source !== 'upload' || !m.storage_key) throw conflict('Tệp này không phải tệp tải lên.', 'invalid_state');
     if (m.state !== 'uploading') return c.json(present(m, external)); // idempotent
     const u = c.get('user');
-    await finalizeUpload({
+    const fin = await finalizeUpload({
       rt, m, hints: { width: b.width, height: b.height, duration_sec: b.duration_sec }, fromState: 'uploading',
       actor: { id: u.id, kind: u.kind, ip: c.get('ip') }, finance: c.get('finance'),
       // Nguoi noi bo co quyen media:approve tu tai len: tu duyet (sau khi da qua kiem tra spec). Duong Cloudflare: validator da chay trong runOutbox.
       // Duong VPS: media-worker quet bat dong bo -> sweepAutoApprove (worker outbox) duyet khi scan_state xong. Khach/doi tac: van cho duyet.
       autoApprove: !external && u.kind === 'internal' && can(u.perms, u.role, 'media', 'approve'),
     });
+    if (fin.warnings.length) await rt.db.tx(async (db) => { await saveDiag(db, m.id, { kind: 'import', code: 'warning', http: null, content_type: null, title: null, snippet: null, final_url: null, steps: [], warnings: fin.warnings }, rt.clock.now().toISOString()); });
     return c.json(present(await loadMedia(c, m.id), external));
   });
 
@@ -807,6 +838,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
         if (del.changes === 0) return false;
         await db.run('DELETE FROM creative_thumbnails WHERE creative_id = ?', [m.id]);
         await db.run('DELETE FROM creative_transfers WHERE creative_id = ?', [m.id]);
+        await db.run('DELETE FROM creative_diag WHERE creative_id = ?', [m.id]);
         await auditCtx(c, db, { action: 'media.delete', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { name: m.name, size_bytes: m.size_bytes === null ? null : num(m.size_bytes), bulk: true } });
         return true;
       });
@@ -860,6 +892,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     await rt.db.tx(async (db) => {
       await db.run('DELETE FROM creative_thumbnails WHERE creative_id = ?', [m.id]);
       await db.run('DELETE FROM creative_transfers WHERE creative_id = ?', [m.id]);
+      await db.run('DELETE FROM creative_diag WHERE creative_id = ?', [m.id]);
       await db.run('DELETE FROM creatives WHERE id = ?', [m.id]);
       await auditCtx(c, db, { action: 'media.delete', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { name: m.name } });
     });

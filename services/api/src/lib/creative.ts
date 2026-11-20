@@ -45,7 +45,8 @@ export const DURATION_RANGE: Partial<Record<TargetType, [number, number]>> = { t
  * - TV/LED: H.264 (avc1/avc3) + AAC, canh dai <= 1920 va canh ngan <= 1080 (Full HD), toi da 100 MB/tep.
  * - THANG MAY (tu 20/11/2026): H.264 hoac H.265/HEVC (hvc1/hev1) + AAC, den 4K 2160x3840; toi da 200 MB/tep (elevatorMaxBytes).
  *   Bitrate khuyen nghi <= 8 Mbps (Full HD) / <= 16 Mbps (2K/4K): clip 30 giay 4K @16 Mbps ~ 60 MB; tran 200 MB cho ban goc bitrate cao.
- * AV1/VP9 khong phat duoc tren da so box => tu choi som voi thong bao ro.
+ * AV1/VP8/MPEG-4 Part 2 khong phat duoc on dinh tren da so box => tu choi som, thong bao dan nguoi dung toi nut "Tu dong chuyen sang chuan phat duoc" (chuyen ma o trinh duyet).
+ * VP9 (thang may) va H.265: CHO PHEP kem canh bao (phat duoc tren da so Android moi, nhung khong toi uu bang H.264), khong chan.
  */
 export const VIDEO_RULES = {
   maxBytes: 100 * MB,
@@ -53,7 +54,9 @@ export const VIDEO_RULES = {
   maxLongSide: 1920,
   maxShortSide: 1080,
   codecs: ['avc1', 'avc3'] as readonly string[],
-  elevatorCodecs: ['avc1', 'avc3', 'hvc1', 'hev1'] as readonly string[],
+  elevatorCodecs: ['avc1', 'avc3', 'hvc1', 'hev1', 'vp09'] as readonly string[],
+  /** Thang may: chap nhan nhung KHONG toi uu (canh bao, khong chan). H.264 la chuan an toan nhat; VP9 phu thuoc may giai ma phan cung cua box. */
+  elevatorWarnCodecs: ['vp09'] as readonly string[],
   elevatorMaxLongSide: ELEVATOR_MAX.h,
   elevatorMaxShortSide: ELEVATOR_MAX.w,
 };
@@ -61,7 +64,18 @@ const CODEC_NAME: Record<string, string> = { av01: 'AV1', hvc1: 'H.265/HEVC', he
 /** Tran dung luong video theo loai man: thang may 200 MB, TV/LED 100 MB. */
 export const videoMaxBytes = (target?: TargetType | null): number => (target === 'elevator' ? VIDEO_RULES.elevatorMaxBytes : VIDEO_RULES.maxBytes);
 export const codecLabel = (fcc: string): string => CODEC_NAME[fcc] ?? fcc.trim();
-/** Tra thong bao loi tieng Viet neu video khong dat quy tac; null neu dat. `target='elevator'`: cho phep H.265 va den 4K. */
+/** Cau huong dan chung: nguoi dung co ban khong tu chuyen ma duoc, nen dan toi nut tu dong chuyen o hop thoai tai len. */
+export const AUTO_CONVERT_SHORT = 'Cách dễ nhất: tải tệp từ máy tính (Chrome hoặc Edge mới nhất) và bấm "Tự động chuyển sang chuẩn phát được", hệ thống tự chuyển sang H.264.';
+export const AUTO_CONVERT_HINT = `${AUTO_CONVERT_SHORT} Nếu tệp đến từ liên kết Drive, hãy tải tệp về máy rồi kéo vào ô tải lên.`;
+/** Canh bao (khong chan) cho codec chap nhan duoc nhung khong toi uu. */
+export function videoSpecWarnings(p: { codec?: string | null }, target?: TargetType | null): string[] {
+  if (!p.codec) return [];
+  if (target === 'elevator' && VIDEO_RULES.elevatorWarnCodecs.includes(p.codec)) {
+    return [`Video dùng codec ${codecLabel(p.codec)}: màn thang máy phát được trên đa số máy mới nhưng H.264 ổn định hơn. Nếu màn bị giật hoặc đen hình, hãy tải lại bằng nút "Tự động chuyển sang chuẩn phát được".`];
+  }
+  return [];
+}
+/** Tra thong bao loi tieng Viet neu video khong dat quy tac; null neu dat. `target='elevator'`: cho phep H.265/VP9 va den 4K. */
 export function videoSpecProblem(p: { w?: number | null; h?: number | null; codec?: string | null }, target?: TargetType | null): { code: string; message: string } | null {
   const el = target === 'elevator';
   const codecs = el ? VIDEO_RULES.elevatorCodecs : VIDEO_RULES.codecs;
@@ -69,8 +83,8 @@ export function videoSpecProblem(p: { w?: number | null; h?: number | null; code
     return {
       code: 'unsupported_codec',
       message: el
-        ? `Video dùng codec ${codecLabel(p.codec)} mà màn thang máy không phát được ổn định. Hãy xuất lại video H.264 (AVC) hoặc H.265 (HEVC) + AAC, tối đa 2160×3840 (4K), bitrate khuyến nghị ≤ 16 Mbps, tệp tối đa ${VIDEO_RULES.elevatorMaxBytes / MB} MB, rồi tải lên.`
-        : `Video dùng codec ${codecLabel(p.codec)} mà TV không phát được ổn định. Hãy xuất lại video H.264 (AVC) + AAC, tối đa 1920×1080, rồi tải lên.`,
+        ? `Video dùng codec ${codecLabel(p.codec)} mà màn thang máy không phát được ổn định. ${AUTO_CONVERT_HINT} (Hoặc tự xuất H.264 hoặc H.265 + AAC, tối đa 2160×3840, bitrate ≤ 16 Mbps, tệp ≤ ${VIDEO_RULES.elevatorMaxBytes / MB} MB.)`
+        : `Video dùng codec ${codecLabel(p.codec)} mà TV không phát được ổn định. ${AUTO_CONVERT_HINT} (Hoặc tự xuất H.264 + AAC, tối đa 1920×1080.)`,
     };
   }
   if (p.w && p.h) {
@@ -78,10 +92,10 @@ export function videoSpecProblem(p: { w?: number | null; h?: number | null; code
     const short = Math.min(p.w, p.h);
     if (el) {
       if (long > VIDEO_RULES.elevatorMaxLongSide || short > VIDEO_RULES.elevatorMaxShortSide) {
-        return { code: 'video_resolution_too_high', message: `Video ${p.w}×${p.h} vượt độ phân giải tối đa của màn thang máy ${ELEVATOR_MAX.w}×${ELEVATOR_MAX.h} (4K). Hãy xuất lại ở tối đa 4K dọc, H.264/H.265 + AAC, bitrate ≤ 16 Mbps, tệp ≤ ${VIDEO_RULES.elevatorMaxBytes / MB} MB.` };
+        return { code: 'video_resolution_too_high', message: `Video ${p.w}×${p.h} vượt độ phân giải tối đa của màn thang máy ${ELEVATOR_MAX.w}×${ELEVATOR_MAX.h} (4K). ${AUTO_CONVERT_SHORT} (Hoặc xuất lại tối đa 4K dọc, bitrate ≤ 16 Mbps, tệp ≤ ${VIDEO_RULES.elevatorMaxBytes / MB} MB.)` };
       }
     } else if (long > VIDEO_RULES.maxLongSide || short > VIDEO_RULES.maxShortSide) {
-      return { code: 'video_resolution_too_high', message: `Video ${p.w}×${p.h} vượt độ phân giải tối đa ${VIDEO_RULES.maxLongSide}×${VIDEO_RULES.maxShortSide} (Full HD). Hãy xuất lại ở 1080p (H.264) rồi tải lên.` };
+      return { code: 'video_resolution_too_high', message: `Video ${p.w}×${p.h} vượt độ phân giải tối đa ${VIDEO_RULES.maxLongSide}×${VIDEO_RULES.maxShortSide} (Full HD). ${AUTO_CONVERT_SHORT} (Hoặc xuất lại ở 1080p H.264.)` };
     }
   }
   return null;

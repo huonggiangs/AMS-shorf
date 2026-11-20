@@ -1,11 +1,15 @@
 // Nhap tu Google Drive / Dropbox / URL truc tiep tren Worker: fetch gia lap (khong goi mang that).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createCfCreativeValidator } from '../src/lib/cf-creative-validate.js';
-import { DRIVE_FAIL_MSG, IMPORT_MAX_BYTES, createMediaImporter, parseDriveId, planImport, sniffImportMime } from '../src/lib/media-import.js';
+import { DRIVE_MSG, IMPORT_MAX_BYTES, NEEDS_CONVERT_MSG, createMediaImporter, parseDriveId, planImport, sniffImportMime } from '../src/lib/media-import.js';
+import { classifyDriveHtml, parseDriveConfirm, sanitizeSnippet, sanitizeUrl } from '../src/lib/drive-resolver.js';
+import { parseWebmHead, probeWebm } from '../src/lib/webm-probe.js';
+import { sweepStaleUploads, STALE_UPLOAD_MSG } from '../src/lib/transfers.js';
+import { videoSpecProblem, videoSpecWarnings } from '../src/lib/creative.js';
 import { runOutbox } from '../src/outbox.js';
 import { login, setup } from './helpers.js';
 import type { Env, Session } from './helpers.js';
-import { bigMp4 } from './mp4-fixture.js';
+import { bigMp4, webmFile } from './mp4-fixture.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const PART = 131072;
@@ -95,6 +99,8 @@ describe('phan tich lien ket (don vi)', () => {
     expect(sniffImportMime(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]))).toBe('image/png');
     expect(sniffImportMime(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]))).toBe('image/jpeg');
     expect(sniffImportMime(new TextEncoder().encode('<!DOCTYPE html><html>'))).toBeNull();
+    expect(sniffImportMime(webmFile('V_AV1', 3840, 2160, 10, 100))).toBe('video/webm');
+    expect(sniffImportMime(new Uint8Array([0, 0, 0, 20, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20, 0, 0, 0, 0]))).toBe('video/quicktime');
   });
 });
 
@@ -150,11 +156,11 @@ describe('nhap tu Drive (fetch gia lap)', () => {
     expect(r.status).toBe(201);
     await settle();
     let m = await get(lan, '/portal/v1', r.body.id);
-    expect(m.transfer).toMatchObject({ status: 'failed', error_code: 'drive_not_public', error_message: DRIVE_FAIL_MSG });
+    expect(m.transfer).toMatchObject({ status: 'failed', error_code: 'drive_login_required', error_message: DRIVE_MSG.login });
     expect(m.status).toBe('rejected');
-    expect(m.reject_reason).toBe(DRIVE_FAIL_MSG);
+    expect(m.reject_reason).toBe(DRIVE_MSG.login);
     expect(m.blocker).toMatchObject({ code: 'import_failed', action: 'retry' });
-    expect(DRIVE_FAIL_MSG).toMatch(/không chia sẻ công khai hoặc vượt hạn mức tải/);
+    expect(DRIVE_MSG.login).toMatch(/Bất kỳ ai có đường liên kết/);
     expect((await rows("SELECT 1 FROM audit_log WHERE object_id = ? AND action = 'media.import_failed'", [r.body.id])).length).toBe(1);
     // nguoi khac (khach khac) khong thu lai duoc; khach tao tep thi duoc
     expect((await dang.json('POST', `/portal/v1/media/${r.body.id}/import/retry`, {})).status).toBe(404);
@@ -175,7 +181,7 @@ describe('nhap tu Drive (fetch gia lap)', () => {
   });
 
   it('HTTP 403/429/404 tu Drive -> thong bao dung; 5xx -> thu lai roi bao loi mang', async () => {
-    for (const [status, code] of [[403, 'drive_not_public'], [429, 'drive_not_public'], [404, 'source_not_found']] as const) {
+    for (const [status, code] of [[403, 'drive_blocked'], [429, 'drive_blocked'], [404, 'source_not_found']] as const) {
       handler = () => new Response('x', { status });
       const r = await importLink(admin, '/admin/v1', { source: 'drive', url: DRIVE_LINK });
       await settle();
@@ -202,10 +208,12 @@ describe('nhap tu Drive (fetch gia lap)', () => {
     await settle();
     expect((await get(admin, '/admin/v1', a.body.id)).transfer).toMatchObject({ status: 'failed', error_code: 'file_too_large' });
     expect((await get(admin, '/admin/v1', a.body.id)).transfer.error_message).toMatch(/200 MB/);
+    expect((await get(admin, '/admin/v1', a.body.id)).transfer.error_message).toContain(NEEDS_CONVERT_MSG);
     handler = () => new Response(new TextEncoder().encode('MZ\x90\x00 chuong trinh doc hai, khong phai video'), { status: 200, headers: { 'content-type': 'video/mp4' } });
     const b = await importLink(admin, '/admin/v1', { source: 'drive', url: DRIVE_LINK });
     await settle();
     expect((await get(admin, '/admin/v1', b.body.id)).transfer).toMatchObject({ status: 'failed', error_code: 'not_media' });
+    expect((await get(admin, '/admin/v1', b.body.id)).transfer.error_message).toMatch(/không phải MP4, MOV, WebM/);
     expect(store().openMultipart()).toEqual([]);
   });
 
@@ -329,5 +337,171 @@ describe('tiep tuc, bao tri, nguon khac', () => {
     expect(bulk.body.deleted_count).toBe(1);
     await settle();
     expect((await rows('SELECT 1 FROM creative_transfers WHERE creative_id = ?', [q.body.id])).length).toBe(0);
+  });
+});
+
+// ================================================================== Drive: phan tich trang xac nhan, phan loai loi, chan doan, WebM, quy tac codec
+const BASE = new URL('https://drive.usercontent.google.com/download?id=' + FILE_ID);
+const htmlRes = (body: string, status = 200, h: Record<string, string> = {}) => new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', ...h } });
+
+describe('trang xac nhan Drive: cac dinh dang (don vi)', () => {
+  it('form kieu moi: thuoc tinh dao thu tu / nhay don / input khong hidden / action tuong doi; lay du id, export, confirm, uuid, at', () => {
+    const html = `<form action='/download' id='download-form' method='post'><input name="id" type="hidden" value="${FILE_ID}"><input type='hidden' name='export' value='download'><input type="hidden" name="authuser" value="0"><input type="hidden" name="confirm" value="t"><input type="hidden" name="uuid" value="u-1&amp;x"><input type="hidden" name="at" value="AB&#x3D;cd"><input type="submit" value="Download anyway"></form>`;
+    const u = parseDriveConfirm(html, BASE)!;
+    expect(u.origin + u.pathname).toBe('https://drive.usercontent.google.com/download');
+    expect(Object.fromEntries(u.searchParams)).toEqual({ id: FILE_ID, export: 'download', authuser: '0', confirm: 't', uuid: 'u-1&x', at: 'AB=cd' });
+  });
+  it('lien ket href co confirm=...&uuid=... (HTML-escaped) va "downloadUrl" nhung trong script (\\u0026)', () => {
+    const a = parseDriveConfirm(`<a href="/uc?export=download&amp;id=${FILE_ID}&amp;confirm=AbC9&amp;uuid=77">Download anyway</a>`, new URL('https://drive.google.com/uc?id=1'))!;
+    expect(a.toString()).toBe(`https://drive.google.com/uc?export=download&id=${FILE_ID}&confirm=AbC9&uuid=77`);
+    const b = parseDriveConfirm(`<script>var x={"downloadUrl":"https:\\/\\/drive.usercontent.google.com\\/download?id\\u003d${FILE_ID}\\u0026export\\u003ddownload\\u0026confirm\\u003dt"}</script>`, BASE)!;
+    expect(b.toString()).toBe(`https://drive.usercontent.google.com/download?id=${FILE_ID}&export=download&confirm=t`);
+    expect(parseDriveConfirm('<html><body>khong co gi</body></html>', BASE)).toBeNull();
+    expect(parseDriveConfirm('<form action="https://evil.example/login"><input name="id" value="1"></form>', BASE)).toBeNull(); // form khong phai tai xuong
+  });
+  it('phan loai: xac nhan / het han muc / dang nhap / khong tim thay / khong ro', () => {
+    const k = (html: string, st = 200, url = BASE) => classifyDriveHtml(html, st, url).kind;
+    expect(k(`<title>Google Drive - Virus scan warning</title><form id="download-form" action="https://drive.usercontent.google.com/download"><input type="hidden" name="id" value="x"></form>`)).toBe('confirm');
+    expect(k('<title>Google Drive - Quota exceeded</title><p>Sorry, you can\'t view or download this file at this time. Too many users have viewed or downloaded this file recently.</p>', 403)).toBe('quota');
+    expect(k('<title>Sign in - Google Accounts</title>')).toBe('login');
+    expect(k('<title>Google Drive: Sign-in</title>', 200, new URL('https://accounts.google.com/v3/signin'))).toBe('login');
+    expect(k('<title>Error 404 (Not Found)!!1</title>', 404)).toBe('not_found');
+    expect(k('<html><title>Moi thu</title><body>xin chao</body></html>')).toBe('unknown');
+  });
+  it('chan doan an toan: bo script/the, che chuoi giong token, cat 200 ky tu; URL chi giu ten tham so', () => {
+    const sn = sanitizeSnippet(`<script>secret()</script><p>Xin   chào ${'A1b2C3d4E5f6G7h8I9j0K1l2M3n4'} và ${'x'.repeat(500)}</p>`);
+    expect(sn).not.toMatch(/secret|A1b2C3d4E5/);
+    expect(sn.length).toBeLessThanOrEqual(200);
+    expect(sanitizeUrl(`https://drive.usercontent.google.com/download?id=${FILE_ID}&confirm=t&uuid=abc-123&at=TOKENSECRET`)).toBe('drive.usercontent.google.com/download?id&confirm&uuid&at');
+  });
+});
+
+describe('WebM: doc codec/kich thuoc/thoi luong tu dau tep (don vi)', () => {
+  it('AV1 4K, VP9 doc 1080x1920, H.264/HEVC trong WebM -> quy ve fourcc nhu MP4', async () => {
+    const av1 = parseWebmHead(webmFile('V_AV1', 3840, 2160, 232.5, 5000));
+    expect(av1).toMatchObject({ recognized: true, videoCodec: 'av01', w: 3840, h: 2160 });
+    expect(av1.durationS).toBeCloseTo(232.5, 1);
+    expect(parseWebmHead(webmFile('V_VP9', 1080, 1920, 20, 100))).toMatchObject({ videoCodec: 'vp09', w: 1080, h: 1920 });
+    expect(parseWebmHead(webmFile('V_MPEG4/ISO/AVC', 1920, 1080, 20, 100)).videoCodec).toBe('avc1');
+    expect(parseWebmHead(webmFile('V_MPEGH/ISO/HEVC', 1920, 1080, 20, 100)).videoCodec).toBe('hvc1');
+    expect(parseWebmHead(new Uint8Array([1, 2, 3, 4, 5])).recognized).toBe(false);
+    const b = webmFile('V_AV1', 3840, 2160, 10, 100);
+    expect((await probeWebm(async (o, l) => b.slice(o, o + l), b.length)).videoCodec).toBe('av01');
+  });
+});
+
+describe('quy tac codec thang may', () => {
+  it('AV1/VP8 bi chan va dan toi nut chuyen ma tu dong; VP9 va H.265 duoc nhan (VP9 co canh bao); TV van chi H.264', () => {
+    const av1 = videoSpecProblem({ w: 1080, h: 1920, codec: 'av01' }, 'elevator')!;
+    expect(av1.code).toBe('unsupported_codec');
+    expect(av1.message).toMatch(/AV1/);
+    expect(av1.message).toMatch(/Tự động chuyển sang chuẩn phát được/);
+    expect(av1.message).not.toMatch(/xuất lại bằng phần mềm/);
+    expect(videoSpecProblem({ w: 1080, h: 1920, codec: 'vp08' }, 'elevator')?.code).toBe('unsupported_codec');
+    expect(videoSpecProblem({ w: 1080, h: 1920, codec: 'vp09' }, 'elevator')).toBeNull();
+    expect(videoSpecProblem({ w: 1080, h: 1920, codec: 'hvc1' }, 'elevator')).toBeNull();
+    expect(videoSpecWarnings({ codec: 'vp09' }, 'elevator')[0]).toMatch(/VP9.*H\.264/);
+    expect(videoSpecWarnings({ codec: 'hvc1' }, 'elevator')).toEqual([]);
+    expect(videoSpecWarnings({ codec: 'avc1' }, 'elevator')).toEqual([]);
+    expect(videoSpecProblem({ w: 1920, h: 1080, codec: 'vp09' }, 'tv')?.code).toBe('unsupported_codec');
+  });
+});
+
+describe('Drive: phan loai nguyen nhan that bai, chan doan chi cho admin, WebM', () => {
+  const run = async (s: Session, prefix: string) => {
+    const r = await importLink(s, prefix, { source: 'drive', url: DRIVE_LINK });
+    await settle();
+    return get(s, prefix, r.body.id);
+  };
+  it('thu lan luot: usercontent -> trang HTML khong co form -> drive.google.com/uc (kieu cu: href confirm + cookie download_warning) -> tai duoc, cookie duoc giu', async () => {
+    const b = bigMp4(1080, 1920, 15, 120_000);
+    calls.length = 0;
+    handler = (u) => {
+      if (u.hostname === 'drive.usercontent.google.com') return htmlRes('<html><title>Moi thu</title><body>...</body></html>', 200, { 'set-cookie': 'NID=abc; Path=/' });
+      if (!u.searchParams.has('confirm')) return htmlRes(`<a href="/uc?export=download&amp;confirm=Zx9&amp;id=${FILE_ID}">Download anyway</a>`, 200, { 'set-cookie': 'download_warning_123=Zx9; Path=/' });
+      return mp4Res(b);
+    };
+    const m = await run(admin, '/admin/v1');
+    expect(m.transfer, JSON.stringify(m.transfer)).toMatchObject({ status: 'done' });
+    expect(calls.map((c) => new URL(c.url).hostname)).toEqual(['drive.usercontent.google.com', 'drive.google.com', 'drive.google.com']);
+    expect(calls[1]!.cookie).toContain('NID=abc');
+    expect(calls[2]!.cookie).toContain('download_warning_123=Zx9');
+    expect(calls[0]!.url).toContain('confirm=t'); // buoc 1 dung usercontent ... confirm=t
+  });
+  it('chuyen huong toi accounts.google.com -> "can dang nhap/khong cong khai"; KHONG goi toi accounts.google.com', async () => {
+    calls.length = 0;
+    handler = () => new Response(null, { status: 302, headers: { location: 'https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fdrive.google.com' } });
+    const m = await run(admin, '/admin/v1');
+    expect(m.transfer).toMatchObject({ status: 'failed', error_code: 'drive_login_required', error_message: DRIVE_MSG.login });
+    expect(calls.every((c) => !c.url.includes('accounts.google.com'))).toBe(true);
+    expect(m.diag).toMatchObject({ code: 'drive_login_required', http: 302 });
+  });
+  it('het han muc ("Too many users"): bao dung nguyen nhan; admin thay chan doan (HTTP, content-type, title, doan dau, URL cuoi), khach KHONG thay', async () => {
+    handler = () => htmlRes(`<html><head><title>Google Drive - Quota exceeded</title></head><body>Sorry, you can't view or download this file at this time. Too many users have viewed or downloaded this file recently. <a href="https://support.google.com/">Learn more</a></body></html>`, 403);
+    const m = await run(admin, '/admin/v1');
+    expect(m.transfer).toMatchObject({ status: 'failed', error_code: 'drive_quota', error_message: DRIVE_MSG.quota });
+    expect(m.diag).toMatchObject({ kind: 'import', code: 'drive_quota', http: 403, title: 'Google Drive - Quota exceeded' });
+    expect(m.diag.content_type).toContain('text/html');
+    expect(m.diag.snippet).toMatch(/Too many users/);
+    expect(m.diag.final_url).toMatch(/^drive\.(usercontent\.)?google\.com\/(download|uc)/);
+    expect(m.diag.final_url).not.toMatch(new RegExp(FILE_ID));
+    expect(JSON.stringify(m.diag)).not.toMatch(/cookie|set-cookie/i);
+    // khach (portal) cung tao viec nhap: khong co truong chan doan
+    const k = await run(lan, '/portal/v1');
+    expect(k.transfer.error_code).toBe('drive_quota');
+    expect(k.diag).toBeUndefined();
+    expect((await rows("SELECT diff FROM audit_log WHERE object_id = ? AND action = 'media.import_failed'", [m.id]))[0].diff).toMatch(/"diag"/);
+  });
+  it('trang xac nhan khong phan tich duoc -> bao rieng (khong bao "khong cong khai"); 429 khong co HTML -> bi chan', async () => {
+    handler = () => htmlRes('<html><title>Google Drive - Virus scan warning</title><body>Google Drive can\'t scan this file for viruses. Tep qua lon. <a href="/help">Help</a></body></html>');
+    let m = await run(admin, '/admin/v1');
+    expect(m.transfer).toMatchObject({ status: 'failed', error_code: 'drive_page_unrecognized', error_message: DRIVE_MSG.unrecognized });
+    expect(m.diag.title).toBe('Google Drive - Virus scan warning');
+    handler = () => new Response('Too Many Requests', { status: 429, headers: { 'content-type': 'text/plain' } });
+    m = await run(admin, '/admin/v1');
+    expect(m.transfer).toMatchObject({ error_code: 'drive_blocked', error_message: DRIVE_MSG.blocked });
+    expect(m.diag).toMatchObject({ http: 429, content_type: 'text/plain' });
+  });
+  it('tep tai duoc nhung vi pham quy tac: WebM AV1 4K (giong tep that) bao DUNG ly do codec + huong dan tai ve may; tep bi xoa khoi kho', async () => {
+    const b = webmFile('V_AV1', 3840, 2160, 232.5, 300_000);
+    handler = () => new Response(bodyOf(b), { status: 200, headers: { 'content-type': 'application/octet-stream', 'content-length': String(b.length), 'content-disposition': 'attachment; filename="Silhouette of Vietnam 4K.webm"' } });
+    const m = await run(admin, '/admin/v1');
+    expect(m.transfer).toMatchObject({ status: 'failed', error_code: 'unsupported_codec' });
+    expect(m.transfer.error_message).toContain(NEEDS_CONVERT_MSG);
+    expect(m.transfer.error_message).toMatch(/AV1/);
+    expect(m.reject_reason).toContain(NEEDS_CONVERT_MSG);
+    expect(m.name).toBe('Silhouette of Vietnam 4K.webm');
+    expect(store().openMultipart()).toEqual([]);
+  });
+  it('WebM VP9 doc 1080x1920 20 giay: nhan duoc (khong bi bao "khong phai video"), kem canh bao; khach cung thay canh bao', async () => {
+    const b = webmFile('V_VP9', 1080, 1920, 20, 200_000);
+    handler = () => new Response(bodyOf(b), { status: 200, headers: { 'content-type': 'video/webm', 'content-length': String(b.length) } });
+    const m = await run(admin, '/admin/v1');
+    expect(m.transfer).toMatchObject({ status: 'done' });
+    expect(m).toMatchObject({ mime: 'video/webm', width: 1080, height: 1920, duration_sec: 20 });
+    expect(m.warnings[0]).toMatch(/VP9/);
+    expect(m.diag).toBeUndefined();
+    const k = await run(lan, '/portal/v1');
+    expect(k.warnings[0]).toMatch(/VP9/);
+  });
+});
+
+describe('don tep ket o trang thai "uploading"', () => {
+  it('qua 1 gio -> "can chinh sua" voi ly do ro (liet ke tu don, khong the "Dang xu ly" vinh vien); chua qua han thi khong dong', async () => {
+    const other = Object.values(env.seed.customers).find((c) => c !== K001)!; // han muc 20 tep/ngay cua K001 da dung het o cac test tren
+    const mk = async (name: string) => (await admin.json('POST', '/admin/v1/media/upload-url', { customer_id: other, name, content_type: 'video/mp4', size_bytes: 5_000_000, width: 1080, height: 1920, duration_sec: 15 })).body.id as string;
+    const old = await mk('ket-cu.mp4');
+    env.rt.clock.advance(61 * 60_000);
+    const fresh = await mk('moi.mp4');
+    await env.rt.kv.del('sweep:stale-uploads'); // bo gioi han 1 lan/60 giay de thu duong don luoi
+    const list = await admin.json('GET', '/admin/v1/media?page_size=5&filter=status:rejected'); // liet ke kich hoat don dep
+    expect(list.status).toBe(200);
+    expect(await get(admin, '/admin/v1', old)).toMatchObject({ status: 'rejected', reject_reason: STALE_UPLOAD_MSG });
+    expect(await get(admin, '/admin/v1', fresh)).toMatchObject({ status: 'processing' });
+    expect((await rows("SELECT 1 FROM audit_log WHERE object_id = ? AND action = 'media.upload_stale'", [old])).length).toBe(1);
+    expect(await sweepStaleUploads(env.rt)).toBe(0); // idempotent
+    env.rt.clock.advance(61 * 60_000);
+    expect(await sweepStaleUploads(env.rt)).toBeGreaterThanOrEqual(1);
+    expect((await get(admin, '/admin/v1', fresh)).status).toBe('rejected');
   });
 });

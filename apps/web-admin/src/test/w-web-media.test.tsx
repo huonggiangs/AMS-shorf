@@ -131,24 +131,24 @@ describe('Nhap tu lien ket: tien do va Thu lai', () => {
   });
 
   it('loi cu the (Drive khong cong khai) + nut Thu lai goi POST /media/:id/import/retry', async () => {
-    const msg = 'Tệp Drive không chia sẻ công khai hoặc vượt hạn mức tải. Hãy đặt chia sẻ "Bất kỳ ai có đường liên kết" hoặc tải tệp lên trực tiếp.';
-    const m = media('i2', { status: 'rejected', kind: 'link', source: 'gdrive', reject_reason: msg, scan_reasons: [], blocker: BLK('import_failed', 'retry', msg), transfer: { kind: 'import', status: 'failed', bytes_done: 0, bytes_total: null, percent: null, error_code: 'drive_not_public', error_message: msg } });
+    const msg = 'Tệp Drive chưa chia sẻ công khai nên hệ thống không tải được. Mở Drive, bấm Chia sẻ, chọn "Bất kỳ ai có đường liên kết" (quyền Người xem) rồi bấm Thử lại.';
+    const m = media('i2', { status: 'rejected', kind: 'link', source: 'gdrive', reject_reason: msg, scan_reasons: [], blocker: BLK('import_failed', 'retry', msg), transfer: { kind: 'import', status: 'failed', bytes_done: 0, bytes_total: null, percent: null, error_code: 'drive_login_required', error_message: msg } });
     handlers.push(me(['view', 'write']), on('/admin/v1/media', { items: [m], total: 1, page: 1, page_size: 9 }), on('/admin/v1/media/i2/import/retry', { ...m, status: 'processing' }, 'POST'));
     vi.stubGlobal('fetch', mockFetch());
     mount('/media');
     const why = await screen.findByRole('status', { name: 'Vì sao chưa duyệt được' });
-    expect(why).toHaveTextContent('không chia sẻ công khai hoặc vượt hạn mức tải');
+    expect(why).toHaveTextContent('chưa chia sẻ công khai');
     await userEvent.click(within(why).getByRole('button', { name: 'Thử lại' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/api/admin/v1/media/i2/import/retry')).toBe(true));
   });
 
-  it('YouTube: bao ro chua ho tro, khong cho gui', async () => {
+  it('YouTube: dan lien ket YouTube -> bao ro chua ho tro va huong dan tai ve may, khong cho gui', async () => {
     handlers.push(me(['view', 'write']), on('/admin/v1/media', { items: [], total: 0 }));
     vi.stubGlobal('fetch', mockFetch());
     mount('/media');
     await userEvent.click(await screen.findByRole('button', { name: /Tải nội dung mới/ }));
     const dlg = await screen.findByRole('dialog', { name: 'Tải nội dung' });
-    await userEvent.click(within(dlg).getByRole('button', { name: 'YouTube' }));
+    await userEvent.type(within(dlg).getByLabelText('Liên kết Google Drive hoặc Dropbox'), 'https://www.youtube.com/watch?v=abc123');
     expect(dlg).toHaveTextContent('Chưa hỗ trợ tải từ YouTube');
     expect(within(dlg).getByRole('button', { name: 'Nhập từ liên kết' })).toBeDisabled();
   });

@@ -5,6 +5,8 @@ import react from '@vitejs/plugin-react';
 // Dev proxy: /api/* -> http://localhost:8787/* (the /api prefix is stripped).
 export default defineConfig({
   plugins: [react()],
+  // Worker chuyen ma video (src/lib/transcode.worker.ts) nap mediabunny bang dynamic import => can dinh dang ES (khong IIFE)
+  worker: { format: 'es' },
   server: {
     port: 5173,
     proxy: {
