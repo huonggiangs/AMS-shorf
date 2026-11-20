@@ -103,6 +103,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   const flushSize = envInt(env, 'TELEMETRY_FLUSH_SIZE', 200);
   const publicManifest = env['MANIFEST_PUBLIC'] !== '0';
   const cmdRedeliverS = envInt(env, 'CMD_REDELIVER_S', 120);
+  const pairedHbS = Math.max(0, envInt(env, 'HB_PAIRED_S', 0)) === 0 ? 0 : Math.max(30, envInt(env, 'HB_PAIRED_S', 0));
 
   // ----- bo dem telemetry: gop lo, khong qua Queue tung heartbeat -----
   let hbRows: HbRow[] = [];
@@ -275,7 +276,11 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     }
     const cfg = await ctl.get();
     const monitored = cfg.monitored?.includes(dev.id) ?? false;
-    const { base, next } = computeInterval(hb.state, monitored, loadFn(), cfg, intervals, rng);
+    // w-dev: HB_PAIRED_S (tuy chon, mac dinh TAT) rut ngan chu ky co so cua thiet bi DA GHEP (trust >= 1) de lenh tu web toi nhanh hon.
+    // Van la polling (khong realtime); tai cao van keo gian theo computeInterval. Toi thieu 30 giay de khong tao tai.
+    const pairedCap = Number(dev.trust) >= 1 && pairedHbS > 0 ? pairedHbS : 0;
+    const eff: IntervalCfg = pairedCap ? { playingS: Math.min(intervals.playingS, pairedCap), idleS: Math.min(intervals.idleS, pairedCap), errorS: Math.min(intervals.errorS, pairedCap), monitoredS: intervals.monitoredS } : intervals;
+    const { base, next } = computeInterval(hb.state, monitored, loadFn(), cfg, eff, rng);
     const group = groupOfDevice(dev);
     const view = await manifests.get(group);
     const gs = groupString(group);

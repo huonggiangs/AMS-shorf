@@ -82,11 +82,11 @@ describe('TvExperience: kid_safe + overlay', () => {
 
   it('nguoi duyet dat kid_safe + lock; overlay luu du truong; tim duoc theo bo loc; audit', async () => {
     // chinh sach tre em (p2): man khoa TAT mac dinh => chua cho dat ngu canh 'lock'
-    const off = await admin.json('PUT', `/admin/v1/tv-experience/creatives/${cid}`, { kid_safe: true, contexts: ['lock', 'fullscreen'], duration_s: 25 });
+    const off = await admin.json('PUT', `/admin/v1/tv-experience/creatives/${cid}`, { kid_safe: true, contexts: ['lock', 'fullscreen'], duration_s: 25, confirm_reviewed: true, note: 'da xem noi dung' });
     expect(off.status).toBe(422);
     expect(off.body.error.code).toBe('lock_ads_disabled');
     await db().run("INSERT INTO settings (key, value, updated_by, updated_at) VALUES ('tv_experience', ?, NULL, ?)", [JSON.stringify({ lock_ads_enabled: true, fullscreen_ads_enabled: true, frequency: { per_hour: 30, min_gap_s: 60, same_creative_gap_s: 300 }, banned_industries: ['rượu bia'] }), '2026-11-12T03:00:00.000Z']);
-    const r = await admin.json('PUT', `/admin/v1/tv-experience/creatives/${cid}`, { kid_safe: true, contexts: ['lock', 'fullscreen'], duration_s: 25 });
+    const r = await admin.json('PUT', `/admin/v1/tv-experience/creatives/${cid}`, { kid_safe: true, contexts: ['lock', 'fullscreen'], duration_s: 25, confirm_reviewed: true, note: 'da xem noi dung' });
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ kid_safe: true, lock_eligible: true, duration_s: 25 });
     const stored = JSON.parse((await db().query<{ overlay: string }>('SELECT overlay FROM creatives WHERE id = ?', [cid]))[0]!.overlay);

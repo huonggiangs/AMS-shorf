@@ -42,6 +42,11 @@ interface CreativeRow {
   overlay?: string | null;
   customer_id?: string | null;
   scan_state?: string | null;
+  /** creative_security.content_version hien tai (khong co dong = 1) */
+  content_version?: number | null;
+  /** creative_kid_review (0015): xac nhan kid_safe cua nguoi duyet va phien ban noi dung luc xac nhan */
+  kr_kid?: number | null;
+  kr_version?: number | null;
 }
 interface SlotRow {
   campaign_id: string;
@@ -328,7 +333,7 @@ export class ManifestService {
       }
       if (!sha) continue; // khong xac minh duoc tep => khong dua vao manifest
       const fmt = isAdFormat(r.format) ? r.format : isAdFormat(r.kind) ? r.kind : 'fullscreen';
-      const { ov, drop } = parseOverlayJson(r.overlay, lockAllowed);
+      const { ov, drop } = parseOverlayJson(r.overlay, lockAllowed, Number(r.kr_kid ?? 0) === 1 && r.kr_version != null && Number(r.kr_version) === Number(r.content_version ?? 1));
       if (drop) continue; // creative chi-man-khoa khi man khoa/tre em chua duoc bat (hoac khong kid_safe): khong phat o man thuong
       creatives.push({
         id: r.id,
@@ -455,8 +460,9 @@ export class ManifestService {
   private async queryCreatives(type: string): Promise<CreativeRow[]> {
     const allowUnscanned = await this.allowUnscanned();
     return this.rt.db.query<CreativeRow>(
-      `SELECT cr.id, cr.campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay, cr.customer_id, cr.scan_state
-         FROM creatives cr JOIN campaigns c ON c.id = cr.campaign_id LEFT JOIN creative_security cs ON cs.creative_id = cr.id
+      `SELECT cr.id, cr.campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay, cr.customer_id, cr.scan_state,
+              COALESCE(cs.content_version, 1) AS content_version, kr.kid_safe AS kr_kid, kr.content_version AS kr_version
+         FROM creatives cr JOIN campaigns c ON c.id = cr.campaign_id LEFT JOIN creative_security cs ON cs.creative_id = cr.id LEFT JOIN creative_kid_review kr ON kr.creative_id = cr.id
         WHERE c.state = 'active' AND cr.target_type = ? AND cr.review_state = 'approved' AND cr.state = 'ready'
           AND NOT (cs.approved_version IS NOT NULL AND cs.approved_version <> cs.content_version)
           ${allowUnscanned ? "AND cr.scan_state NOT IN ('infected','failed')" : "AND cr.scan_state = 'clean'"}`,
@@ -488,16 +494,23 @@ export class ManifestService {
 
 /**
  * overlay luu TEXT JSON; kiem lai khi phat (du lieu cu/hong thi bo qua, khong lam hong manifest).
- * Chinh sach tre em (p2, fail-safe): ngu canh 'lock' chi con khi settings.tv_experience.lock_ads_enabled === true VA creative kid_safe === true;
+ * Chinh sach tre em (p2, fail-safe): ngu canh 'lock' chi con khi settings.tv_experience.lock_ads_enabled === true VA creative kid_safe === true
+ * VA nguoi duyet da xac nhan kid_safe cho dung content_version hien tai (creative_kid_review, w-dev);
  * nguoc lai 'lock' bi bo; neu 'lock' la ngu canh DUY NHAT thi creative bi loai khoi manifest (drop) — khong roi ve fullscreen.
  */
-function parseOverlayJson(raw: string | null | undefined, lockAllowed: boolean): { ov: import('@ams/shared').CreativeOverlay | null; drop: boolean } {
+function parseOverlayJson(raw: string | null | undefined, lockAllowed: boolean, kidReviewed: boolean): { ov: import('@ams/shared').CreativeOverlay | null; drop: boolean } {
   if (!raw) return { ov: null, drop: false };
   try {
     // du lieu DB la dang tin cay (khach chi ghi qua route 'reject'/'strip'): giu kid_safe/ngu canh 'lock' do nguoi duyet dat
     const r = parseOverlay(JSON.parse(raw), { reviewerFields: 'keep' });
     if (!r.ok || !r.value) return { ov: null, drop: false };
-    const v = r.value;
+    let v = r.value;
+    // w-dev: kid_safe chi co hieu luc khi nguoi duyet da xac nhan (creative_kid_review) cho DUNG phien ban noi dung hien tai.
+    // Khong co xac nhan / xac nhan cu (khach da doi noi dung) => khong bao kid_safe=true, khong cho ngu canh 'lock'.
+    if (v.kid_safe === true && !kidReviewed) {
+      const { kid_safe: _drop, ...rest } = v;
+      v = rest;
+    }
     if (v.contexts?.includes('lock') && !(lockAllowed && v.kid_safe === true)) {
       const rest = v.contexts.filter((x) => x !== 'lock');
       if (rest.length === 0) return { ov: null, drop: true };

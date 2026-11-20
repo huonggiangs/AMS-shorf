@@ -70,5 +70,10 @@ export const MIGRATIONS: MigrationFile[] = [
     "name": "0013_ui",
     "dialect": "all",
     "sql": "-- 0013 (u1-ui): dieu khoan bo sung cua dong gia hop dong: mo hinh gia (fixed|cpm), gia CPM goc, ngay hieu luc.\n-- Co y KHONG dung ALTER TABLE (khong idempotent): bang phu khoa theo contract_line_id, nhu 0007. Don gia moi luot van nam o contract_line_prices.\n-- model='cpm': cpm_micro_vnd = gia moi 1.000 luot (micro-VND nguyen); don gia moi luot = ceil(cpm/1000) (cung quy tac voi bang gia).\n-- effective_from/to: ngay YYYY-MM-DD gio Viet Nam, bao gom ca hai dau; NULL = khong gioi han (theo thoi han hop dong).\nCREATE TABLE IF NOT EXISTS contract_line_terms (\n  contract_line_id TEXT NOT NULL PRIMARY KEY,\n  contract_id TEXT NOT NULL,\n  model TEXT NOT NULL DEFAULT 'fixed' CHECK (model IN ('fixed','cpm')),\n  cpm_micro_vnd BIGINT CHECK (cpm_micro_vnd IS NULL OR cpm_micro_vnd > 0),\n  effective_from TEXT,\n  effective_to TEXT\n);\nCREATE INDEX IF NOT EXISTS idx_contract_line_terms_contract ON contract_line_terms(contract_id);\n"
+  },
+  {
+    "name": "0015_device_ops",
+    "dialect": "all",
+    "sql": "-- 0015 (w-dev): xac nhan cua nguoi duyet cho kid_safe / ngu canh man khoa cua creative, GAN VOI phien ban noi dung.\n-- Co y KHONG dung ALTER TABLE (khong idempotent): bang phu khoa theo creative_id, nhu 0007/0013.\n-- Manifest chi giu ngu canh 'lock' khi dong nay co kid_safe = 1 VA content_version = creative_security.content_version hien tai\n-- (khach doi tep/dinh dang/overlay => content_version tang => xac nhan het hieu luc cho toi khi nguoi duyet xac nhan lai).\n-- Lenh thiet bi dung bang device_commands (0004); huy lenh = status 'failed' + result 'cancelled_by_admin' (khong doi CHECK).\nCREATE TABLE IF NOT EXISTS creative_kid_review (\n  creative_id TEXT NOT NULL PRIMARY KEY,\n  content_version INTEGER NOT NULL,\n  kid_safe INTEGER NOT NULL DEFAULT 0 CHECK (kid_safe IN (0,1)),\n  contexts TEXT,\n  reviewed_by TEXT,\n  reviewed_at TEXT NOT NULL,\n  note TEXT\n);\n"
   }
 ];

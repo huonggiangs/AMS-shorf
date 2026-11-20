@@ -15,7 +15,7 @@ info:
     Mã: `bad_request` (400), `invalid_signature` (401), `stale_timestamp` (401), `unknown_device` (401), `device_blocked` (403), `replay` (409), `payload_too_large` (413), `validation_failed` (422), `rate_limited` (429), `overloaded` (503), `not_found` (404), `internal` (500). 429/503 kèm `Retry-After` (đã jitter): thiết bị PHẢI chờ đúng giá trị đó.
 
     ## TODO (p0-domain): chưa có trong tài liệu này
-    Endpoint admin để tạo/xem lệnh (hiện chỉ có hàm `enqueueCommand`, chưa có route HTTP) và loại lệnh mới do p0-domain bổ sung. `/v1/commands/ack` và `commands[]` của heartbeat (bảng `device_commands`) đã có và được sinh từ mã; xem docs/DEVICE-PROTOCOL.md mục 6. Khi p0 thêm route, `check` báo lệch; chạy lại `generate`.
+    Lệnh admin tạo/xem/huỷ qua `/admin/v1/devices/{id}/commands` (xem tài liệu admin API); loại lệnh mới do p0-domain bổ sung (nếu có). `/v1/commands/ack` và `commands[]` của heartbeat (bảng `device_commands`) đã có và được sinh từ mã; xem docs/DEVICE-PROTOCOL.md mục 6. Khi p0 thêm route, `check` báo lệch; chạy lại `generate`.
 servers:
   - url: http://gw.ams.localhost
     description: Docker local (Caddy)

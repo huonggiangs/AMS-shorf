@@ -8,6 +8,7 @@ import { dropDeviceCache } from '../lib/manifest.js';
 import { getRt, num, parseBody, placeholders, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { hasPerm, requirePerm } from '../auth/middleware.js';
+import { deviceCommandRoutes, deliveryInfo } from './device-commands.js';
 import type { AppEnv } from '../types.js';
 
 const D_SELECT = `d.id, d.name, d.kind, d.model, d.os, d.app_version, d.region_id, d.status, d.last_seen_at, d.views_30d, d.blocked, d.trust_level, d.paired_at, d.created_at, eu.display_name AS owner_name`;
@@ -48,6 +49,7 @@ const spec: ListSpec = {
     region: (v) => ({ sql: 'd.region_id = ?', params: [regionCode(v)] }),
     status: (v) => {
       if (v === 'blocked') return { sql: 'd.blocked = 1', params: [] };
+      if (v === 'unpaired') return { sql: 'd.blocked = 0 AND d.paired_at IS NULL', params: [] };
       if (v === 'online') return { sql: "d.status = 'active' AND d.blocked = 0", params: [] };
       return { sql: 'd.status = ? AND d.blocked = 0', params: [v] };
     },
@@ -82,6 +84,8 @@ async function present(c: Ctx, rows: DevRow[]): Promise<Record<string, unknown>[
     region_id: d.region_id,
     status: apiStatus(d),
     trust_level: num(d.trust_level),
+    // w-dev: ghep ma (trust 1) tach khoi Xac minh (trust 2): blocked > verified > paired > pending (TV da dang ky, chua nhap ma)
+    pairing_state: d.blocked ? 'blocked' : num(d.trust_level) >= 2 ? 'verified' : d.paired_at ? 'paired' : 'pending',
     last_seen_at: d.last_seen_at,
     paired_at: d.paired_at,
     views: num(d.views_30d),
@@ -126,20 +130,72 @@ export function deviceRoutes(): Hono<AppEnv> {
     const u = c.get('user');
     const b = await parseBody(c, z.object({ code: z.string().trim().regex(/^\d{6}$/, 'Mã ghép đôi gồm 6 chữ số'), owner_name: z.string().trim().max(100).optional() }));
     const bucket = Math.floor(rt.clock.now().getTime() / 600_000);
+    // han muc: moi lan nhap (30/10 phut/nguoi) VA rieng so lan nhap SAI (10/10 phut/nguoi, 200/10 phut toan he thong) de chan do ma 6 so
     if ((await rt.kv.incr(`rl:pair:${u.id}:${bucket}`, 600)) > 30) throw tooMany('Nhập mã quá nhiều lần, thử lại sau ít phút.', 300);
+    const failKeyU = `rl:pairfail:${u.id}:${bucket}`;
+    const failKeyG = `rl:pairfail:all:${bucket}`;
+    const fails = Number((await rt.kv.get(failKeyU).catch(() => null)) ?? 0);
+    const failsAll = Number((await rt.kv.get(failKeyG).catch(() => null)) ?? 0);
+    if (fails >= 10 || failsAll >= 200) throw tooMany('Nhập sai mã quá nhiều lần, thử lại sau ít phút.', 300, 'pair_locked');
+    const fail = async (reason: string): Promise<void> => {
+      await rt.kv.incr(failKeyU, 600);
+      await rt.kv.incr(failKeyG, 600);
+      await auditCtx(c, rt.db, { action: 'device.pair_failed', objectType: 'device', objectId: null, diff: { reason } });
+    };
     const nowIso = rt.clock.now().toISOString();
+    // kiem tra truoc (khong tao end_user rac): ma co that, con han, chua dung, thiet bi khong bi chan
+    const pre = (await rt.db.query<{ device_id: string; expires_at: string; used_at: string | null; blocked: number }>('SELECT p.device_id, p.expires_at, p.used_at, d.blocked FROM pairing_codes p JOIN devices d ON d.id = p.device_id WHERE p.code = ?', [b.code]))[0];
+    if (!pre) {
+      await fail('not_found');
+      throw notFound('Mã ghép đôi không đúng.', 'pair_code_not_found');
+    }
+    if (pre.used_at) {
+      await fail('used');
+      throw conflict('Mã này đã được dùng.', 'pair_code_used');
+    }
+    if (pre.expires_at <= nowIso) {
+      await fail('expired');
+      throw unprocessable('Mã đã hết hạn (5 phút). Hãy lấy mã mới trên màn hình TV.', 'pair_code_expired');
+    }
+    if (Number(pre.blocked) === 1) {
+      await fail('device_blocked');
+      throw conflict('Thiết bị này đang bị chặn nên không ghép được.', 'device_blocked');
+    }
     const userId = rt.id();
     await rt.db.run('INSERT INTO end_users (id, phone_hash, email_enc, display_name, created_at) VALUES (?, NULL, NULL, ?, ?)', [userId, b.owner_name || `Ghép bởi ${u.name}`, nowIso]);
     const res = await redeemPairingCode(rt, b.code, userId); // cung xoa kv `dev:<id>`
     if (!res.ok) {
       await rt.db.run('DELETE FROM end_users WHERE id = ?', [userId]);
+      await fail(res.reason);
       if (res.reason === 'not_found') throw notFound('Mã ghép đôi không đúng.', 'pair_code_not_found');
       if (res.reason === 'expired') throw unprocessable('Mã đã hết hạn (5 phút). Hãy lấy mã mới trên màn hình TV.', 'pair_code_expired');
       throw conflict('Mã này đã được dùng.', 'pair_code_used');
     }
-    await auditCtx(c, rt.db, { action: 'device.pair', objectType: 'device', objectId: res.deviceId, diff: { end_user_id: userId } });
-    return c.json({ device_id: res.deviceId, paired: true });
+    await auditCtx(c, rt.db, { action: 'device.pair', objectType: 'device', objectId: res.deviceId, diff: { end_user_id: userId, owner_name: b.owner_name ?? null, trust_level: 1 } });
+    return c.json({ device_id: res.deviceId, paired: true, trust_level: 1 });
   });
+
+  // Gan/doi chu so huu (khach hang) cho thiet bi DA ghep ma. Tao end_user moi va tro device toi do (khong sua end_user cu vi co the dung chung).
+  r.put('/:id/owner', requirePerm('devices', 'write'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const id = c.req.param('id');
+    const b = await parseBody(c, z.object({ owner_name: z.string().trim().min(1, 'Nhập tên chủ sở hữu / khách hàng').max(100) }).strict());
+    const d = (await rt.db.query<{ id: string; user_id: string | null; paired_at: string | null; blocked: number }>('SELECT id, user_id, paired_at, blocked FROM devices WHERE id = ?', [id]))[0];
+    if (!d) throw notFound('Không tìm thấy thiết bị.');
+    if (!d.paired_at) throw conflict('Thiết bị chưa ghép mã nên chưa gán chủ sở hữu được. Hãy ghép mã hiển thị trên TV trước.', 'device_not_paired');
+    const nowIso = rt.clock.now().toISOString();
+    const userId = rt.id();
+    await rt.db.tx(async (db) => {
+      await db.run('INSERT INTO end_users (id, phone_hash, email_enc, display_name, created_at) VALUES (?, NULL, NULL, ?, ?)', [userId, b.owner_name, nowIso]);
+      await db.run('UPDATE devices SET user_id = ? WHERE id = ?', [userId, id]);
+      await auditCtx(c, db, { action: 'device.owner_assign', objectType: 'device', objectId: id, diff: { owner_name: b.owner_name, previous_user_id: d.user_id, end_user_id: userId, by: u.id } });
+    });
+    await dropDeviceCache(rt, [id]);
+    return c.json({ device_id: id, owner_name: b.owner_name });
+  });
+
+  r.route('/:id/commands', deviceCommandRoutes());
 
   r.get('/:id', requirePerm('devices', 'view'), async (c) => {
     const rt = getRt(c);
@@ -156,7 +212,7 @@ export function deviceRoutes(): Hono<AppEnv> {
     const days = await rt.db.query<{ d: string; n: number }>('SELECT substr(ts, 1, 10) AS d, COUNT(*) AS n FROM ev_ad_impression WHERE device_id = ? AND valid = 1 AND ts >= ? GROUP BY substr(ts, 1, 10)', [id, since]);
     const dm = new Map(days.map((x) => [x.d, num(x.n)]));
     const views7 = Array.from({ length: 7 }, (_, i) => dm.get(new Date(rt.clock.now().getTime() - (6 - i) * 86400_000).toISOString().slice(0, 10)) ?? 0);
-    return c.json({ ...base, seen_ads: seen.map((s) => ({ name: s.name, brand: s.brand, views: num(s.views) })), views_7d: views7 });
+    return c.json({ ...base, delivery: deliveryInfo(rt.config.env), seen_ads: seen.map((s) => ({ name: s.name, brand: s.brand, views: num(s.views) })), views_7d: views7 });
   });
 
   return r;

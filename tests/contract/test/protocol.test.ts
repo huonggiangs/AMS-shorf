@@ -336,6 +336,7 @@ describe('manifest', () => {
       const [c1, c2, c3] = w2.fixture.campaigns[0]!.creatives;
       const reviewed = { v: 1, headline: 'Xin chao', duration_s: 12, kid_safe: true, contexts: ['lock', 'fullscreen'], safe_area: { top: 5, right: 5, bottom: 5, left: 5 }, qr: { url: 'https://ams.example/q', hint: 'Quet de nhan uu dai' } };
       await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify(reviewed), c1!.id]);
+      await w2.rt.db.run("INSERT INTO creative_kid_review (creative_id, content_version, kid_safe, reviewed_by, reviewed_at, note) VALUES (?, 1, 1, NULL, '2026-11-12T03:00:00.000Z', 'test')", [c1!.id]);
       await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify({ ...reviewed, kid_safe: false }), c2!.id]);
       await w2.rt.db.run('UPDATE creatives SET overlay = ? WHERE id = ?', [JSON.stringify({ headline: 'Khong ro', contexts: ['lock'] }), c3!.id]);
       await setLock(w2, LOCK_ON);
