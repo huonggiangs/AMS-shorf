@@ -22,7 +22,7 @@ try {
   if ($ans -ne 'xoa-staging') { Say 'Da huy, khong xoa gi.'; return }
   $w = Join-Path $root 'node_modules\.bin\wrangler.cmd'
   if (-not (Test-Path $w)) { pnpm install --frozen-lockfile 2>&1 | Out-Null }
-  if (-not (Test-Path $w)) { $w = 'npx wrangler' }
+  if (-not (Test-Path $w)) { $w = 'npx --yes wrangler@4' }
   foreach ($n in $d1)     { Say "--- D1 $n ---";    & cmd /c "$w d1 delete $n -y 2>&1" | Tee-Object -FilePath $log -Append }
   Say '--- KV ams-kv-staging ---'; & cmd /c "$w kv namespace delete --namespace-id $kvId 2>&1" | Tee-Object -FilePath $log -Append
   foreach ($n in $queues) { Say "--- Queue $n ---"; & cmd /c "$w queues delete $n 2>&1" | Tee-Object -FilePath $log -Append }
