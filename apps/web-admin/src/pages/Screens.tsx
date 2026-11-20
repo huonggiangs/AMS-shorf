@@ -11,7 +11,10 @@ import { Dialog } from '../components/Dialog';
 import { useT } from '../i18n';
 import { SignageConfigCard } from '../components/SignageOps';
 
-const EL: Record<string, [number, number, number]> = { '18.5': [18.5, 768, 1366], '21.5': [21.5, 1080, 1920], '23.8': [23.8, 1080, 1920] };
+// Mau hien thi thang may: [inch (0 = khong ro), rong, cao]. Man thang may nhan moi do phan giai doc 9:16 tu HD den 4K.
+const EL: Record<string, [number, number, number]> = { hd: [0, 720, 1280], '18.5': [18.5, 768, 1366], '21.5': [21.5, 1080, 1920], '23.8': [23.8, 1080, 1920], '2k': [0, 1440, 2560], '4k': [0, 2160, 3840] };
+const EL_LABEL = (k: string) => (EL[k]![0] ? `${EL[k]![0]}"` : k === 'hd' ? 'HD' : k.toUpperCase());
+const EL_SIZES = [['720×1280', 'HD'], ['768×1366', '18,5"'], ['1080×1920', 'Full HD · 21,5"/23,8"'], ['1440×2560', '2K'], ['2160×3840', '4K']] as const;
 const LD: Record<string, [number, number]> = { '1.28': [1.28, 0.64], '2.56': [2.56, 1.28], '3.84': [3.84, 1.92], '0.96': [0.96, 1.92] };
 
 /** Drop a local file onto the preview frame; kept in the browser session only (object URL). */
@@ -34,7 +37,7 @@ export default function Screens() {
   const [add, setAdd] = useState(false);
   const count = (key: string, filter?: string) => useQuery({ queryKey: ['/admin/v1/screens', 'count', key], queryFn: () => api.get('/admin/v1/screens', { query: { page_size: 1, filter }, schema: listOf(screenSchema) }) }).data?.total; // eslint-disable-line react-hooks/rules-of-hooks
   const nEl = count('el', 'type:elevator'), nLed = count('led', 'type:led'), nAll = count('all');
-  const e = EL[el]!, dm = e[0] * 25.4, ew = Math.round(dm * 0.4902), eh = Math.round(dm * 0.8716);
+  const e = EL[el]!, dm = (e[0] || (e[1] <= 720 ? 15.6 : e[1] <= 1440 ? 27 : 32)) * 25.4, ew = Math.round(dm * 0.4902), eh = Math.round(dm * 0.8716);
   const l = LD[ld]!, lw = Math.round((l[0] * 1000) / 5), lh = Math.round((l[1] * 1000) / 5);
   const showE = T === 'all' || T === 'elevator', showL = T === 'all' || T === 'led';
   const cols: Col<Screen>[] = useMemo(() => [
@@ -61,7 +64,7 @@ export default function Screens() {
         {showE ? (
           <div className="card cp">
             <div className="ch"><div><h2>Màn hình thang máy (dọc)</h2><p>Màn hình 18,5&quot;–23,8&quot;, đặt dọc 9:16, thường có loa; nội dung ngắn, xem trong 20–60 giây di chuyển.</p></div><Tag tone="info">Portrait</Tag></div>
-            {seg(Object.keys(EL), el, setEl, (i) => `${i}"`)}
+            {seg(Object.keys(EL), el, setEl, EL_LABEL)}
             <div style={{ display: 'grid', placeItems: 'center', background: 'var(--bg)', borderRadius: 10, padding: 18 }}>
               <div className="tv" style={{ width: 'min(190px,100%)', borderRadius: 14 }}>
                 <div className="scr" style={{ aspectRatio: `${e[1]}/${e[2]}` }}>
@@ -72,9 +75,9 @@ export default function Screens() {
               </div>
             </div>
             <dl className="kv" style={{ margin: '16px 0 0' }}>
-              <dt>Kích thước màn</dt><dd className="mono">{e[0]}&quot; · khoảng {ew} × {eh} mm (đặt dọc)</dd>
+              <dt>Kích thước màn</dt><dd className="mono">{e[0] ? `${e[0]}"` : `mẫu ${EL_LABEL(el)}`} · khoảng {ew} × {eh} mm (đặt dọc)</dd>
               <dt>Độ phân giải</dt><dd className="mono">{e[1]} × {e[2]} px</dd><dt>Tỷ lệ</dt><dd>9:16 · không dùng ảnh ngang 16:9</dd>
-              <dt>Định dạng</dt><dd>MP4 H.264 hoặc JPG/PNG, tối đa 30 MB</dd><dt>Thời lượng</dt><dd>10–30 giây, lặp liên tục</dd>
+              <dt>Độ phân giải nhận</dt><dd className="mono">mọi độ phân giải dọc 9:16 từ 720×1280 (HD) đến 2160×3840 (4K)</dd><dt>Định dạng</dt><dd>MP4 H.264 hoặc H.265 (bitrate ≤ 16 Mbps), hoặc JPG/PNG; tối đa 30 MB (đến Full HD) / 100 MB (2K, 4K)</dd><dt>Thời lượng</dt><dd>10–30 giây, lặp liên tục</dd>
               <dt>Âm thanh</dt><dd>Mặc định tắt; bật theo quy định tòa nhà</dd><dt>Vùng an toàn</dt><dd>Lề 6% mỗi cạnh; chữ tối thiểu 36 px</dd>
             </dl>
           </div>
@@ -99,7 +102,7 @@ export default function Screens() {
           </div>
         ) : null}
       </div>
-      <Note>Mỗi loại màn hình dùng tệp creative riêng đúng độ phân giải gốc. Màn hình dọc không dùng lại video ngang 16:9; bảng LED không co giãn tự động, hệ thống từ chối tệp sai kích thước. Ảnh thả vào khung chỉ lưu trong phiên trình duyệt.</Note>
+      <Note>Màn thang máy nhận tệp dọc 9:16 từ HD đến 4K: {EL_SIZES.map(([px, n]) => `${px} (${n})`).join(', ')}. Mỗi màn được gửi bản bằng hoặc thấp hơn gần nhất độ phân giải của nó (không đẩy 4K cho màn HD); mặc định hiện vừa khung, giữ tỷ lệ, có viền đen nếu lệch. Màn hình dọc không dùng lại video ngang 16:9; bảng LED không co giãn tự động, hệ thống từ chối tệp sai kích thước. Ảnh thả vào khung chỉ lưu trong phiên trình duyệt.</Note>
       {can('screens', 'view') ? <SignageConfigCard canWrite={can('screens', 'write')} /> : null}
       <ServerTable id="vn" endpoint="/admin/v1/screens" itemSchema={screenSchema} cols={cols} title="Vị trí lắp đặt" sub="Chung cư, thang máy và bãi đỗ xe" exportName="vi-tri-man-hinh"
         extra={useMemo(() => (T === 'all' ? undefined : { type: T }), [T])}

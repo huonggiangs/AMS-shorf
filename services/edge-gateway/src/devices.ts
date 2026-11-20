@@ -1,4 +1,5 @@
 import type { Runtime } from '@ams/runtime';
+import { signageModelClass } from '@ams/shared';
 import { DEVICE_KV_TTL_S } from './heartbeat-ttl.js';
 
 export interface DeviceRec {
@@ -24,7 +25,7 @@ export interface DeviceRec {
 export function modelClassOf(r: { kind: string; screenType?: string | null; pxW?: number | null; pxH?: number | null }): { type: 'tv' | 'elevator' | 'led_p5'; cls: string } {
   const type = (r.screenType as 'tv' | 'elevator' | 'led_p5' | null) ?? (r.kind === 'elevator' ? 'elevator' : r.kind === 'led_p5' ? 'led_p5' : 'tv');
   if (type === 'tv') return { type, cls: 'tv' };
-  return { type, cls: r.pxW && r.pxH ? `${type}_${r.pxW}x${r.pxH}` : type };
+  return { type, cls: signageModelClass(type, r.pxW, r.pxH) };
 }
 
 interface Row {

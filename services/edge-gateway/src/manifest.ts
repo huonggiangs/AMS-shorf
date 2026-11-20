@@ -1,5 +1,5 @@
 import type { Runtime } from '@ams/runtime';
-import { ANY, MANIFEST_EPOCH_KEY, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
+import { ANY, MANIFEST_EPOCH_KEY, elevatorTierFor, isElevatorResolution, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
 import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestSlot } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 
@@ -333,8 +333,23 @@ export class ManifestService {
     const creativeRows = (await this.queryCreatives(type)).filter((r) => campaignIds.has(r.campaign_id));
     const lockAllowed = await this.lockAdsEnabled();
     const creatives: ManifestCreative[] = [];
+    // Thang may co nhom theo bac (elevator_<w>x<h>): moi chien dich chi giu creative o bac CAO NHAT khong vuot bac cua thiet bi
+    // (bang hoac thap hon gan nhat; khong bao gio day 4K cho man HD). Nhom `elevator` (chua khai px) nhan moi creative thang may HD-4K.
+    const elevatorBest = new Map<string, number>();
+    if (type === 'elevator' && px) {
+      for (const r of creativeRows) {
+        if (!r.px_w || !r.px_h || !isElevatorResolution(Number(r.px_w), Number(r.px_h))) continue;
+        const tw = elevatorTierFor(Number(r.px_w), Number(r.px_h)).w;
+        if (tw <= px.w && tw > (elevatorBest.get(r.campaign_id) ?? 0)) elevatorBest.set(r.campaign_id, tw);
+      }
+    }
     for (const r of creativeRows) {
-      if (px && (r.px_w !== px.w || r.px_h !== px.h)) continue; // thang may/LED khong tu co gian: dung do phan giai
+      if (type === 'elevator') {
+        const known = !!r.px_w && !!r.px_h;
+        if (known && !isElevatorResolution(Number(r.px_w), Number(r.px_h))) continue; // chi creative doc 9:16 HD-4K
+        if (px && !known) continue; // nhom theo do phan giai: creative chua biet kich thuoc thi khong dua vao
+        if (px && elevatorTierFor(Number(r.px_w), Number(r.px_h)).w !== elevatorBest.get(r.campaign_id)) continue;
+      } else if (px && (r.px_w !== px.w || r.px_h !== px.h)) continue; // LED khong tu co gian: dung do phan giai
       if (!r.storage_key) continue;
       // uu tien ban chuyen ma; tep goc chi duoc phat khi da quet sach (hoac quan tri cho phep tep chua quet)
       const rend = await this.renditionOf(r, ctx);

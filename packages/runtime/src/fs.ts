@@ -93,6 +93,17 @@ export class FsObjectStore implements ObjectStore {
     await this.writeAtomic(file, body); // du lieu ghi sau cung: nguoi doc thay du lieu thi luon co meta
   }
 
+  async putStream(key: string, body: ReadableStream<Uint8Array>, contentType: string, _size: number): Promise<void> {
+    const parts: Uint8Array[] = []; // fs chi dung cho may chu Node (khong phai Worker): gom roi ghi nguyen tu nhu put()
+    const rd = body.getReader();
+    for (;;) {
+      const { done, value } = await rd.read();
+      if (done) break;
+      parts.push(value);
+    }
+    await this.put(key, Buffer.concat(parts), contentType);
+  }
+
   async get(key: string): Promise<Uint8Array | null> {
     const file = this.path(key);
     try {

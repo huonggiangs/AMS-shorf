@@ -32,14 +32,19 @@ Quy tắc đã mã hóa (`services/api/src/lib/creative.ts`: `VIDEO_RULES`, `DUR
 
 | | Quy tắc | Lỗi (mã) |
 |---|---|---|
-| Codec hình | H.264 (`avc1`/`avc3`) + AAC. AV1, H.265, VP9... bị từ chối, tệp bị xóa khỏi kho | 422 `unsupported_codec` |
-| Độ phân giải video | cạnh dài <= 1920, cạnh ngắn <= 1080 (Full HD) | 422 `video_resolution_too_high` |
-| Dung lượng video | <= 100 MB (mọi loại màn); thang máy <= 30 MB, LED <= 50 MB; khách còn hạn mức tài khoản (mặc định 30 MB/tệp) | 422 `file_too_large` |
+| Codec hình | TV/LED: H.264 (`avc1`/`avc3`) + AAC. **Thang máy: H.264 hoặc H.265 (`hvc1`/`hev1`) + AAC** (bitrate khuyến nghị <= 16 Mbps). AV1, VP9... và H.265 cho TV/LED bị từ chối, tệp bị xóa khỏi kho | 422 `unsupported_codec` |
+| Độ phân giải video | TV/LED: cạnh dài <= 1920, cạnh ngắn <= 1080 (Full HD). Thang máy: dọc 9:16 từ 720×1280 đến 2160×3840 (4K) | 422 `video_resolution_too_high` / `creative_size_mismatch` |
+| Dung lượng video | <= 100 MB (mọi loại màn); thang máy <= 30 MB (đến Full HD) và <= 100 MB (2K/4K, chiều rộng > 1080), LED <= 50 MB; khách còn hạn mức tài khoản (mặc định 30 MB/tệp) | 422 `file_too_large` |
 | Thời lượng | TV 5-60 s, thang máy 10-30 s, LED 5-15 s | 422 `duration_out_of_range` |
 | Ảnh | PNG/JPG <= 500 MB (TV) | |
 | Định dạng | MP4 (khuyến nghị), MOV, WebM, PNG, JPG; magic bytes + MIME + kích thước thật | |
 
 Khuyến nghị xuất video: H.264 High, 1920x1080, 24-30 fps, 6-10 Mbps, AAC 128 kbps, `-movflags +faststart`, 15-60 s (ffmpeg: `ffmpeg -i in.mp4 -vf scale=1920:-2 -c:v libx264 -crf 23 -c:a aac -b:a 128k -movflags +faststart out.mp4`).
+
+**Hai đường tải lên (tự chọn theo cấu hình, từ 20/11/2026).**
+
+1. **Mặc định, không cần khóa S3 và không cần CORS: qua Worker.** Nếu thiếu một trong `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` thì `R2ObjectStore.signedPut = false`; `POST /media/upload-url` trả `via:"proxy"` và `url:"/api/{admin|portal}/v1/media/:id/content"` (cùng origin). Trình duyệt `PUT` tệp (phiên đăng nhập + `X-CSRF-Token`, `Content-Type` = loại khai báo, `Content-Length` = `size_bytes` đã khai) tới đó; Worker ghi **thẳng luồng** vào R2 binding (`putStream`, không đọc cả tệp vào bộ nhớ), kiểm quyền `media:write`, phạm vi khách hàng, chỉ người tạo tệp, tệp còn `uploading` (<= 1 giờ), 60 lần/giờ/người, ghi audit `media.upload_proxy`. Rồi client gọi `/confirm` như cũ. **Giới hạn: 95 MB mỗi tệp** (body Worker tối đa 100 MB); quá thì `upload-url` trả 422 `file_too_large` "Tệp vượt 95 MB: nén lại (H.264) rồi tải lại". Mã lỗi: `length_mismatch`, `content_type_mismatch`, `length_required`, `not_uploader`, `invalid_state`, `upload_expired`, `file_too_large`.
+2. **Tối ưu cho tệp lớn: URL ký trực tiếp lên R2** (khi đủ khóa S3). Mô tả bên dưới.
 
 **Tải lên đi thẳng lên R2** bằng URL ký trước (một PUT, tối đa 5 GiB theo R2): Worker không nhận thân tệp nên không vướng giới hạn 100 MB của request. Không cần multipart vì giới hạn nghiệp vụ (100 MB) thấp hơn nhiều. Điều kiện hạ tầng: bucket R2 phải bật **CORS** cho origin `https://ams.anio.vn` (method `PUT`, header `Content-Type`); thiếu CORS thì trình duyệt báo lỗi mạng và UI hiện hướng dẫn. URL ký hết hạn sau 15 phút.
 

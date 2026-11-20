@@ -31,6 +31,8 @@ export interface WorkerOptions {
 
 const MB = 1024 * 1024;
 const SIZE_LIMIT_MB: Record<TargetKind, number> = { tv: 500, elevator: 30, led_p5: 50 };
+/** Thang may 2K/4K (rong > 1080): tran 100 MB (cung services/api/src/lib/creative.ts ELEVATOR_HIRES_LIMIT_MB) */
+const ELEVATOR_HIRES_LIMIT_MB = 100;
 const DURATION: Partial<Record<TargetKind, [number, number]>> = { elevator: [10, 30], led_p5: [5, 15] };
 const EXT: Record<string, string> = { png: 'png', jpeg: 'jpg', mp4: 'mp4', webm: 'webm' };
 const tk = (t: string | null): TargetKind | null => (t === 'tv' || t === 'elevator' || t === 'led_p5' ? t : t === 'led' ? 'led_p5' : null);
@@ -90,7 +92,8 @@ export function createMediaWorker(rt: Runtime, opts: WorkerOptions = {}) {
     const head = await rt.objects.head(key);
     if (!head) return { outcome: 'deferred', reason: 'chua thay tep tren kho' };
     const target = tk(row.target_type);
-    const limit = Math.min(maxBytes, (target ? SIZE_LIMIT_MB[target] : SIZE_LIMIT_MB.tv) * MB);
+    const hires = target === 'elevator' && Number(row.px_w ?? 0) > 1080;
+    const limit = Math.min(maxBytes, (hires ? ELEVATOR_HIRES_LIMIT_MB : target ? SIZE_LIMIT_MB[target] : SIZE_LIMIT_MB.tv) * MB);
     if (head.size > limit) return reject(row, 'file_too_large', `Tệp ${(head.size / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB.`, { scan: 'unscanned' });
     const bytes = await rt.objects.get(key);
     if (!bytes) return { outcome: 'deferred', reason: 'khong doc duoc tep' };

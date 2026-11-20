@@ -12,7 +12,7 @@
 | 4 | Manifest theo độ phân giải | Xong | `services/edge-gateway/src/{protocol,devices,manifest}.ts` | `signage.test.ts` (gateway) |
 | 5 | Header/footer (manifest + slot) | Xong | `manifest.ts`, `services/api/src/routes/{screens,schedule}.ts`, bảng `schedule_slot_text` | cả hai file; `apps/web-admin/src/test/signage-player.test.tsx` (giao diện cấp quyền/nhật ký) |
 | 6 | Hotline/Zalo | Xong (heartbeat và manifest) | `gateway.ts`, `manifest.ts`, `packages/shared/src/signage.ts` | `signage.test.ts` |
-| 7 | `duration_s` ảnh và `fit` | Xong, `fit` theo loại màn (không theo từng creative) | `manifest.ts` | `signage.test.ts` |
+| 7 | `duration_s` ảnh và `fit` | Xong. Từ 20/11/2026 mặc định `fit` (vừa khung, giữ tỷ lệ, viền đen nếu lệch); `cover` chọn thủ công theo loại màn. Chưa có ghi đè theo từng creative | `manifest.ts` | `signage.test.ts` |
 | 8 | Quy tắc xoay vòng | Xong (chốt trong giao thức, `rotation` trong manifest; app thực hiện) | `manifest.ts`, `DEVICE-PROTOCOL.md` 7.5 | `signage.test.ts` |
 | 9 | `set_volume`, `set_orientation`, `message` | Xong | `device-commands.ts` | `signage-player.test.ts` (api) |
 | 10 | Cập nhật app từ xa | Xong (cấu hình theo loại màn; cần quyền `devices:approve`) | `screens.ts` (`/signage-config`), `gateway.ts` | cả hai file |
@@ -36,7 +36,20 @@ Giới hạn đã biết: chưa kiểm trên ams.anio.vn thật và thiết bị
 - `POST /v1/register`: thêm `px_w`, `px_h`, `orientation`, `region`; cùng khóa luôn nhận lại cùng `device_id`.
 - `POST /v1/heartbeat`: gửi thêm (tùy chọn) `source` (`ams|usb|lan`), `app_version`, `cache_mb`, `px_w/px_h/orientation/region`. Nhận thêm `hotline`, `app_update_url`, `app_update_sha256`, `min_app_version`.
 - `GET /v1/manifest`: thêm `header`, `footer`, `hotline`, `rotation`, `schedule[].header/footer`, `creatives[].fit`, `duration_s` ảnh luôn có.
+- Độ phân giải thang máy: mọi 9:16 từ 720×1280 đến 2160×3840; khai `px_w`/`px_h` thật, gateway gom về bậc chuẩn (720×1280, 768×1366, 1080×1920, 1440×2560, 2160×3840) không vượt quá và chỉ gửi bản bằng hoặc thấp hơn (không đẩy 4K cho màn HD). Chi tiết `DEVICE-PROTOCOL.md` 7.1.
+- `creatives[].fit` mặc định `fit`; hiển thị đúng theo giá trị nhận được.
 - Lệnh: `reset_pin`, `set_volume {percent}`, `set_orientation {orientation}`, `message {text, duration_s?}`; `id` không đổi khi giao lại; lệnh lạ vẫn ack.
 - `POST /v1/events` `proof_of_play`: hợp lệ khi thiết bị đã được cấp quyền; chưa cấp quyền thì `pending_trust` (không mất, tính lại khi cấp quyền).
 - `POST /v1/logs`: <= 8 KB, <= 100 dòng, 60 lần/giờ, lưu 7 ngày.
 - OpenAPI: `docs/openapi/ams-device-gateway.yaml` (sinh bằng `pnpm --filter @ams/openapi generate`).
+
+## 4. Màn thang máy HD đến 4K, vừa khung, xóa hàng loạt media (20/11/2026)
+
+- **Vừa khung mặc định.** `fit` mặc định của màn thang máy/LED là `fit` (giữ tỷ lệ, có viền đen nếu lệch); `cover` vẫn chọn được ở Màn hình thang máy & LED > "Chữ, hotline và cập nhật app" > "Cách hiện hình". Manifest TV không có `fit` (hợp đồng TV giữ nguyên; app TV tự quyết cách hiện). Ghi đè theo từng creative chưa làm.
+- **Độ phân giải thang máy.** Chấp nhận mọi tệp/màn dọc 9:16 từ 720×1280 (HD) đến 2160×3840 (4K), gồm 768×1366, 1080×1920, 1440×2560 (sai số tỷ lệ 2%); tệp ngang 16:9 bị từ chối (`creative_size_mismatch`). Mã: `isElevatorResolution`, `elevatorTierFor`, `signageModelClass` (`packages/shared/src/signage.ts`), `fitsTarget`/`inferTarget` (`services/api/src/lib/creative.ts`). Chọn manifest: `DEVICE-PROTOCOL.md` 7.1.
+- **Video thang máy:** H.264 hoặc H.265 (HEVC) + AAC, tối đa 4K, bitrate khuyến nghị <= 16 Mbps. Thông báo lỗi nêu rõ codec, độ phân giải, bitrate và dung lượng. TV/LED giữ H.264 <= Full HD. Dung lượng tệp: giữ trần video 100 MB; trần theo loại màn thang máy là 30 MB đến Full HD (như cũ) và **100 MB cho 2K/4K** (lý do: clip 30 giây 4K ở 16 Mbps khoảng 60 MB, vượt 30 MB; trần 100 MB là trần video chung, không nâng thêm). Tệp > 48 MB trên Cloudflare vào "chờ kiểm tra thủ công" như mọi tệp lớn (xem `CLOUDFLARE-MEDIA-LIMITS.md`).
+- **Xóa hàng loạt media.** Trang Media (người có `media:delete`, chỉ tài khoản nội bộ): chọn từng tệp, "Chọn tất cả trang này" hoặc "Chọn tất cả N tệp (theo bộ lọc hiện tại)", "Xóa đã chọn"; hộp xác nhận nêu số tệp và dung lượng, cảnh báo không hoàn tác, quá 5 tệp phải gõ `XOA`. API `POST /admin/v1/media/bulk-delete {ids}` (<= 200 id/lần): tệp thuộc chiến dịch ngoài `draft`/`rejected` (đang phát, đã lên lịch, chờ duyệt, tạm dừng, kết thúc) bị BỎ QUA kèm lý do "Đang dùng trong chiến dịch <tên>"; tệp xóa được thì xóa hàng CSDL, `creative_thumbnails`, tệp gốc, ảnh đại diện và bản chuyển mã trong kho. Audit: `media.bulk_delete` (tóm tắt) và `media.delete` từng tệp. Cổng khách hàng không có route này (giống `DELETE /:id`).
+
+## 5. Quyền riêng tư (chủ dự án quyết 20/11/2026)
+
+Sẽ **không** có trường hợp ảnh trẻ em được gửi cho dịch vụ AI. Phía AMS không cần làm gì thêm (không có tính năng nào ở AMS cần bổ sung hay chặn cho việc này). Phần Mindo (TV Nhà) xử lý riêng.

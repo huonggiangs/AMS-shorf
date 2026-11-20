@@ -39,6 +39,13 @@ export interface ObjectStore {
   /** `opts.maxBytes`: chi adapter fs dung (S3/R2 gioi han kich thuoc o buoc confirm). */
   putSigned(key: string, contentType: string, ttlSec: number, opts?: { maxBytes?: number }): Promise<{ url: string; headers: Record<string, string> }>;
   getSigned(key: string, ttlSec: number): Promise<string>;
+  /**
+   * false = KHONG ky duoc URL PUT truc tiep len kho (vd Cloudflare R2 thieu khoa S3): API phai nhan tep qua chinh no
+   * (`PUT /media/:id/content`, ghi bang `putStream`). undefined/true = `putSigned` dung duoc.
+   */
+  readonly signedPut?: boolean;
+  /** Ghi tep tu luong, KHONG doc ca tep vao bo nho. `size` la so byte da khai (R2 can do dai biet truoc). Ghi de neu da co. */
+  putStream?(key: string, body: ReadableStream<Uint8Array>, contentType: string, size: number): Promise<void>;
   put(key: string, body: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<Uint8Array | null>;
   head(key: string): Promise<{ size: number; contentType: string } | null>;

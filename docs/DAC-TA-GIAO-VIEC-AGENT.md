@@ -263,8 +263,8 @@ Dashboard luôn đọc bảng gộp, không quét bảng thô. Presence: `KEY de
 |---|---|---|---|
 | Vị trí | Hộ gia đình, quán, văn phòng | Thang máy chung cư | Cổng, sảnh xe chung cư; bãi đỗ xe |
 | Kích thước | 16:9 mọi kích cỡ | 18,5" / 21,5" / 23,8" đặt dọc 9:16 | Mô-đun: 1,28×0,64 m; 2,56×1,28 m; 3,84×1,92 m; 0,96×1,92 m (dọc) |
-| Độ phân giải gốc | HD → 8K, tự co giãn | 18,5": 768×1366; 21,5" và 23,8": 1080×1920 | Chiều mm / 5, ví dụ 2,56×1,28 m = 512×256 px |
-| Tệp | MP4 H.264/H.265, PNG/JPG | MP4 H.264 hoặc ảnh, ≤30 MB, 10–30 giây | MP4 H.264 hoặc PNG/JPG đúng kích thước, 5–15 giây, không âm thanh |
+| Độ phân giải gốc | HD → 8K, tự co giãn | Mọi độ phân giải dọc 9:16 từ HD 720×1280 đến 4K 2160×3840 (18,5": 768×1366; 21,5" và 23,8": 1080×1920; 2K: 1440×2560) | Chiều mm / 5, ví dụ 2,56×1,28 m = 512×256 px |
+| Tệp | MP4 H.264/H.265, PNG/JPG | MP4 H.264/H.265 hoặc ảnh, ≤30 MB (đến Full HD) / ≤100 MB (2K, 4K), 10–30 giây | MP4 H.264 hoặc PNG/JPG đúng kích thước, 5–15 giây, không âm thanh |
 | Thiết bị phát | App TV | Player Android/Linux mini PC | Card nhận LED (Novastar/Colorlight) qua bộ gửi, có API hoặc đồng bộ thư mục |
 | Thưởng người xem | Có (VCR 100%) | Không | Không |
 | Đo lường | Impression + VCR | Proof-of-play | Proof-of-play + ảnh chụp đối chứng định kỳ |

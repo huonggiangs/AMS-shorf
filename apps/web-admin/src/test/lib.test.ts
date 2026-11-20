@@ -34,8 +34,16 @@ describe('creative size check', () => {
   });
   it('elevator is portrait and exact for the chosen size', () => {
     expect(checkCreative({ type: 'elevator', px: ELEVATOR_SIZES['21.5'] }, { width: 1080, height: 1920 }).ok).toBe(true);
-    expect(checkCreative({ type: 'elevator', px: ELEVATOR_SIZES['18.5'] }, { width: 1080, height: 1920 }).ok).toBe(false);
+    expect(checkCreative({ type: 'elevator', px: ELEVATOR_SIZES['18.5'] }, { width: 1080, height: 1920 }).ok).toBe(false); // lon hon man: khong gui
     expect(checkCreative({ type: 'elevator' }, { width: 1920, height: 1080 }).ok).toBe(false);
+  });
+  it('elevator accepts any 9:16 portrait from HD 720x1280 to 4K 2160x3840; lower-than-screen is OK (fit with bars)', () => {
+    for (const [w, h] of [[720, 1280], [768, 1366], [1080, 1920], [1440, 2560], [2160, 3840]]) expect(checkCreative({ type: 'elevator' }, { width: w, height: h }).ok, `${w}x${h}`).toBe(true);
+    for (const [w, h] of [[540, 960], [4320, 7680], [1920, 1080], [3840, 2160], [1000, 1000]]) expect(checkCreative({ type: 'elevator' }, { width: w, height: h }).ok, `${w}x${h}`).toBe(false);
+    const lower = checkCreative({ type: 'elevator', px: ELEVATOR_SIZES['4k'] }, { width: 1080, height: 1920 });
+    expect(lower.ok).toBe(true);
+    expect(lower.message).toMatch(/vừa khung/);
+    expect(checkCreative({ type: 'elevator', px: ELEVATOR_SIZES['hd'] }, { width: 2160, height: 3840 }).ok).toBe(false); // khong day 4K cho man HD
   });
   it('led must match exactly, no scaling', () => {
     expect(checkCreative({ type: 'led', px: { w: 512, h: 256 } }, { width: 512, height: 256 }).ok).toBe(true);

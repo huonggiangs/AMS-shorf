@@ -149,6 +149,7 @@ const SPECIAL: [RegExp, string, ZodTypeAny][] = [
   [/^POST \/admin\/v1\/campaigns\/:id\/approve$/, 'ApproveResult', asZ(W.approveResultSchema)],
   [/^POST \/admin\/v1\/contracts\/:id\/render$/, 'ContractRender', asZ(W.contractRenderSchema)],
   [/^POST \/(admin|portal)\/v1\/media\/upload-url$/, 'UploadUrl', asZ(W.uploadUrlSchema)],
+  [/^POST \/admin\/v1\/media\/bulk-delete$/, 'MediaBulkDeleteResult', asZ(W.bulkDeleteResultSchema)],
   [/^(GET|PUT) \/admin\/v1\/settings\/sepay$/, 'SepaySettings', asZ(W.sepaySettingsSchema)],
   [/^GET \/admin\/v1\/dashboard\/overview$/, 'Overview', asZ(W.overviewSchema)],
   [/^GET \/admin\/v1\/revenue$/, 'Revenue', asZ(W.revenueSchema)],

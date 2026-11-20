@@ -31,6 +31,8 @@ export interface Declared {
   durationS: number | null;
   /** [min,max] giay theo loai man hinh (null = khong rang buoc) */
   durationRange?: [number, number] | null;
+  /** loai man hinh (tv | elevator | led_p5): thang may duoc H.265 va den 4K */
+  targetType?: string | null;
 }
 export interface Facts { kind?: CfKind; w?: number; h?: number; durationS?: number; sha256?: string; size: number }
 export interface Verdict { clean: boolean; reasons: string[]; facts: Facts }
@@ -218,7 +220,7 @@ export async function validateCreativeBytes(bytes: Uint8Array, d: Declared, limi
     const r = checkMp4(bytes, why);
     px = r.px;
     const pr = await probeMp4(async (o, l) => bytes.subarray(o, o + l), bytes.length);
-    const vp = videoSpecProblem({ w: px?.w, h: px?.h, codec: pr.videoCodec });
+    const vp = videoSpecProblem({ w: px?.w, h: px?.h, codec: pr.videoCodec }, d.targetType === 'elevator' ? 'elevator' : null);
     if (vp) why.push(vp.code + (pr.videoCodec ? `:${pr.videoCodec.trim()}` : ''));
     if (r.durationS !== null) {
       facts.durationS = Math.round(r.durationS * 100) / 100;
@@ -289,7 +291,7 @@ export function createCfCreativeValidator(rt: Runtime, opts: CfValidatorOptions 
       }
       facts.kind = 'mp4';
       reasons.push(...p.reasons);
-      const vp = videoSpecProblem({ w: p.w, h: p.h, codec: p.videoCodec });
+      const vp = videoSpecProblem({ w: p.w, h: p.h, codec: p.videoCodec }, row.target_type === 'elevator' ? 'elevator' : null);
       if (vp) reasons.push(vp.code + (p.videoCodec ? `:${p.videoCodec.trim()}` : ''));
       if (p.w && p.h) {
         facts.w = p.w;
@@ -324,7 +326,7 @@ export function createCfCreativeValidator(rt: Runtime, opts: CfValidatorOptions 
     if (!bytes) return { outcome: 'deferred', reason: 'khong doc duoc tep' };
     const v = await validateCreativeBytes(
       bytes,
-      { mime: row.mime, sizeBytes: row.size_bytes === null ? null : Number(row.size_bytes), w: row.px_w, h: row.px_h, durationS: row.duration_s === null ? null : Number(row.duration_s), durationRange: row.target_type ? DURATION[row.target_type] ?? null : null },
+      { mime: row.mime, sizeBytes: row.size_bytes === null ? null : Number(row.size_bytes), w: row.px_w, h: row.px_h, durationS: row.duration_s === null ? null : Number(row.duration_s), durationRange: row.target_type ? DURATION[row.target_type] ?? null : null, targetType: row.target_type },
       limits,
     );
     if (v.clean && !markClean) return finish(row, 'needs_manual_review', { reasons: ['mark_clean_disabled'], facts: v.facts });

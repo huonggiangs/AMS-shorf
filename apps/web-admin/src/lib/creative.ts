@@ -3,9 +3,13 @@ export type ScreenType = 'tv' | 'elevator' | 'led';
 export interface Dim { width?: number | null; height?: number | null }
 export interface CreativeTarget { type: ScreenType; /** required exact px for led / elevator */ px?: { w: number; h: number } | null }
 
+/** Man thang may: moi do phan giai doc 9:16 tu HD (720x1280) den 4K (2160x3840). Khoa = cach goi man (inch hoac bac). */
 export const ELEVATOR_SIZES: Record<string, { w: number; h: number }> = {
-  '18.5': { w: 768, h: 1366 }, '21.5': { w: 1080, h: 1920 }, '23.8': { w: 1080, h: 1920 },
+  hd: { w: 720, h: 1280 }, '18.5': { w: 768, h: 1366 }, '21.5': { w: 1080, h: 1920 }, '23.8': { w: 1080, h: 1920 }, '2k': { w: 1440, h: 2560 }, '4k': { w: 2160, h: 3840 },
 };
+export const ELEVATOR_SIZE_LABEL: Record<string, string> = { hd: 'HD', '18.5': '18,5"', '21.5': '21,5"', '23.8': '23,8"', '2k': '2K', '4k': '4K' };
+export const ELEVATOR_MIN = { w: 720, h: 1280 };
+export const ELEVATOR_MAX = { w: 2160, h: 3840 };
 
 export function checkCreative(target: CreativeTarget, m: Dim): { ok: boolean; message: string } {
   const w = m.width ?? 0, h = m.height ?? 0;
@@ -16,8 +20,10 @@ export function checkCreative(target: CreativeTarget, m: Dim): { ok: boolean; me
   }
   if (target.type === 'elevator') {
     if (!near(w / h, 9 / 16)) return { ok: false, message: `Màn hình thang máy đặt dọc 9:16, tệp là ${w}×${h}. Không dùng lại video ngang 16:9.` };
-    if (target.px && (w !== target.px.w || h !== target.px.h)) return { ok: false, message: `Cần đúng ${target.px.w}×${target.px.h} px, tệp là ${w}×${h}.` };
-    return { ok: true, message: 'Tệp đúng tỷ lệ dọc 9:16.' };
+    if (w < ELEVATOR_MIN.w || h < ELEVATOR_MIN.h || w > ELEVATOR_MAX.w || h > ELEVATOR_MAX.h) return { ok: false, message: `Màn hình thang máy nhận từ HD ${ELEVATOR_MIN.w}×${ELEVATOR_MIN.h} đến 4K ${ELEVATOR_MAX.w}×${ELEVATOR_MAX.h}, tệp là ${w}×${h}.` };
+    if (target.px && w > target.px.w * 1.02) return { ok: false, message: `Màn đã chọn (${target.px.w}×${target.px.h}) không nhận tệp lớn hơn độ phân giải của nó; tệp là ${w}×${h}. Hệ thống chỉ gửi bản bằng hoặc thấp hơn gần nhất.` };
+    if (target.px && w < target.px.w * 0.98) return { ok: true, message: `Tệp ${w}×${h} thấp hơn màn ${target.px.w}×${target.px.h}: hiển thị vừa khung (giữ tỷ lệ, có thể có viền đen).` };
+    return { ok: true, message: 'Tệp đúng tỷ lệ dọc 9:16 (HD–4K).' };
   }
   if (!target.px) return { ok: false, message: 'Chọn bảng LED để biết kích thước yêu cầu.' };
   return w === target.px.w && h === target.px.h ? { ok: true, message: `Đúng ${w}×${h} px.` } : { ok: false, message: `Bảng LED không co giãn tự động: cần đúng ${target.px.w}×${target.px.h} px, tệp là ${w}×${h}.` };

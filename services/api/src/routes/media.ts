@@ -3,12 +3,12 @@ import { z } from 'zod';
 import type { Runtime } from '@ams/runtime';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { esc, trySend } from '../lib/mail.js';
-import { HttpError, conflict, notFound, unprocessable } from '../lib/errors.js';
+import { HttpError, conflict, forbidden, notFound, tooMany, unprocessable } from '../lib/errors.js';
 import { eq, getRt, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { mediaScope } from '../lib/scope.js';
 import {
-  ALLOWED_MIME, DURATION_RANGE, VIDEO_RULES, videoSpecProblem, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
+  ALLOWED_MIME, DURATION_RANGE, PROXY_UPLOAD_MAX_BYTES, VIDEO_RULES, videoSpecProblem, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
 } from '../lib/creative.js';
 import { todayVn } from '../lib/dates.js';
 import { bumpManifest } from '../lib/manifest.js';
@@ -90,6 +90,8 @@ export function sniffThumb(b: Uint8Array): 'image/jpeg' | 'image/webp' | null {
   return null;
 }
 const SHA_MAX_BYTES = 32 * MB;
+/** So tep toi da cho mot lan POST /media/bulk-delete. */
+export const BULK_DELETE_MAX = 200;
 /** Gioi han ghi trong docs/CLOUDFLARE-MEDIA-LIMITS.md: tep > ngay tren khong bi doc vao bo nho Worker (128 MB) o buoc confirm. */
 export const SHA_INLINE_MAX_BYTES = SHA_MAX_BYTES;
 
@@ -280,15 +282,18 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     if (b.width && b.height) {
       const led = await knownLedPx(rt);
       target ??= inferTarget(b.width, b.height, led);
-      if (!target) throw unprocessable(`Độ phân giải ${b.width}×${b.height} không khớp loại màn hình nào (TV 16:9, thang máy 768×1366 / 1080×1920, LED P5 đúng kích thước bảng).`, 'unsupported_resolution');
+      if (!target) throw unprocessable(`Độ phân giải ${b.width}×${b.height} không khớp loại màn hình nào (TV 16:9, thang máy dọc 9:16 từ 720×1280 đến 2160×3840, LED P5 đúng kích thước bảng).`, 'unsupported_resolution');
       const fit = fitsTarget(target, b.width, b.height, { knownLed: led });
       if (!fit.ok) throw unprocessable(fit.message, 'creative_size_mismatch');
     }
     if (isVideoMime(mime)) {
-      const vp = videoSpecProblem({ w: b.width, h: b.height });
+      const vp = videoSpecProblem({ w: b.width, h: b.height }, target);
       if (vp) throw unprocessable(vp.message, vp.code);
     }
-    const limit = Math.min(sizeLimitBytes(target ?? 'tv', extQuotaMb), isVideoMime(mime) ? VIDEO_RULES.maxBytes : Infinity);
+    // Kho khong ky duoc URL (Cloudflare thieu khoa S3): tep di qua Worker, tran 95 MB (body Worker 100 MB)
+    const viaProxy = rt.objects.signedPut === false && typeof rt.objects.putStream === 'function';
+    if (viaProxy && b.size_bytes > PROXY_UPLOAD_MAX_BYTES) throw unprocessable(`Tệp ${(b.size_bytes / MB).toFixed(1)} MB vượt 95 MB: nén lại (H.264) rồi tải lại.`, 'file_too_large', { limit_bytes: PROXY_UPLOAD_MAX_BYTES });
+    const limit = Math.min(sizeLimitBytes(target ?? 'tv', extQuotaMb, b.width), isVideoMime(mime) ? VIDEO_RULES.maxBytes : Infinity);
     if (b.size_bytes > limit) throw unprocessable(`Tệp ${(b.size_bytes / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB${target ? ` cho loại màn này` : ''}.`, 'file_too_large', { limit_bytes: limit });
     const dur = target ? DURATION_RANGE[target] : undefined;
     if (dur && b.duration_sec !== undefined && isVideoMime(mime) && (b.duration_sec < dur[0] || b.duration_sec > dur[1])) {
@@ -300,7 +305,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const id = rt.id();
     const key = `media/${customerId}/${id}/${safeName(b.name)}`;
     const nowIso = rt.clock.now().toISOString();
-    const signed = await rt.objects.putSigned(key, mime, 900, { maxBytes: b.size_bytes });
+    const signed = viaProxy ? { url: `/api/${external ? 'portal' : 'admin'}/v1/media/${id}/content`, headers: { 'Content-Type': mime } } : await rt.objects.putSigned(key, mime, 900, { maxBytes: b.size_bytes });
     await rt.db.tx(async (db) => {
       await db.run(
         `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, uploaded_by, uploader_kind, scan_state, review_state, state, format, overlay, created_at)
@@ -309,7 +314,57 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       );
       await auditCtx(c, db, { action: 'media.upload_url', objectType: 'creative', objectId: id, customerId, diff: { name: b.name, size_bytes: b.size_bytes, mime } });
     });
-    return c.json({ id, url: signed.url, method: 'PUT', headers: signed.headers, key, expires_in: 900 }, 201);
+    return c.json({ id, url: signed.url, method: 'PUT', headers: signed.headers, key, expires_in: 900, via: viaProxy ? 'proxy' : 'direct' }, 201);
+  });
+
+  /**
+   * Nhan tep qua Worker khi kho khong ky duoc URL (R2 thieu khoa S3). Chi chu tep (nguoi tao) khi tep con `uploading`; Content-Length phai bang size_bytes da khai,
+   * Content-Type phai khop; ghi thang luong vao kho (khong doc ca tep vao bo nho); sau do client goi /confirm nhu thuong.
+   */
+  r.put('/:id/content', requirePerm('media', 'write'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const m = await loadMedia(c, c.req.param('id'));
+    if (rt.objects.signedPut !== false || typeof rt.objects.putStream !== 'function') throw conflict('Kho lưu trữ cho phép tải lên trực tiếp bằng đường dẫn đã ký; không dùng đường này.', 'direct_upload_available');
+    if (m.uploaded_by !== u.id) throw forbidden('Chỉ người tạo tệp mới được tải nội dung lên.', 'not_uploader');
+    if (m.source !== 'upload' || m.state !== 'uploading' || !m.storage_key) throw conflict('Tệp không ở trạng thái chờ tải lên.', 'invalid_state');
+    if (rt.clock.now().getTime() - new Date(m.created_at).getTime() > 3600_000) throw conflict('Phiên tải lên đã hết hạn. Hãy chọn tệp và tải lại.', 'upload_expired');
+    const n = await rt.kv.incr(`rl:media-put:${u.id}`, 3600);
+    if (n > 60) throw tooMany('Tải lên quá nhiều lần. Vui lòng thử lại sau.', 3600);
+    const want = num(m.size_bytes);
+    const ct = (c.req.header('content-type') ?? '').toLowerCase().split(';')[0]!.trim();
+    if (!ct || ct !== (m.mime ?? '').toLowerCase()) throw unprocessable(`Loại tệp tải lên (${ct || 'không có'}) khác loại đã khai báo (${m.mime ?? ''}).`, 'content_type_mismatch');
+    const lenRaw = c.req.header('content-length');
+    const len = lenRaw === undefined ? NaN : Number(lenRaw);
+    if (!Number.isInteger(len)) throw new HttpError(400, 'length_required', 'Thiếu Content-Length.');
+    if (len > PROXY_UPLOAD_MAX_BYTES || want > PROXY_UPLOAD_MAX_BYTES) throw new HttpError(413, 'file_too_large', 'Tệp vượt 95 MB: nén lại (H.264) rồi tải lại.', { limit_bytes: PROXY_UPLOAD_MAX_BYTES });
+    if (len !== want) throw new HttpError(400, 'length_mismatch', `Dung lượng gửi lên (${len} byte) khác dung lượng đã khai báo (${want} byte).`);
+    const body = c.req.raw.body;
+    if (!body) throw new HttpError(400, 'empty_body', 'Thiếu nội dung tệp.');
+    // dem byte thuc te: neu gui nhieu hon khai bao thi cat va tu choi (Content-Length co the noi doi)
+    let seen = 0;
+    const guard = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, ctl) {
+        seen += chunk.length;
+        if (seen > want) ctl.error(new Error('over_declared'));
+        else ctl.enqueue(chunk);
+      },
+    });
+    try {
+      await rt.objects.putStream(m.storage_key, body.pipeThrough(guard), ct, want);
+    } catch {
+      try { await rt.objects.delete?.(m.storage_key); } catch { /* khong chan */ }
+      throw new HttpError(400, 'upload_failed', 'Không nhận trọn vẹn tệp (mất kết nối hoặc dung lượng sai). Hãy tải lại.');
+    }
+    const head = await rt.objects.head(m.storage_key);
+    if (!head || head.size !== want) {
+      try { await rt.objects.delete?.(m.storage_key); } catch { /* khong chan */ }
+      throw new HttpError(400, 'length_mismatch', 'Dung lượng tệp nhận được không khớp khai báo. Hãy tải lại.');
+    }
+    await rt.db.tx(async (db) => {
+      await auditCtx(c, db, { action: 'media.upload_proxy', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { size_bytes: want, mime: ct } });
+    });
+    return c.json({ ok: true, size_bytes: want });
   });
 
   r.post('/:id/confirm', requirePerm('media', 'write'), async (c) => {
@@ -347,7 +402,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       }
     }
     let probedDuration: number | undefined;
-    let specProblem: { code: string; message: string } | null = null;
+    let probedCodec: string | null | undefined;
     if (declared === 'video/mp4') {
       // doc header MP4 (range read, khong doc ca tep): dung thoi luong/kich thuoc doc tu chinh tep, khong tin khai bao cua client
       try {
@@ -357,21 +412,25 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
           h = p.h;
         }
         if (p.recognized && p.durationS !== null && p.durationS > 0) probedDuration = p.durationS;
-        if (p.recognized) specProblem = videoSpecProblem({ w: p.w, h: p.h, codec: p.videoCodec });
+        if (p.recognized) probedCodec = p.videoCodec;
       } catch (e) {
         console.error('[media] doc header mp4 loi:', (e as Error).name);
       }
     }
-    if (specProblem) await reject(specProblem.code, specProblem.message); // codec/độ phân giải TV không phát được: từ chối ngay, xóa tệp
+    const led = await knownLedPx(rt);
+    const target: TargetType | null = m.target_type ? dbTarget(m.target_type) : w && h ? inferTarget(w, h, led) : null;
+    if (declared === 'video/mp4') {
+      // codec/độ phân giải màn không phát được: từ chối ngay, xóa tệp (thang máy được H.265 và tới 4K, loại khác H.264 <= Full HD)
+      const specProblem = videoSpecProblem({ w, h, codec: probedCodec }, target);
+      if (specProblem) await reject(specProblem.code, specProblem.message);
+    }
     if (!w || !h) throw unprocessable('Chưa đọc được kích thước video. Hãy dùng tệp MP4 (H.264) chuẩn hoặc gửi width/height khi xác nhận.', 'dimensions_required');
 
-    const led = await knownLedPx(rt);
-    const target: TargetType | null = m.target_type ? dbTarget(m.target_type) : inferTarget(w, h, led);
     if (!target) await reject('unsupported_resolution', `Độ phân giải ${w}×${h} không khớp loại màn hình nào.`);
     const fit = fitsTarget(target!, w, h, { knownLed: led });
     if (!fit.ok) await reject('creative_size_mismatch', fit.message);
     const quota = await quotaOf(rt, m.customer_id);
-    const limit = Math.min(sizeLimitBytes(target!, c.get('user').kind === 'internal' ? null : quota.max_mb_per_file), declared.startsWith('video/') ? VIDEO_RULES.maxBytes : Infinity);
+    const limit = Math.min(sizeLimitBytes(target!, c.get('user').kind === 'internal' ? null : quota.max_mb_per_file, w), declared.startsWith('video/') ? VIDEO_RULES.maxBytes : Infinity);
     if (head.size > limit) await reject('file_too_large', `Tệp ${(head.size / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB cho loại màn này.`);
     const dur = DURATION_RANGE[target!];
     const durationSec = probedDuration ?? b.duration_sec ?? (m.duration_s === null ? undefined : num(m.duration_s));
@@ -578,6 +637,84 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     await bumpManifest(rt);
     await emailOwner(rt, m.customer_id, `Tệp "${m.name ?? ''}" cần chỉnh sửa`, `<p>Tệp <b>${esc(m.name)}</b> được trả lại.</p><p>Lý do: ${esc(b.reason)}</p>`);
     return c.json(present(await loadMedia(c, m.id), external));
+  });
+
+  /**
+   * Xoa hang loat (toi da 200 tep/lan). Moi tep di dung quy tac cua DELETE /:id: quyen media:delete (cua tuyen), pham vi khach hang (mediaScope: tep ngoai pham vi
+   * bao "khong tim thay", khong lo su ton tai), tep thuoc chien dich da gui duyet/dang chay/da len lich thi BO QUA (khong xoa ngam).
+   * Tep xoa duoc: bo hang creatives + creative_thumbnails (cascade) VA xoa khoa tep goc, anh dai dien va ban chuyen ma trong objects. Audit: media.delete tung tep + media.bulk_delete.
+   */
+  r.post('/bulk-delete', requirePerm('media', 'delete'), async (c) => {
+    const rt = getRt(c);
+    const b = await parseBody(c, z.object({ ids: z.array(z.string().trim().min(1).max(64)).min(1, 'Chọn ít nhất 1 tệp').max(BULK_DELETE_MAX, `Tối đa ${BULK_DELETE_MAX} tệp mỗi lần`) }));
+    const ids = [...new Set(b.ids)];
+    const nowIso = rt.clock.now().toISOString();
+    const scope = mediaScope(c.get('user'), 'm', nowIso);
+    const deleted: { id: string; name: string | null; size_bytes: number }[] = [];
+    const skipped: { id: string; name: string | null; code: 'not_found' | 'in_use' | 'busy'; reason: string }[] = [];
+    const orphanKeys: string[] = [];
+    const rendPrefixes: string[] = [];
+    for (const id of ids) {
+      const m = (await rt.db.query<MediaRow>(`SELECT ${M_SELECT} ${M_FROM} WHERE m.id = ?${scope ? ` AND (${scope.sql})` : ''}`, [id, ...(scope?.params ?? [])]))[0];
+      if (!m) {
+        skipped.push({ id, name: null, code: 'not_found', reason: 'Không tìm thấy tệp.' });
+        continue;
+      }
+      if (m.campaign_id) {
+        const camp = (await rt.db.query<{ name: string; state: string }>('SELECT name, state FROM campaigns WHERE id = ?', [m.campaign_id]))[0];
+        if (camp && !['draft', 'rejected'].includes(camp.state)) {
+          skipped.push({ id, name: m.name, code: 'in_use', reason: `Đang dùng trong chiến dịch ${camp.name}` });
+          continue;
+        }
+      }
+      const th = (await rt.db.query<{ thumb_key: string }>('SELECT thumb_key FROM creative_thumbnails WHERE creative_id = ?', [m.id]))[0];
+      const res = await rt.db.tx(async (db) => {
+        // dieu kien trang thai chien dich kiem lai ngay trong lenh xoa: chien dich vua duoc gui/chay thi khong xoa (tx tren D1 khong hoan tac => xoa creatives truoc, anh dai dien sau)
+        const del = await db.run(
+          `DELETE FROM creatives WHERE id = ? AND (campaign_id IS NULL OR campaign_id IN (SELECT id FROM campaigns WHERE state IN ('draft','rejected')) OR NOT EXISTS (SELECT 1 FROM campaigns WHERE id = creatives.campaign_id))`,
+          [m.id],
+        );
+        if (del.changes === 0) return false;
+        await db.run('DELETE FROM creative_thumbnails WHERE creative_id = ?', [m.id]);
+        await auditCtx(c, db, { action: 'media.delete', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { name: m.name, size_bytes: m.size_bytes === null ? null : num(m.size_bytes), bulk: true } });
+        return true;
+      });
+      if (!res) {
+        skipped.push({ id, name: m.name, code: 'busy', reason: 'Tệp vừa được dùng trong chiến dịch, đã bỏ qua.' });
+        continue;
+      }
+      deleted.push({ id, name: m.name, size_bytes: m.size_bytes === null ? 0 : num(m.size_bytes) });
+      if (m.storage_key) orphanKeys.push(m.storage_key);
+      if (th) orphanKeys.push(th.thumb_key);
+      rendPrefixes.push(`renditions/${m.customer_id}/${m.id}/`);
+    }
+    // xoa tep that trong kho (sau khi hang CSDL da mat): loi kho khong lam hong ket qua, chi con tep mo coi (khong ai tro toi)
+    let objectsDeleted = 0;
+    for (const k of orphanKeys) {
+      try {
+        await rt.objects.delete?.(k);
+        objectsDeleted++;
+      } catch { /* mo coi: khong anh huong */ }
+    }
+    for (const pre of rendPrefixes) {
+      try {
+        for (const o of (await rt.objects.list?.(pre, 200)) ?? []) {
+          await rt.objects.delete?.(o.key);
+          objectsDeleted++;
+        }
+      } catch { /* mo coi: khong anh huong */ }
+    }
+    const freed = deleted.reduce((a, x) => a + x.size_bytes, 0);
+    await rt.db.tx(async (db) => {
+      await auditCtx(c, db, {
+        action: 'media.bulk_delete',
+        objectType: 'creative',
+        objectId: null,
+        diff: { requested: ids.length, deleted_count: deleted.length, skipped_count: skipped.length, freed_bytes: freed, deleted_ids: deleted.map((x) => x.id), skipped: skipped.map((x) => ({ id: x.id, code: x.code })) },
+      });
+    });
+    if (deleted.length) await bumpManifest(rt);
+    return c.json({ requested: ids.length, deleted_count: deleted.length, skipped_count: skipped.length, freed_bytes: freed, objects_deleted: objectsDeleted, deleted, skipped });
   });
 
   r.delete('/:id', requirePerm('media', 'delete'), async (c) => {

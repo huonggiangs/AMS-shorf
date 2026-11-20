@@ -12,6 +12,22 @@ export interface R2PresignConfig {
 /** R2 qua binding; URL ky bang SigV4 tren endpoint S3 cua R2 (binding khong co presign). */
 export class R2ObjectStore implements ObjectStore {
   constructor(private bucket: R2Bucket, private cfg: R2PresignConfig, private clock: { now(): Date } = { now: () => new Date() }) {}
+  /** Chi ky URL khi du khoa S3 (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME); thieu mot cai => tep di qua Worker (PUT /media/:id/content). */
+  get signedPut(): boolean {
+    const c = this.cfg;
+    return !!(c.accountId.trim() && c.accessKeyId.trim() && c.secretAccessKey.trim() && c.bucketName.trim());
+  }
+  /** Ghi thang luong vao binding R2 (khong doc ca tep vao bo nho Worker). R2 can do dai biet truoc: dung FixedLengthStream. */
+  async putStream(key: string, body: ReadableStream<Uint8Array>, contentType: string, size: number) {
+    const FLS = (globalThis as unknown as { FixedLengthStream?: new (n: number) => TransformStream<Uint8Array, Uint8Array> }).FixedLengthStream;
+    let stream: ReadableStream<Uint8Array> = body;
+    if (FLS) {
+      const fl = new FLS(size);
+      void body.pipeTo(fl.writable).catch(() => undefined);
+      stream = fl.readable;
+    }
+    await this.bucket.put(key, stream as never, { httpMetadata: { contentType } });
+  }
   private base() {
     return `https://${this.cfg.accountId}.r2.cloudflarestorage.com`;
   }

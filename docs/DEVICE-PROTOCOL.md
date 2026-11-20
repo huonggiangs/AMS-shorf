@@ -213,6 +213,7 @@ Chữ ký thiết bị. Thân: `{"acks":[{"id":"<command id>","status":"ok"|"fai
 ### 7.1 `GET /v1/manifest?etag=<etag đang giữ>` (có ký, thân rỗng)
 
 - Chọn nhóm theo thiết bị: `region x model_class` (daypart `all`: một manifest chứa mọi khung giờ). `model_class`: `tv` cho TV; `elevator_<w>x<h>` / `led_p5_<w>x<h>` theo độ phân giải thật của màn hình: lấy từ `screens` (admin gắn) nếu có, nếu không thì từ `px_w`/`px_h` thiết bị khai ở `register`/`heartbeat`; chỉ khi không có cả hai mới là `elevator`, `led_p5` (nhóm này phục vụ mọi độ phân giải, nên khai `px_w`/`px_h`).
+- **Thang máy HD đến 4K (từ 20/11/2026).** Màn thang máy là màn dọc 9:16, nhận mọi độ phân giải từ 720×1280 (HD) đến 2160×3840 (4K) (sai số tỷ lệ <= 2%, nên 768×1366 hợp lệ). Gateway gom độ phân giải thiết bị về **bậc chuẩn gần nhất không vượt quá**: 720×1280, 768×1366, 1080×1920, 1440×2560, 2160×3840 (so theo cạnh ngắn, dung sai +2%; ví dụ 1080×1794 do thanh điều hướng vẫn là bậc 1080×1920; 1200×2133 là bậc 1080×1920, không lên 1440). Nhóm là `elevator_<bậc>`. Với mỗi chiến dịch, manifest chỉ chứa creative ở **bậc cao nhất không vượt bậc của thiết bị** (bằng hoặc thấp hơn gần nhất): màn HD không bao giờ nhận bản 4K; chiến dịch chỉ có bản 4K thì không vào manifest của màn thấp hơn. Bản thấp hơn màn hiển thị theo `fit` (vừa khung). Nhóm `elevator` (chưa khai độ phân giải) nhận mọi creative thang máy HD–4K đã duyệt. Thiết bị khai dưới 720 px dùng bậc 720×1280. LED không đổi (đúng kích thước bảng).
 - `?daypart=<tên>` (tùy chọn): chỉ các slot của khung giờ đó (nhóm riêng, etag riêng). Bỏ qua nếu không cần.
 - Nếu `etag` (hoặc `If-None-Match`) trùng bản hiện hành: `304` thân rỗng. Phản hồi luôn có `ETag: "<etag>"`; `Cache-Control: private, no-cache` (không cache dùng chung).
 - `?etag=<cũ>&delta=1`: nếu server còn bản `<cũ>` (giữ 1 giờ) trả **delta** (tiêu đề `X-Manifest-Kind: delta`), ngược lại trả bản đầy đủ (`X-Manifest-Kind: full`).
@@ -233,7 +234,7 @@ Phản hồi đầy đủ `200`:
 | `hotline` | chuỗi <= 60 (cũng có ở heartbeat) |
 | `rotation` | `{"mode":"sequential"}`: quy tắc xoay vòng (mục 7.5) |
 | `schedule[].header`, `schedule[].footer` | ghi đè cấp slot **nếu có** (kể cả chuỗi rỗng = ẩn); vắng mặt = dùng cấp manifest |
-| `creatives[].fit` | `cover` (mặc định, phủ kín khung) hoặc `fit` (vừa khung) |
+| `creatives[].fit` | `fit` (**mặc định từ 20/11/2026**: vừa khung, giữ tỷ lệ, viền đen nếu lệch) hoặc `cover` (phủ kín khung, có thể cắt mép; chọn thủ công theo loại màn ở admin). TV không nhận trường này |
 | `creatives[].duration_s` | ảnh LUÔN có số nguyên giây (3..120; mặc định 10, đổi ở admin); video là thời lượng thật |
 
 **Creative** `{id, campaign_id, url, sha256, duration_s, px_w, px_h, format, media_type, size_bytes}`

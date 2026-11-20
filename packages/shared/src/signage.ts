@@ -17,7 +17,7 @@ export interface SignageKindConfig {
   footer: string;
   /** hotline / Zalo hien o man hinh logo (rong = khong gui) */
   hotline: string;
-  /** cach hien anh/video trong khung: 'cover' (mac dinh, phu kin) hoac 'fit' (vua khung, co the co vien) */
+  /** cach hien anh/video trong khung: 'fit' (MAC DINH tu 20/11/2026: vua khung, giu ti le, co vien den neu lech) hoac 'cover' (phu kin, co the cat mep; chon thu cong theo loai man) */
   fit: SignageFit;
   /** thoi luong mac dinh cua anh tinh khi creative chua khai bao duration_s */
   image_duration_s: number;
@@ -34,7 +34,7 @@ export const SIGNAGE_DEFAULT: SignageKindConfig = {
   header: '',
   footer: '',
   hotline: '',
-  fit: 'cover',
+  fit: 'fit',
   image_duration_s: DEFAULT_IMAGE_DURATION_S,
   min_app_version: '',
   app_update_url: '',
@@ -149,3 +149,50 @@ export const DEVICE_ORIENTATIONS = ['landscape', 'portrait'] as const;
 
 /** Nhat ky thiet bi (device_logs) giu bao nhieu ngay; gateway don, API chi hien trong khoang nay. */
 export const DEVICE_LOG_RETENTION_DAYS = 7;
+
+/**
+ * Thang may: moi do phan giai DOC 9:16 tu HD (720x1280) den 4K (2160x3840).
+ * Cac bac chuan dung de gom nhom manifest `elevator_<w>x<h>` (768x1366 la sai so nho cua 9:16 cho man 18,5").
+ */
+export const ELEVATOR_TIERS: readonly { w: number; h: number }[] = [
+  { w: 720, h: 1280 },
+  { w: 768, h: 1366 },
+  { w: 1080, h: 1920 },
+  { w: 1440, h: 2560 },
+  { w: 2160, h: 3840 },
+];
+export const ELEVATOR_MIN = { w: 720, h: 1280 } as const;
+export const ELEVATOR_MAX = { w: 2160, h: 3840 } as const;
+/** Sai so cho phep khi so ti le 9:16 va khi so voi bac (vd man co thanh dieu huong an bot vai pixel chieu cao). */
+export const ELEVATOR_TOLERANCE = 0.02;
+
+/** true neu w x h la man/tep thang may hop le: doc, ~9:16 (+-2%), tu 720x1280 den 2160x3840. */
+export function isElevatorResolution(w: number, h: number): boolean {
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return false;
+  if (Math.abs(w / h - 9 / 16) / (9 / 16) > ELEVATOR_TOLERANCE) return false;
+  return w >= ELEVATOR_MIN.w && h >= ELEVATOR_MIN.h && w <= ELEVATOR_MAX.w && h <= ELEVATOR_MAX.h;
+}
+
+/**
+ * Bac chuan gan nhat KHONG VUOT do phan giai (w x h): bac lon nhat co chieu rong <= w (sai so +2%).
+ * Khong bao gio day len bac cao hon (man HD khong nhan 4K). Duoi 720 px: tra bac thap nhat. Tra anh xoay ngang (w > h) ve doc.
+ */
+export function elevatorTierFor(w: number, h: number): { w: number; h: number } {
+  const pw = Math.min(w, h);
+  let best = ELEVATOR_TIERS[0]!;
+  for (const t of ELEVATOR_TIERS) if (t.w <= pw * (1 + ELEVATOR_TOLERANCE)) best = t;
+  return best;
+}
+
+/**
+ * Ten nhom manifest cho thiet bi/man hinh: `elevator_<bac chuan>` (bac gan nhat khong vuot do phan giai), `led_p5_<w>x<h>` (dung kich thuoc), hoac chinh `kind` khi chua khai px.
+ * Gateway (manifest) va API quan tri (model_class) dung CHUNG ham nay de hai ben luon khop.
+ */
+export function signageModelClass(kind: 'elevator' | 'led_p5', w: number | null | undefined, h: number | null | undefined): string {
+  if (!w || !h) return kind;
+  if (kind === 'elevator') {
+    const t = elevatorTierFor(w, h);
+    return `elevator_${t.w}x${t.h}`;
+  }
+  return `${kind}_${w}x${h}`;
+}

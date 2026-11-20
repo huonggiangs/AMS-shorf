@@ -145,6 +145,24 @@ export class MemoryObjectStore implements ObjectStore {
   async put(key: string, body: Uint8Array, contentType: string) {
     this.m.set(key, { body: body.slice(), contentType });
   }
+  /** true (mac dinh) = ky duoc URL; dat false trong test de mo phong Cloudflare thieu khoa S3 */
+  signedPut = true;
+  async putStream(key: string, body: ReadableStream<Uint8Array>, contentType: string, _size: number) {
+    const parts: Uint8Array[] = [];
+    const rd = body.getReader();
+    for (;;) {
+      const { done, value } = await rd.read();
+      if (done) break;
+      parts.push(value);
+    }
+    const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
+    let o = 0;
+    for (const p of parts) {
+      out.set(p, o);
+      o += p.length;
+    }
+    this.m.set(key, { body: out, contentType });
+  }
   async get(key: string) {
     return this.m.get(key)?.body.slice() ?? null;
   }

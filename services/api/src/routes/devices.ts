@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { DEVICE_LOG_RETENTION_DAYS, REGIONS } from '@ams/shared';
+import { DEVICE_LOG_RETENTION_DAYS, REGIONS, signageModelClass } from '@ams/shared';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { conflict, forbidden, notFound, tooMany, unprocessable } from '../lib/errors.js';
 import { redeemPairingCode } from '@ams/edge-gateway/pairing';
@@ -88,7 +88,7 @@ function classOf(d: DevRow): string {
   if (!isSignage(d.kind)) return 'tv';
   const w = num(d.screen_px_w ?? d.prof_px_w, 0);
   const h = num(d.screen_px_h ?? d.prof_px_h, 0);
-  return w && h ? `${d.kind}_${w}x${h}` : d.kind;
+  return signageModelClass(d.kind as 'elevator' | 'led_p5', w, h);
 }
 
 async function present(c: Ctx, rows: DevRow[]): Promise<Record<string, unknown>[]> {

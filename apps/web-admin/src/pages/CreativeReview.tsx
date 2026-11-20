@@ -45,8 +45,8 @@ export function reasonText(code: string): string {
   if (REASON[code]) return REASON[code];
   const [k, ...rest] = code.split(':');
   const arg = rest.join(':');
-  if (k === 'unsupported_codec') return `Video dùng codec ${arg === 'av01' ? 'AV1' : arg === 'hvc1' || arg === 'hev1' ? 'H.265' : arg || 'không phải H.264'} mà TV không phát ổn định (cần H.264/AAC)`;
-  if (k === 'video_resolution_too_high') return 'Video vượt Full HD 1920×1080 (cần xuất lại 1080p)';
+  if (k === 'unsupported_codec') return `Video dùng codec ${arg === 'av01' ? 'AV1' : arg === 'hvc1' || arg === 'hev1' ? 'H.265' : arg || 'không phải H.264'} mà màn hình không phát ổn định (TV/LED cần H.264/AAC; thang máy nhận H.264 hoặc H.265)`;
+  if (k === 'video_resolution_too_high') return 'Video vượt độ phân giải cho phép (TV/LED: Full HD 1920×1080; thang máy: 4K 2160×3840)';
   if (k === 'mime_mismatch') return `Loại tệp khai báo (${arg}) không khớp nội dung thật`;
   if (k === 'dimensions_mismatch') return `Kích thước thật của tệp khác khai báo (${arg.replace('!=', ' so với ')})`;
   if (k === 'mp4_brand_not_allowed') return `MP4 dùng định dạng con không nằm trong danh sách an toàn (${arg})`;

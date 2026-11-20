@@ -2500,7 +2500,7 @@
                     "fit",
                     "cover"
                   ],
-                  "description": "CHI thang may/LED: cach hien trong khung (mac dinh cover)"
+                  "description": "CHI thang may/LED: cach hien trong khung (mac dinh fit = vua khung, giu ti le, co vien den neu lech; cover = phu kin, co the cat mep)"
                 }
               },
               "required": [
@@ -2770,7 +2770,7 @@
                     "fit",
                     "cover"
                   ],
-                  "description": "CHI thang may/LED: cach hien trong khung (mac dinh cover)"
+                  "description": "CHI thang may/LED: cach hien trong khung (mac dinh fit = vua khung, giu ti le, co vien den neu lech; cover = phu kin, co the cat mep)"
                 }
               },
               "required": [

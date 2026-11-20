@@ -16,7 +16,7 @@ import { PromptDialog } from '../components/Prompt';
 import { Icon } from '../components/Icon';
 import { useT } from '../i18n';
 import { vnd, num, fmtDate } from '../lib/format';
-import { ELEVATOR_SIZES, checkCreative, parsePx, type ScreenType } from '../lib/creative';
+import { ELEVATOR_SIZES, ELEVATOR_SIZE_LABEL, checkCreative, parsePx, type ScreenType } from '../lib/creative';
 import { STATUS_LABEL } from '../lib/status';
 
 const TABS = ['all', 'active', 'scheduled', 'pending', 'awaiting_funds', 'draft', 'paused'] as const;
@@ -207,7 +207,7 @@ export function CampaignForm({ open, onClose }: { open: boolean; onClose: () => 
         <Field label="Loại màn hình">
           <select value={f.screen_type} onChange={(e) => set('screen_type', e.target.value as ScreenType)}>{SCREEN_OPTS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
         </Field>
-        {f.screen_type === 'elevator' ? <Field label="Kích thước màn"><select value={f.elev} onChange={(e) => set('elev', e.target.value)}>{Object.entries(ELEVATOR_SIZES).map(([k, v]) => <option key={k} value={k}>{k}&quot; · {v.w}×{v.h}</option>)}</select></Field> : null}
+        {f.screen_type === 'elevator' ? <Field label="Kích thước màn"><select value={f.elev} onChange={(e) => set('elev', e.target.value)}>{Object.entries(ELEVATOR_SIZES).map(([k, v]) => <option key={k} value={k}>{ELEVATOR_SIZE_LABEL[k] ?? k} · {v.w}×{v.h}</option>)}</select></Field> : null}
         {f.screen_type === 'led' && !base.isExternal ? <Field label="Bảng LED"><select value={f.led} onChange={(e) => set('led', e.target.value)}><option value="">—</option>{leds.data?.items.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.resolution}</option>)}</select></Field> : null}
         <Field label="Tệp creative (đã duyệt)">
           <select value={f.media_id} onChange={(e) => set('media_id', e.target.value)}><option value="">Chưa chọn (tải sau)</option>{media.data?.items.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.width ?? '?'}×{x.height ?? '?'}</option>)}</select>

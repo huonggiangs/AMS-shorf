@@ -185,7 +185,7 @@ function SignageKindForm({ kind, cfg, canWrite }: { kind: string; cfg: KindCfg; 
         <Field label="Chữ đầu màn hình (header)"><input readOnly={ro} maxLength={120} value={f.header} onChange={(e) => set('header', e.target.value)} /></Field>
         <Field label="Chữ cuối màn hình (footer)"><input readOnly={ro} maxLength={200} value={f.footer} onChange={(e) => set('footer', e.target.value)} /></Field>
         <Field label="Hotline / Zalo"><input readOnly={ro} maxLength={60} value={f.hotline} onChange={(e) => set('hotline', e.target.value)} /></Field>
-        <Field label="Cách hiện hình"><select disabled={ro} value={f.fit} onChange={(e) => set('fit', e.target.value)}><option value="cover">Phủ kín khung (cover)</option><option value="fit">Vừa khung (fit)</option></select></Field>
+        <Field label="Cách hiện hình"><select disabled={ro} value={f.fit} onChange={(e) => set('fit', e.target.value)}><option value="fit">Vừa khung (fit) — mặc định: giữ tỷ lệ, có viền đen nếu lệch</option><option value="cover">Phủ kín khung (cover) — có thể cắt mép</option></select></Field>
         <Field label="Thời lượng ảnh mặc định (giây)"><input readOnly={ro} type="number" min={3} max={120} value={f.image_duration_s} onChange={(e) => set('image_duration_s', e.target.value)} /></Field>
       </div>
       <h3 style={{ margin: '14px 0 6px', fontSize: 14 }}>Cập nhật app từ xa</h3>

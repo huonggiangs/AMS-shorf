@@ -200,8 +200,21 @@ export const mediaSchema = z
   })
   .passthrough();
 export type Media = z.infer<typeof mediaSchema>;
+/** POST /media/bulk-delete: ket qua tung dot (<= 200 tep). skipped[].code: not_found | in_use | busy. */
+export const bulkDeleteResultSchema = z
+  .object({
+    requested: z.number(),
+    deleted_count: z.number(),
+    skipped_count: z.number(),
+    freed_bytes: z.number(),
+    objects_deleted: z.number().optional(),
+    deleted: z.array(z.object({ id: idStr, name: z.string().nullish(), size_bytes: z.coerce.number().nullish() }).passthrough()),
+    skipped: z.array(z.object({ id: idStr, name: z.string().nullish(), code: z.string(), reason: z.string() }).passthrough()),
+  })
+  .passthrough();
+export type BulkDeleteResult = z.infer<typeof bulkDeleteResultSchema>;
 export const uploadUrlSchema = z
-  .object({ id: idStr, url: z.string(), method: z.string().optional(), headers: z.record(z.string(), z.string()).optional() })
+  .object({ id: idStr, url: z.string(), method: z.string().optional(), headers: z.record(z.string(), z.string()).optional(), via: z.enum(['direct', 'proxy']).optional() })
   .passthrough();
 
 /* ---------- devices ---------- */

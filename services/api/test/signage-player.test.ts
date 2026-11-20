@@ -325,12 +325,12 @@ describe('5-8, 10. cau hinh header/footer/hotline/fit/thoi luong anh + cap nhat 
   it('doc mac dinh; ghi (screens:write) + audit; gateway: heartbeat va manifest phan anh', async () => {
     const g = await devops.json('GET', '/admin/v1/screens/signage-config');
     expect(g.status).toBe(200);
-    expect(g.body.kinds.elevator).toMatchObject({ header: '', footer: '', hotline: '', fit: 'cover', image_duration_s: 10, app_update_url: '' });
+    expect(g.body.kinds.elevator).toMatchObject({ header: '', footer: '', hotline: '', fit: 'fit', image_duration_s: 10, app_update_url: '' }); // mac dinh tu 20/11/2026: vua khung
     expect((await finance.json('GET', '/admin/v1/screens/signage-config')).status).toBe(403);
     expect((await lan.json('GET', '/admin/v1/screens/signage-config')).status).toBe(403);
-    const r = await devops.json('PUT', '/admin/v1/screens/signage-config/elevator', { header: '  ANIO TV  ', footer: 'Liên hệ 0900 123 456', hotline: '0900 123 456 · Zalo', fit: 'fit', image_duration_s: 12 });
+    const r = await devops.json('PUT', '/admin/v1/screens/signage-config/elevator', { header: '  ANIO TV  ', footer: 'Liên hệ 0900 123 456', hotline: '0900 123 456 · Zalo', fit: 'cover', image_duration_s: 12 }); // chon thu cong cover theo loai man
     expect(r.status, JSON.stringify(r.body)).toBe(200);
-    expect(r.body.config).toMatchObject({ header: 'ANIO TV', fit: 'fit', image_duration_s: 12 });
+    expect(r.body.config).toMatchObject({ header: 'ANIO TV', fit: 'cover', image_duration_s: 12 });
     const a = await audit('signage.config');
     expect(a.length).toBe(1);
     expect(a[0]!.actor_id).toBeTruthy();
@@ -340,7 +340,7 @@ describe('5-8, 10. cau hinh header/footer/hotline/fit/thoi luong anh + cap nhat 
     expect(hb.body.hotline).toBe('0900 123 456 · Zalo');
     const m = await d.manifest();
     expect(m).toMatchObject({ header: 'ANIO TV', footer: 'Liên hệ 0900 123 456', hotline: '0900 123 456 · Zalo', rotation: { mode: 'sequential' } });
-    expect(m.creatives[0].fit).toBe('fit');
+    expect(m.creatives[0].fit).toBe('cover');
     // LED khong bi anh huong (cau hinh rieng theo loai)
     const led = await new Dev('led_p5', { px_w: 640, px_h: 320 }).init();
     expect((await led.heartbeat()).body.hotline).toBeUndefined();

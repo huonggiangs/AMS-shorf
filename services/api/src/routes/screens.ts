@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { REGIONS, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, SIGNAGE_KINDS, isSignageKind, parseSignageConfig, validateSignageKind, type SignageKindConfig } from '@ams/shared';
+import { REGIONS, SIGNAGE_CONFIG_KEY, isElevatorResolution, SIGNAGE_DEFAULT, SIGNAGE_KINDS, isSignageKind, parseSignageConfig, validateSignageKind, type SignageKindConfig } from '@ams/shared';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { diffObjects } from '../lib/audit.js';
-import { ELEVATOR_PX, LED_MODULE_PX, parsePx } from '../lib/creative.js';
+import { LED_MODULE_PX, parsePx } from '../lib/creative.js';
 import { forbidden, notFound, unprocessable } from '../lib/errors.js';
 import { readJson, getRt, num, parseBody, runList } from '../lib/http.js';
 import { bumpManifest } from '../lib/manifest.js';
@@ -153,9 +153,9 @@ export function screenRoutes(): Hono<AppEnv> {
     let wmm: number | null = null;
     let hmm: number | null = null;
     if (!led) {
-      if (!ELEVATOR_PX.some((p) => p.w === px.w && p.h === px.h)) throw unprocessable('Màn hình thang máy chỉ nhận 768×1366 (18,5") hoặc 1080×1920 (21,5"/23,8").', 'bad_resolution');
+      if (!isElevatorResolution(px.w, px.h)) throw unprocessable('Màn hình thang máy chỉ nhận độ phân giải dọc 9:16 từ 720×1280 (HD) đến 2160×3840 (4K), ví dụ 768×1366 (18,5"), 1080×1920 (21,5"/23,8").', 'bad_resolution');
       const d = b.size ? Number(b.size.replace(',', '.').replace(/[^\d.]/g, '')) : NaN;
-      diag = [18.5, 21.5, 23.8].includes(d) ? d : px.w === 768 ? 18.5 : 21.5;
+      diag = [18.5, 21.5, 23.8].includes(d) ? d : px.w <= 768 ? 18.5 : 21.5;
     } else {
       const m = b.size?.replace(/,/g, '.').match(/([\d.]+)\s*[×x]\s*([\d.]+)/i);
       wmm = m ? Math.round(Number(m[1]) * 1000) : px.w * 5;

@@ -10,6 +10,7 @@ import { TestDevice, harness, type Harness } from './helpers.js';
 let h: Harness;
 let fx1080: Awaited<ReturnType<typeof seedAdFixture>>;
 let fx768: Awaited<ReturnType<typeof seedAdFixture>>;
+let fx2160: Awaited<ReturnType<typeof seedAdFixture>>;
 const J = async (r: Response): Promise<any> => (await r.json()) as any;
 const el = (reg: Record<string, unknown> = {}) => TestDevice.create(h, { kind: 'elevator', model: 'RK3568', os: 'android-11', app_version: '1.0.0', ...reg });
 const hb = async (d: TestDevice, extra: Record<string, unknown> = {}) => d.call('POST', '/v1/heartbeat', { state: 1, app_ver: '1.0.0', ...extra });
@@ -28,6 +29,7 @@ beforeAll(async () => {
   // hai chien dich thang may, MOI chien dich mot do phan giai (1080x1920 va 768x1366); tep xac minh duoc sha256 (withObjects)
   fx1080 = await seedAdFixture(h.rt, { campaigns: 1, targetType: 'elevator', px: { w: 1080, h: 1920 }, regions: null });
   fx768 = await seedAdFixture(h.rt, { campaigns: 1, targetType: 'elevator', px: { w: 768, h: 1366 }, regions: null });
+  fx2160 = await seedAdFixture(h.rt, { campaigns: 1, targetType: 'elevator', px: { w: 2160, h: 3840 }, regions: null }); // 4K: KHONG bao gio day cho man thap hon
 }, 60_000);
 afterAll(async () => h.close());
 
@@ -62,12 +64,54 @@ describe('dang ky + do phan giai (muc 4)', () => {
     expect(hbb.manifest_group).toBe('HN.all.elevator_768x1366');
     const ma = await J(await a.call('GET', '/v1/manifest'));
     const mb = await J(await b.call('GET', '/v1/manifest'));
-    expect(ma.creatives.map((c: any) => c.id)).toEqual([fx1080.campaigns[0]!.creatives[0]!.id]);
+    // moi chien dich chi giu creative o bac cao nhat KHONG VUOT do phan giai thiet bi: man 1080 nhan chien dich 1080 va chien dich 768 (thap hon), khong nhan 4K
+    expect(ma.creatives.map((c: any) => c.id).sort()).toEqual([fx1080.campaigns[0]!.creatives[0]!.id, fx768.campaigns[0]!.creatives[0]!.id].sort());
+    expect(ma.creatives.every((c: any) => c.px_w <= 1080)).toBe(true);
+    // man 768: chi chien dich 768 (khong day 1080/4K cho man thap hon)
     expect(mb.creatives.map((c: any) => c.id)).toEqual([fx768.campaigns[0]!.creatives[0]!.id]);
-    expect(ma.creatives.every((c: any) => c.px_w === 1080 && c.px_h === 1920)).toBe(true);
     // chua gui do phan giai (app cu): nhom 'elevator' khong theo do phan giai (khong chon duoc)
     const old = await el();
     expect((await J(await hb(old))).manifest_group).toBe('HN.all.elevator');
+    // nhom `elevator` (chua khai px): moi creative thang may HD-4K da duyet (1080, 768 va 4K)
+    const mo = await J(await old.call('GET', '/v1/manifest'));
+    expect(mo.creatives.map((c: any) => c.id).sort()).toEqual([fx1080, fx768, fx2160].map((f) => f.campaigns[0]!.creatives[0]!.id).sort());
+  });
+
+  it('do phan giai khai la cac cong/giay le: nhom = bac chuan gan nhat KHONG VUOT (720, 768, 1080, 1440, 2160); man 4K nhan ca 4K', async () => {
+    const group = async (px_w: number, px_h: number) => (await J(await hb(await el({ px_w, px_h, region: 'HN' })))).manifest_group;
+    expect(await group(720, 1280)).toBe('HN.all.elevator_720x1280');
+    expect(await group(768, 1366)).toBe('HN.all.elevator_768x1366');
+    expect(await group(1080, 1794)).toBe('HN.all.elevator_1080x1920'); // thanh dieu huong an bot chieu cao
+    expect(await group(1200, 2133)).toBe('HN.all.elevator_1080x1920'); // khong day len 1440
+    expect(await group(1440, 2560)).toBe('HN.all.elevator_1440x2560');
+    expect(await group(2160, 3840)).toBe('HN.all.elevator_2160x3840');
+    expect(await group(3000, 5000)).toBe('HN.all.elevator_2160x3840');
+    expect(await group(1920, 1080)).toBe('HN.all.elevator_1080x1920'); // bao xoay ngang: van tinh theo canh ngan
+    const d4k = await el({ px_w: 2160, px_h: 3840, region: 'HN' });
+    expect((await J(await d4k.call('GET', '/v1/manifest'))).creatives.map((c: any) => c.id)).toContain(fx2160.campaigns[0]!.creatives[0]!.id);
+    const d720 = await el({ px_w: 720, px_h: 1280, region: 'HN' });
+    expect((await J(await d720.call('GET', '/v1/manifest'))).creatives).toEqual([]); // 720 < 768: khong co creative nao khong vuot
+  });
+
+  it('mot chien dich co nhieu ban: man nhan ban cao nhat khong vuot (1080 -> ban 1080, khong lay ban 768 hay 4K)', async () => {
+    const camp = fx1080.campaigns[0]!;
+    const extra = h.rt.id();
+    await h.rt.db.run(
+      `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, storage_key, mime, size_bytes, duration_s, scan_state, review_state, state, created_at)
+       SELECT ?, campaign_id, customer_id, 'ban 4K', target_type, 2160, 3840, orientation, kind, source, storage_key, mime, size_bytes, duration_s, scan_state, review_state, state, created_at FROM creatives WHERE id = ?`,
+      [extra, camp.creatives[0]!.id],
+    );
+    await bump();
+    const d = await el({ px_w: 1080, px_h: 1920 });
+    const ids = (await J(await d.call('GET', '/v1/manifest'))).creatives.map((c: any) => c.id);
+    expect(ids).toContain(camp.creatives[0]!.id);
+    expect(ids).not.toContain(extra);
+    const d4 = await el({ px_w: 2160, px_h: 3840 });
+    const ids4 = (await J(await d4.call('GET', '/v1/manifest'))).creatives.map((c: any) => c.id);
+    expect(ids4).toContain(extra);
+    expect(ids4).not.toContain(camp.creatives[0]!.id); // cung chien dich: chi ban cao nhat khong vuot
+    await h.rt.db.run('DELETE FROM creatives WHERE id = ?', [extra]);
+    await bump();
   });
 
   it('heartbeat doi do phan giai/huong/vung -> doi nhom NGAY, luu device_profiles; kiem tra gia tri o heartbeat', async () => {
@@ -134,14 +178,14 @@ describe('heartbeat mo rong (muc 6, 10, 12)', () => {
 });
 
 describe('manifest thang may/LED (muc 5, 6, 7, 8)', () => {
-  it('header/footer/hotline cap manifest, fit mac dinh cover, rotation sequential; slot ghi de header/footer; TV KHONG co cac truong nay', async () => {
-    await setConfig({ elevator: { header: 'ANIO · Chung cư xanh', footer: 'Hotline 0900', hotline: '0900 000 000', fit: 'fit' } });
+  it('header/footer/hotline cap manifest, fit mac dinh = vua khung, rotation sequential; slot ghi de header/footer; TV KHONG co cac truong nay', async () => {
+    await setConfig({ elevator: { header: 'ANIO · Chung cư xanh', footer: 'Hotline 0900', hotline: '0900 000 000', fit: 'cover' } });
     await h.rt.db.run('INSERT INTO schedule_slot_text (slot_id, header, footer, updated_at) VALUES (?,?,?,?)', [fx1080.campaigns[0]!.slotId, 'Tiêu đề riêng', '', h.rt.clock.now().toISOString()]);
     await bump();
     const d = await el({ px_w: 1080, px_h: 1920 });
     const m = await J(await d.call('GET', '/v1/manifest'));
     expect(m).toMatchObject({ header: 'ANIO · Chung cư xanh', footer: 'Hotline 0900', hotline: '0900 000 000', rotation: { mode: 'sequential' } });
-    expect(m.creatives[0].fit).toBe('fit');
+    expect(m.creatives[0].fit).toBe('cover'); // chon thu cong 'cover' theo loai man van duoc
     expect(m.schedule[0]).toMatchObject({ header: 'Tiêu đề riêng', footer: '' }); // chuoi rong = an
     // slot khong ghi de: khong co header/footer o cap slot
     const m2 = await J(await (await el({ px_w: 768, px_h: 1366 })).call('GET', '/v1/manifest'));
@@ -150,13 +194,13 @@ describe('manifest thang may/LED (muc 5, 6, 7, 8)', () => {
     const mt = await J(await tv.call('GET', '/v1/manifest'));
     for (const k of ['header', 'footer', 'hotline', 'rotation']) expect(mt[k], k).toBeUndefined();
     for (const c of mt.creatives) expect(c.fit).toBeUndefined();
-    // mac dinh khi chua cau hinh: cover, header/footer/hotline rong
+    // mac dinh khi chua cau hinh: fit (vua khung), header/footer/hotline rong
     await setConfig({});
     await h.rt.db.run('DELETE FROM schedule_slot_text');
     await bump();
     const m3 = await J(await d.call('GET', '/v1/manifest'));
     expect(m3).toMatchObject({ header: '', footer: '', hotline: '', rotation: { mode: 'sequential' } });
-    expect(m3.creatives[0].fit).toBe('cover');
+    expect(m3.creatives[0].fit).toBe('fit');
   });
 
   it('anh tinh: duration_s LUON co (mac dinh 10 giay, hoac theo cau hinh); video giu thoi luong that', async () => {
@@ -166,7 +210,7 @@ describe('manifest thang may/LED (muc 5, 6, 7, 8)', () => {
     await bump();
     const d = await el({ px_w: 1080, px_h: 1920 });
     let m = await J(await d.call('GET', '/v1/manifest'));
-    expect(m.creatives.find((c: any) => c.id === id)).toMatchObject({ media_type: 'image', duration_s: 10, fit: 'cover' });
+    expect(m.creatives.find((c: any) => c.id === id)).toMatchObject({ media_type: 'image', duration_s: 10, fit: 'fit' });
     // video thang may giu thoi luong that (15 giay); (TV: duration_s cua anh chua khai bao van la null, khong doi hop dong TV: manifest.ts chi them mac dinh khi co `signage`)
     const m768 = await J(await (await el({ px_w: 768, px_h: 1366 })).call('GET', '/v1/manifest'));
     expect(m768.creatives[0]).toMatchObject({ media_type: 'video', duration_s: 15 });
@@ -178,10 +222,10 @@ describe('manifest thang may/LED (muc 5, 6, 7, 8)', () => {
   });
 
   it('delta: creative doi noi dung (fit) cung id duoc gui lai (added + removed) de client thay the', async () => {
-    await setConfig({});
+    await setConfig({ elevator: { fit: 'cover' } });
     const d = await el({ px_w: 1080, px_h: 1920 });
     const m0 = await J(await d.call('GET', '/v1/manifest'));
-    await setConfig({ elevator: { fit: 'fit' } });
+    await setConfig({}); // mac dinh 'fit'
     const r = await d.call('GET', `/v1/manifest?etag=${m0.etag}&delta=1`);
     expect(r.headers.get('x-manifest-kind')).toBe('delta');
     const dl = await J(r);
@@ -216,7 +260,7 @@ describe('proof_of_play hop le (muc 3)', () => {
     await h.gw.devices.invalidate(d.id);
     const cr = fx1080.campaigns[0]!.creatives[0]!.id;
     const ev = pop(cr);
-    const r1 = await J(await d.call('POST', '/v1/events', { events: [ev, pop(fx768.campaigns[0]!.creatives[0]!.id)] }));
+    const r1 = await J(await d.call('POST', '/v1/events', { events: [ev, pop(fx2160.campaigns[0]!.creatives[0]!.id)] }));
     expect(r1).toMatchObject({ accepted: 1, valid: 1, flagged: 0 });
     expect(r1.rejected).toEqual([{ event_id: expect.any(String), reason: 'not_in_manifest' }]);
     await d.call('POST', '/v1/events', { events: [ev] }); // gui lai: khong dem hai lan

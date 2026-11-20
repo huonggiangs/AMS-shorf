@@ -47,6 +47,16 @@ export class S3ObjectStore implements ObjectStore {
     const { s3, client } = await this.load();
     await client.send(new s3.PutObjectCommand({ Bucket: this.cfg.bucket, Key: key, Body: body, ContentType: contentType }));
   }
+  async putStream(key: string, body: ReadableStream<Uint8Array>, contentType: string, _size: number) {
+    const parts: Uint8Array[] = []; // S3 SDK can do dai/chunk; may chu Node (khong phai Worker) gom lai roi gui
+    const rd = body.getReader();
+    for (;;) {
+      const { done, value } = await rd.read();
+      if (done) break;
+      parts.push(value);
+    }
+    await this.put(key, Buffer.concat(parts), contentType);
+  }
   async get(key: string) {
     const { s3, client } = await this.load();
     try {

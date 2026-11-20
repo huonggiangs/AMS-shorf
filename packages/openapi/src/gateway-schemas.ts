@@ -78,7 +78,7 @@ export const manifestCreative = z.object({
   overlay: overlay.optional(),
   media_type: z.enum(['video', 'image']),
   size_bytes: z.number().nullable(),
-  fit: z.enum(['fit', 'cover']).optional().describe('CHI thang may/LED: cach hien trong khung (mac dinh cover)'),
+  fit: z.enum(['fit', 'cover']).optional().describe('CHI thang may/LED: cach hien trong khung (mac dinh fit = vua khung, giu ti le, co vien den neu lech; cover = phu kin, co the cat mep)'),
 });
 export const manifestSlot = z.object({
   slot_id: z.string(),
