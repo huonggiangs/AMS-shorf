@@ -73,13 +73,20 @@ interface CRow {
   review_state: string;
   state: string;
   overlay: string | null;
+  content_version: number | null;
+  kr_kid: number | null;
+  kr_version: number | null;
+  kr_at: string | null;
+  kr_note: string | null;
+  kr_by_name: string | null;
   owner_name: string;
   industry: string | null;
   campaign_name: string | null;
 }
 const C_SELECT = `m.id, m.campaign_id, m.customer_id, m.name, m.kind, m.format, m.px_w, m.px_h, m.size_bytes, m.duration_s, m.review_state, m.state, m.overlay,
+  COALESCE(sec.content_version, 1) AS content_version, kr.kid_safe AS kr_kid, kr.content_version AS kr_version, kr.reviewed_at AS kr_at, kr.note AS kr_note, ra.name AS kr_by_name,
   cu.short_name AS owner_name, cu.industry, ca.name AS campaign_name`;
-const C_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN campaigns ca ON ca.id = m.campaign_id LEFT JOIN creative_security sec ON sec.creative_id = m.id';
+const C_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN campaigns ca ON ca.id = m.campaign_id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_kid_review kr ON kr.creative_id = m.id LEFT JOIN admins ra ON ra.id = kr.reviewed_by';
 
 const overlayOf = (raw: string | null): CreativeOverlay => {
   if (!raw) return {};
@@ -95,6 +102,8 @@ const present = (m: CRow) => {
   const o = overlayOf(m.overlay);
   const contexts = o.contexts ?? ['fullscreen'];
   const kid = o.kid_safe === true;
+  // w-dev: xac nhan cua nguoi duyet gan voi phien ban noi dung; khach doi noi dung => xac nhan het hieu luc (manifest cung kiem nhu vay)
+  const reviewCurrent = num(m.kr_kid) === 1 && m.kr_version != null && num(m.kr_version) === num(m.content_version ?? 1);
   return {
     id: m.id,
     name: m.name,
@@ -110,11 +119,13 @@ const present = (m: CRow) => {
     review_state: m.review_state,
     duration_s: m.duration_s,
     kid_safe: kid,
+    content_version: num(m.content_version ?? 1),
+    kid_review: { current: reviewCurrent, reviewed_at: m.kr_at ?? null, reviewed_by: m.kr_by_name ?? null, note: m.kr_note ?? null, version: m.kr_version == null ? null : num(m.kr_version) },
     contexts,
     safe_area: o.safe_area ?? null,
     headline: o.headline ?? null,
     // chi len man khoa khi: duoc duyet noi dung + kid_safe + ngu canh lock
-    lock_eligible: kid && contexts.includes('lock') && m.review_state === 'approved',
+    lock_eligible: kid && reviewCurrent && contexts.includes('lock') && m.review_state === 'approved',
   };
 };
 
@@ -162,6 +173,9 @@ const patchBody = z
     duration_s: z.number().int().min(5).max(60).optional(),
     safe_area: z.object({ top: z.number().int().min(0).max(15), right: z.number().int().min(0).max(15), bottom: z.number().int().min(0).max(15), left: z.number().int().min(0).max(15) }).optional(),
     kid_safe: z.boolean().optional(),
+    /** w-dev: nguoi duyet xac nhan da xem noi dung that cua creative (bat buoc khi dat kid_safe=true hoac them ngu canh lock) */
+    confirm_reviewed: z.boolean().optional(),
+    note: z.string().trim().min(3, 'Ghi chú duyệt tối thiểu 3 ký tự').max(500).optional(),
   })
   .strict();
 
@@ -175,8 +189,8 @@ export function tvExperienceRoutes(): Hono<AppEnv> {
     const counts = (await rt.db.query<{ total: unknown; kid: unknown; lock: unknown }>(
       `SELECT COUNT(*) AS total,
               COALESCE(SUM(CASE WHEN COALESCE(sec.kid_safe, 0) = 1 THEN 1 ELSE 0 END), 0) AS kid,
-              COALESCE(SUM(CASE WHEN COALESCE(sec.kid_safe, 0) = 1 AND COALESCE(sec.lock_context, 0) = 1 AND m.review_state = 'approved' THEN 1 ELSE 0 END), 0) AS lock
-         FROM creatives m LEFT JOIN creative_security sec ON sec.creative_id = m.id WHERE COALESCE(m.format, 'fullscreen') = 'fullscreen'`,
+              COALESCE(SUM(CASE WHEN COALESCE(sec.kid_safe, 0) = 1 AND COALESCE(sec.lock_context, 0) = 1 AND m.review_state = 'approved' AND kr.kid_safe = 1 AND kr.content_version = COALESCE(sec.content_version, 1) THEN 1 ELSE 0 END), 0) AS lock
+         FROM creatives m LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_kid_review kr ON kr.creative_id = m.id WHERE COALESCE(m.format, 'fullscreen') = 'fullscreen'`,
     ))[0];
     const total = num(counts?.total);
     const kid = num(counts?.kid);
@@ -241,6 +255,10 @@ export function tvExperienceRoutes(): Hono<AppEnv> {
       contexts = contexts.filter((x) => x !== 'lock');
       if (!contexts.length) contexts = ['fullscreen'];
     }
+    // w-dev: xac nhan cua nguoi duyet BAT BUOC khi dat kid_safe=true hoac them ngu canh `lock`; xac nhan gan voi phien ban noi dung
+    const addsLock = !!contexts?.includes('lock') && !(cur.contexts ?? []).includes('lock');
+    const needsConfirm = kid && (b.kid_safe === true || addsLock);
+    const confirmed = canApprove && b.confirm_reviewed === true;
     if (kid && b.kid_safe === true) {
       const problems = kidSafeProblems(m, await loadTvSettings(rt));
       if (problems.length) throw unprocessable(`Không thể xác nhận kid_safe: ${problems.join(' ')}`, 'kid_safe_blocked', { problems });
@@ -256,12 +274,21 @@ export function tvExperienceRoutes(): Hono<AppEnv> {
     const json = check.value ? JSON.stringify(check.value) : null;
     // chinh sach tre em: man khoa tat (mac dinh) => khong cho dat ngu canh 'lock' (cung bi chan luc duyet va luc xay manifest)
     if (contexts?.includes('lock') && !(cur.contexts ?? []).includes('lock')) await assertLockPolicy(rt.db, json, { creative_id: m.id });
+    if (needsConfirm && !(b.confirm_reviewed === true && b.note)) throw unprocessable('Cần người duyệt tích xác nhận "đã xem nội dung" và nhập ghi chú duyệt trước khi cho phép kid_safe/màn khóa.', 'reviewer_confirmation_required');
     const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
       // duration_s dong bo sang creatives.duration_s de manifest co thoi luong (TV-APP-INTEGRATION request 1.4)
       await db.run('UPDATE creatives SET overlay = ?, duration_s = COALESCE(?, duration_s) WHERE id = ?', [json, b.duration_s ?? null, m.id]);
-      await bumpContentVersion(db, m.id, nowIso); // R1-14
+      const newVer = await bumpContentVersion(db, m.id, nowIso); // R1-14
       await syncKidFlags(db, m.id, json, nowIso); // N5: cot kid_safe/lock_context
+      // xac nhan cua nguoi duyet gan voi phien ban moi (thu hoi kid_safe => ghi kid_safe=0). Sua khac ma khong xac nhan lai => xac nhan cu het hieu luc (manifest bo 'lock').
+      if (kid ? confirmed : b.kid_safe === false || cur.kid_safe === true) {
+        await db.run(
+          `INSERT INTO creative_kid_review (creative_id, content_version, kid_safe, contexts, reviewed_by, reviewed_at, note) VALUES (?,?,?,?,?,?,?)
+           ON CONFLICT (creative_id) DO UPDATE SET content_version = excluded.content_version, kid_safe = excluded.kid_safe, contexts = excluded.contexts, reviewed_by = excluded.reviewed_by, reviewed_at = excluded.reviewed_at, note = excluded.note`,
+          [m.id, newVer, kid ? 1 : 0, next.contexts ? JSON.stringify(next.contexts) : null, c.get('user').id, nowIso, b.note ?? null],
+        );
+      }
       if (m.review_state === 'approved') {
         const cur2 = (await db.query<{ sha256: string | null; storage_key: string | null; size_bytes: unknown; source_url: string | null; format: string | null; overlay: string | null }>('SELECT sha256, storage_key, size_bytes, source_url, format, overlay FROM creatives WHERE id = ?', [m.id]))[0]!;
         await recordApproval(db, { id: m.id, ...cur2 }, nowIso); // nguoi duyet tu sua: duyet lai co kiem toan, giu phien ban khop
@@ -271,7 +298,7 @@ export function tvExperienceRoutes(): Hono<AppEnv> {
         objectType: 'creative',
         objectId: m.id,
         customerId: m.customer_id,
-        diff: { before: { kid_safe: cur.kid_safe === true, contexts: cur.contexts ?? null, duration_s: cur.duration_s ?? null, safe_area: cur.safe_area ?? null }, after: { kid_safe: kid, contexts: next.contexts ?? null, duration_s: next.duration_s ?? null, safe_area: next.safe_area ?? null } },
+        diff: { reviewer_confirmed: confirmed, note: b.note ?? null, content_version: newVer, before: { kid_safe: cur.kid_safe === true, contexts: cur.contexts ?? null, duration_s: cur.duration_s ?? null, safe_area: cur.safe_area ?? null }, after: { kid_safe: kid, contexts: next.contexts ?? null, duration_s: next.duration_s ?? null, safe_area: next.safe_area ?? null } },
       });
     });
     if (m.campaign_id) await bumpManifest(rt);

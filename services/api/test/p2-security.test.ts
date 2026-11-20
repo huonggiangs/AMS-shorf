@@ -126,7 +126,7 @@ describe('Chinh sach tre em: an toan mac dinh, cuong che o duyet', () => {
     expect((await admin.json('PUT', '/admin/v1/tv-experience/settings', { ...cur, lock_ads_enabled: true, confirm_children_policy: true })).status).toBe(200);
     const ap = await admin.json('POST', `/admin/v1/media/${cid}/approve`, {});
     expect(ap.status).toBe(200);
-    await admin.json('PUT', `/admin/v1/tv-experience/creatives/${cid}`, { kid_safe: true, contexts: ['lock', 'fullscreen'] });
+    await admin.json('PUT', `/admin/v1/tv-experience/creatives/${cid}`, { kid_safe: true, contexts: ['lock', 'fullscreen'], confirm_reviewed: true, note: 'da xem noi dung' });
     const sec = (await db().query<{ kid_safe: number; lock_context: number }>('SELECT kid_safe, lock_context FROM creative_security WHERE creative_id = ?', [cid]))[0]!;
     expect([Number(sec.kid_safe), Number(sec.lock_context)]).toEqual([1, 1]);
     const sum = (await admin.json('GET', '/admin/v1/tv-experience')).body.summary;

@@ -7,6 +7,7 @@ import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, Note, PageHead, Tag }
 import { Dialog } from '../components/Dialog';
 import { fmtDateTime } from '../lib/format';
 import { useUi } from '../state/ui';
+import { TvMetaSection } from '../components/TvMeta';
 
 const PAGE_SIZE = 12;
 const ENDPOINT = '/admin/v1/media/scan-review/queue';
@@ -83,6 +84,7 @@ export default function CreativeReview() {
         <span>{total} tệp đang chờ</span>
         <div className="pg">{Array.from({ length: pages }, (_, i) => <button key={i} type="button" className={i + 1 === page ? 'on' : ''} aria-label={`Trang ${i + 1}`} aria-current={i + 1 === page ? 'page' : undefined} onClick={() => setPage(i + 1)}>{i + 1}</button>)}</div>
       </div>
+      <TvMetaSection />
       {dlg ? <ReasonDialog key={`${dlg.item.id}-${dlg.decision}`} item={dlg.item} decision={dlg.decision} onClose={() => setDlg(null)} onSubmit={(note) => submit(dlg.item, dlg.decision, note)} /> : null}
     </>
   );

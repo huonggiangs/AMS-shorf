@@ -12,7 +12,7 @@ info:
     Số tiền luôn là số nguyên đồng (VND), không dùng số thực.
 
     ## TODO (p0-domain): chưa có trong tài liệu này
-    Endpoint lệnh thiết bị phía admin (tạo/liệt kê/huỷ `device_commands`), trạng thái chiến dịch mới, outbox, chi tiêu. p0-domain đang bổ sung; khi route xuất hiện, `check` sẽ báo lệch, chạy lại `generate` (yêu cầu ở ops/agents/g1-openapi.requests.md).
+    Trạng thái chiến dịch mới, outbox, chi tiêu (p0-domain đang bổ sung). Lệnh thiết bị phía admin (tạo/liệt kê/huỷ `device_commands`) đã có: `/admin/v1/devices/{id}/commands` (w-dev). Khi route mới xuất hiện, `check` sẽ báo lệch, chạy lại `generate`.
 servers:
   - url: http://api.ams.localhost
     description: Docker local (Caddy)
@@ -2964,7 +2964,7 @@ paths:
       x-ams-permission:
         module: devices
         action: view
-      x-ams-source: services/api/src/routes/devices.ts:95
+      x-ams-source: services/api/src/routes/devices.ts:99
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -2992,7 +2992,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/devices.ts:101
+      x-ams-source: services/api/src/routes/devices.ts:105
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3029,7 +3029,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/devices.ts:124
+      x-ams-source: services/api/src/routes/devices.ts:128
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3071,7 +3071,7 @@ paths:
       x-ams-permission:
         module: devices
         action: view
-      x-ams-source: services/api/src/routes/devices.ts:144
+      x-ams-source: services/api/src/routes/devices.ts:200
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3089,6 +3089,205 @@ paths:
           $ref: "#/components/responses/Error"
       security:
         - cookieAuth: []
+  /admin/v1/devices/{id}/commands:
+    get:
+      operationId: adminGetDevicesByIdCommands
+      tags:
+        - devices
+      summary: GET /admin/v1/devices/{id}/commands
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: devices
+        action: view
+      x-ams-source: services/api/src/routes/device-commands.ts:125
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostDevicesByIdCommands
+      tags:
+        - devices
+      summary: POST /admin/v1/devices/{id}/commands
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: devices
+        action: write
+      x-ams-source: services/api/src/routes/device-commands.ts:142
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostDevicesByIdCommandsRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/devices/{id}/commands/{cid}:
+    get:
+      operationId: adminGetDevicesByIdCommandsByCid
+      tags:
+        - devices
+      summary: GET /admin/v1/devices/{id}/commands/{cid}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cid
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: devices
+        action: view
+      x-ams-source: services/api/src/routes/device-commands.ts:134
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/devices/{id}/commands/{cid}/cancel:
+    post:
+      operationId: adminPostDevicesByIdCommandsByCidCancel
+      tags:
+        - devices
+      summary: POST /admin/v1/devices/{id}/commands/{cid}/cancel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cid
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: devices
+        action: write
+      x-ams-source: services/api/src/routes/device-commands.ts:185
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/devices/{id}/owner:
+    put:
+      operationId: adminPutDevicesByIdOwner
+      tags:
+        - devices
+      summary: PUT /admin/v1/devices/{id}/owner
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: devices
+        action: write
+      x-ams-source: services/api/src/routes/devices.ts:179
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutDevicesByIdOwnerRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
   /admin/v1/einvoices:
     get:
       operationId: adminGetEinvoices
@@ -6479,7 +6678,7 @@ paths:
       x-ams-permission:
         module: tv_experience
         action: view
-      x-ams-source: services/api/src/routes/tv-experience.ts:171
+      x-ams-source: services/api/src/routes/tv-experience.ts:185
       description: |-
         Quyền cần có: mô-đun `tv_experience`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6514,7 +6713,7 @@ paths:
       x-ams-permission:
         module: tv_experience
         action: view
-      x-ams-source: services/api/src/routes/tv-experience.ts:211
+      x-ams-source: services/api/src/routes/tv-experience.ts:225
       description: |-
         Quyền cần có: mô-đun `tv_experience`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6549,7 +6748,7 @@ paths:
       x-ams-permission:
         module: tv_experience
         action: view
-      x-ams-source: services/api/src/routes/tv-experience.ts:216
+      x-ams-source: services/api/src/routes/tv-experience.ts:230
       description: |-
         Quyền cần có: mô-đun `tv_experience`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6583,7 +6782,7 @@ paths:
       x-ams-permission:
         module: tv_experience
         action: write
-      x-ams-source: services/api/src/routes/tv-experience.ts:222
+      x-ams-source: services/api/src/routes/tv-experience.ts:236
       description: |-
         Quyền cần có: mô-đun `tv_experience`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6620,7 +6819,7 @@ paths:
       x-ams-permission:
         module: tv_experience
         action: write
-      x-ams-source: services/api/src/routes/tv-experience.ts:191
+      x-ams-source: services/api/src/routes/tv-experience.ts:205
       description: |-
         Quyền cần có: mô-đun `tv_experience`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9272,6 +9471,27 @@ components:
         - action
         - ids
       additionalProperties: true
+    AdminPostDevicesByIdCommandsRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          minLength: 1
+          maxLength: 40
+        args:
+          type: object
+          additionalProperties: {}
+        ttl_s:
+          type: integer
+          minimum: 60
+          maximum: 604800
+          default: 3600
+        idempotency_key:
+          type: string
+          pattern: ^[A-Za-z0-9_.:-]{8,64}$
+      required:
+        - type
+      additionalProperties: false
     AdminPostDevicesPairRequest:
       type: object
       properties:
@@ -10445,6 +10665,16 @@ components:
             - pending_payment
             - terminated
       additionalProperties: true
+    AdminPutDevicesByIdOwnerRequest:
+      type: object
+      properties:
+        owner_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+        - owner_name
+      additionalProperties: false
     AdminPutEinvoicesSettingsRequest:
       type: object
       properties:
@@ -10777,6 +11007,12 @@ components:
           additionalProperties: true
         kid_safe:
           type: boolean
+        confirm_reviewed:
+          type: boolean
+        note:
+          type: string
+          minLength: 3
+          maxLength: 500
       additionalProperties: false
     AdminPutTvExperienceSettingsRequest:
       type: object
@@ -12891,5 +13127,4 @@ components:
       name: Authorization
       description: "`Apikey <khóa>`"
 x-todo:
-  - device command endpoints (create/list/cancel device_commands) - p0-domain
   - campaign state / outbox / spend visibility endpoints - p0-domain
