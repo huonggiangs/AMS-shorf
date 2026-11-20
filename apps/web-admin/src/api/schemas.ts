@@ -186,6 +186,7 @@ export const mediaSchema = z
     owner_name: z.string().nullish(),
     source_url: z.string().nullish(),
     thumb_url: z.string().nullish(),
+    source: z.string().nullish(), // upload | youtube | gdrive | dropbox | url
     reject_reason: z.string().nullish(),
     format: z.string().nullish(), // fullscreen | menu_banner | l_banner | pause_ad | qr_corner | reward
     sha256: z.string().nullish(),

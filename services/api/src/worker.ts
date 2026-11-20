@@ -3,6 +3,7 @@ import type { CloudflareEnv, CloudflareRuntime } from '@ams/runtime/cloudflare';
 import { createApp } from './app.js';
 import { createCfCreativeValidator } from './lib/cf-creative-validate.js';
 import { mountFinanceRoutes } from './finance-mount.js';
+import { sweepAutoApprove } from './lib/auto-approve.js';
 import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import type { FinancePort } from './ports.js';
 import { opsTick } from './ops/index.js';
@@ -49,6 +50,7 @@ export default {
     const r = ready(env);
     // outbox: moi lan cron (thu lai viec dang do; duong chinh la xu ly ngay sau commit trong request). Mot Queue consumer co the goi sweepOutbox y het.
     ctx.waitUntil(sweepOutbox(r.rt, r.finance).catch((e) => console.error('[api] outbox loi:', (e as Error).message)));
+    ctx.waitUntil(sweepAutoApprove(r.rt).then(() => undefined, () => undefined)); // tep noi bo co quyen duyet, da qua quet
     ctx.waitUntil(r.media.sweep(5).then(() => undefined, () => undefined)); // creative con 'pending' (mat tin nhan)
     ctx.waitUntil(r.rt.kv.purgeExpiredCounters().then(() => undefined, () => undefined)); // don bo dem D1 het han
     if (event.cron === '* * * * *') return; // cron moi phut chi de outbox + kiem tra creative

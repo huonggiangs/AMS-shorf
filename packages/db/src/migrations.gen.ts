@@ -80,5 +80,10 @@ export const MIGRATIONS: MigrationFile[] = [
     "name": "0015_device_ops",
     "dialect": "all",
     "sql": "-- 0015 (w-dev): xac nhan cua nguoi duyet cho kid_safe / ngu canh man khoa cua creative, GAN VOI phien ban noi dung.\n-- Co y KHONG dung ALTER TABLE (khong idempotent): bang phu khoa theo creative_id, nhu 0007/0013.\n-- Manifest chi giu ngu canh 'lock' khi dong nay co kid_safe = 1 VA content_version = creative_security.content_version hien tai\n-- (khach doi tep/dinh dang/overlay => content_version tang => xac nhan het hieu luc cho toi khi nguoi duyet xac nhan lai).\n-- Lenh thiet bi dung bang device_commands (0004); huy lenh = status 'failed' + result 'cancelled_by_admin' (khong doi CHECK).\nCREATE TABLE IF NOT EXISTS creative_kid_review (\n  creative_id TEXT NOT NULL PRIMARY KEY,\n  content_version INTEGER NOT NULL,\n  kid_safe INTEGER NOT NULL DEFAULT 0 CHECK (kid_safe IN (0,1)),\n  contexts TEXT,\n  reviewed_by TEXT,\n  reviewed_at TEXT NOT NULL,\n  note TEXT\n);\n"
+  },
+  {
+    "name": "0016_creative_thumbnails",
+    "dialect": "all",
+    "sql": "-- 0016: anh dai dien (thumbnail) cua creative, tao O TRINH DUYET luc tai len (Cloudflare khong co ffmpeg) roi PUT /media/:id/thumbnail.\n-- Co y KHONG dung ALTER TABLE (khong idempotent tren SQLite/D1): bang phu khoa theo creative_id, nhu 0007/0013/0015.\n-- thumb_key: khoa trong kho tep (media/{customer}/{id}/thumb.jpg). Xoa creative => xoa dong nay (API cung xoa tep).\nCREATE TABLE IF NOT EXISTS creative_thumbnails (\n  creative_id TEXT NOT NULL PRIMARY KEY REFERENCES creatives(id) ON DELETE CASCADE,\n  thumb_key TEXT NOT NULL,\n  content_type TEXT NOT NULL,\n  size_bytes INTEGER NOT NULL,\n  created_at TEXT NOT NULL\n);\n"
   }
 ];

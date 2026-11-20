@@ -128,6 +128,29 @@ export async function request<S extends z.ZodTypeAny | undefined = undefined>(
   return json as never;
 }
 
+/** PUT thang byte (anh dai dien): cung phien/CSRF nhu request(); khong doc JSON, nem ApiError khi loi. */
+export async function putBlob(path: string, blob: Blob): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': blob.type || 'application/octet-stream', Accept: 'application/json' };
+  const t = csrfToken ?? readCsrfCookie();
+  if (t) headers['X-CSRF-Token'] = t;
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { method: 'PUT', headers, body: blob, credentials: 'include' });
+  } catch {
+    throw new ApiError(0, 'network_error', 'Không kết nối được máy chủ.');
+  }
+  if (!res.ok) {
+    let msg = `Lỗi máy chủ (${res.status}).`;
+    let code = `http_${res.status}`;
+    try {
+      const j = (await res.json()) as { error?: { code?: string; message?: string } };
+      msg = j.error?.message ?? msg;
+      code = j.error?.code ?? code;
+    } catch { /* khong phai JSON */ }
+    throw new ApiError(res.status, code, msg);
+  }
+}
+
 export const api = {
   get: <S extends z.ZodTypeAny | undefined = undefined>(p: string, o?: ReqOpts<S>) => request('GET', p, o),
   post: <S extends z.ZodTypeAny | undefined = undefined>(p: string, o?: ReqOpts<S>) => request('POST', p, o),

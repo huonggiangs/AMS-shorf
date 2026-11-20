@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { createDockerRuntime } from '@ams/runtime/docker';
 import type { Runtime } from '@ams/runtime';
 import { createApp } from './app.js';
+import { sweepAutoApprove } from './lib/auto-approve.js';
 import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import { mountFinanceRoutes } from './finance-mount.js';
 import type { FinancePort } from './ports.js';
@@ -71,6 +72,7 @@ function startOutboxWorker(rt: Runtime, port: () => FinancePort | undefined, env
     if (busy) return;
     busy = true;
     sweepOutbox(rt, fin)
+      .then(() => sweepAutoApprove(rt)) // media-worker VPS ghi scan_state sau confirm: tep noi bo co quyen duyet -> tu duyet
       .catch((e) => console.error('[api] outbox loi:', (e as Error).message))
       .finally(() => (busy = false));
   }, every);

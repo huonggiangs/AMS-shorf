@@ -53,6 +53,18 @@ Khuyến nghị xuất video: H.264 High, 1920x1080, 24-30 fps, 6-10 Mbps, AAC 1
 - `POST /admin|portal/v1/media/:id/recheck` (quyền `media:write`): đặt `pending` + ghi lại việc `media.uploaded` vào outbox; không bao giờ ghi `clean` (chỉ validator Cloudflare / media-worker VPS quyết định). Chỉ cho `pending`, `needs_manual_review`, `unscanned`, `skipped`.
 - UI "Duyệt creative" có ô "Đồng thời duyệt nội dung" (mặc định bật) và nút Kiểm tra lại.
 
+## Tự duyệt khi người có quyền duyệt tải lên (`media:approve`)
+Nguyên nhân gốc báo cáo "Super admin tải video vẫn phải chờ duyệt": mọi creative tạo ra với `review_state='pending'`; chỉ `POST /media/:id/approve` mới đổi, và trên Cloudflare tệp còn bị `needs_manual_review`.
+- Điều kiện (`services/api/src/lib/auto-approve.ts`): người tải lên `kind='internal'`, đang `active`, và hàm phân quyền hiện có `can(perms, role, 'media', 'approve')` đúng (không hard-code vai trò; gỡ quyền thì không tự duyệt); tệp qua kiểm tra spec ở `/confirm` (H.264/AAC, kích thước, thời lượng; sai spec vẫn 422 và bị xóa); `scan_state` là `clean` hoặc `needs_manual_review`; lý do của validator không chứa lỗi spec (`unsupported_codec`, `video_resolution_too_high`, `duration_out_of_range`, `duration_mismatch`, `dimensions_*`...).
+- KHÔNG tự duyệt: khách/đối tác (kể cả qua `/portal`), `infected`, `failed`, `pending` (chưa quét), `unscanned/skipped`.
+- Hành vi: `review_state='approved'`, `state='ready'`, `scan_state='clean'`; với `needs_manual_review` ghi `creative_validation.engine='auto-privileged'`; ghi audit `media.auto_approve` (lý do "tải lên bởi người có quyền duyệt"), `recordApproval` (gắn phiên bản nội dung) và `bumpManifest`.
+- Hook: (1) cuối `POST /media/:id/confirm` (sau khi outbox/validator đã chạy); (2) cuối validator Cloudflare `finish()` (queue chạy sau confirm); (3) `sweepAutoApprove()` ở cron Worker mỗi phút và vòng outbox của API Node, để bắt tệp VPS khi media-worker quét xong sau confirm. Tệp nội bộ cũ còn `pending_review` đã `clean`/`needs_manual_review` sẽ được duyệt ở lần quét đầu tiên (có audit từng tệp).
+- Công tắc: `settings.auto_approve_privileged_uploads = '0'` tắt tính năng (mặc định bật).
+
+## Ảnh đại diện (thumbnail) tạo ở trình duyệt
+Worker không có ffmpeg, nên web-admin tự tạo: `<video>`+canvas lấy khung ~1 s (hoặc 10% thời lượng nếu video < 10 s), rộng 320 px, JPEG chất lượng 0,7 (giảm dần đến khi <= 150 KB; ảnh thì co chính ảnh). Sau `PUT` tệp chính và `/confirm`, gửi `PUT /media/:id/thumbnail` (raw body JPEG/WebP, quyền `media:write`, theo phạm vi khách hàng như các route media khác, <= 150 KB, kiểm tra magic bytes). Lưu ở kho tệp key `media/{customer}/{id}/thumb.jpg`, bảng `creative_thumbnails` (migration 0016). `GET /media/:id/thumbnail` stream từ kho (xác thực bằng cookie phiên, `Cache-Control: private`); `thumb_url` trả `/api/{admin|portal}/v1/media/{id}/thumbnail?v=<thời điểm tạo>`. Lỗi tạo/gửi ảnh không làm hỏng việc tải lên. Tệp tải trước đây chưa có ảnh: khi mở trang Media, web-admin tự tạo tuần tự tối đa 3 tệp mỗi lần (im lặng khi lỗi), và thẻ có nút "Tạo ảnh đại diện" để làm thủ công.
+- **CORS R2 cho GET**: tạo ảnh từ tệp đã tải lên dùng `<video crossOrigin="anonymous">` đọc URL ký GET trên R2; thiếu CORS `GET` thì canvas bị chặn (tainted) và tệp cũ chỉ không có ảnh (tệp mới tạo ảnh từ tệp trên máy, không cần CORS). `scripts/deploy-cloudflare.mjs` (`ensureMediaCors`) đã đặt origin `https://ams.anio.vn` với `GET, PUT, HEAD`, header `*`, nên chạy lại `scripts\DEPLOY-AMS-ANIO-VN.bat` là đủ; nếu đặt tay: R2 > bucket media > Settings > CORS policy, thêm `GET` và `HEAD`.
+
 ## Còn thiếu so với đường VPS (media-worker + ClamAV)
 | | Cloudflare (đường này) | VPS: `services/media-worker` + ClamAV |
 |---|---|---|

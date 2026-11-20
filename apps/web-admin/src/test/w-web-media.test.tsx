@@ -58,6 +58,21 @@ describe('Noi dung & Media: moi trang thai khong duyet duoc co giai thich + hanh
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path.endsWith('/m1/approve'))?.body).toEqual({ manual_review_note: 'da xem het video', content_version: 2 }));
   });
 
+  it('thumb_url: the hien anh dai dien (duong API co xac thuc); chua co anh thi hien khung VIDEO; tep da duyet khong con Cho duyet', async () => {
+    const a = media('t1', { status: 'approved', scan_state: 'clean', scan_reasons: [], thumb_url: '/api/admin/v1/media/t1/thumbnail?v=2026-11-20T00%3A00%3A00.000Z' });
+    const b = media('t2', { status: 'approved', scan_state: 'clean', scan_reasons: [], thumb_url: null, source: 'upload' });
+    handlers.push(me(['view', 'write', 'approve']), on('/admin/v1/media', { items: [a, b], total: 2, page: 1, page_size: 9 }));
+    vi.stubGlobal('fetch', mockFetch());
+    const { container } = mount('/media');
+    await screen.findByText('t1.mp4');
+    const imgs = container.querySelectorAll('img');
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0]).toHaveAttribute('src', '/api/admin/v1/media/t1/thumbnail?v=2026-11-20T00%3A00%3A00.000Z');
+    expect(container.querySelectorAll('.ph')).toHaveLength(1);
+    expect(screen.queryByText('Chờ duyệt', { selector: '.tag, span' })).toBeNull();
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false); // jsdom khong tu tao anh (khong co canvas that)
+  });
+
   it('scan pending: hien "Kiem tra lai" va goi /recheck; tep chua xac nhan: "Xac nhan lai" goi /confirm', async () => {
     const p = media('p1', { scan_state: 'pending', scan_reasons: [], blocker: BLK('creative_scan_pending', 'recheck', 'Tệp đang chờ quét. Vui lòng thử lại sau ít phút.') });
     const u = media('u1', { status: 'processing', scan_state: 'pending', scan_reasons: [], blocker: BLK('upload_incomplete', 'confirm', 'Tệp chưa tải xong hoặc chưa được xác nhận.') });

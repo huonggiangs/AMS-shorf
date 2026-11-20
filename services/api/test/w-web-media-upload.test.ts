@@ -134,6 +134,7 @@ describe('luong day du tren runtime kieu Cloudflare', () => {
   beforeAll(async () => {
     env = await setup({});
     await env.rt.db.run("DELETE FROM settings WHERE key = 'allow_unscanned_creatives'");
+    await env.rt.db.run("INSERT INTO settings (key, value, updated_by, updated_at) VALUES ('auto_approve_privileged_uploads', '0', NULL, ?)", [env.rt.clock.now().toISOString()]); // bai test duyet tay: tat tu duyet (tu duyet co test rieng: media-auto-approve.test.ts)
     K001 = env.seed.customers['K001']!;
     admin = await login(env, env.byRole('super_admin'));
     createCfCreativeValidator(env.rt).subscribe();

@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { api, errMsg } from '../api/client';
+import { useEffect, useRef, useState } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { API_BASE, api, errMsg, putBlob } from '../api/client';
 import { customerSchema, listOf, mediaSchema, uploadUrlSchema, type Media } from '../api/schemas';
 import { useAct, useBase } from '../api/hooks';
 import { useAuth } from '../auth/AuthProvider';
@@ -11,12 +11,27 @@ import { reasonText } from './CreativeReview';
 import { OverlayForm, emptyOverlay, overlayError, overlayPayload, AD_FORMAT_OPTIONS } from '../components/OverlayForm';
 import { useT } from '../i18n';
 import { checkMediaUrl, type LinkSource } from '../lib/creative';
+import { captureThumbnail, pickBackfill, resolveThumbUrl, thumbSupported, uploadDoneMessage } from '../lib/thumbnail';
 
 const PAGE = 9;
 const MAX_IMAGE_BYTES = 500 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 /** Giới hạn tải lên hiển thị cho người dùng (khớp services/api/src/lib/creative.ts + docs/CLOUDFLARE-MEDIA-LIMITS.md). Tệp đi thẳng lên kho R2 (không qua Worker 100 MB). */
 export const UPLOAD_LIMIT_TEXT = 'Video: H.264 + AAC, tối đa 1920×1080 (Full HD), tối đa 100 MB; không nhận AV1/H.265/4K vì TV không phát ổn định và hệ thống không chuyển mã được. TV: 16:9, 5–60 giây. Thang máy: 768×1366 hoặc 1080×1920, 10–30 giây, tối đa 30 MB. LED: đúng kích thước bảng, 5–15 giây, tối đa 50 MB. Ảnh PNG/JPG tối đa 500 MB. Khách hàng còn bị giới hạn theo hạn mức tải lên của tài khoản.';
+
+/** Tao anh dai dien cho tep da tai truoc day: lay URL ky GET -> canvas -> PUT. Tra ve true neu thanh cong. Khong nem loi. */
+async function backfillThumb(base: string, m: { id: string; mime?: string | null; duration_sec?: number | null }): Promise<boolean> {
+  try {
+    const one = await api.get(`${base}/${m.id}`, { schema: mediaSchema });
+    if (!one.preview_url) return false;
+    const blob = await captureThumbnail(one.preview_url, m.mime ?? 'video/mp4', { durationSec: m.duration_sec });
+    if (!blob) return false;
+    await putBlob(`${base}/${m.id}/thumbnail`, blob);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export default function MediaPage() {
   const t = useT();
@@ -35,6 +50,30 @@ export default function MediaPage() {
     queryFn: () => api.get(base.media, { query: { page, page_size: PAGE, q, filter: status ? `status:${status}` : undefined }, schema: listOf(mediaSchema) }),
   });
   const pages = Math.max(1, Math.ceil((query.data?.total ?? 0) / PAGE));
+  const qc = useQueryClient();
+  const tried = useRef<Set<string>>(new Set());
+  const canWrite = can('media', 'write');
+  // Tep cu chua co anh dai dien: tao ngam, tuan tu, toi da vai tep moi lan mo trang; im lang khi loi, khong chan giao dien.
+  useEffect(() => {
+    if (!canWrite || !thumbSupported() || !query.data) return;
+    const todo = pickBackfill(query.data.items, tried.current);
+    if (!todo.length) return;
+    todo.forEach((m) => tried.current.add(m.id));
+    let stop = false;
+    void (async () => {
+      let any = false;
+      for (const m of todo) {
+        if (stop) return;
+        if (await backfillThumb(base.media, m)) any = true;
+      }
+      if (any && !stop) await qc.invalidateQueries({ queryKey: [base.media] });
+    })();
+    return () => { stop = true; };
+  }, [query.data, canWrite, base.media, qc]);
+  const makeThumb = async (m: Media) => {
+    const ok = await backfillThumb(base.media, m);
+    await act(async () => { if (!ok) throw new Error('Chưa tạo được ảnh đại diện (trình duyệt không đọc được video hoặc kho tệp chưa cho phép tải từ trình duyệt).'); }, 'Đã tạo ảnh đại diện.', [base.media]);
+  };
   const canApprove = can('media', 'approve') && !base.isExternal;
   return (
     <>
@@ -45,7 +84,7 @@ export default function MediaPage() {
       </div>
       {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.items.length ? <EmptyBlock /> : (
         <div className="g g3">
-          {query.data.items.map((m) => <MediaCard key={m.id} m={m} canApprove={canApprove} onReview={() => setRev(m.id)} onAction={(a) => void act(() => api.post(`${base.media}/${m.id}/${a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.')} onApprove={() => void act(() => api.post(`${base.media}/${m.id}/approve`), 'Đã duyệt media.')} onReject={() => setRej(m.id)} />)}
+          {query.data.items.map((m) => <MediaCard key={m.id} m={m} canApprove={canApprove} onMakeThumb={canWrite && thumbSupported() ? () => void makeThumb(m) : undefined} onReview={() => setRev(m.id)} onAction={(a) => void act(() => api.post(`${base.media}/${m.id}/${a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.')} onApprove={() => void act(() => api.post(`${base.media}/${m.id}/approve`), 'Đã duyệt media.')} onReject={() => setRej(m.id)} />)}
         </div>
       )}
       <div className="tf" style={{ background: 'none' }}>
@@ -59,14 +98,14 @@ export default function MediaPage() {
   );
 }
 
-function MediaCard({ m, canApprove, onApprove, onReject, onReview, onAction }: { m: Media; canApprove: boolean; onApprove: () => void; onReject: () => void; onReview: () => void; onAction: (a: 'confirm' | 'recheck') => void }) {
+function MediaCard({ m, canApprove, onMakeThumb, onApprove, onReject, onReview, onAction }: { m: Media; canApprove: boolean; onMakeThumb?: (() => void) | undefined; onApprove: () => void; onReject: () => void; onReview: () => void; onAction: (a: 'confirm' | 'recheck') => void }) {
   const t = useT();
   const fmtLabel = m.format && m.format !== 'fullscreen' ? AD_FORMAT_OPTIONS.find((o) => o.id === m.format)?.label : null;
   const meta = [m.mime?.split('/')[1]?.toUpperCase(), fmtLabel, m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_sec ? `${m.duration_sec} giây` : null].filter(Boolean).join(' · ');
   return (
     <div className="card">
       <div className="scr" style={{ borderRadius: '20px 20px 0 0' }}>
-        {m.thumb_url ? <img src={m.thumb_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div className="ph">{m.kind === 'image' ? 'ẢNH' : 'VIDEO'}<br />{m.width && m.height ? `${m.width}×${m.height}` : ''}</div>}
+        {m.thumb_url ? <img src={resolveThumbUrl(m.thumb_url, API_BASE) ?? ''} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div className="ph">{m.kind === 'image' ? 'ẢNH' : 'VIDEO'}<br />{m.width && m.height ? `${m.width}×${m.height}` : ''}{onMakeThumb && m.source === 'upload' && m.status !== 'processing' ? <><br /><button type="button" className="btn sm" onClick={onMakeThumb}>Tạo ảnh đại diện</button></> : null}</div>}
       </div>
       <div className="cp" style={{ padding: 16 }}>
         <b>{m.name}</b>
@@ -197,6 +236,7 @@ export function UploadDialog({ open, onClose }: { open: boolean; onClose: () => 
     const oe = overlayError(ov);
     if (oe) return setErr(oe);
     setBusy(true);
+    let doneStatus: string | null = null;
     try {
       if (mode === 'file') {
         if (!file) throw new Error('Chọn một tệp.');
@@ -213,13 +253,21 @@ export function UploadDialog({ open, onClose }: { open: boolean; onClose: () => 
           throw new Error('Không tải được tệp lên kho lưu trữ (mất kết nối hoặc kho chưa cho phép tải từ trình duyệt). Kiểm tra mạng và thử lại; nếu vẫn lỗi, báo quản trị cấu hình CORS cho kho R2.');
         }
         if (!put.ok) throw new Error(put.status === 403 ? 'Đường dẫn tải lên đã hết hạn (15 phút). Hãy chọn tệp và tải lại.' : `Tải lên kho lưu trữ thất bại (${put.status}).`);
-        await api.post(`${base.media}/${u.id}/confirm`, { body: { ...dims } });
+        const confirmed = (await api.post(`${base.media}/${u.id}/confirm`, { body: { ...dims } })) as { status?: string } | null;
+        doneStatus = confirmed?.status ?? null;
+        // Anh dai dien tao tai trinh duyet (khung ~1 s, rong 320 px, JPEG ~0,7); loi o day KHONG lam hong viec tai len.
+        if (thumbSupported()) {
+          try {
+            const tb = await captureThumbnail(file, file.type, { durationSec: dims.duration_sec });
+            if (tb) await putBlob(`${base.media}/${u.id}/thumbnail`, tb);
+          } catch { /* im lang: se tu tao lai khi mo trang Media */ }
+        }
       } else {
         const c = checkMediaUrl(mode, url);
         if (!c.ok) throw new Error(c.message);
         await api.post(`${base.media}/import`, { body: { source: mode, url: url.trim(), ...(customerId ? { customer_id: customerId } : {}) } });
       }
-      await act(async () => undefined, 'Đã tải lên. Hệ thống kiểm tra cơ bản rồi chuyển tệp vào hàng chờ duyệt; xem trạng thái ở thẻ tệp.', [base.media, '/admin/v1/media', '/portal/v1/media']);
+      await act(async () => undefined, uploadDoneMessage(doneStatus), [base.media, '/admin/v1/media', '/portal/v1/media']);
       setFile(null); setUrl(''); setOv(emptyOverlay());
       onClose();
     } catch (e) {

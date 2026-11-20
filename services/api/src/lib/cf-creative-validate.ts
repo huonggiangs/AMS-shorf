@@ -1,6 +1,7 @@
 // Kiem tra creative tren Cloudflare (khong co ClamAV/ffmpeg). KHONG PHAI quet virus: xem docs/CLOUDFLARE-MEDIA-LIMITS.md.
 // 'clean' CHI cho tep nam trong danh sach cho phep hep (png/jpg/webp/mp4) va qua moi kiem tra cau truc; moi truong hop khac
 // -> 'needs_manual_review' (admin duyet/tu choi, co audit). Cong quet (chi creative 'clean' moi duoc phat) khong doi.
+import { autoApprovePrivileged } from './auto-approve.js';
 import type { Runtime } from '@ams/runtime';
 import { sha256Hex } from '@ams/shared';
 import { probeMp4, rangeReaderFor } from './mp4-probe.js';
@@ -271,6 +272,7 @@ export function createCfCreativeValidator(rt: Runtime, opts: CfValidatorOptions 
       [row.id, CF_VALIDATOR_ENGINE, state, detail, v.facts.sha256 ?? null, now],
     );
     log(`[cf-validate] ${row.id}: ${state}${v.reasons.length ? ' (' + v.reasons.join(',') + ')' : ''}`);
+    await autoApprovePrivileged(rt, row.id); // tep cua nguoi noi bo co quyen media:approve: tu duyet ngay khi quet xong (khong nem loi)
     return { outcome: state, reasons: v.reasons };
   }
 

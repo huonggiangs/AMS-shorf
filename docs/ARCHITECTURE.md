@@ -68,7 +68,7 @@ Chống đua: không dùng khóa hàng (D1/SQLite không có `FOR UPDATE`); dùn
 | Quảng cáo | `campaigns`, `creatives`, `schedule_slots`, `partners`, `rtb_floors` | Giao dịch | Một bộ creative cho mỗi loại màn/độ phân giải |
 | Tiền | `ad_wallets` (cache), `wallet_entries` (sổ cái), `topups`, `payment_webhooks`, `activation_rules/log`, `invoices`, `payouts`, `wallet_ledger` | Giao dịch | Tiền là `BIGINT` đồng, không float |
 | Sự kiện | `heartbeat`, `ad_impression`, `proof_of_play` + bảng gộp | R2 Parquet / ClickHouse | Dashboard chỉ đọc bảng gộp |
-| Tệp | media, báo cáo, hợp đồng đã ký | R2 / S3 | Presigned URL, quét mã độc, kiểm kích thước |
+| Tệp | media, báo cáo, hợp đồng đã ký | R2 / S3 | Presigned URL, quét mã độc, kiểm kích thước; ảnh đại diện do trình duyệt tạo (`creative_thumbnails`); người có `media:approve` tự tải lên thì tự duyệt (docs/CLOUDFLARE-MEDIA-LIMITS.md) |
 
 Quy ước SQL chung Postgres/D1: id `TEXT` ULID/UUIDv7, thời gian `TEXT` ISO-8601 UTC, boolean `INTEGER`, JSON `TEXT`, placeholder `?`, không ORM.
 
