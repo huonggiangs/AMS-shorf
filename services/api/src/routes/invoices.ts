@@ -7,6 +7,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
+import { decField } from '../lib/crypto.js';
 import { conflict, notFound, unprocessable } from '../lib/errors.js';
 import { eq, getRt, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec, SqlFrag } from '../lib/http.js';
@@ -228,8 +229,13 @@ interface PayRow {
   requested_at: string;
   paid_at: string | null;
   balance_vnd: number;
+  bank_code: string | null;
+  bank_name: string | null;
+  account_last4: string | null;
+  tax_mode: string | null;
+  requested_via: string | null;
 }
-const P_SELECT = `p.id, p.user_id, u.display_name, p.amount_vnd, p.channel, p.status, p.external_ref, p.requested_at, p.paid_at,
+const P_SELECT = `p.id, p.user_id, u.display_name, p.amount_vnd, p.channel, p.status, p.external_ref, p.requested_at, p.paid_at, p.bank_code, p.bank_name, p.account_last4, p.tax_mode, p.requested_via,
   COALESCE((SELECT SUM(l.amount_vnd) FROM wallet_ledger l WHERE l.user_id = p.user_id AND l.status = 'posted'), 0) AS balance_vnd`;
 const P_FROM = 'FROM payouts p JOIN end_users u ON u.id = p.user_id';
 const presentPayout = (p: PayRow) => ({
@@ -243,6 +249,12 @@ const presentPayout = (p: PayRow) => ({
   requested_at: p.requested_at,
   paid_at: p.paid_at,
   user_balance_vnd: num(p.balance_vnd),
+  // lenh tao tu app nguoi xem (WP-18): chi hien ngan hang + 4 so cuoi; so day du xem qua GET /:id/destination (co ghi audit)
+  bank_code: p.bank_code,
+  bank_name: p.bank_name,
+  account_last4: p.account_last4,
+  tax_mode: p.tax_mode,
+  requested_via: p.requested_via,
 });
 const payoutSpec: ListSpec = {
   from: P_FROM,
@@ -267,27 +279,50 @@ export function payoutRoutes(): Hono<AppEnv> {
   });
   r.get('/:id', requirePerm('finance', 'view'), async (c) => c.json(presentPayout(await loadPayout(c, c.req.param('id')))));
 
+  // Tai khoan nhan day du (giai ma AES-GCM): chi finance:approve, MOI lan xem deu ghi audit. Khong co o danh sach/chi tiet.
+  r.get('/:id/destination', requirePerm('finance', 'approve'), async (c) => {
+    const rt = getRt(c);
+    const p = await loadPayout(c, c.req.param('id'));
+    const row = (await rt.db.query<{ account_enc: string | null }>('SELECT account_enc FROM payouts WHERE id = ?', [p.id]))[0];
+    if (!row?.account_enc) throw notFound('Lệnh chi trả này không có tài khoản nhận lưu trong hệ thống.');
+    const acc = JSON.parse(await decField(rt, row.account_enc, `payout:${p.id}`)) as { n: string; name: string };
+    await rt.db.tx(async (db) => {
+      await auditCtx(c, db, { action: 'payout.reveal_destination', objectType: 'payout', objectId: p.id, diff: { bank_name: p.bank_name, account_last4: p.account_last4 } });
+    });
+    c.header('cache-control', 'no-store');
+    return c.json({ payout_id: p.id, bank_code: p.bank_code, bank_name: p.bank_name, account_number: acc.n, account_name: acc.name, amount_vnd: num(p.amount_vnd), tax_mode: p.tax_mode });
+  });
+
   // pending -> paid: tru vi thuong (so cai bat bien) + doi trang thai trong mot giao dich; thieu so du thi khong ghi gi
   r.post('/:id/pay', requirePerm('finance', 'approve'), async (c) => {
     const rt = getRt(c);
     const p = await loadPayout(c, c.req.param('id'));
     const b = await parseBody(c, z.object({ external_ref: z.string().trim().min(1, 'Nhập mã giao dịch ngân hàng/ví').max(80) }));
     const now = rt.clock.now().toISOString();
-    await rt.db.tx(async (db) => {
-      // Khoa hang nguoi dung bang UPDATE (khong FOR UPDATE): hai lenh dong thoi cung nguoi dung xep hang tai day; lenh sau chay cau INSERT co dieu kien
-      // SAU KHI lenh truoc commit (READ COMMITTED lay snapshot moi moi cau lenh) => so du luon duoc doc lai, khong the chi vuot.
-      await db.run('UPDATE end_users SET created_at = created_at WHERE id = ?', [p.user_id]);
-      const u = await db.run("UPDATE payouts SET status = 'paid', paid_at = ?, external_ref = ? WHERE id = ? AND status = 'pending'", [now, b.external_ref, p.id]);
-      if (u.changes !== 1) throw conflict('Lệnh chi trả không còn chờ xử lý.', 'invalid_state');
-      const l = await db.run(
-        `INSERT INTO wallet_ledger (id, user_id, kind, amount_vnd, ref_type, ref_id, status, created_at)
-         SELECT ?, ?, 'payout', CAST(? AS BIGINT), 'payout', ?, 'posted', ?
-         WHERE COALESCE((SELECT SUM(amount_vnd) FROM wallet_ledger WHERE user_id = ? AND status = 'posted'), 0) >= ?`,
-        [rt.id(), p.user_id, -num(p.amount_vnd), p.id, now, p.user_id, num(p.amount_vnd)],
-      );
-      if (l.changes !== 1) throw conflict('Số dư ví thưởng của người dùng không đủ để chi trả.', 'insufficient_balance');
-      await auditCtx(c, db, { action: 'payout.pay', objectType: 'payout', objectId: p.id, diff: { amount_vnd: num(p.amount_vnd), channel: p.channel, external_ref: b.external_ref } });
-    });
+    // MOT batch nguyen tu (Postgres/SQLite: giao dich; D1: batch): dong so cai tru tien chi ghi khi lenh con 'pending', chua co dong tru cho lenh nay va du so du;
+    // doi trang thai chi khi dong tru da ghi. Khong con khoang trong "da paid nhung chua tru" tren D1 (tx() cua D1 khong hoan tac).
+    // UPDATE dau tien khoa hang nguoi dung (PG): lenh dong thoi cung nguoi dung xep hang, so du duoc doc lai sau khi lenh truoc commit.
+    const [, l, u] = await rt.db.batch([
+      { sql: 'UPDATE end_users SET created_at = created_at WHERE id = ?', params: [p.user_id] },
+      {
+        sql: `INSERT INTO wallet_ledger (id, user_id, kind, amount_vnd, ref_type, ref_id, status, created_at)
+              SELECT ?, ?, 'payout', CAST(? AS BIGINT), 'payout', ?, 'posted', ?
+               WHERE EXISTS (SELECT 1 FROM payouts WHERE id = ? AND status = 'pending')
+                 AND NOT EXISTS (SELECT 1 FROM wallet_ledger WHERE kind = 'payout' AND ref_type = 'payout' AND ref_id = ?)
+                 AND COALESCE((SELECT SUM(amount_vnd) FROM wallet_ledger WHERE user_id = ? AND status = 'posted'), 0) >= ?`,
+        params: [rt.id(), p.user_id, -num(p.amount_vnd), p.id, now, p.id, p.id, p.user_id, num(p.amount_vnd)],
+      },
+      {
+        sql: "UPDATE payouts SET status = 'paid', paid_at = ?, external_ref = ? WHERE id = ? AND status = 'pending' AND EXISTS (SELECT 1 FROM wallet_ledger WHERE kind = 'payout' AND ref_type = 'payout' AND ref_id = ?)",
+        params: [now, b.external_ref, p.id, p.id],
+      },
+    ]);
+    if (!l || l.changes !== 1 || !u || u.changes !== 1) {
+      const cur = (await rt.db.query<{ status: string }>('SELECT status FROM payouts WHERE id = ?', [p.id]))[0];
+      if (cur?.status !== 'pending') throw conflict('Lệnh chi trả không còn chờ xử lý.', 'invalid_state');
+      throw conflict('Số dư ví thưởng của người dùng không đủ để chi trả.', 'insufficient_balance');
+    }
+    await auditCtx(c, rt.db, { action: 'payout.pay', objectType: 'payout', objectId: p.id, diff: { amount_vnd: num(p.amount_vnd), channel: p.channel, external_ref: b.external_ref } });
     return c.json(presentPayout(await loadPayout(c, p.id)));
   });
 

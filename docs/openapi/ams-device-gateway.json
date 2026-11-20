@@ -4,7 +4,7 @@
     "title": "AMS - Device Gateway API",
     "version": "0.1.0-protocol.1",
     "summary": "Giao thức thiết bị (TV/thang máy/LED) <-> edge gateway",
-    "description": "File SINH TỰ ĐỘNG từ gateway thật (route Hono + zod trong `services/edge-gateway/src/protocol.ts`). Mô tả văn xuôi: docs/DEVICE-PROTOCOL.md.\n\n## Chữ ký thiết bị (Ed25519)\nMỗi request (trừ /health và /v1/manifest/g/{group}) mang 4 header: `x-device-id`, `x-timestamp`, `x-nonce`, `x-signature`.\nChuỗi ký (UTF-8, nối bằng `\\n`): `METHOD\\nPATH?QUERY\\nTIMESTAMP\\nNONCE\\nSHA256_HEX(body)`; body rỗng => sha256 của chuỗi rỗng. `PATH?QUERY` đúng như gửi trên đường truyền.\nLệch đồng hồ > 300s => 401 `stale_timestamp`; nonce dùng lại => 409 `replay`.\n\n## Lỗi\nMã: `bad_request` (400), `invalid_signature` (401), `stale_timestamp` (401), `unknown_device` (401), `device_blocked` (403), `replay` (409), `payload_too_large` (413), `validation_failed` (422), `rate_limited` (429), `overloaded` (503), `not_found` (404), `internal` (500). 429/503 kèm `Retry-After` (đã jitter): thiết bị PHẢI chờ đúng giá trị đó.\n\n## TODO (p0-domain): chưa có trong tài liệu này\nEndpoint admin để tạo/xem lệnh (hiện chỉ có hàm `enqueueCommand`, chưa có route HTTP) và loại lệnh mới do p0-domain bổ sung. `/v1/commands/ack` và `commands[]` của heartbeat (bảng `device_commands`) đã có và được sinh từ mã; xem docs/DEVICE-PROTOCOL.md mục 6. Khi p0 thêm route, `check` báo lệch; chạy lại `generate`."
+    "description": "File SINH TỰ ĐỘNG từ gateway thật (route Hono + zod trong `services/edge-gateway/src/protocol.ts`). Mô tả văn xuôi: docs/DEVICE-PROTOCOL.md.\n\n## Chữ ký thiết bị (Ed25519)\nMỗi request (trừ /health và /v1/manifest/g/{group}) mang 4 header: `x-device-id`, `x-timestamp`, `x-nonce`, `x-signature`.\nChuỗi ký (UTF-8, nối bằng `\\n`): `METHOD\\nPATH?QUERY\\nTIMESTAMP\\nNONCE\\nSHA256_HEX(body)`; body rỗng => sha256 của chuỗi rỗng. `PATH?QUERY` đúng như gửi trên đường truyền.\nLệch đồng hồ > 300s => 401 `stale_timestamp`; nonce dùng lại => 409 `replay`.\n\n## Lỗi\nMã: `bad_request` (400), `invalid_signature` (401), `stale_timestamp` (401), `unknown_device` (401), `device_blocked` (403), `replay` (409), `payload_too_large` (413), `validation_failed` (422), `rate_limited` (429), `overloaded` (503), `not_found` (404), `internal` (500), `forbidden` (403), `feature_disabled` (403), `otp_required` (403), `otp_invalid` (403), `phone_not_verified` (403), `tax_consent_required` (403), `invalid_code` (404), `already_paired` (409), `conflict` (409), `insufficient_balance` (409), `idempotency_conflict` (409), `below_threshold` (422), `not_configured` (503). 429/503 kèm `Retry-After` (đã jitter): thiết bị PHẢI chờ đúng giá trị đó.\n\n## TODO (p0-domain): chưa có trong tài liệu này\nEndpoint admin để tạo/xem lệnh (hiện chỉ có hàm `enqueueCommand`, chưa có route HTTP) và loại lệnh mới do p0-domain bổ sung. `/v1/commands/ack` và `commands[]` của heartbeat (bảng `device_commands`) đã có và được sinh từ mã; xem docs/DEVICE-PROTOCOL.md mục 6. Khi p0 thêm route, `check` báo lệch; chạy lại `generate`."
   },
   "servers": [
     {
@@ -318,6 +318,105 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HeartbeatResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/interactions": {
+      "post": {
+        "operationId": "gatewayPostInteractions",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Báo tương tác (nhấp / quét QR), tối đa 10 sự kiện/lô, khử trùng theo event_id",
+        "description": "Xác thực bằng chữ ký thiết bị (phone hoặc tv, đã ghép: trust_level >= 1). Thưởng = `interaction_reward_vnd` của chiến dịch (tối đa `INTERACTION_MAX_REWARD_VND`=50), ghi `wallet_ledger` bất biến, một lần theo event_id. Giới hạn: 20 lô/phút/thiết bị, 30 tương tác/người/ngày, 3/chiến dịch/người/ngày, trần thưởng/ngày. Gửi lại event_id => `duplicate` (không cộng lại). Sự kiện từ chối nằm ở `rejected` (vd `untrusted_device`, `not_in_manifest`, `campaign_cap`).",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InteractionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã xử lý",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionsResponse"
                 }
               }
             }
@@ -740,6 +839,705 @@
           }
         }
       }
+    },
+    "/v1/tax-authorization": {
+      "get": {
+        "operationId": "gatewayGetTaxAuthorization",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Chế độ thuế hiện tại của người nhận chi trả",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxAuthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      },
+      "post": {
+        "operationId": "gatewayPostTaxAuthorization",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Chọn/đổi chế độ thuế: `auto_pay` (thanh toán tự động, chấp nhận chi trả thuế), `delegate` (ủy quyền ứng dụng nộp thuế) hoặc `none` (thu hồi)",
+        "description": "Chỉ LƯU ý chí và đồng ý (lịch sử chỉ thêm dòng; `none` = thu hồi). **Chưa khấu trừ hay nộp thuế thật** (`remittance_active=false`). `tax_code` (MST, tùy chọn, mã hóa khi lưu). `consent_version` phải khớp phiên bản điều khoản hiện hành.",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaxAuthRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã ghi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxAuthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/viewer/pair": {
+      "post": {
+        "operationId": "gatewayPostViewerPair",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Điện thoại nhập mã 6 số của TV để ghép đôi (người xem)",
+        "description": "Chỉ thiết bị `kind=phone`. Mã 6 số hết hạn sau 5 phút, dùng một lần. Chống dò: sai quá 5 lần/15 phút/thiết bị => 429 `rate_limited` (Retry-After 900); giới hạn theo IP. Mã sai/hết hạn/đã dùng trả cùng một lỗi `invalid_code` (404). Lần ghép đầu tạo người dùng cho điện thoại và nâng trust_level lên 1.",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewerPairRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã ghép đôi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewerPairResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/viewer/phone": {
+      "post": {
+        "operationId": "gatewayPostViewerPhone",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Xác minh số điện thoại bằng OTP (không có `otp` => gửi OTP; có `otp` => xác minh)",
+        "description": "Cần đã ghép TV. 202 khi đã gửi OTP. Kênh gửi OTP chưa được cấu hình => 503 `not_configured`. OTP 6 số, hết hạn 5 phút, tối đa 5 lần thử, 3 lần gửi/giờ.",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewerPhoneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã xác minh",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewerPhoneVerified"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Đã gửi OTP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewerPhoneOtp"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/wallet": {
+      "get": {
+        "operationId": "gatewayGetWallet",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Ví thưởng của người xem",
+        "description": "Chỉ điện thoại (`kind=phone`). `balance_vnd` là số dư khả dụng (sổ cái trừ lệnh rút đang chờ). Điện thoại chưa ghép TV nhận ví 0 với `paired=false`.",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/wallet/ledger": {
+      "get": {
+        "operationId": "gatewayGetWalletLedger",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Sao kê ví (phân trang theo con trỏ, mới nhất trước)",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
+    },
+    "/v1/withdraw": {
+      "post": {
+        "operationId": "gatewayPostWithdraw",
+        "tags": [
+          "device"
+        ],
+        "security": [
+          {
+            "deviceSignature": []
+          }
+        ],
+        "x-ams-source": "services/edge-gateway/src/gateway.ts",
+        "summary": "Yêu cầu rút thưởng (tạo lệnh CHỜ tài chính duyệt, KHÔNG tự chuyển tiền)",
+        "description": "Điều kiện: bật `VIEWER_WITHDRAW_ENABLED=1` (mặc định tắt => 403 `feature_disabled`), đã xác minh điện thoại, đã chọn chế độ thuế (nếu `PAYOUT_REQUIRE_TAX_CONSENT`; có thể gửi kèm `tax_authorization` trong chính yêu cầu rút, tương thích app Mindo), `amount_vnd >= PAYOUT_THRESHOLD_VND` (100.000) và <= số dư khả dụng, không có lệnh rút nào đang chờ.\n\nOTP: gọi lần đầu KHÔNG có `otp` => 403 `otp_required` (và gửi OTP tới số đã xác minh); gọi lại cùng thân kèm `otp`. OTP gắn với đúng số tiền + tài khoản nhận.\n\nIdempotent theo `idempotency_key` (8-64 ký tự): gửi lại cùng khóa => 200 trả lệnh cũ (không cần OTP mới); cùng khóa khác nội dung => 409 `idempotency_conflict`.\n\nTài khoản nhận lưu mã hóa AES-GCM; nhân viên tài chính duyệt/chi ở `/admin/v1/payouts/{id}/pay|reject`.",
+        "parameters": [
+          {
+            "name": "x-device-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "device_id từ /v1/register"
+          },
+          {
+            "name": "x-timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "epoch giây; lệch máy chủ tối đa 300s"
+          },
+          {
+            "name": "x-nonce",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,64}$"
+            },
+            "description": "dùng một lần (chống phát lại)"
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{86}$"
+            },
+            "description": "Ed25519, base64url không padding (64 byte)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lệnh cũ (idempotent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Đã tạo lệnh chờ duyệt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/RetryLater"
+          },
+          "503": {
+            "$ref": "#/components/responses/RetryLater"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1130,6 +1928,195 @@
           "manifest_group",
           "manifest_url",
           "commands"
+        ],
+        "additionalProperties": true
+      },
+      "InteractionsRequest": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "interaction"
+                },
+                "event_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                },
+                "ts": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "tap",
+                    "qr_scan"
+                  ]
+                },
+                "interaction": {
+                  "type": "string",
+                  "enum": [
+                    "tap",
+                    "qr_scan"
+                  ]
+                },
+                "campaign_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "creative_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "slot_id": {
+                  "type": "string",
+                  "maxLength": 40
+                }
+              },
+              "required": [
+                "event_id",
+                "ts",
+                "campaign_id",
+                "creative_id"
+              ],
+              "additionalProperties": true
+            },
+            "minItems": 1,
+            "maxItems": 10
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "additionalProperties": true
+      },
+      "InteractionsResponse": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "integer"
+          },
+          "valid": {
+            "type": "integer"
+          },
+          "credited_vnd": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "event_id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "event_id",
+                "reason"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "event_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "credited",
+                    "recorded",
+                    "duplicate",
+                    "rejected"
+                  ]
+                },
+                "credited_vnd": {
+                  "type": "integer"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "event_id",
+                "status",
+                "credited_vnd"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "accepted",
+          "valid",
+          "credited_vnd",
+          "rejected",
+          "results"
+        ],
+        "additionalProperties": true
+      },
+      "LedgerResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "amount_vnd": {
+                  "type": "integer"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "ref_type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "amount_vnd",
+                "status",
+                "created_at",
+                "ref_type"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
         ],
         "additionalProperties": true
       },
@@ -1727,6 +2714,455 @@
           "protocol",
           "heartbeat_interval",
           "created"
+        ],
+        "additionalProperties": true
+      },
+      "TaxAuthRequest": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "auto_pay",
+              "delegate"
+            ]
+          },
+          "consent_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "tax_code": {
+            "type": "string",
+            "pattern": "^\\d{10}(-?\\d{3})?$"
+          }
+        },
+        "required": [
+          "mode",
+          "consent_version"
+        ],
+        "additionalProperties": true
+      },
+      "TaxAuthResponse": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "auto_pay",
+              "delegate"
+            ]
+          },
+          "tax_authorization": {
+            "type": "string",
+            "enum": [
+              "none",
+              "auto_pay",
+              "delegate"
+            ],
+            "description": "trung mode, ten truong cua app Mindo"
+          },
+          "consent_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "current_consent_version": {
+            "type": "string"
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remittance_active": {
+            "type": "boolean",
+            "const": false,
+            "description": "CHUA khau tru/nop thue that"
+          }
+        },
+        "required": [
+          "mode",
+          "tax_authorization",
+          "consent_version",
+          "updated_at",
+          "current_consent_version",
+          "modes",
+          "remittance_active"
+        ],
+        "additionalProperties": true
+      },
+      "ViewerPairRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "additionalProperties": true
+      },
+      "ViewerPairResponse": {
+        "type": "object",
+        "properties": {
+          "paired": {
+            "type": "boolean",
+            "const": true
+          },
+          "device_id": {
+            "type": "string",
+            "description": "device_id cua TV vua ghep"
+          },
+          "trust_level": {
+            "type": "integer"
+          },
+          "already": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paired",
+          "device_id",
+          "trust_level"
+        ],
+        "additionalProperties": true
+      },
+      "ViewerPhoneOtp": {
+        "type": "object",
+        "properties": {
+          "otp_sent": {
+            "type": "boolean",
+            "const": true
+          },
+          "expires_in": {
+            "type": "integer"
+          },
+          "phone_masked": {
+            "type": "string"
+          },
+          "dev_otp": {
+            "type": "string",
+            "description": "CHI local/test khi VIEWER_OTP_DEV_ECHO=1"
+          }
+        },
+        "required": [
+          "otp_sent",
+          "expires_in",
+          "phone_masked"
+        ],
+        "additionalProperties": true
+      },
+      "ViewerPhoneRequest": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "pattern": "^(\\+84|0)\\d{9}$"
+          },
+          "otp": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "additionalProperties": true
+      },
+      "ViewerPhoneVerified": {
+        "type": "object",
+        "properties": {
+          "verified": {
+            "type": "boolean",
+            "const": true
+          },
+          "phone_masked": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "verified",
+          "phone_masked"
+        ],
+        "additionalProperties": true
+      },
+      "WalletResponse": {
+        "type": "object",
+        "properties": {
+          "paired": {
+            "type": "boolean"
+          },
+          "balance_vnd": {
+            "type": "integer",
+            "description": "so du KHA DUNG = so cai - lenh rut dang cho"
+          },
+          "ledger_balance_vnd": {
+            "type": "integer"
+          },
+          "pending_payout_vnd": {
+            "type": "integer"
+          },
+          "total_paid_vnd": {
+            "type": "integer"
+          },
+          "views": {
+            "type": "integer",
+            "description": "so luot xem DA CO THUONG (chien dich phu)"
+          },
+          "interactions": {
+            "type": "integer",
+            "description": "so tuong tac DA CO THUONG"
+          },
+          "payouts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "amount_vnd": {
+                  "type": "integer"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "paid",
+                    "rejected"
+                  ]
+                },
+                "requested_at": {
+                  "type": "string"
+                },
+                "paid_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "amount_vnd",
+                "status",
+                "requested_at",
+                "paid_at"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "device_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "paired_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "device_id",
+                "name",
+                "paired_at"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "tax_mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "auto_pay",
+              "delegate"
+            ]
+          },
+          "tax_authorization": {
+            "type": "string",
+            "enum": [
+              "none",
+              "auto_pay",
+              "delegate"
+            ],
+            "description": "trung tax_mode, ten truong cua app Mindo"
+          },
+          "phone_verified": {
+            "type": "boolean"
+          },
+          "today_reward_vnd": {
+            "type": "integer"
+          },
+          "unit_price_vnd": {
+            "type": "integer",
+            "description": "don gia chi de hien thi (20 d)"
+          },
+          "payout_threshold_vnd": {
+            "type": "integer",
+            "description": "moc nhan thuong cong don (mac dinh 100000)"
+          },
+          "interaction_reward_range_vnd": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "daily_reward_cap_vnd": {
+            "type": "integer"
+          },
+          "withdraw_enabled": {
+            "type": "boolean",
+            "description": "false => POST /v1/withdraw tra feature_disabled"
+          }
+        },
+        "required": [
+          "paired",
+          "balance_vnd",
+          "ledger_balance_vnd",
+          "pending_payout_vnd",
+          "total_paid_vnd",
+          "views",
+          "interactions",
+          "payouts",
+          "devices",
+          "tax_mode",
+          "tax_authorization",
+          "phone_verified",
+          "unit_price_vnd",
+          "payout_threshold_vnd",
+          "interaction_reward_range_vnd",
+          "daily_reward_cap_vnd",
+          "withdraw_enabled"
+        ],
+        "additionalProperties": true
+      },
+      "WithdrawRequest": {
+        "type": "object",
+        "properties": {
+          "amount_vnd": {
+            "type": "integer",
+            "exclusiveMinimum": true,
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "bank": {
+            "type": "object",
+            "properties": {
+              "bank_code": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,20}$"
+              },
+              "bank_name": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 80
+              },
+              "account_number": {
+                "type": "string",
+                "pattern": "^[0-9A-Za-z]{4,30}$"
+              },
+              "account_name": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 80
+              }
+            },
+            "required": [
+              "bank_name",
+              "account_number",
+              "account_name"
+            ],
+            "additionalProperties": true
+          },
+          "otp": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          },
+          "tax_authorization": {
+            "type": "string",
+            "enum": [
+              "none",
+              "auto_pay",
+              "delegate"
+            ]
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{8,64}$"
+          }
+        },
+        "required": [
+          "amount_vnd",
+          "bank",
+          "idempotency_key"
+        ],
+        "additionalProperties": true
+      },
+      "WithdrawResponse": {
+        "type": "object",
+        "properties": {
+          "payout_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "paid",
+              "rejected"
+            ]
+          },
+          "amount_vnd": {
+            "type": "integer"
+          },
+          "requested_at": {
+            "type": "string"
+          },
+          "review": {
+            "type": "string",
+            "const": "awaiting_finance_approval"
+          },
+          "idempotent_replay": {
+            "type": "boolean",
+            "description": "true => 200, tra lai lenh cu theo idempotency_key"
+          }
+        },
+        "required": [
+          "payout_id",
+          "id",
+          "status",
+          "amount_vnd",
+          "requested_at",
+          "review"
         ],
         "additionalProperties": true
       }

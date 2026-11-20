@@ -74,6 +74,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/interactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Báo tương tác (nhấp / quét QR), tối đa 10 sự kiện/lô, khử trùng theo event_id
+         * @description Xác thực bằng chữ ký thiết bị (phone hoặc tv, đã ghép: trust_level >= 1). Thưởng = `interaction_reward_vnd` của chiến dịch (tối đa `INTERACTION_MAX_REWARD_VND`=50), ghi `wallet_ledger` bất biến, một lần theo event_id. Giới hạn: 20 lô/phút/thiết bị, 30 tương tác/người/ngày, 3/chiến dịch/người/ngày, trần thưởng/ngày. Gửi lại event_id => `duplicate` (không cộng lại). Sự kiện từ chối nằm ở `rejected` (vd `untrusted_device`, `not_in_manifest`, `campaign_cap`).
+         */
+        post: operations["gatewayPostInteractions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/manifest": {
         parameters: {
             query?: never;
@@ -148,6 +168,130 @@ export interface paths {
          * @description Ký bằng chính khóa riêng tương ứng `pubkey` trong body (không có X-Device-Id). Trả `attestation_nonce` để kiểm chứng. Giới hạn theo IP.
          */
         post: operations["gatewayPostRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tax-authorization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chế độ thuế hiện tại của người nhận chi trả */
+        get: operations["gatewayGetTaxAuthorization"];
+        put?: never;
+        /**
+         * Chọn/đổi chế độ thuế: `auto_pay` (thanh toán tự động, chấp nhận chi trả thuế), `delegate` (ủy quyền ứng dụng nộp thuế) hoặc `none` (thu hồi)
+         * @description Chỉ LƯU ý chí và đồng ý (lịch sử chỉ thêm dòng; `none` = thu hồi). **Chưa khấu trừ hay nộp thuế thật** (`remittance_active=false`). `tax_code` (MST, tùy chọn, mã hóa khi lưu). `consent_version` phải khớp phiên bản điều khoản hiện hành.
+         */
+        post: operations["gatewayPostTaxAuthorization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/viewer/pair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Điện thoại nhập mã 6 số của TV để ghép đôi (người xem)
+         * @description Chỉ thiết bị `kind=phone`. Mã 6 số hết hạn sau 5 phút, dùng một lần. Chống dò: sai quá 5 lần/15 phút/thiết bị => 429 `rate_limited` (Retry-After 900); giới hạn theo IP. Mã sai/hết hạn/đã dùng trả cùng một lỗi `invalid_code` (404). Lần ghép đầu tạo người dùng cho điện thoại và nâng trust_level lên 1.
+         */
+        post: operations["gatewayPostViewerPair"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/viewer/phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Xác minh số điện thoại bằng OTP (không có `otp` => gửi OTP; có `otp` => xác minh)
+         * @description Cần đã ghép TV. 202 khi đã gửi OTP. Kênh gửi OTP chưa được cấu hình => 503 `not_configured`. OTP 6 số, hết hạn 5 phút, tối đa 5 lần thử, 3 lần gửi/giờ.
+         */
+        post: operations["gatewayPostViewerPhone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ví thưởng của người xem
+         * @description Chỉ điện thoại (`kind=phone`). `balance_vnd` là số dư khả dụng (sổ cái trừ lệnh rút đang chờ). Điện thoại chưa ghép TV nhận ví 0 với `paired=false`.
+         */
+        get: operations["gatewayGetWallet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sao kê ví (phân trang theo con trỏ, mới nhất trước) */
+        get: operations["gatewayGetWalletLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Yêu cầu rút thưởng (tạo lệnh CHỜ tài chính duyệt, KHÔNG tự chuyển tiền)
+         * @description Điều kiện: bật `VIEWER_WITHDRAW_ENABLED=1` (mặc định tắt => 403 `feature_disabled`), đã xác minh điện thoại, đã chọn chế độ thuế (nếu `PAYOUT_REQUIRE_TAX_CONSENT`; có thể gửi kèm `tax_authorization` trong chính yêu cầu rút, tương thích app Mindo), `amount_vnd >= PAYOUT_THRESHOLD_VND` (100.000) và <= số dư khả dụng, không có lệnh rút nào đang chờ.
+         *
+         *     OTP: gọi lần đầu KHÔNG có `otp` => 403 `otp_required` (và gửi OTP tới số đã xác minh); gọi lại cùng thân kèm `otp`. OTP gắn với đúng số tiền + tài khoản nhận.
+         *
+         *     Idempotent theo `idempotency_key` (8-64 ký tự): gửi lại cùng khóa => 200 trả lệnh cũ (không cần OTP mới); cùng khóa khác nội dung => 409 `idempotency_conflict`.
+         *
+         *     Tài khoản nhận lưu mã hóa AES-GCM; nhân viên tài chính duyệt/chi ở `/admin/v1/payouts/{id}/pay|reject`.
+         */
+        post: operations["gatewayPostWithdraw"];
         delete?: never;
         options?: never;
         head?: never;
@@ -283,6 +427,63 @@ export interface components {
                 [key: string]: unknown;
             })[];
             min_app_version?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        InteractionsRequest: {
+            events: ({
+                /** @constant */
+                type?: "interaction";
+                event_id: string;
+                /** Format: date-time */
+                ts: string;
+                /** @enum {string} */
+                kind?: "tap" | "qr_scan";
+                /** @enum {string} */
+                interaction?: "tap" | "qr_scan";
+                campaign_id: string;
+                creative_id: string;
+                slot_id?: string;
+            } & {
+                [key: string]: unknown;
+            })[];
+        } & {
+            [key: string]: unknown;
+        };
+        InteractionsResponse: {
+            accepted: number;
+            valid: number;
+            credited_vnd: number;
+            rejected: ({
+                event_id: string;
+                reason: string;
+            } & {
+                [key: string]: unknown;
+            })[];
+            results: ({
+                event_id: string;
+                /** @enum {string} */
+                status: "credited" | "recorded" | "duplicate" | "rejected";
+                credited_vnd: number;
+                reason?: string;
+            } & {
+                [key: string]: unknown;
+            })[];
+        } & {
+            [key: string]: unknown;
+        };
+        LedgerResponse: {
+            items: ({
+                id: string;
+                kind: string;
+                amount_vnd: number;
+                status: string;
+                created_at: string;
+                ref_type: string | null;
+            } & {
+                [key: string]: unknown;
+            })[];
+            next_cursor?: string;
         } & {
             [key: string]: unknown;
         };
@@ -459,6 +660,151 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        TaxAuthRequest: {
+            /** @enum {string} */
+            mode: "none" | "auto_pay" | "delegate";
+            consent_version: string;
+            tax_code?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        TaxAuthResponse: {
+            /** @enum {string} */
+            mode: "none" | "auto_pay" | "delegate";
+            /**
+             * @description trung mode, ten truong cua app Mindo
+             * @enum {string}
+             */
+            tax_authorization: "none" | "auto_pay" | "delegate";
+            consent_version: string | null;
+            updated_at: string | null;
+            current_consent_version: string;
+            modes: string[];
+            /**
+             * @description CHUA khau tru/nop thue that
+             * @constant
+             */
+            remittance_active: false;
+        } & {
+            [key: string]: unknown;
+        };
+        ViewerPairRequest: {
+            code: string;
+        } & {
+            [key: string]: unknown;
+        };
+        ViewerPairResponse: {
+            /** @constant */
+            paired: true;
+            /** @description device_id cua TV vua ghep */
+            device_id: string;
+            trust_level: number;
+            already?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        ViewerPhoneOtp: {
+            /** @constant */
+            otp_sent: true;
+            expires_in: number;
+            phone_masked: string;
+            /** @description CHI local/test khi VIEWER_OTP_DEV_ECHO=1 */
+            dev_otp?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        ViewerPhoneRequest: {
+            phone: string;
+            otp?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        ViewerPhoneVerified: {
+            /** @constant */
+            verified: true;
+            phone_masked: string;
+        } & {
+            [key: string]: unknown;
+        };
+        WalletResponse: {
+            paired: boolean;
+            /** @description so du KHA DUNG = so cai - lenh rut dang cho */
+            balance_vnd: number;
+            ledger_balance_vnd: number;
+            pending_payout_vnd: number;
+            total_paid_vnd: number;
+            /** @description so luot xem DA CO THUONG (chien dich phu) */
+            views: number;
+            /** @description so tuong tac DA CO THUONG */
+            interactions: number;
+            payouts: ({
+                id: string;
+                amount_vnd: number;
+                /** @enum {string} */
+                status: "pending" | "paid" | "rejected";
+                requested_at: string;
+                paid_at: string | null;
+            } & {
+                [key: string]: unknown;
+            })[];
+            devices: ({
+                device_id: string;
+                name: string | null;
+                paired_at: string | null;
+            } & {
+                [key: string]: unknown;
+            })[];
+            /** @enum {string} */
+            tax_mode: "none" | "auto_pay" | "delegate";
+            /**
+             * @description trung tax_mode, ten truong cua app Mindo
+             * @enum {string}
+             */
+            tax_authorization: "none" | "auto_pay" | "delegate";
+            phone_verified: boolean;
+            today_reward_vnd?: number;
+            /** @description don gia chi de hien thi (20 d) */
+            unit_price_vnd: number;
+            /** @description moc nhan thuong cong don (mac dinh 100000) */
+            payout_threshold_vnd: number;
+            interaction_reward_range_vnd: number[];
+            daily_reward_cap_vnd: number;
+            /** @description false => POST /v1/withdraw tra feature_disabled */
+            withdraw_enabled: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        WithdrawRequest: {
+            amount_vnd: number;
+            bank: {
+                bank_code?: string;
+                bank_name: string;
+                account_number: string;
+                account_name: string;
+            } & {
+                [key: string]: unknown;
+            };
+            otp?: string;
+            /** @enum {string} */
+            tax_authorization?: "none" | "auto_pay" | "delegate";
+            idempotency_key: string;
+        } & {
+            [key: string]: unknown;
+        };
+        WithdrawResponse: {
+            payout_id: string;
+            id: string;
+            /** @enum {string} */
+            status: "pending" | "paid" | "rejected";
+            amount_vnd: number;
+            requested_at: string;
+            /** @constant */
+            review: "awaiting_finance_approval";
+            /** @description true => 200, tra lai lenh cu theo idempotency_key */
+            idempotent_replay?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
     };
     responses: {
         /** @description Lỗi: luôn có dạng { error: { code, message, details? } } */
@@ -628,6 +974,46 @@ export interface operations {
             503: components["responses"]["RetryLater"];
         };
     };
+    gatewayPostInteractions: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InteractionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã xử lý */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionsResponse"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
     gatewayGetManifest: {
         parameters: {
             query?: {
@@ -782,6 +1168,296 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegisterResponse"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayGetTaxAuthorization: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxAuthResponse"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayPostTaxAuthorization: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaxAuthRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã ghi */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxAuthResponse"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayPostViewerPair: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ViewerPairRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã ghép đôi */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViewerPairResponse"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayPostViewerPhone: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ViewerPhoneRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã xác minh */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViewerPhoneVerified"];
+                };
+            };
+            /** @description Đã gửi OTP */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViewerPhoneOtp"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayGetWallet: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletResponse"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayGetWalletLedger: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerResponse"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayPostWithdraw: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithdrawRequest"];
+            };
+        };
+        responses: {
+            /** @description Lệnh cũ (idempotent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WithdrawResponse"];
+                };
+            };
+            /** @description Đã tạo lệnh chờ duyệt */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WithdrawResponse"];
                 };
             };
             401: components["responses"]["Error"];

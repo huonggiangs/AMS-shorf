@@ -471,7 +471,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:278
+      x-ams-source: services/api/src/routes/campaigns.ts:282
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -498,7 +498,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:301
+      x-ams-source: services/api/src/routes/campaigns.ts:305
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -538,7 +538,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: delete
-      x-ams-source: services/api/src/routes/campaigns.ts:559
+      x-ams-source: services/api/src/routes/campaigns.ts:581
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -573,7 +573,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:284
+      x-ams-source: services/api/src/routes/campaigns.ts:288
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -605,7 +605,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:329
+      x-ams-source: services/api/src/routes/campaigns.ts:333
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -645,7 +645,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:439
+      x-ams-source: services/api/src/routes/campaigns.ts:461
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -679,7 +679,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:542
+      x-ams-source: services/api/src/routes/campaigns.ts:564
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -715,7 +715,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:395
+      x-ams-source: services/api/src/routes/campaigns.ts:417
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -751,7 +751,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:290
+      x-ams-source: services/api/src/routes/campaigns.ts:294
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -784,7 +784,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:518
+      x-ams-source: services/api/src/routes/campaigns.ts:540
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -826,13 +826,55 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:408
+      x-ams-source: services/api/src/routes/campaigns.ts:430
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
         Chỉ tài khoản nội bộ.
 
         Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/campaigns/{id}/reward-config:
+    put:
+      operationId: adminPutCampaignsByIdRewardConfig
+      tags:
+        - campaigns
+      summary: PUT /admin/v1/campaigns/{id}/reward-config
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: campaigns
+        action: approve
+      x-ams-source: services/api/src/routes/campaigns.ts:369
+      description: |-
+        Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutCampaignsByIdRewardConfigRequest"
       responses:
         "200":
           description: Thành công
@@ -862,7 +904,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:361
+      x-ams-source: services/api/src/routes/campaigns.ts:383
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3518,7 +3560,7 @@ paths:
       x-ams-permission:
         module: finance
         action: view
-      x-ams-source: services/api/src/routes/invoices.ts:264
+      x-ams-source: services/api/src/routes/invoices.ts:276
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3547,7 +3589,7 @@ paths:
       x-ams-permission:
         module: finance
         action: write
-      x-ams-source: services/api/src/routes/invoices.ts:101
+      x-ams-source: services/api/src/routes/invoices.ts:102
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3589,7 +3631,7 @@ paths:
       x-ams-permission:
         module: finance
         action: view
-      x-ams-source: services/api/src/routes/invoices.ts:268
+      x-ams-source: services/api/src/routes/invoices.ts:280
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3623,7 +3665,7 @@ paths:
       x-ams-permission:
         module: finance
         action: write
-      x-ams-source: services/api/src/routes/invoices.ts:121
+      x-ams-source: services/api/src/routes/invoices.ts:122
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3665,7 +3707,7 @@ paths:
       x-ams-permission:
         module: finance
         action: approve
-      x-ams-source: services/api/src/routes/invoices.ts:135
+      x-ams-source: services/api/src/routes/invoices.ts:136
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3707,7 +3749,7 @@ paths:
       x-ams-permission:
         module: finance
         action: approve
-      x-ams-source: services/api/src/routes/invoices.ts:271
+      x-ams-source: services/api/src/routes/invoices.ts:297
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3749,7 +3791,7 @@ paths:
       x-ams-permission:
         module: finance
         action: approve
-      x-ams-source: services/api/src/routes/invoices.ts:178
+      x-ams-source: services/api/src/routes/invoices.ts:179
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4855,7 +4897,7 @@ paths:
       x-ams-permission:
         module: finance
         action: view
-      x-ams-source: services/api/src/routes/invoices.ts:264
+      x-ams-source: services/api/src/routes/invoices.ts:276
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4890,9 +4932,44 @@ paths:
       x-ams-permission:
         module: finance
         action: view
-      x-ams-source: services/api/src/routes/invoices.ts:268
+      x-ams-source: services/api/src/routes/invoices.ts:280
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/payouts/{id}/destination:
+    get:
+      operationId: adminGetPayoutsByIdDestination
+      tags:
+        - payouts
+      summary: GET /admin/v1/payouts/{id}/destination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: finance
+        action: approve
+      x-ams-source: services/api/src/routes/invoices.ts:283
+      description: |-
+        Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
         Chỉ tài khoản nội bộ.
 
@@ -4925,7 +5002,7 @@ paths:
       x-ams-permission:
         module: finance
         action: approve
-      x-ams-source: services/api/src/routes/invoices.ts:271
+      x-ams-source: services/api/src/routes/invoices.ts:297
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4967,7 +5044,7 @@ paths:
       x-ams-permission:
         module: finance
         action: approve
-      x-ams-source: services/api/src/routes/invoices.ts:294
+      x-ams-source: services/api/src/routes/invoices.ts:329
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7294,7 +7371,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:278
+      x-ams-source: services/api/src/routes/campaigns.ts:282
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7321,7 +7398,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:301
+      x-ams-source: services/api/src/routes/campaigns.ts:305
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7361,7 +7438,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:284
+      x-ams-source: services/api/src/routes/campaigns.ts:288
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7393,7 +7470,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:329
+      x-ams-source: services/api/src/routes/campaigns.ts:333
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7433,7 +7510,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:395
+      x-ams-source: services/api/src/routes/campaigns.ts:417
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7469,7 +7546,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:290
+      x-ams-source: services/api/src/routes/campaigns.ts:294
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7502,7 +7579,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:408
+      x-ams-source: services/api/src/routes/campaigns.ts:430
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7538,7 +7615,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:361
+      x-ams-source: services/api/src/routes/campaigns.ts:383
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7700,7 +7777,7 @@ paths:
       x-ams-permission:
         module: finance
         action: view
-      x-ams-source: services/api/src/routes/invoices.ts:264
+      x-ams-source: services/api/src/routes/invoices.ts:276
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7735,7 +7812,7 @@ paths:
       x-ams-permission:
         module: finance
         action: view
-      x-ams-source: services/api/src/routes/invoices.ts:268
+      x-ams-source: services/api/src/routes/invoices.ts:280
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9970,6 +10047,21 @@ components:
                   maxLength: 64
             - type: "null"
       additionalProperties: true
+    AdminPutCampaignsByIdRewardConfigRequest:
+      type: object
+      properties:
+        reward_model:
+          type: string
+          enum:
+            - cover
+            - performance
+        interaction_reward_vnd:
+          type: integer
+          minimum: 0
+      required:
+        - reward_model
+        - interaction_reward_vnd
+      additionalProperties: true
     AdminPutComplianceCampaignsByIdCategoryRequest:
       type: object
       properties:
@@ -11005,6 +11097,13 @@ components:
           type:
             - number
             - "null"
+        reward_model:
+          type: string
+          enum:
+            - cover
+            - performance
+        interaction_reward_vnd:
+          type: number
         reject_reason:
           type:
             - string
@@ -11675,6 +11774,13 @@ components:
                 type:
                   - number
                   - "null"
+              reward_model:
+                type: string
+                enum:
+                  - cover
+                  - performance
+              interaction_reward_vnd:
+                type: number
               reject_reason:
                 type:
                   - string

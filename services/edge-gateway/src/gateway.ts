@@ -14,12 +14,14 @@ import { ackCommands, hasCommandFlag, type Delivered, sweepCommands, takeDeliver
 import { MAX_ACK_BODY_BYTES, MAX_BODY_BYTES, MAX_HEARTBEAT_BODY_BYTES, PAIR_CODE_TTL_S, PROTOCOL_VERSION, commandAckBody, heartbeatBody, registerBody } from './protocol.js';
 import { HttpProblem, clientIp, defaultRng, defer, envInt, nowSec, problem, type Rng } from './util.js';
 import { redeemPairingCode } from './pairing.js';
+import { CampaignRewardCfg, mountViewerRoutes, postViewRewards, viewerCors, viewerPolicyFromEnv, type ViewerOptions } from './viewer.js';
 
 export { redeemPairingCode, issuePairingCode } from './pairing.js';
 export { enqueueCommand, ackCommands, sweepCommands, listCommands, CommandError } from './commands.js';
 export type { DeviceCommand, EnqueueOptions, CommandStatus } from './commands.js';
 export { INGEST_TOPIC } from './events.js';
 export type { ImpressionRow, IngestMessage } from './events.js';
+export { CampaignRewardCfg, viewerPolicyFromEnv, vnDayStartIso, type OtpSender, type ViewerOptions, type ViewerPolicy } from './viewer.js';
 
 export interface GatewayOptions {
   rng?: Rng;
@@ -29,6 +31,8 @@ export interface GatewayOptions {
   presence?: Presence;
   intervals?: Partial<IntervalCfg>;
   policy?: Partial<EventPolicy>;
+  /** phia nguoi xem (WP-18): cong gui OTP, ghi de chinh sach */
+  viewer?: ViewerOptions;
 }
 
 export interface Gateway {
@@ -133,7 +137,11 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     }
   }
 
+  const viewerPolicy = { ...viewerPolicyFromEnv(env, isLocalEnv(amsEnv)), ...opts.viewer?.policy };
+  const rewardCfg = new CampaignRewardCfg(rt, envInt(env, 'CAMPAIGN_REWARD_TTL_S', 30) * 1000);
   const app = new Hono();
+  const cors = viewerCors(env);
+  if (cors) app.use('/v1/*', cors);
 
   app.onError((err, c) => {
     if (err instanceof HttpProblem) return problem(c, err.code, err.message, err.details, err.headers);
@@ -373,10 +381,18 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     if (!Array.isArray(parsed?.events) || parsed.events.length < 1) throw new HttpProblem('validation_failed', 'Can mang events (1..50 su kien).');
     if (parsed.events.length > 50) throw new HttpProblem('validation_failed', 'Toi da 50 su kien moi lo.', { max: 50, got: parsed.events.length });
     const view = await manifests.get(groupOfDevice(dev));
-    const { result, msg } = await processEvents(rt, dev, parsed.events, view, policy);
-    if (msg) await rt.queue.send(INGEST_TOPIC, msg);
+    const campIds = parsed.events.flatMap((e) => (typeof (e as { campaign_id?: unknown })?.campaign_id === 'string' ? [(e as { campaign_id: string }).campaign_id] : []));
+    const rewardModels = await rewardCfg.get(campIds);
+    const { result, msg } = await processEvents(rt, dev, parsed.events, view, policy, rewardModels);
+    if (msg) {
+      await postViewRewards({ rt, policy: viewerPolicy }, dev, msg.impressions); // so cai truoc, hang doi sau: gui lai se khu trung theo event_id
+      await rt.queue.send(INGEST_TOPIC, msg);
+    }
     return c.json(result, 202);
   });
+
+  // ---- phia nguoi xem (WP-18): /v1/viewer/*, /v1/wallet, /v1/withdraw, /v1/interactions, /v1/tax-authorization
+  mountViewerRoutes(app, { rt, deps, devices, manifests, policy: viewerPolicy, otpSender: opts.viewer?.otpSender, rewardCfg, readBody, parseJson, rateLimit });
 
   // ---- chi de thu/gia lap: xac nhan ma ghep doi khong can ung dung (KHONG mount tren Cloudflare/production)
   if (env['GATEWAY_DEV_ENDPOINTS'] === '1' && rt.config.runtime !== 'cloudflare' && isLocalEnv(amsEnv)) {

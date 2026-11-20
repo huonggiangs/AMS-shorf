@@ -35,6 +35,20 @@ export const ERROR_CODES = {
   overloaded: 503,
   not_found: 404,
   internal: 500,
+  // ---- phia nguoi xem (WP-18)
+  forbidden: 403,
+  feature_disabled: 403,
+  otp_required: 403,
+  otp_invalid: 403,
+  phone_not_verified: 403,
+  tax_consent_required: 403,
+  invalid_code: 404,
+  already_paired: 409,
+  conflict: 409,
+  insufficient_balance: 409,
+  idempotency_conflict: 409,
+  below_threshold: 422,
+  not_configured: 503,
 } as const;
 export type ErrorCode = keyof typeof ERROR_CODES;
 
@@ -154,3 +168,61 @@ export interface ManifestDelta {
 export interface Problem {
   error: { code: ErrorCode; message: string; details?: unknown };
 }
+
+// ---------------------------------------------------------------- phia nguoi xem (WP-18)
+/** Mat khau mot lan 6 so. */
+export const OTP_RE = /^\d{6}$/;
+export const MAX_VIEWER_BODY_BYTES = 2048;
+export const MAX_INTERACTION_BODY_BYTES = 4096;
+export const MAX_INTERACTIONS_PER_BATCH = 10;
+
+export const viewerPairBody = z.object({ code: z.string().regex(/^\d{6}$/, 'Ma ghep doi gom 6 chu so.') });
+export type ViewerPairBody = z.infer<typeof viewerPairBody>;
+
+export const bankAccountBody = z.object({
+  bank_code: z.string().regex(/^[A-Za-z0-9_-]{1,20}$/).optional(),
+  bank_name: z.string().trim().min(2).max(80),
+  account_number: z.string().regex(/^[0-9A-Za-z]{4,30}$/, 'So tai khoan khong hop le.'),
+  account_name: z.string().trim().min(2).max(80),
+});
+export const withdrawBody = z.object({
+  amount_vnd: z.number().int().positive().max(1_000_000_000),
+  bank: bankAccountBody,
+  otp: z.string().regex(OTP_RE).optional(),
+  /** y chi thue di kem lenh rut (app Mindo): auto_pay | delegate | none. Bo trong => dung che do da luu. */
+  tax_authorization: z.enum(['none', 'auto_pay', 'delegate']).optional(),
+  idempotency_key: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, 'idempotency_key 8-64 ky tu [A-Za-z0-9_-].'),
+});
+export type WithdrawBody = z.infer<typeof withdrawBody>;
+
+/** Xac minh so dien thoai: khong co otp => gui OTP; co otp => kiem tra. */
+export const phoneBody = z.object({
+  phone: z.string().regex(/^(\+84|0)\d{9}$/, 'So dien thoai Viet Nam: 0xxxxxxxxx hoac +84xxxxxxxxx.'),
+  otp: z.string().regex(OTP_RE).optional(),
+});
+export type PhoneBody = z.infer<typeof phoneBody>;
+
+export const TAX_MODES = ['none', 'auto_pay', 'delegate'] as const;
+export const taxAuthBody = z.object({
+  mode: z.enum(TAX_MODES),
+  consent_version: z.string().trim().min(1).max(20),
+  /** ma so thue ca nhan (10 hoac 13 so), tuy chon (luat su/ke toan quyet dinh co bat buoc khong) */
+  tax_code: z.string().regex(/^\d{10}(-?\d{3})?$/, 'Ma so thue 10 hoac 13 so.').optional(),
+});
+export type TaxAuthBody = z.infer<typeof taxAuthBody>;
+
+export const interactionEvent = z
+  .object({
+    type: z.literal('interaction').optional(),
+    event_id: z.string().regex(UUID_V7_RE),
+    ts: z.string().datetime(),
+    kind: z.enum(['tap', 'qr_scan']).optional(),
+    /** ten cu cua app Mindo (types.ts: InteractionReport.kind gui qua truong `interaction`); nhan de khop hop dong dang chay */
+    interaction: z.enum(['tap', 'qr_scan']).optional(),
+    campaign_id: z.string().min(1).max(40),
+    creative_id: z.string().min(1).max(40),
+    slot_id: z.string().max(40).optional(),
+  })
+  .refine((e) => e.kind !== undefined || e.interaction !== undefined, { message: 'Can kind (tap|qr_scan).' });
+export const interactionsBody = z.object({ events: z.array(interactionEvent).min(1).max(MAX_INTERACTIONS_PER_BATCH) });
+export type InteractionsBody = z.infer<typeof interactionsBody>;

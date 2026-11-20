@@ -23,7 +23,7 @@ import { assertCreditForApproval } from '../billing/dunning.js';
 import type { AppEnv, AuthUser } from '../types.js';
 
 const CAMP_SELECT = `c.id, c.name, c.customer_id, c.state, c.budget_cap_vnd, c.approved_budget_vnd, c.reserved_vnd, c.spent_vnd, c.funding_state, c.target_types, c.duration_s,
-  c.start_at, c.end_at, c.reject_reason, c.created_at, c.approved_at, cu.payment_code AS customer_code, cu.industry AS customer_industry,
+  c.start_at, c.end_at, c.reject_reason, c.created_at, c.approved_at, c.reward_model, c.interaction_reward_vnd, cu.payment_code AS customer_code, cu.industry AS customer_industry,
   COALESCE(g.restricted_industry, 0) AS restricted_industry, g.restricted_reason, g.rights_confirmed_at, g.rights_confirmed_by, cu.short_name AS customer_short, adv.name AS advertiser_name, ua.name AS creator_name,
   (SELECT cr.id FROM creatives cr WHERE cr.campaign_id = c.id ORDER BY cr.created_at, cr.id LIMIT 1) AS media_id,
   (SELECT cr.name FROM creatives cr WHERE cr.campaign_id = c.id ORDER BY cr.created_at, cr.id LIMIT 1) AS media_name`;
@@ -51,6 +51,8 @@ export interface CampRow {
   reject_reason: string | null;
   created_at: string;
   approved_at: string | null;
+  reward_model: string;
+  interaction_reward_vnd: number;
   customer_code: string;
   customer_short: string;
   advertiser_name: string | null;
@@ -124,6 +126,8 @@ export async function presentCampaigns(rt: Runtime, rows: CampRow[], external: b
       media_name: r.media_name,
       pacing_pct: budget > 0 ? Math.min(100, Math.floor((num(r.spent_vnd) * 100) / budget)) : 0,
       reward_per_view: null,
+      reward_model: r.reward_model,
+      interaction_reward_vnd: num(r.interaction_reward_vnd),
       reject_reason: r.reject_reason,
       created_at: r.created_at,
       approved_at: r.approved_at,
@@ -357,6 +361,24 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
     });
     return c.json((await presentCampaigns(rt, [await loadCampaign(c, row.id)], external))[0]);
   });
+
+  // Thuong cho nguoi xem (WP-18): loai chien dich + don gia tuong tac do nha tai tro chi. Tien that => chi noi bo, quyen duyet chien dich.
+  // 'cover' = luot xem tra thap theo reward_points cua slot; 'performance' = luot xem KHONG tinh, chi nhap/quet QR theo interaction_reward_vnd.
+  // Gateway doc cau hinh nay qua cache ngan (CAMPAIGN_REWARD_TTL_S, mac dinh 30 giay).
+  if (!external) {
+    r.put('/:id/reward-config', requirePerm('campaigns', 'approve'), async (c) => {
+      const rt = getRt(c);
+      const row = await loadCampaign(c, c.req.param('id'), true);
+      const cap = Number(rt.config.env['INTERACTION_MAX_REWARD_VND'] ?? 50) || 50;
+      const b = await parseBody(c, z.object({ reward_model: z.enum(['cover', 'performance']), interaction_reward_vnd: z.number().int().min(0, 'Không âm') }));
+      if (b.interaction_reward_vnd > cap) throw unprocessable(`Đơn giá thưởng tương tác tối đa ${cap} đồng.`, 'reward_too_high');
+      await rt.db.tx(async (db) => {
+        await db.run('UPDATE campaigns SET reward_model = ?, interaction_reward_vnd = ?, updated_at = ? WHERE id = ?', [b.reward_model, b.interaction_reward_vnd, rt.clock.now().toISOString(), row.id]);
+        await auditCtx(c, db, { action: 'campaign.reward_config', objectType: 'campaign', objectId: row.id, customerId: row.customer_id, diff: { reward_model: { from: row.reward_model, to: b.reward_model }, interaction_reward_vnd: { from: num(row.interaction_reward_vnd), to: b.interaction_reward_vnd } } });
+      });
+      return c.json((await presentCampaigns(rt, [await loadCampaign(c, row.id)], false))[0]);
+    });
+  }
 
   r.post('/:id/submit', requirePerm('campaigns', 'write'), async (c) => {
     const rt = getRt(c);

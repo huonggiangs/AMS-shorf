@@ -53,7 +53,12 @@ export const SECRETS = {
     { name: 'MAIL_HTTP_KEY', required: false },
     { name: 'MAIL_FROM', required: false },
   ],
-  gateway: [],
+  // Phia nguoi xem (WP-18, docs/VIEWER-API.md): FIELD_ENC_KEY PHAI TRUNG gia tri cua Worker api (tai chinh giai ma tai khoan nhan o api). Khong tu sinh.
+  // Thieu => /v1/viewer/phone, /v1/withdraw, /v1/tax-authorization tra not_configured (khong anh huong thiet bi TV).
+  gateway: [
+    { name: 'FIELD_ENC_KEY', required: false },
+    { name: 'VIEWER_OTP_SECRET', required: false },
+  ],
 };
 
 // Quyền token (tên nhóm quyền trên dashboard) dùng cho kiểm tra chủ động qua API token, và thăm dò quyền ĐỌC từng nhóm tài nguyên.
