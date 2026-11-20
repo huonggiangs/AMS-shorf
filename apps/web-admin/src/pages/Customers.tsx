@@ -134,7 +134,7 @@ function AddCustomer({ open, onClose }: { open: boolean; onClose: () => void }) 
   const [f, setF] = useState({ legal_name: '', short_name: '', tax_code: '', address: '', representative: '', rep_title: '', phone: '', email: '', industry: '', payment_terms: '', credit_limit_vnd: '0' });
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
   return (
-    <Dialog open={open} onClose={onClose} width="min(560px,96vw)" label="Thêm khách hàng">
+    <Dialog open={open} onClose={onClose} size="lg" label="Thêm khách hàng">
       <form onSubmit={async (e) => { e.preventDefault(); const r = await act(() => api.post('/admin/v1/customers', { body: { ...f, credit_limit_vnd: Math.round(+f.credit_limit_vnd || 0) } }), 'Đã thêm khách hàng.'); if (r !== undefined) onClose(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Thêm khách hàng</h2>
         <Field label="Tên pháp lý"><input required value={f.legal_name} onChange={(e) => set('legal_name', e.target.value)} /></Field>

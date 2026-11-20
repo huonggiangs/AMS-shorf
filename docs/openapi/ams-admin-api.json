@@ -6244,7 +6244,7 @@
           "module": "media",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:207",
+        "x-ams-source": "services/api/src/routes/media.ts:240",
         "description": "Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -6283,7 +6283,7 @@
           "module": "media",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:345",
+        "x-ams-source": "services/api/src/routes/media.ts:399",
         "description": "Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -6372,7 +6372,7 @@
           "module": "media",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:221",
+        "x-ams-source": "services/api/src/routes/media.ts:254",
         "description": "Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "requestBody": {
           "required": true,
@@ -6431,7 +6431,7 @@
           "module": "media",
           "action": "delete"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:440",
+        "x-ams-source": "services/api/src/routes/media.ts:530",
         "description": "Quyền cần có: mô-đun `media`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -6478,7 +6478,7 @@
           "module": "media",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:213",
+        "x-ams-source": "services/api/src/routes/media.ts:246",
         "description": "Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -6526,7 +6526,7 @@
           "module": "media",
           "action": "approve"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:401",
+        "x-ams-source": "services/api/src/routes/media.ts:478",
         "description": "Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -6585,7 +6585,7 @@
           "module": "media",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:263",
+        "x-ams-source": "services/api/src/routes/media.ts:300",
         "description": "Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -6644,7 +6644,7 @@
           "module": "media",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:371",
+        "x-ams-source": "services/api/src/routes/media.ts:448",
         "description": "Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -6656,6 +6656,55 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/media/{id}/recheck": {
+      "post": {
+        "operationId": "adminPostMediaByIdRecheck",
+        "tags": [
+          "media"
+        ],
+        "summary": "POST /admin/v1/media/{id}/recheck",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "media",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/media.ts:426",
+        "description": "Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -6703,7 +6752,7 @@
           "module": "media",
           "action": "approve"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:426",
+        "x-ams-source": "services/api/src/routes/media.ts:516",
         "description": "Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -12431,7 +12480,7 @@
           "module": "media",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:207",
+        "x-ams-source": "services/api/src/routes/media.ts:240",
         "description": "Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.",
         "responses": {
           "200": {
@@ -12470,7 +12519,7 @@
           "module": "media",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:345",
+        "x-ams-source": "services/api/src/routes/media.ts:399",
         "description": "Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -12520,7 +12569,7 @@
           "module": "media",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:221",
+        "x-ams-source": "services/api/src/routes/media.ts:254",
         "description": "Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.",
         "requestBody": {
           "required": true,
@@ -12579,7 +12628,7 @@
           "module": "media",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:213",
+        "x-ams-source": "services/api/src/routes/media.ts:246",
         "description": "Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.",
         "responses": {
           "200": {
@@ -12627,7 +12676,7 @@
           "module": "media",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:263",
+        "x-ams-source": "services/api/src/routes/media.ts:300",
         "description": "Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -12686,7 +12735,7 @@
           "module": "media",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/media.ts:371",
+        "x-ams-source": "services/api/src/routes/media.ts:448",
         "description": "Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -12698,6 +12747,55 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/portal/v1/media/{id}/recheck": {
+      "post": {
+        "operationId": "portalPostMediaByIdRecheck",
+        "tags": [
+          "media"
+        ],
+        "summary": "POST /portal/v1/media/{id}/recheck",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "media",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/media.ts:426",
+        "description": "Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
             "description": "Thành công",
@@ -14359,6 +14457,11 @@
           "content_version": {
             "type": "integer",
             "minimum": 1
+          },
+          "manual_review_note": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
           }
         },
         "additionalProperties": true
@@ -17627,7 +17730,57 @@
               "null"
             ]
           },
-          "overlay": {}
+          "overlay": {},
+          "scan_state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scan_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "content_version": {
+            "type": "number",
+            "default": 1
+          },
+          "preview_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "blocker": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "action"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
         },
         "required": [
           "id",

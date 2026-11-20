@@ -28,7 +28,29 @@ export const REASON: Record<string, string> = {
   size_over_inline_limit: 'Tệp quá lớn để kiểm tra tự động',
   too_large_to_read_inline: 'Tệp quá lớn để đọc kiểm tra tự động',
   mark_clean_disabled: 'Máy chủ đang tắt tự động đánh dấu sạch',
+  mp4_trailing_bytes: 'MP4 có dữ liệu thừa phía sau (có thể chứa tệp ẩn)',
+  mp4_box_overrun: 'MP4 có khối dữ liệu vượt giới hạn tệp (tệp hỏng hoặc bị cắt)',
+  mp4_ftyp_missing: 'Không nhận ra tệp MP4 (thiếu phần đầu)',
+  mp4_no_moov: 'MP4 thiếu thông tin thời lượng/khung hình (moov)',
+  mp4_no_mvhd: 'MP4 thiếu thông tin thời lượng',
+  mp4_no_video_track: 'MP4 không có luồng hình',
+  mp4_zero_duration: 'MP4 có thời lượng bằng 0',
+  mp4_moov_too_large: 'MP4 có phần mô tả quá lớn để kiểm tra tự động',
+  mp4_header_unreadable: 'Không đọc được phần đầu MP4',
+  mp4_too_many_boxes: 'MP4 có cấu trúc bất thường (quá nhiều khối)',
 };
+/** Mã lý do có thể kèm tham số sau dấu ':' (mime_mismatch:…, dimensions_mismatch:…, mp4_brand_not_allowed:…). */
+export function reasonText(code: string): string {
+  if (REASON[code]) return REASON[code];
+  const [k, ...rest] = code.split(':');
+  const arg = rest.join(':');
+  if (k === 'unsupported_codec') return `Video dùng codec ${arg === 'av01' ? 'AV1' : arg === 'hvc1' || arg === 'hev1' ? 'H.265' : arg || 'không phải H.264'} mà TV không phát ổn định (cần H.264/AAC)`;
+  if (k === 'video_resolution_too_high') return 'Video vượt Full HD 1920×1080 (cần xuất lại 1080p)';
+  if (k === 'mime_mismatch') return `Loại tệp khai báo (${arg}) không khớp nội dung thật`;
+  if (k === 'dimensions_mismatch') return `Kích thước thật của tệp khác khai báo (${arg.replace('!=', ' so với ')})`;
+  if (k === 'mp4_brand_not_allowed') return `MP4 dùng định dạng con không nằm trong danh sách an toàn (${arg})`;
+  return code;
+}
 const SCAN: Record<string, string> = { needs_manual_review: 'Chờ kiểm tra thủ công', clean: 'Đã sạch', failed: 'Bị từ chối', infected: 'Nhiễm mã độc' };
 const sizeText = (b?: number | null) => (b == null ? '—' : b >= 1048576 ? `${(b / 1048576).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} MB` : `${Math.max(1, Math.round(b / 1024)).toLocaleString('vi-VN')} KB`);
 const MIN_NOTE = 3;
@@ -56,10 +78,16 @@ export default function CreativeReview() {
   const total = q.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const refresh = () => qc.invalidateQueries({ queryKey: [ENDPOINT] });
-  const submit = async (item: ScanQueueItem, decision: 'approve' | 'reject', note: string) => {
+  const submit = async (item: ScanQueueItem, decision: 'approve' | 'reject', note: string, alsoApprove = false) => {
     try {
-      await api.post(`/admin/v1/media/${item.id}/scan-review`, { body: { decision, note, content_version: item.content_version } });
-      notify(decision === 'approve' ? 'Đã duyệt kiểm tra thủ công. Tệp vẫn cần duyệt nội dung ở trang Nội dung & Media.' : 'Đã từ chối creative.');
+      if (decision === 'approve' && alsoApprove) {
+        // một bước: xác nhận an toàn (kiểm tra thủ công) + duyệt nội dung => dùng được ngay cho chiến dịch
+        await api.post(`/admin/v1/media/${item.id}/approve`, { body: { manual_review_note: note, content_version: item.content_version } });
+        notify('Đã duyệt creative. Tệp có thể gắn vào chiến dịch.');
+      } else {
+        await api.post(`/admin/v1/media/${item.id}/scan-review`, { body: { decision, note, content_version: item.content_version } });
+        notify(decision === 'approve' ? 'Đã duyệt kiểm tra thủ công. Tệp vẫn cần duyệt nội dung ở trang Nội dung & Media.' : 'Đã từ chối creative.');
+      }
       if (page > 1 && (q.data?.items.length ?? 0) <= 1) setPage(page - 1);
       void qc.invalidateQueries({ queryKey: ['/admin/v1/media'] });
       return true;
@@ -76,14 +104,14 @@ export default function CreativeReview() {
       <Note>Duyệt tại đây chỉ xác nhận tệp an toàn (không phải duyệt nội dung quảng cáo). Tệp bị từ chối sẽ không bao giờ được phát. Mỗi quyết định gắn với phiên bản nội dung bạn đang xem: nếu khách đổi tệp, hệ thống yêu cầu xem lại.</Note>
       {q.isLoading ? <LoadingBlock /> : q.isError ? <ErrorBlock error={q.error} onRetry={() => void q.refetch()} /> : !q.data?.items.length ? <EmptyBlock>Không có creative nào đang chờ kiểm tra thủ công.</EmptyBlock> : (
         <div className="g g3">
-          {q.data.items.map((m) => <ReviewCard key={m.id} m={m} onApprove={() => setDlg({ item: m, decision: 'approve' })} onReject={() => setDlg({ item: m, decision: 'reject' })} />)}
+          {q.data.items.map((m) => <ReviewCard key={m.id} m={m} onRecheck={async () => { try { await api.post(`/admin/v1/media/${m.id}/recheck`); notify('Đã gửi kiểm tra lại. Kết quả hiện sau ít phút.'); } catch (e) { notify(errMsg(e)); } void refresh(); }} onApprove={() => setDlg({ item: m, decision: 'approve' })} onReject={() => setDlg({ item: m, decision: 'reject' })} />)}
         </div>
       )}
       <div className="tf" style={{ background: 'none' }}>
         <span>{total} tệp đang chờ</span>
         <div className="pg">{Array.from({ length: pages }, (_, i) => <button key={i} type="button" className={i + 1 === page ? 'on' : ''} aria-label={`Trang ${i + 1}`} aria-current={i + 1 === page ? 'page' : undefined} onClick={() => setPage(i + 1)}>{i + 1}</button>)}</div>
       </div>
-      {dlg ? <ReasonDialog key={`${dlg.item.id}-${dlg.decision}`} item={dlg.item} decision={dlg.decision} onClose={() => setDlg(null)} onSubmit={(note) => submit(dlg.item, dlg.decision, note)} /> : null}
+      {dlg ? <ReasonDialog key={`${dlg.item.id}-${dlg.decision}`} item={dlg.item} decision={dlg.decision} onClose={() => setDlg(null)} onSubmit={(note, both) => submit(dlg.item, dlg.decision, note, both)} /> : null}
     </>
   );
 }
@@ -96,7 +124,7 @@ function Preview({ m }: { m: ScanQueueItem }) {
   return <div className="ph">{isVideo ? 'VIDEO' : 'TỆP'}<br />Không có bản xem trước</div>;
 }
 
-function ReviewCard({ m, onApprove, onReject }: { m: ScanQueueItem; onApprove: () => void; onReject: () => void }) {
+function ReviewCard({ m, onApprove, onReject, onRecheck }: { m: ScanQueueItem; onApprove: () => void; onReject: () => void; onRecheck: () => void }) {
   const meta = [m.mime?.split('/')[1]?.toUpperCase(), sizeText(m.size_bytes), m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_s ? `${m.duration_s} giây` : null].filter(Boolean).join(' · ');
   return (
     <div className="card" role="group" aria-label={m.name ?? m.id}>
@@ -108,34 +136,42 @@ function ReviewCard({ m, onApprove, onReject }: { m: ScanQueueItem; onApprove: (
           <Tag tone="warn">{SCAN[m.scan_state] ?? m.scan_state}</Tag>
           <Tag tone="info">Phiên bản nội dung v{m.content_version}</Tag>
         </div>
-        {m.reasons.length ? <ul aria-label="Lý do cần kiểm tra" style={{ margin: '0 0 10px', paddingLeft: 18, fontSize: 13 }}>{m.reasons.map((r) => <li key={r}>{REASON[r] ?? r}</li>)}</ul> : <p className="sub" style={{ margin: '0 0 10px' }}>Không có chi tiết lý do.</p>}
+        {m.reasons.length ? <ul aria-label="Lý do cần kiểm tra" style={{ margin: '0 0 10px', paddingLeft: 18, fontSize: 13 }}>{m.reasons.map((r) => <li key={r}>{reasonText(r)}</li>)}</ul> : <p className="sub" style={{ margin: '0 0 10px' }}>Không có chi tiết lý do.</p>}
         <div style={{ display: 'flex', gap: 8 }}>
           <Btn tone="p" className="sm" onClick={onApprove}>Duyệt</Btn>
           <Btn className="sm" onClick={onReject}>Từ chối</Btn>
+          <Btn className="sm" onClick={onRecheck}>Kiểm tra lại</Btn>
         </div>
       </div>
     </div>
   );
 }
 
-function ReasonDialog({ item, decision, onClose, onSubmit }: { item: ScanQueueItem; decision: 'approve' | 'reject'; onClose: () => void; onSubmit: (note: string) => Promise<boolean> }) {
+function ReasonDialog({ item, decision, onClose, onSubmit }: { item: ScanQueueItem; decision: 'approve' | 'reject'; onClose: () => void; onSubmit: (note: string, both: boolean) => Promise<boolean> }) {
   const [note, setNote] = useState('');
+  const [both, setBoth] = useState(true);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const title = decision === 'approve' ? 'Duyệt creative (xác nhận an toàn)' : 'Từ chối creative';
   return (
-    <Dialog open onClose={onClose} width="min(480px,96vw)" label={title}>
+    <Dialog open onClose={onClose} size="sm" label={title}>
       <form onSubmit={async (e) => {
         e.preventDefault();
         if (note.trim().length < MIN_NOTE) return setErr(`Nhập lý do (tối thiểu ${MIN_NOTE} ký tự).`);
         setErr(''); setBusy(true);
-        const ok = await onSubmit(note.trim());
+        const ok = await onSubmit(note.trim(), both);
         setBusy(false);
         if (ok) onClose();
       }}>
         <h2 style={{ margin: '0 0 6px', fontSize: 18 }}>{title}</h2>
         <p className="sub" style={{ margin: '0 0 10px' }}>{item.name ?? item.id} · phiên bản nội dung v{item.content_version}</p>
         <Field label={decision === 'approve' ? 'Lý do duyệt (ghi vào nhật ký)' : 'Lý do từ chối (ghi vào nhật ký)'}><textarea value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></Field>
+        {decision === 'approve' ? (
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 10, fontSize: 13 }}>
+            <input type="checkbox" checked={both} onChange={(e) => setBoth(e.target.checked)} style={{ marginTop: 3 }} />
+            <span>Đồng thời duyệt nội dung quảng cáo (dùng được ngay cho chiến dịch). Bỏ chọn nếu chỉ xác nhận an toàn.</span>
+          </label>
+        ) : null}
         {err ? <p role="alert" style={{ color: 'var(--bad)', margin: '8px 0 0' }}>{err}</p> : null}
         <div className="da" style={{ marginTop: 14 }}>
           <button type="button" className="btn" onClick={onClose}>Hủy</button>

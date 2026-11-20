@@ -57,6 +57,17 @@ export class S3ObjectStore implements ObjectStore {
       throw e;
     }
   }
+  async getRange(key: string, offset: number, length: number) {
+    if (length <= 0) return new Uint8Array(0);
+    const { s3, client } = await this.load();
+    try {
+      const r = await client.send(new s3.GetObjectCommand({ Bucket: this.cfg.bucket, Key: key, Range: `bytes=${offset}-${offset + length - 1}` }));
+      return r.Body ? await r.Body.transformToByteArray() : null;
+    } catch (e) {
+      if (isNotFound(e)) return null;
+      throw e;
+    }
+  }
   async head(key: string) {
     const { s3, client } = await this.load();
     try {

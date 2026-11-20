@@ -218,6 +218,7 @@ describe('u1: Duyet creative', () => {
     await userEvent.click(within(card).getByRole('button', { name: 'Duyệt' }));
     const dlg = await screen.findByRole('dialog', { name: 'Duyệt creative (xác nhận an toàn)' });
     await userEvent.type(within(dlg).getByRole('textbox'), 'da xem tay');
+    await userEvent.click(within(dlg).getByRole('checkbox')); // bo chon "duyet luon noi dung": chi xac nhan an toan (scan-review)
     await userEvent.click(within(dlg).getByRole('button', { name: 'Xác nhận duyệt' }));
     await waitFor(() => expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ decision: 'approve', note: 'da xem tay', content_version: 3 }));
     expect(await screen.findByText(/Nội dung tệp đã thay đổi/)).toBeInTheDocument();

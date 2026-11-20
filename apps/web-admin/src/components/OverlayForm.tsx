@@ -43,7 +43,7 @@ export function overlayError(d: OverlayDraft): string | null {
 export function OverlayForm({ value, onChange }: { value: OverlayDraft; onChange: (v: OverlayDraft) => void }) {
   const set = (k: keyof OverlayDraft, v: string) => onChange({ ...value, [k]: v });
   return (
-    <fieldset style={{ border: '1px solid var(--line, #e5e7eb)', borderRadius: 12, padding: 12, marginTop: 12 }}>
+    <fieldset className="fs2" style={{ border: '1px solid var(--line, #e5e7eb)', borderRadius: 12, padding: 12, marginTop: 12 }}>
       <legend style={{ fontSize: 13, color: 'var(--mut)', padding: '0 6px' }}>Định dạng và lớp phủ trên TV (tùy chọn)</legend>
       <Field label="Định dạng quảng cáo">
         <select value={value.format} onChange={(e) => set('format', e.target.value)} aria-label="Định dạng quảng cáo">

@@ -125,7 +125,7 @@ function NewSlot({ open, onClose }: { open: boolean; onClose: () => void }) {
   const camps = useQuery({ queryKey: ['/admin/v1/campaigns', 'pick-active'], enabled: open, queryFn: () => api.get('/admin/v1/campaigns', { query: { page_size: 100 }, schema: listOf(campaignSchema) }) });
   const toMin = (s: string) => { const [h, m] = s.split(':').map(Number); return (h ?? 0) * 60 + (m ?? 0); };
   return (
-    <Dialog open={open} onClose={onClose} label="Tạo lịch phát">
+    <Dialog open={open} onClose={onClose} size="lg" label="Tạo lịch phát">
       <form onSubmit={async (e) => { e.preventDefault(); const a = toMin(f.start), b = toMin(f.end); if (b <= a) return; const r = await act(() => api.post('/admin/v1/schedule', { body: { campaign_id: f.campaign_id, start_min: a, end_min: b } }), 'Đã tạo lịch phát.'); if (r !== undefined) onClose(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Tạo lịch phát</h2>
         <Field label="Chiến dịch"><select required value={f.campaign_id} onChange={(e) => setF({ ...f, campaign_id: e.target.value })}><option value="">—</option>{camps.data?.items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>

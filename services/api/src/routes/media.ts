@@ -8,21 +8,22 @@ import { eq, getRt, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { mediaScope } from '../lib/scope.js';
 import {
-  ALLOWED_MIME, DURATION_RANGE, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
+  ALLOWED_MIME, DURATION_RANGE, VIDEO_RULES, videoSpecProblem, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
 } from '../lib/creative.js';
 import { todayVn } from '../lib/dates.js';
 import { bumpManifest } from '../lib/manifest.js';
 import { enqueueMediaUploaded, runOutbox } from '../outbox.js';
 import { assertContentVersion, assertLockPolicy, bumpContentVersion, recordApproval, syncKidFlags } from '../lib/creative-security.js';
-import { mediaScanReviewRoutes } from './media-scan-review.js';
-import { UNSCANNED_STATES, allowUnscannedCreatives, assertScanOk } from './creatives-scan.js';
+import { NEEDS_MANUAL_REVIEW, mediaScanReviewRoutes } from './media-scan-review.js';
+import { UNSCANNED_STATES, allowUnscannedCreatives, assertScanOk, scanVerdict } from './creatives-scan.js';
+import { probeMp4, rangeReaderFor } from '../lib/mp4-probe.js';
 import { requirePerm } from '../auth/middleware.js';
 import { AD_FORMATS, isAdFormat, parseOverlay, sha256Hex, type CreativeOverlay } from '@ams/shared';
 import type { AppEnv, AuthUser } from '../types.js';
 
 const M_SELECT = `m.id, m.campaign_id, m.customer_id, m.name, m.target_type, m.px_w, m.px_h, m.kind, m.source, m.source_url, m.storage_key, m.mime, m.size_bytes, m.duration_s,
-  m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code, COALESCE(sec.content_version, 1) AS content_version`;
-const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id';
+  m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code, COALESCE(sec.content_version, 1) AS content_version, cv.detail AS scan_detail`;
+const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_validation cv ON cv.creative_id = m.id';
 
 interface MediaRow {
   id: string;
@@ -52,6 +53,7 @@ interface MediaRow {
   owner_name: string;
   customer_code: string;
   content_version: number;
+  scan_detail: string | null;
 }
 
 function overlayOf(raw: string | null | undefined): CreativeOverlay | null {
@@ -76,7 +78,36 @@ function checkFormatOverlay(format: string | undefined, overlay: unknown, extern
 }
 
 /** Tep <= 128 MB: bam SHA-256 luc xac nhan (manifest chi phat tep da xac minh). Lon hon: de null, gateway/transcoder bam sau. */
-const SHA_MAX_BYTES = 128 * MB;
+const SHA_MAX_BYTES = 32 * MB;
+/** Gioi han ghi trong docs/CLOUDFLARE-MEDIA-LIMITS.md: tep > ngay tren khong bi doc vao bo nho Worker (128 MB) o buoc confirm. */
+export const SHA_INLINE_MAX_BYTES = SHA_MAX_BYTES;
+
+/** Vi sao tep chua duyet duoc + nguoi dung lam gi tiep (UI hien thi cho moi trang thai khong the duyet). */
+export interface Blocker {
+  code: string;
+  message: string;
+  /** confirm: xac nhan lai tai len | recheck: kiem tra lai tu dong | manual_review: nguoi co quyen xem va duyet tay | reupload: tai lai tep | wait: cho | none */
+  action: 'confirm' | 'recheck' | 'manual_review' | 'reupload' | 'wait' | 'none';
+}
+export function blockerOf(m: Pick<MediaRow, 'state' | 'review_state' | 'scan_state' | 'source'>): Blocker | null {
+  if (m.review_state === 'approved') return null;
+  if (m.state === 'uploading') return { code: 'upload_incomplete', message: 'Tệp chưa tải xong hoặc chưa được xác nhận. Bấm "Xác nhận lại" sau khi tệp đã tải lên; nếu vẫn lỗi, hãy tải lại tệp.', action: 'confirm' };
+  if (m.state === 'invalid') return { code: 'invalid', message: 'Tệp không hợp lệ (đã bị từ chối khi xác nhận). Hãy tải lại tệp đúng định dạng.', action: 'reupload' };
+  if (m.review_state === 'rejected' || m.review_state === 'returned' || m.state === 'rejected') return { code: 'rejected', message: 'Tệp đã bị trả lại. Chỉnh sửa và tải lại tệp mới.', action: 'reupload' };
+  const v = scanVerdict(m, false);
+  if (v.ok) return null;
+  const action = v.code === 'creative_needs_manual_review' ? 'manual_review' : v.code === 'creative_scan_pending' || v.code === 'creative_not_scanned' ? 'recheck' : v.code === 'creative_link_not_ingested' ? 'none' : 'reupload';
+  return { code: v.code!, message: v.message!, action };
+}
+function reasonsOf(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const r = (JSON.parse(raw) as { reasons?: unknown }).reasons;
+    return Array.isArray(r) ? r.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 const statusOf = (m: Pick<MediaRow, 'state' | 'review_state'>): string => (m.state === 'uploading' ? 'processing' : m.review_state === 'returned' ? 'rejected' : m.review_state);
 
@@ -100,6 +131,8 @@ export const present = (m: MediaRow): Record<string, unknown> => ({
   campaign_id: m.campaign_id,
   target_type: apiTarget(m.target_type),
   scan_state: m.scan_state,
+  scan_reasons: reasonsOf(m.scan_detail),
+  blocker: blockerOf(m),
   scan_warning: (UNSCANNED_STATES as readonly string[]).includes(m.scan_state) ? 'Chưa quét mã độc' : m.scan_state === 'needs_manual_review' ? 'Chờ kiểm tra thủ công (không có quét mã độc)' : null,
   format: isAdFormat(m.format) ? m.format : 'fullscreen',
   overlay: overlayOf(m.overlay),
@@ -236,7 +269,11 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       const fit = fitsTarget(target, b.width, b.height, { knownLed: led });
       if (!fit.ok) throw unprocessable(fit.message, 'creative_size_mismatch');
     }
-    const limit = sizeLimitBytes(target ?? 'tv', extQuotaMb);
+    if (isVideoMime(mime)) {
+      const vp = videoSpecProblem({ w: b.width, h: b.height });
+      if (vp) throw unprocessable(vp.message, vp.code);
+    }
+    const limit = Math.min(sizeLimitBytes(target ?? 'tv', extQuotaMb), isVideoMime(mime) ? VIDEO_RULES.maxBytes : Infinity);
     if (b.size_bytes > limit) throw unprocessable(`Tệp ${(b.size_bytes / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB${target ? ` cho loại màn này` : ''}.`, 'file_too_large', { limit_bytes: limit });
     const dur = target ? DURATION_RANGE[target] : undefined;
     if (dur && b.duration_sec !== undefined && isVideoMime(mime) && (b.duration_sec < dur[0] || b.duration_sec > dur[1])) {
@@ -294,7 +331,24 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
         h = px!.h;
       }
     }
-    if (!w || !h) throw unprocessable('Chưa đọc được kích thước tệp. Hãy gửi width/height khi xác nhận.', 'dimensions_required');
+    let probedDuration: number | undefined;
+    let specProblem: { code: string; message: string } | null = null;
+    if (declared === 'video/mp4') {
+      // doc header MP4 (range read, khong doc ca tep): dung thoi luong/kich thuoc doc tu chinh tep, khong tin khai bao cua client
+      try {
+        const p = await probeMp4(rangeReaderFor(rt.objects, m.storage_key), head.size);
+        if (p.recognized && p.w && p.h) {
+          w = p.w;
+          h = p.h;
+        }
+        if (p.recognized && p.durationS !== null && p.durationS > 0) probedDuration = p.durationS;
+        if (p.recognized) specProblem = videoSpecProblem({ w: p.w, h: p.h, codec: p.videoCodec });
+      } catch (e) {
+        console.error('[media] doc header mp4 loi:', (e as Error).name);
+      }
+    }
+    if (specProblem) await reject(specProblem.code, specProblem.message); // codec/độ phân giải TV không phát được: từ chối ngay, xóa tệp
+    if (!w || !h) throw unprocessable('Chưa đọc được kích thước video. Hãy dùng tệp MP4 (H.264) chuẩn hoặc gửi width/height khi xác nhận.', 'dimensions_required');
 
     const led = await knownLedPx(rt);
     const target: TargetType | null = m.target_type ? dbTarget(m.target_type) : inferTarget(w, h, led);
@@ -302,10 +356,10 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const fit = fitsTarget(target!, w, h, { knownLed: led });
     if (!fit.ok) await reject('creative_size_mismatch', fit.message);
     const quota = await quotaOf(rt, m.customer_id);
-    const limit = sizeLimitBytes(target!, c.get('user').kind === 'internal' ? null : quota.max_mb_per_file);
+    const limit = Math.min(sizeLimitBytes(target!, c.get('user').kind === 'internal' ? null : quota.max_mb_per_file), declared.startsWith('video/') ? VIDEO_RULES.maxBytes : Infinity);
     if (head.size > limit) await reject('file_too_large', `Tệp ${(head.size / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB cho loại màn này.`);
     const dur = DURATION_RANGE[target!];
-    const durationSec = b.duration_sec ?? (m.duration_s === null ? undefined : num(m.duration_s));
+    const durationSec = probedDuration ?? b.duration_sec ?? (m.duration_s === null ? undefined : num(m.duration_s));
     if (dur && durationSec !== undefined && declared.startsWith('video/') && (durationSec < dur[0] || durationSec > dur[1])) {
       await reject('duration_out_of_range', `Thời lượng phải từ ${dur[0]} đến ${dur[1]} giây cho loại màn này.`);
     }
@@ -367,6 +421,29 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     return c.json(present(await loadMedia(c, id)), 201);
   });
 
+  // Kiem tra lai tu dong (tep 'pending' bi ket do mat tin nhan/queue, hoac 'needs_manual_review' muon chay lai kiem tra): dat lai 'pending' + day lai viec quet.
+  // Khong bao gio ghi 'clean' o day: chi bo quet (media-worker/ClamAV tren VPS, validator tren Cloudflare) moi quyet dinh.
+  r.post('/:id/recheck', requirePerm('media', 'write'), async (c) => {
+    const rt = getRt(c);
+    const m = await loadMedia(c, c.req.param('id'));
+    if (m.source !== 'upload' || !m.storage_key) throw conflict('Tệp lấy từ liên kết không kiểm tra lại được.', 'invalid_state');
+    if (m.state === 'uploading') throw conflict('Tệp chưa được xác nhận tải lên. Hãy xác nhận lại trước.', 'invalid_state');
+    if (m.state === 'invalid' || m.review_state === 'approved') throw conflict('Tệp ở trạng thái này không cần kiểm tra lại.', 'invalid_state');
+    if (!['pending', NEEDS_MANUAL_REVIEW, 'unscanned', 'skipped'].includes(m.scan_state)) throw conflict('Tệp đã có kết quả quét cuối cùng, không kiểm tra lại được.', 'invalid_state', { scan_state: m.scan_state });
+    await rt.db.tx(async (db) => {
+      await db.run("UPDATE creatives SET scan_state = 'pending' WHERE id = ? AND scan_state IN ('pending','needs_manual_review','unscanned','skipped')", [m.id]);
+      await db.run("DELETE FROM outbox WHERE dedupe_key = ? AND status <> 'pending'", [`media.uploaded:${m.id}`]); // cho phep dat viec moi (khoa khu trung)
+      await enqueueMediaUploaded(db, rt, m.id);
+      await auditCtx(c, db, { action: 'media.recheck', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { scan_state: { from: m.scan_state, to: 'pending' } } });
+    });
+    try {
+      await runOutbox(rt, c.get('finance'));
+    } catch (e) {
+      console.error('[media] xu ly outbox loi:', (e as Error).name);
+    }
+    return c.json(present(await loadMedia(c, m.id)));
+  });
+
   // Doi dinh dang/lop phu. Khach sua tep da duyet => quay lai cho duyet (QR/hotline la noi dung nhay cam); noi bo giu nguyen trang thai.
   r.put('/:id/overlay', requirePerm('media', 'write'), async (c) => {
     const rt = getRt(c);
@@ -400,11 +477,14 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
 
   r.post('/:id/approve', requirePerm('media', 'approve'), async (c) => {
     const rt = getRt(c);
+    const u = c.get('user');
     const m = await loadMedia(c, c.req.param('id'));
-    const body = await parseBody(c, z.object({ content_version: z.coerce.number().int().min(1).optional() }));
+    const body = await parseBody(c, z.object({ content_version: z.coerce.number().int().min(1).optional(), manual_review_note: z.string().trim().min(3, 'Nhập ghi chú kiểm tra thủ công (tối thiểu 3 ký tự)').max(500).optional() }));
     if (m.state === 'uploading' || m.state === 'invalid') throw conflict('Tệp chưa tải xong hoặc không hợp lệ.', 'invalid_state');
     if (m.review_state === 'approved') return c.json(present(m));
-    assertScanOk(m, await allowUnscannedCreatives(rt), { creative_id: m.id, scan_state: m.scan_state });
+    // Cloudflare (khong co ClamAV): nguoi co quyen media:approve xem tep roi duyet MOT BUOC; ghi chu bat buoc, ghi audit + creative_validation.engine='manual'.
+    const manual = m.scan_state === NEEDS_MANUAL_REVIEW && body.manual_review_note !== undefined;
+    assertScanOk(manual ? { ...m, scan_state: 'clean' } : m, await allowUnscannedCreatives(rt), { creative_id: m.id, scan_state: m.scan_state });
     await assertContentVersion(rt.db, m.id, body.content_version); // R1-14: nguoi duyet phai duyet dung phien ban da xem
     await assertLockPolicy(rt.db, m.overlay, { creative_id: m.id }); // chinh sach tre em: man khoa tat thi khong duyet creative co ngu canh 'lock'
     const nowIso = rt.clock.now().toISOString();
@@ -413,7 +493,17 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       const cur = (await db.query<{ sha256: string | null; storage_key: string | null; size_bytes: unknown; source_url: string | null; format: string | null; overlay: string | null }>('SELECT sha256, storage_key, size_bytes, source_url, format, overlay FROM creatives WHERE id = ?', [m.id]))[0];
       if (!cur || cur.overlay !== m.overlay || cur.format !== m.format || cur.sha256 !== m.sha256) throw conflict('Nội dung tệp vừa thay đổi, hãy tải lại và xem lại trước khi duyệt.', 'content_changed');
       await assertContentVersion(db, m.id, body.content_version);
-      const res = await db.run("UPDATE creatives SET review_state = 'approved', review_note = NULL, state = 'ready' WHERE id = ? AND state NOT IN ('uploading','invalid') AND scan_state = ?", [m.id, m.scan_state]);
+      if (manual) {
+        const mr = await db.run("UPDATE creatives SET scan_state = 'clean' WHERE id = ? AND scan_state = ?", [m.id, NEEDS_MANUAL_REVIEW]);
+        if (mr.changes === 0) throw conflict('Tệp vừa được người khác xử lý.', 'invalid_state');
+        await db.run(
+          `INSERT INTO creative_validation (creative_id, engine, verdict, detail, sha256, checked_at) VALUES (?,?,?,?,NULL,?)
+           ON CONFLICT (creative_id) DO UPDATE SET engine = excluded.engine, verdict = excluded.verdict, detail = excluded.detail, checked_at = excluded.checked_at`,
+          [m.id, 'manual', 'clean', JSON.stringify({ by: u.id, note: body.manual_review_note, previous: m.scan_detail }), nowIso],
+        );
+        await auditCtx(c, db, { action: 'media.scan_review.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { content_version: body.content_version ?? null, scan_state: { from: NEEDS_MANUAL_REVIEW, to: 'clean' }, note: body.manual_review_note, via: 'media.approve' } });
+      }
+      const res = await db.run("UPDATE creatives SET review_state = 'approved', review_note = NULL, state = 'ready' WHERE id = ? AND state NOT IN ('uploading','invalid') AND scan_state = ?", [m.id, manual ? 'clean' : m.scan_state]);
       if (res.changes === 0) throw conflict('Tệp vừa đổi trạng thái.', 'invalid_state');
       const ap = await recordApproval(db, { id: m.id, ...cur }, nowIso);
       await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'approved' }, scan_state: m.scan_state, content_version: ap.version, content_hash: ap.hash, version_bound: body.content_version !== undefined } });

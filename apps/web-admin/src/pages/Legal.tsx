@@ -82,7 +82,7 @@ function DocDialog({ id, canWrite, onClose }: { id: string | null; canWrite: boo
   };
   const set = (p: Partial<NonNullable<typeof cur>>) => cur && setF({ ...cur, ...p });
   return (
-    <Dialog open onClose={onClose} width="min(760px,96vw)" label="Văn bản pháp lý">
+    <Dialog open onClose={onClose} size="xl" label="Văn bản pháp lý">
       <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>{id ? 'Văn bản pháp lý' : 'Tạo phiên bản văn bản'}</h2>
         {id && q.isLoading ? <LoadingBlock /> : null}
@@ -131,7 +131,7 @@ function PublishDialog({ doc, onClose }: { doc: Row; onClose: () => void }) {
     }
   };
   return (
-    <Dialog open onClose={onClose} width="min(560px,96vw)" label="Phát hành văn bản">
+    <Dialog open onClose={onClose} size="md" label="Phát hành văn bản">
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Phát hành {LEGAL_KIND_LABEL[s(doc.kind)] ?? s(doc.kind)} · {s(doc.version)}</h2>
         <Note warn>Phát hành sẽ bắt buộc mọi tài khoản khách hàng bên ngoài đọc và chấp nhận trước khi dùng tiếp. Bản đang phát hành cùng loại sẽ được gỡ.</Note>

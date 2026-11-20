@@ -32,6 +32,14 @@ describe.each(factories)('ObjectStore contract: %s', (_n, make) => {
     await s.put('media/c1/a.png', new Uint8Array([9]), 'image/jpeg');
     expect(await s.head('media/c1/a.png')).toEqual({ size: 1, contentType: 'image/jpeg' });
   });
+  it('getRange doc dung doan [offset, offset+length), cat o cuoi tep, khoa khong co tra null', async () => {
+    const s = await make();
+    await s.put('k/r.bin', new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), 'application/octet-stream');
+    expect(Array.from((await s.getRange!('k/r.bin', 2, 3))!)).toEqual([2, 3, 4]);
+    expect(Array.from((await s.getRange!('k/r.bin', 8, 16))!)).toEqual([8, 9]);
+    expect((await s.getRange!('k/r.bin', 0, 0))!.length).toBe(0);
+    expect(await s.getRange!('k/none.bin', 0, 4)).toBeNull();
+  });
   it('get tra ban sao: sua ket qua khong doi du lieu da luu', async () => {
     const s = await make();
     await s.put('k/x.bin', new Uint8Array([5, 5]), 'application/octet-stream');
