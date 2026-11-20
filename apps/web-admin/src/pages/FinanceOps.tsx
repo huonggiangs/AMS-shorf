@@ -61,7 +61,7 @@ function ResolveDialog({ item, onClose, onDone }: { item: ManualItem | null; onC
   if (!item) return null;
   const needCustomer = !item.topup_id;
   return (
-    <Dialog open onClose={onClose} label="Xử lý giao dịch">
+    <Dialog open onClose={onClose} size="md" label="Xử lý giao dịch">
       <form onSubmit={(e) => { e.preventDefault(); void onDone(item, cid).then(onClose); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Xử lý giao dịch {vnd(item.amount_vnd)}</h2>
         <p style={{ color: 'var(--mut)', fontSize: 13 }}>{item.content}</p>

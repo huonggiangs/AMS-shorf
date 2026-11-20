@@ -123,7 +123,7 @@ function ConfigDialog({ item, canApprove, onClose, onSave }: { item: Creative | 
     }
   };
   return (
-    <Dialog open onClose={() => { setSeen(null); onClose(); }} label="Cấu hình hiển thị trên TV" width="min(480px, 94vw)">
+    <Dialog open onClose={() => { setSeen(null); onClose(); }} label="Cấu hình hiển thị trên TV" size="lg">
       <h2>{item.name ?? item.id}</h2>
       <Field label="Thời lượng hiển thị (5–60 giây)"><input type="number" min={5} max={60} value={dur} onChange={(e) => setDur(e.target.value)} /></Field>
       <Field label="Nơi hiển thị">

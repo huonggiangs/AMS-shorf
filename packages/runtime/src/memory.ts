@@ -148,6 +148,10 @@ export class MemoryObjectStore implements ObjectStore {
   async get(key: string) {
     return this.m.get(key)?.body.slice() ?? null;
   }
+  async getRange(key: string, offset: number, length: number) {
+    const e = this.m.get(key);
+    return e ? e.body.slice(offset, offset + length) : null;
+  }
   async head(key: string) {
     const e = this.m.get(key);
     return e ? { size: e.body.length, contentType: e.contentType } : null;

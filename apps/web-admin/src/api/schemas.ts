@@ -190,6 +190,12 @@ export const mediaSchema = z
     format: z.string().nullish(), // fullscreen | menu_banner | l_banner | pause_ad | qr_corner | reward
     sha256: z.string().nullish(),
     overlay: z.unknown().optional(),
+    scan_state: z.string().nullish(),
+    scan_reasons: z.array(z.string()).default([]),
+    content_version: z.coerce.number().default(1),
+    preview_url: z.string().nullish(),
+    /** vì sao chưa duyệt được + việc cần làm (confirm | recheck | manual_review | reupload | wait | none) */
+    blocker: z.object({ code: z.string(), message: z.string(), action: z.string() }).nullish(),
   })
   .passthrough();
 export type Media = z.infer<typeof mediaSchema>;

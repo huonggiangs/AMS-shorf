@@ -22,6 +22,37 @@ Worker không chạy được `ffmpeg` hay `clamd` (xem `docs/DEPLOY-CLOUDFLARE.
 ## Cấu hình
 `CF_VALIDATOR_MARK_CLEAN=0`: không bao giờ tự ghi `clean`, mọi tệp vào hàng chờ duyệt tay. Mặc định bật. Biến `allow_unscanned_creatives` giữ nguyên nghĩa (không khuyến nghị cho khách trả tiền).
 
+## Giới hạn tải lên (video quảng cáo cho TV) — w-web
+Nguyên nhân gốc báo cáo "đã upload nhưng không duyệt được" (tệp thật `JOURNEY TO VIETNAM ... .mp4`: 202 MB, 232,5 s, **AV1 4K 3840x2160**, HE-AAC):
+1. Tệp video thật vượt mọi cổng tự động trên Cloudflare (> 48 MB không đọc vào bộ nhớ Worker; không có ffmpeg để chuyển mã) nên vào `needs_manual_review`; thẻ ở "Nội dung & Media" vẫn hiện nút **Duyệt** và bấm vào chỉ báo lỗi chung (422 `creative_needs_manual_review`), trong khi hàng chờ "Duyệt creative" là trang khác và duyệt xong còn phải duyệt nội dung lần nữa ở trang Media.
+2. Với tệp 32-128 MB, `confirm` đọc cả tệp vào bộ nhớ Worker (128 MB) để băm sha256 rồi chép sang khóa mới: có thể hết bộ nhớ, tệp kẹt ở `uploading`.
+3. Không có kiểm tra codec: AV1/H.265 4K TV box không phát được, và Cloudflare không chuyển mã được.
+
+Quy tắc đã mã hóa (`services/api/src/lib/creative.ts`: `VIDEO_RULES`, `DURATION_RANGE`; kiểm tra sớm ở `POST /media/upload-url`, đọc header MP4 ở `POST /media/:id/confirm`, validator `cf-creative-validate.ts`):
+
+| | Quy tắc | Lỗi (mã) |
+|---|---|---|
+| Codec hình | H.264 (`avc1`/`avc3`) + AAC. AV1, H.265, VP9... bị từ chối, tệp bị xóa khỏi kho | 422 `unsupported_codec` |
+| Độ phân giải video | cạnh dài <= 1920, cạnh ngắn <= 1080 (Full HD) | 422 `video_resolution_too_high` |
+| Dung lượng video | <= 100 MB (mọi loại màn); thang máy <= 30 MB, LED <= 50 MB; khách còn hạn mức tài khoản (mặc định 30 MB/tệp) | 422 `file_too_large` |
+| Thời lượng | TV 5-60 s, thang máy 10-30 s, LED 5-15 s | 422 `duration_out_of_range` |
+| Ảnh | PNG/JPG <= 500 MB (TV) | |
+| Định dạng | MP4 (khuyến nghị), MOV, WebM, PNG, JPG; magic bytes + MIME + kích thước thật | |
+
+Khuyến nghị xuất video: H.264 High, 1920x1080, 24-30 fps, 6-10 Mbps, AAC 128 kbps, `-movflags +faststart`, 15-60 s (ffmpeg: `ffmpeg -i in.mp4 -vf scale=1920:-2 -c:v libx264 -crf 23 -c:a aac -b:a 128k -movflags +faststart out.mp4`).
+
+**Tải lên đi thẳng lên R2** bằng URL ký trước (một PUT, tối đa 5 GiB theo R2): Worker không nhận thân tệp nên không vướng giới hạn 100 MB của request. Không cần multipart vì giới hạn nghiệp vụ (100 MB) thấp hơn nhiều. Điều kiện hạ tầng: bucket R2 phải bật **CORS** cho origin `https://ams.anio.vn` (method `PUT`, header `Content-Type`); thiếu CORS thì trình duyệt báo lỗi mạng và UI hiện hướng dẫn. URL ký hết hạn sau 15 phút.
+
+**Đọc header MP4** (`lib/mp4-probe.ts`, chạy trong Worker, không native): duyệt các box cấp cao bằng đọc đoạn nhỏ (`ObjectStore.getRange`, R2 range) bỏ qua `mdat`, đọc `moov` (<= 16 MB, ở đầu hoặc cuối tệp): `mvhd` (thời lượng), `tkhd` (rộng/cao), `stsd` (fourcc codec hình/tiếng). Dùng ở confirm (thay giá trị client khai báo) và cho tệp > 48 MB ở validator để người duyệt thấy thời lượng/kích thước thật.
+
+**Băm/chép tệp ở confirm**: chỉ tệp <= 32 MB (bộ nhớ Worker). Tệp lớn hơn để `sha256 = NULL`, giữ khóa tải lên; thiết bị đối chiếu khi tải.
+
+## Duyệt một bước và tự khắc phục
+- Mọi trạng thái chưa duyệt được hiện lý do + việc cần làm ở thẻ Media (`blocker.code/action` trong `GET /media`): `confirm` (Xác nhận lại), `recheck` (Kiểm tra lại), `manual_review` (Xem và duyệt), `reupload`, `none`.
+- `POST /admin/v1/media/:id/approve` nhận thêm `manual_review_note` (>= 3 ký tự): với tệp `needs_manual_review` thì xác nhận an toàn + duyệt nội dung trong MỘT giao dịch, ghi hai audit (`media.scan_review.approve`, `media.approve`), `creative_validation.engine='manual'`; vẫn gắn `content_version`. Không có ghi chú: vẫn bị chặn như cũ. Quét thật (`pending`, `unscanned`) không bao giờ bị bỏ qua bằng cách này.
+- `POST /admin|portal/v1/media/:id/recheck` (quyền `media:write`): đặt `pending` + ghi lại việc `media.uploaded` vào outbox; không bao giờ ghi `clean` (chỉ validator Cloudflare / media-worker VPS quyết định). Chỉ cho `pending`, `needs_manual_review`, `unscanned`, `skipped`.
+- UI "Duyệt creative" có ô "Đồng thời duyệt nội dung" (mặc định bật) và nút Kiểm tra lại.
+
 ## Còn thiếu so với đường VPS (media-worker + ClamAV)
 | | Cloudflare (đường này) | VPS: `services/media-worker` + ClamAV |
 |---|---|---|

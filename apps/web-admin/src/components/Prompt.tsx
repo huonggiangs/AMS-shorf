@@ -7,7 +7,7 @@ export function PromptDialog({ open, title, label, required = true, onClose, onS
   const t = useT();
   const [v, setV] = useState('');
   return (
-    <Dialog open={open} onClose={onClose} label={title}>
+    <Dialog open={open} onClose={onClose} size="sm" label={title}>
       <form onSubmit={async (e) => { e.preventDefault(); await onSubmit(v.trim()); setV(''); onClose(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>{title}</h2>
         <div className="fd" style={{ marginTop: 0 }}>

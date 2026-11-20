@@ -90,7 +90,7 @@ function NewInvoice({ open, onClose, onDone }: { open: boolean; onClose: () => v
   const amt = Number(amount);
   const ok = !!cid && /^\d{4}-(0[1-9]|1[0-2])$/.test(period) && Number.isInteger(amt) && amt > 0;
   return (
-    <Dialog open={open} onClose={onClose} label="Tạo hóa đơn VAT" width="min(440px, 94vw)">
+    <Dialog open={open} onClose={onClose} label="Tạo hóa đơn VAT" size="md">
       <h2>Tạo hóa đơn VAT (bản nháp)</h2>
       <Field label="Khách hàng">
         <select value={cid} onChange={(e) => setCid(e.target.value)}>

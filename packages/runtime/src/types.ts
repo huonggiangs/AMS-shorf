@@ -43,6 +43,8 @@ export interface ObjectStore {
   get(key: string): Promise<Uint8Array | null>;
   head(key: string): Promise<{ size: number; contentType: string } | null>;
   /** Tuy chon (adapter fs + bo nho): xoa khong loi neu khong co; liet ke theo tien to chuoi. */
+  /** Tuy chon: doc mot doan [offset, offset+length) (khong doc ca tep vao bo nho Worker). Tra ve toi da `length` byte; null neu khong co tep. */
+  getRange?(key: string, offset: number, length: number): Promise<Uint8Array | null>;
   delete?(key: string): Promise<void>;
   list?(prefix?: string, limit?: number): Promise<{ key: string; size: number }[]>;
 }

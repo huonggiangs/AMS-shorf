@@ -36,6 +36,11 @@ export class R2ObjectStore implements ObjectStore {
     const o = await this.bucket.get(key);
     return o ? new Uint8Array(await o.arrayBuffer()) : null;
   }
+  async getRange(key: string, offset: number, length: number) {
+    if (length <= 0) return new Uint8Array(0);
+    const o = await this.bucket.get(key, { range: { offset, length } });
+    return o ? new Uint8Array(await o.arrayBuffer()) : null;
+  }
   async head(key: string) {
     const o = await this.bucket.head(key);
     return o ? { size: o.size, contentType: o.httpMetadata?.contentType ?? 'application/octet-stream' } : null;

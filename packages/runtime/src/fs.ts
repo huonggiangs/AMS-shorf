@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { Clock, ObjectStore } from './types.js';
 
@@ -100,6 +100,26 @@ export class FsObjectStore implements ObjectStore {
       const st = await lstat(file);
       if (!st.isFile()) return null;
       return new Uint8Array(await readFile(file));
+    } catch (e) {
+      if (isMissing(e)) return null;
+      throw e;
+    }
+  }
+
+  async getRange(key: string, offset: number, length: number): Promise<Uint8Array | null> {
+    const file = this.path(key);
+    try {
+      await this.guardParent(file);
+      const st = await lstat(file);
+      if (!st.isFile()) return null;
+      const fh = await open(file, 'r');
+      try {
+        const buf = new Uint8Array(Math.max(0, Math.min(length, st.size - offset)));
+        const { bytesRead } = await fh.read(buf, 0, buf.length, offset);
+        return buf.subarray(0, bytesRead);
+      } finally {
+        await fh.close();
+      }
     } catch (e) {
       if (isMissing(e)) return null;
       throw e;

@@ -39,7 +39,7 @@ export function TopupDialog({ open, onClose, customers = [], fixed, bank, onSubm
     try { await (fn as (v: TopupSubmit & { content: string }) => unknown)({ customer_id: cust.id, amount_vnd: amount, method: label, content }); onClose(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
   return (
-    <Dialog open={open} onClose={onClose} width="min(800px,96vw)" label="Nạp tiền vào ví quảng cáo">
+    <Dialog open={open} onClose={onClose} size="lg" label="Nạp tiền vào ví quảng cáo">
       <form noValidate onSubmit={(e) => { e.preventDefault(); void submit(onSubmit as never, 'qr'); }} style={{ padding: '18px 22px' }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Nạp tiền vào ví quảng cáo</h2>
         <div className="tp-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)', gap: 18, alignItems: 'start' }}>

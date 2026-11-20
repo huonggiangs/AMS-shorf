@@ -82,7 +82,7 @@ function DsrDialog({ onClose }: { onClose: () => void }) {
     }
   };
   return (
-    <Dialog open onClose={onClose} width="min(520px,96vw)" label="Tạo yêu cầu chủ thể dữ liệu">
+    <Dialog open onClose={onClose} size="md" label="Tạo yêu cầu chủ thể dữ liệu">
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Tạo yêu cầu chủ thể dữ liệu</h2>
         <Field label="Loại yêu cầu"><select className="sel" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>{Object.entries(DSR_KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
@@ -182,7 +182,7 @@ function ConsentDialog({ onClose }: { onClose: () => void }) {
     }
   };
   return (
-    <Dialog open onClose={onClose} width="min(480px,96vw)" label="Ghi nhận đồng ý">
+    <Dialog open onClose={onClose} size="md" label="Ghi nhận đồng ý">
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Ghi nhận đồng ý / rút lại đồng ý</h2>
         <Field label="Loại chủ thể"><select className="sel" value={f.subject_type} onChange={(e) => setF({ ...f, subject_type: e.target.value })}>{Object.entries(SUBJECT_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>

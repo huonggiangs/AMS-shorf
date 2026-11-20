@@ -72,7 +72,7 @@ function RateCardDialog({ base, onClose }: { base: RateCard | null; onClose: () 
     if (r) onClose();
   };
   return (
-    <Dialog open onClose={onClose} width="min(520px,96vw)" label={base ? 'Đổi giá' : 'Thêm dòng giá'}>
+    <Dialog open onClose={onClose} size="md" label={base ? 'Đổi giá' : 'Thêm dòng giá'}>
       <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>{base ? 'Đổi giá (phiên bản mới)' : 'Thêm dòng giá'}</h2>
         {!base ? (

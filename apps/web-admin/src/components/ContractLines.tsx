@@ -118,7 +118,7 @@ function LineDialog({ contractId, line, term, onClose }: { contractId: string; l
     if (ok !== undefined) onClose();
   };
   return (
-    <Dialog open onClose={onClose} width="min(540px,96vw)" label={line ? 'Sửa dòng giá' : 'Thêm dòng giá'}>
+    <Dialog open onClose={onClose} size="md" label={line ? 'Sửa dòng giá' : 'Thêm dòng giá'}>
       <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>{line ? 'Sửa dòng giá' : 'Thêm dòng giá'}</h2>
         <div className="g g2" style={{ margin: 0 }}>

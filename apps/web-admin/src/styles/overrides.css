@@ -6,3 +6,35 @@ html,body{background:var(--bg,#F1F5F9)}
 .tvn .sr-skip:focus{left:8px!important;top:8px;z-index:100;background:var(--card);padding:8px 12px;border-radius:8px}
 .tvn .fd input[type=file]{padding:6px}
 .tvn pre{white-space:pre-wrap}
+
+/* ---- Popup (dialog/drawer) rộng hơn để giảm cuộn trang. sm 640 / md 960 / lg 1120 / xl 1280; màn hẹp: gần toàn chiều rộng, một cột. ---- */
+dialog.dlg.sm{width:min(640px,94vw)}
+dialog.dlg.md{width:min(960px,90vw)}
+dialog.dlg.lg{width:min(1120px,92vw)}
+dialog.dlg.xl{width:min(1280px,94vw)}
+dialog.dlg{max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain}
+dialog.dlg form{box-sizing:border-box;max-width:100%;flex:1 1 100%;min-width:0}
+dialog.dlg h2{margin-top:0}
+/* Biểu mẫu trong popup: 2 cột ở màn rộng; tiêu đề, ghi chú, nút, ô văn bản dài, tệp luôn chiếm cả hàng. */
+@media(min-width:860px){
+  dialog.dlg:not(.sm) form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:28px;align-items:start}
+  dialog.dlg:not(.sm) form>*{grid-column:1/-1;min-width:0}
+  dialog.dlg:not(.sm) form>.fd{grid-column:auto}
+  dialog.dlg:not(.sm) form>.fd:has(textarea,input[type=file],input[type=range],.rich),dialog.dlg:not(.sm) form>.fd.wide{grid-column:1/-1}
+  dialog.dlg.xl form>.g{column-gap:28px}
+}
+@media(max-width:600px){dialog.dlg [style*="grid-template-columns"]{grid-template-columns:minmax(0,1fr)!important}dialog.dlg input,dialog.dlg select,dialog.dlg textarea{max-width:100%;min-width:0}}
+@media(max-width:859px){dialog.dlg{max-width:96vw}dialog.dlg form{padding:18px}}
+.dlg-split{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:24px;align-items:start}
+@media(max-width:859px){.dlg-split{grid-template-columns:minmax(0,1fr)}}
+.dlg-split video,.dlg-split img{width:100%;max-height:60dvh;background:#000;border-radius:12px;object-fit:contain}
+/* Drawer chi tiết rộng hơn; cặp khóa/giá trị thành 2 cặp trên một hàng ở màn rộng */
+.drw>div{width:min(880px,94vw)}
+@media(min-width:900px){.drw .kv{grid-template-columns:150px minmax(0,1fr) 150px minmax(0,1fr)}}
+@media(max-width:560px){.drw>div{width:100vw}}
+@media(min-width:860px){
+  dialog.dlg:not(.sm) fieldset.fs2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:28px;align-items:start}
+  dialog.dlg:not(.sm) fieldset.fs2>div:not(.fd){grid-column:1/-1}
+  dialog.dlg:not(.sm) form .fd{margin:10px 0}
+  dialog.dlg:not(.sm) form>.g{margin-bottom:0;gap:0 28px}
+}

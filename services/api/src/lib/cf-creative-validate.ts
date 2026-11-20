@@ -3,6 +3,8 @@
 // -> 'needs_manual_review' (admin duyet/tu choi, co audit). Cong quet (chi creative 'clean' moi duoc phat) khong doi.
 import type { Runtime } from '@ams/runtime';
 import { sha256Hex } from '@ams/shared';
+import { probeMp4, rangeReaderFor } from './mp4-probe.js';
+import { videoSpecProblem } from './creative.js';
 
 export const CF_VALIDATOR_ENGINE = 'cf-validator-v1';
 export const MEDIA_TOPIC = 'media.uploaded';
@@ -214,6 +216,9 @@ export async function validateCreativeBytes(bytes: Uint8Array, d: Declared, limi
   else {
     const r = checkMp4(bytes, why);
     px = r.px;
+    const pr = await probeMp4(async (o, l) => bytes.subarray(o, o + l), bytes.length);
+    const vp = videoSpecProblem({ w: px?.w, h: px?.h, codec: pr.videoCodec });
+    if (vp) why.push(vp.code + (pr.videoCodec ? `:${pr.videoCodec.trim()}` : ''));
     if (r.durationS !== null) {
       facts.durationS = Math.round(r.durationS * 100) / 100;
       if (!(r.durationS > 0)) why.push('mp4_zero_duration');
@@ -235,7 +240,7 @@ interface Row {
   id: string; target_type: string | null; px_w: number | null; px_h: number | null; source: string; storage_key: string | null;
   mime: string | null; size_bytes: number | null; duration_s: number | null; scan_state: string; state: string;
 }
-const DURATION: Record<string, [number, number]> = { elevator: [10, 30], led_p5: [5, 15] };
+const DURATION: Record<string, [number, number]> = { tv: [5, 60], elevator: [10, 30], led_p5: [5, 15] };
 
 export interface CfValidatorOptions {
   limits?: Partial<CfLimits>;
@@ -269,6 +274,41 @@ export function createCfCreativeValidator(rt: Runtime, opts: CfValidatorOptions 
     return { outcome: state, reasons: v.reasons };
   }
 
+  /** Tep qua lon de doc vao bo nho: KHONG bao gio 'clean' tu dong, nhung neu la MP4 thi doc header bang range read de ghi thoi luong/kich thuoc that cho nguoi duyet. */
+  async function largeFileFacts(row: Row, size: number): Promise<{ reasons: string[]; facts: Facts }> {
+    const reasons = ['too_large_to_read_inline'];
+    const facts: Facts = { size };
+    if ((row.mime ?? '').toLowerCase().split(';')[0]!.trim() !== 'video/mp4') return { reasons, facts };
+    try {
+      const p = await probeMp4(rangeReaderFor(rt.objects, row.storage_key!), size);
+      if (!p.recognized) {
+        reasons.push(...p.reasons);
+        return { reasons, facts };
+      }
+      facts.kind = 'mp4';
+      reasons.push(...p.reasons);
+      const vp = videoSpecProblem({ w: p.w, h: p.h, codec: p.videoCodec });
+      if (vp) reasons.push(vp.code + (p.videoCodec ? `:${p.videoCodec.trim()}` : ''));
+      if (p.w && p.h) {
+        facts.w = p.w;
+        facts.h = p.h;
+        if (p.w > limits.maxDim || p.h > limits.maxDim) reasons.push('dimensions_out_of_range');
+        if (row.px_w && row.px_h && (p.w !== Number(row.px_w) || p.h !== Number(row.px_h))) reasons.push(`dimensions_mismatch:${p.w}x${p.h}!=${row.px_w}x${row.px_h}`);
+      }
+      if (p.durationS !== null) {
+        facts.durationS = Math.round(p.durationS * 100) / 100;
+        const range = row.target_type ? DURATION[row.target_type] : undefined;
+        if (!(p.durationS > 0)) reasons.push('mp4_zero_duration');
+        if (row.duration_s !== null && Math.abs(p.durationS - Number(row.duration_s)) > 1.5) reasons.push('duration_mismatch');
+        if (range && (p.durationS < range[0] - 0.5 || p.durationS > range[1] + 0.5)) reasons.push('duration_out_of_range');
+      }
+    } catch (e) {
+      log(`[cf-validate] doc header loi ${row.id}: ${(e as Error).message}`);
+      reasons.push('mp4_header_unreadable');
+    }
+    return { reasons, facts };
+  }
+
   async function process(id: string): Promise<CfOutcome> {
     const row = (await rt.db.query<Row>('SELECT id, target_type, px_w, px_h, source, storage_key, mime, size_bytes, duration_s, scan_state, state FROM creatives WHERE id = ?', [id]))[0];
     if (!row) return { outcome: 'skipped', reason: 'khong co creative' };
@@ -277,7 +317,7 @@ export function createCfCreativeValidator(rt: Runtime, opts: CfValidatorOptions 
     if (row.state === 'uploading') return { outcome: 'deferred', reason: 'chua confirm' };
     const head = await rt.objects.head(row.storage_key);
     if (!head) return { outcome: 'deferred', reason: 'chua thay tep tren kho' };
-    if (head.size > limits.maxReadBytes) return finish(row, 'needs_manual_review', { reasons: ['too_large_to_read_inline'], facts: { size: head.size } });
+    if (head.size > limits.maxReadBytes) return finish(row, 'needs_manual_review', await largeFileFacts(row, head.size));
     const bytes = await rt.objects.get(row.storage_key);
     if (!bytes) return { outcome: 'deferred', reason: 'khong doc duoc tep' };
     const v = await validateCreativeBytes(

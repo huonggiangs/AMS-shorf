@@ -192,7 +192,7 @@ export function CampaignForm({ open, onClose }: { open: boolean; onClose: () => 
   };
 
   return (
-    <Dialog open={open} onClose={onClose} width="min(560px,96vw)" label="Tạo chiến dịch">
+    <Dialog open={open} onClose={onClose} size="xl" label="Tạo chiến dịch">
       <form onSubmit={(e) => { e.preventDefault(); void submit(true); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Tạo chiến dịch mới</h2>
         <Field label="Tên chiến dịch"><input value={f.name} onChange={(e) => set('name', e.target.value)} required /></Field>

@@ -18,7 +18,26 @@ export const GB = 1024 * MB;
 /** Gioi han dung luong tep toi da theo loai man hinh (MB). */
 export const SIZE_LIMIT_MB: Record<TargetType, number> = { tv: 500, elevator: 30, led_p5: 50 };
 /** Thoi luong cho phep (giay), neu biet. */
-export const DURATION_RANGE: Partial<Record<TargetType, [number, number]>> = { elevator: [10, 30], led_p5: [5, 15] };
+export const DURATION_RANGE: Partial<Record<TargetType, [number, number]>> = { tv: [5, 60], elevator: [10, 30], led_p5: [5, 15] };
+
+/**
+ * Quy tac VIDEO quang cao (Cloudflare khong co ffmpeg => khong chuyen ma duoc; TV phai phat truc tiep tep tai len):
+ * H.264 (avc1/avc3) + AAC, canh dai <= 1920 va canh ngan <= 1080 (Full HD), toi da 100 MB/tep.
+ * AV1/H.265/VP9 4K khong phat duoc tren da so TV box => tu choi som voi thong bao ro.
+ */
+export const VIDEO_RULES = { maxBytes: 100 * MB, maxLongSide: 1920, maxShortSide: 1080, codecs: ['avc1', 'avc3'] as readonly string[] };
+const CODEC_NAME: Record<string, string> = { av01: 'AV1', hvc1: 'H.265/HEVC', hev1: 'H.265/HEVC', vp09: 'VP9', vp08: 'VP8', mp4v: 'MPEG-4 Part 2', avc1: 'H.264', avc3: 'H.264' };
+export const codecLabel = (fcc: string): string => CODEC_NAME[fcc] ?? fcc.trim();
+/** Tra thong bao loi tieng Viet neu video khong dat quy tac; null neu dat. */
+export function videoSpecProblem(p: { w?: number | null; h?: number | null; codec?: string | null }): { code: string; message: string } | null {
+  if (p.codec && !VIDEO_RULES.codecs.includes(p.codec)) {
+    return { code: 'unsupported_codec', message: `Video dùng codec ${codecLabel(p.codec)} mà TV không phát được ổn định. Hãy xuất lại video H.264 (AVC) + AAC, tối đa 1920×1080, rồi tải lên.` };
+  }
+  if (p.w && p.h && (Math.max(p.w, p.h) > VIDEO_RULES.maxLongSide || Math.min(p.w, p.h) > VIDEO_RULES.maxShortSide)) {
+    return { code: 'video_resolution_too_high', message: `Video ${p.w}×${p.h} vượt độ phân giải tối đa ${VIDEO_RULES.maxLongSide}×${VIDEO_RULES.maxShortSide} (Full HD). Hãy xuất lại ở 1080p (H.264) rồi tải lên.` };
+  }
+  return null;
+}
 
 export const ALLOWED_MIME = ['video/mp4', 'video/quicktime', 'video/webm', 'image/png', 'image/jpeg'] as const;
 export const isVideoMime = (m: string) => m.startsWith('video/');

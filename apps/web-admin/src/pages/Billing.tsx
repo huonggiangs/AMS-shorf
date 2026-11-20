@@ -197,7 +197,7 @@ function DocDialog({ kind, doc, onClose }: { kind: 'confirm' | 'adjust'; doc: Ro
     }
   };
   return (
-    <Dialog open onClose={onClose} width="min(480px,96vw)" label={kind === 'confirm' ? 'Nhập số hóa đơn' : 'Điều chỉnh hóa đơn'}>
+    <Dialog open onClose={onClose} size="sm" label={kind === 'confirm' ? 'Nhập số hóa đơn' : 'Điều chỉnh hóa đơn'}>
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>{kind === 'confirm' ? 'Nhập số hóa đơn đã phát hành' : 'Tạo hóa đơn điều chỉnh (hoàn tiền)'}</h2>
         {kind === 'adjust' ? (

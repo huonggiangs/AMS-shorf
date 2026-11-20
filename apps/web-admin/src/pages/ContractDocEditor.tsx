@@ -243,7 +243,7 @@ function FinalizeDialog({ doc, onClose }: { doc: DocDetail; onClose: () => void 
     }
   };
   return (
-    <Dialog open onClose={onClose} width="min(560px,96vw)" label="Chốt bản ký">
+    <Dialog open onClose={onClose} size="md" label="Chốt bản ký">
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Chốt bản ký phiên bản {doc.version}</h2>
         <Note warn>Sau khi chốt, nội dung bị khóa và dấu vân tay SHA-256 được ghi vào nhật ký. Muốn đổi phải tạo phiên bản mới. Mẫu phải đã được luật sư duyệt.</Note>
@@ -319,7 +319,7 @@ function ApproveDialog({ tpl, onClose }: { tpl: Row; onClose: () => void }) {
     }
   };
   return (
-    <Dialog open onClose={onClose} width="min(560px,96vw)" label="Duyệt mẫu hợp đồng">
+    <Dialog open onClose={onClose} size="md" label="Duyệt mẫu hợp đồng">
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Duyệt mẫu {s(tpl.name)} · v{s(tpl.version)}</h2>
         {problems.length ? <Note warn>Mẫu còn dấu hiệu bản nháp ({problems.join('; ')}). Nên để luật sư hoàn thiện trước.</Note> : null}
