@@ -7,7 +7,7 @@ import type { Db, Runtime } from '@ams/runtime';
 import { decryptField, encryptField, fromBase64Url, fromUtf8, hmacSha256Hex, sha256Hex, timingSafeEqualStr, toBase64Url, utf8 } from '@ams/shared';
 import { authenticateDevice, type AuthDeps } from './auth.js';
 import type { DeviceDirectory, DeviceRec } from './devices.js';
-import { groupOfDevice, type ManifestService } from './manifest.js';
+import type { ManifestService } from './manifest.js';
 import { redeemPairingCode, randomCode6 } from './pairing.js';
 import {
   MAX_INTERACTION_BODY_BYTES,
@@ -521,7 +521,7 @@ export function mountViewerRoutes(app: Hono, x: ViewerCtx): void {
     const parsed = interactionsBody.parse(x.parseJson(body));
     const now = rt.clock.now().getTime();
     const dayStart = vnDayStartIso(now);
-    const view = await x.manifests.get(groupOfDevice(dev));
+    const view = await x.manifests.get(await x.manifests.groupFor(dev));
     const cfgs = await x.rewardCfg.get(parsed.events.map((e) => e.campaign_id));
     const results: { event_id: string; status: 'credited' | 'recorded' | 'duplicate' | 'rejected'; credited_vnd: number; reason?: string }[] = [];
     const uid = dev.userId;

@@ -66,6 +66,7 @@ function ZoneView({ z, items, playing, runKey }: { z: Zone; items: PreviewItem[]
     const dur = Math.max(4, Math.round(28 - (z.scroll_speed ?? 60) * 0.22));
     return <div style={{ ...center, justifyContent: 'flex-start', background: z.bg_color ?? '#DC2626', color: z.text_color ?? '#fff', fontSize: `${Math.max(9, (z.font_size ?? 16) * 0.7)}px`, overflow: 'hidden' }}><span className="lp-marq" style={{ ['--lp-dur' as string]: `${dur}s` }}>{z.text ?? ''}</span></div>;
   }
+  if (z.type === 'text') return <div style={{ ...center, background: z.bg_color ?? '#111827', color: z.text_color ?? '#fff', fontSize: `${Math.max(9, (z.font_size ?? 24) * 0.6)}px`, padding: 6, overflow: 'hidden', whiteSpace: 'pre-wrap' }}>{z.text ?? ''}</div>;
   if (z.type === 'clock') return <Clock z={z} />;
   if (z.type === 'weather') return <div style={{ ...center, background: z.bg_color ?? '#1D4ED8', color: z.text_color ?? '#fff', fontSize: 12 }}>☀ 29°C · Hà Nội</div>;
   return <div style={{ ...center, background: '#fff', color: '#111' }}><svg viewBox="0 0 8 8" width="70%" height="70%" shapeRendering="crispEdges" aria-label="Mã QR"><rect width="8" height="8" fill="#fff" />{[0, 1, 2, 5, 6, 7].flatMap((x) => [0, 1, 2, 5, 6, 7].map((y) => ((x < 3 && y < 3) || (x > 4 && y < 3) || (x < 3 && y > 4) ? <rect key={`${x}${y}`} x={x} y={y} width="1" height="1" fill="#000" /> : null)))}<rect x="3" y="3" width="2" height="2" fill="#000" /></svg></div>;

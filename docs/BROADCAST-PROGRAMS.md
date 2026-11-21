@@ -51,3 +51,12 @@ Nhóm menu **Phát sóng nội bộ** (tham khảo QuangBáo Cloud). API đều 
 - **Manifest**: slot `bp_*` có thêm `layout` (xem DEVICE-PROTOCOL.md) kèm `creative_ids` theo vùng; `creative_ids` của slot không đổi nên thiết bị cũ vẫn phát tuần tự.
 - **Web**: trang *Mẫu bố cục* (thẻ mẫu, trình soạn kéo-thả/đổi kích thước, nút *Sử dụng mẫu này* tạo chương trình nháp); *Xem trước* trong Chương trình phát sóng (trình phát mô phỏng với video/ảnh thật, chữ chạy, đồng hồ, header/footer, Tạm dừng/Phát lại, 9:16/16:9) và nút *Xem trước* ở từng tệp trong Kho tư liệu.
 - **Hạn chế**: Signage Player hiện chưa vẽ nhiều vùng (vẫn phát tuần tự một vùng); thời tiết và mã QR trong bản xem trước là hình minh họa.
+
+
+## Trình tạo 4 bước, chọn thiết bị và đẩy ngay (migration 0022)
+
+- **Web** (`Chương trình phát sóng` → *Tạo chương trình*): modal toàn màn hình 4 bước: *01 Thông tin chung* (tên, loại màn, hướng, mẫu bố cục) → *02 Thiết kế phân vùng* (danh sách lớp, khung kéo-thả/đổi kích thước, thêm vùng video/ảnh/chữ chạy/văn bản/đồng hồ/thời tiết/QR, mẫu nhanh, thuộc tính, gắn tư liệu vào từng vùng, *Xem trước*) → *03 Chọn thiết bị* (từng thiết bị hoặc theo khu vực) → *04 Lập lịch & Phát hành* (ngày, giờ, ưu tiên, tóm tắt, xem thử ngay). *Lưu nháp* không gửi gì xuống thiết bị; *Phát hành* lưu, xuất bản rồi đẩy lệnh.
+- **Chọn thiết bị**: bảng phụ `broadcast_program_devices(program_id, device_id)` (không dùng ALTER). `device_ids` (≤ 500) trong POST/PUT; mỗi thiết bị phải tồn tại, đã duyệt (trust ≥ 1), không bị khóa, đúng loại màn (`duplicate_devices`, `device_not_found`, `device_not_approved`, `device_kind_mismatch`). Không chọn thiết bị nào = lọc theo `regions` như trước. `GET /devices-pick?target=&regions=&q=` trả danh sách thiết bị hợp lệ (tối đa 500, `truncated`).
+- **Manifest theo thiết bị**: chương trình có thiết bị riêng chỉ xuất hiện trong manifest nhóm `region.daypart.modelClass.d-<deviceId>` của đúng các thiết bị đó (nhóm này chỉ phục vụ qua `/v1/manifest` có xác thực, route công khai `/v1/manifest/g/...` từ chối); thiết bị khác không thấy.
+- **Đẩy ngay**: xuất bản, sửa chương trình đang phát (hợp thiết bị cũ + mới) và dừng phát/xóa đều xếp lệnh `refresh_manifest` (idempotency theo chương trình + phiên bản) và trả `push: {matched, pushed, skipped}`. `GET /:id/delivery` trả từng thiết bị kèm trạng thái lệnh (`pending|delivered|acked|failed|expired`) và trực tuyến/ngoại tuyến; giao diện tự làm mới 4 giây.
+- **Hạn chế**: thời lượng từng tệp chưa lưu trong chương trình; nút ẩn lớp chỉ áp dụng cho trình soạn/xem trước; Signage Player chưa vẽ đa vùng.

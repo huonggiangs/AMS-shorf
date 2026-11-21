@@ -7,13 +7,15 @@ export interface GroupKey {
   region: string;
   daypart: string; // 'all' = moi khung gio trong mot manifest
   modelClass: string;
+  /** Co gia tri = manifest RIENG cua thiet bi nay (chuong trinh phat song gan theo tung thiet bi). */
+  device?: string;
 }
 
-export const groupString = (g: GroupKey): string => `${g.region}.${g.daypart}.${g.modelClass}`;
+export const groupString = (g: GroupKey): string => `${g.region}.${g.daypart}.${g.modelClass}${g.device ? `.d-${g.device}` : ''}`;
 
 export function parseGroup(s: string): GroupKey | null {
-  const m = /^([A-Za-z0-9_-]{1,16})\.([a-z_]{1,16})\.([a-z0-9_x]{2,40})$/.exec(s);
-  return m ? { region: m[1]!, daypart: m[2]!, modelClass: m[3]! } : null;
+  const m = /^([A-Za-z0-9_-]{1,16})\.([a-z_]{1,16})\.([a-z0-9_x]{2,40})(?:\.d-([A-Za-z0-9_-]{1,64}))?$/.exec(s);
+  return m ? { region: m[1]!, daypart: m[2]!, modelClass: m[3]!, ...(m[4] ? { device: m[4] } : {}) } : null;
 }
 
 export function groupOfDevice(d: DeviceRec, daypart = 'all'): GroupKey {
@@ -230,6 +232,29 @@ export class ManifestService {
     if (this.views.size > 2000) this.views.clear();
     this.views.set(k, v);
     return v;
+  }
+
+  private targetMem: { at: number; epoch: string; ids: Set<string> } | null = null;
+
+  /** Thiet bi duoc chon rieng trong chuong trinh phat song dang xuat ban (nho dem ngan, het han khi epoch manifest doi). */
+  async targetedDevices(): Promise<Set<string>> {
+    const now = this.rt.clock.now().getTime();
+    const epoch = (await this.rt.kv.get(EPOCH_KEY)) ?? '0';
+    if (this.targetMem && this.targetMem.epoch === epoch && now - this.targetMem.at < (this.opts.memTtlS ?? memTtlMs / 1000) * 1000) return this.targetMem.ids;
+    const rows = await this.rt.db.query<{ device_id: string }>("SELECT DISTINCT d.device_id FROM broadcast_program_devices d JOIN broadcast_programs p ON p.id = d.program_id WHERE p.status = 'published'");
+    this.targetMem = { at: now, epoch, ids: new Set(rows.map((r) => r.device_id)) };
+    return this.targetMem.ids;
+  }
+
+  /** Nhom manifest cua mot thiet bi: nhom khu vuc, hoac nhom RIENG neu thiet bi duoc chon trong chuong trinh phat song. */
+  async groupFor(d: DeviceRec, daypart = 'all'): Promise<GroupKey> {
+    const g = groupOfDevice(d, daypart);
+    try {
+      if (daypart === 'all' && (await this.targetedDevices()).has(d.id) && /^[A-Za-z0-9_-]{1,64}$/.test(d.id)) return { ...g, device: d.id };
+    } catch {
+      /* khong doc duoc bang: dung nhom khu vuc */
+    }
+    return g;
   }
 
   /** Nhom da tung duoc xay (dung cho duong cong khai: khong cho ke la liet ke nhom bat ky). */
@@ -563,11 +588,17 @@ export class ManifestService {
     for (const r of rows) {
       if (r.start_date && r.start_date > today) continue;
       if (r.end_date && r.end_date < today) continue;
-      try {
-        const rs = JSON.parse(r.regions ?? '[]') as string[];
-        if (rs.length > 0 && g.region !== 'ALL' && !rs.includes(g.region)) continue;
-      } catch {
-        /* regions hong: coi nhu moi khu vuc */
+      const devs = (await this.rt.db.query<{ device_id: string }>('SELECT device_id FROM broadcast_program_devices WHERE program_id = ?', [r.id])).map((x) => x.device_id);
+      if (devs.length > 0) {
+        // chuong trinh gan theo thiet bi: chi manifest RIENG cua dung thiet bi do (khong vao manifest chung cua khu vuc)
+        if (!g.device || !devs.includes(g.device)) continue;
+      } else {
+        try {
+          const rs = JSON.parse(r.regions ?? '[]') as string[];
+          if (rs.length > 0 && g.region !== 'ALL' && !rs.includes(g.region)) continue;
+        } catch {
+          /* regions hong: coi nhu moi khu vuc */
+        }
       }
       const items = await this.rt.db.query<{ creative_id: string }>('SELECT creative_id FROM broadcast_program_items WHERE program_id = ? ORDER BY position, creative_id', [r.id]);
       const lay = (await this.rt.db.query<{ orientation: string; zones: string | null }>('SELECT orientation, zones FROM broadcast_program_layouts WHERE program_id = ?', [r.id]))[0];

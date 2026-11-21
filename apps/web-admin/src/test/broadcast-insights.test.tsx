@@ -46,7 +46,7 @@ const summary = {
 
 describe('Ban lam viec', () => {
   it('hien so lieu tong quan va loi tat theo quyen', async () => {
-    handlers.push(me(['view', 'write']), on('/admin/v1/broadcast-insights/summary', summary));
+    handlers.push(me(['view', 'write']), on('/admin/v1/broadcast-insights/summary', summary), on('/admin/v1/broadcast', { items: [{ id: 'p1', name: 'Giới thiệu tòa nhà', target_type: 'elevator', regions: [], start_min: 0, end_min: 1439, priority: 1, status: 'published', version: 1, item_count: 4, items: [], updated_at: '2026-11-21T09:00:00Z' }], total: 1 }));
     vi.stubGlobal('fetch', mockFetch());
     mount('/workbench');
     expect(await screen.findByText('Giới thiệu tòa nhà')).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe('Ban lam viec', () => {
     expect(screen.getByText(/4 lệnh gửi thiết bị bị lỗi/)).toBeInTheDocument();
   });
   it('chi xem: khong co nut tao/gui', async () => {
-    handlers.push(me(['view']), on('/admin/v1/broadcast-insights/summary', summary));
+    handlers.push(me(['view']), on('/admin/v1/broadcast-insights/summary', summary), on('/admin/v1/broadcast', { items: [{ id: 'p1', name: 'Giới thiệu tòa nhà', target_type: 'elevator', regions: [], start_min: 0, end_min: 1439, priority: 1, status: 'published', version: 1, item_count: 4, items: [], updated_at: '2026-11-21T09:00:00Z' }], total: 1 }));
     vi.stubGlobal('fetch', mockFetch());
     mount('/workbench');
     await screen.findByText('Giới thiệu tòa nhà');

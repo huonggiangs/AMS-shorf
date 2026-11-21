@@ -1,20 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { broadcastSchema, listOf, mediaSchema, type Broadcast } from '../api/schemas';
+import { broadcastSchema, listOf, type Broadcast } from '../api/schemas';
 import { useAct } from '../api/hooks';
 import { useAuth } from '../auth/AuthProvider';
-import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, Note, PageHead, Tag } from '../components/ui';
+import { Btn, EmptyBlock, ErrorBlock, LoadingBlock, Note, PageHead, Tag } from '../components/ui';
 import { Dialog } from '../components/Dialog';
 import { useT } from '../i18n';
 import { fmtMin } from '../lib/format';
 import { usbPackageSchema } from '../api/schemas';
 import { copyToUsb, usbSupported } from '../lib/usbExport';
 import { ProgramPreviewDialog } from '../components/PreviewDialogs';
-import { LivePreview } from '../components/LivePreview';
-import { usePreviewItems } from '../components/PreviewDialogs';
-import { PRESETS, isMediaZone, layoutError, templateSchema, zoneName, type Orientation, type Zone } from '../lib/layout';
+import { BroadcastWizard } from '../components/BroadcastWizard';
 
 const TARGETS: { id: string; label: string }[] = [
   { id: 'elevator', label: 'Thang máy (9:16)' },
@@ -26,8 +24,6 @@ const STATUS: Record<string, { label: string; tone: 'ok' | 'warn' | 'info' | 'ba
   published: { label: 'Đang phát', tone: 'ok' },
   ended: { label: 'Đã kết thúc', tone: 'info' },
 };
-const toMin = (s: string): number => { const [h, m] = s.split(':').map(Number); return (h ?? 0) * 60 + (m ?? 0); };
-const toTime = (n: number): string => `${String(Math.floor(n / 60) % 24).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 const BASE = '/admin/v1/broadcast';
 
 /** Chương trình phát sóng nội bộ: chọn media trong kho + loại màn + khu vực + khung giờ, xuất bản là thiết bị đã duyệt nhận được (không qua hợp đồng/thanh toán). */
@@ -51,20 +47,20 @@ export default function Broadcast() {
     setSp({}, { replace: true });
   }, [sp, list.data, canWrite, setSp]);
   const canDelete = can('schedule', 'delete');
-  const run = (p: Broadcast, action: 'publish' | 'unpublish', ok: string) => act(() => api.post(`${BASE}/${p.id}/${action}`, { body: {} }), ok);
+  const run = (p: Broadcast, action: 'publish' | 'unpublish', ok: string) => act(() => api.post(`${BASE}/${p.id}/${action}`, { body: {}, schema: broadcastSchema }), (r: Broadcast) => `${ok} Đã gửi lệnh tới ${r.push?.pushed ?? 0} thiết bị.`);
   return (
     <>
       <PageHead eyebrow="Nội dung nội bộ / không qua hợp đồng" title="Chương trình phát sóng" sub="Chọn video, ảnh trong kho, chọn loại màn và khu vực rồi xuất bản: thiết bị đã duyệt sẽ tự nhận ở lần đồng bộ kế tiếp." actions={canWrite ? <Btn tone="p" icon="plus" onClick={() => setEdit('new')}>Tạo chương trình</Btn> : null} />
       {list.isLoading ? <LoadingBlock /> : list.isError ? <ErrorBlock error={list.error} onRetry={() => void list.refetch()} /> : !list.data?.items.length ? <EmptyBlock>Chưa có chương trình phát sóng nào.</EmptyBlock> : (
         <div className="card cp">
           <table className="tbl">
-            <thead><tr><th>Tên</th><th>Loại màn</th><th>Khu vực</th><th>Hiệu lực</th><th>Khung giờ</th><th>Số tệp</th><th>Trạng thái</th><th /></tr></thead>
+            <thead><tr><th>Tên</th><th>Loại màn</th><th>Thiết bị / khu vực</th><th>Hiệu lực</th><th>Khung giờ</th><th>Số tệp</th><th>Trạng thái</th><th /></tr></thead>
             <tbody>
               {list.data.items.map((p) => (
                 <tr key={p.id}>
                   <td><b>{p.name}</b></td>
                   <td>{TARGETS.find((x) => x.id === p.target_type)?.label ?? p.target_type}</td>
-                  <td className="mono">{p.regions.length ? p.regions.join(', ') : 'Tất cả'}</td>
+                  <td className="mono">{p.device_count ? `${p.device_count} thiết bị` : p.regions.length ? p.regions.join(', ') : 'Tất cả'}</td>
                   <td className="mono">{p.start_date ?? '…'} → {p.end_date ?? '…'}</td>
                   <td className="mono">{fmtMin(p.start_min)}–{fmtMin(p.end_min)}</td>
                   <td className="mono">{p.item_count}</td>
@@ -84,126 +80,11 @@ export default function Broadcast() {
         </div>
       )}
       <Note>Chỉ chọn được tệp đã duyệt và chưa gắn vào chiến dịch quảng cáo. Chương trình nội bộ không tính tiền và không có báo cáo doanh thu.</Note>
-      {edit ? <ProgramDialog key={edit === 'new' ? 'new' : edit.id} program={edit === 'new' ? null : edit} onClose={() => setEdit(null)} /> : null}
+      {edit ? <BroadcastWizard key={edit === 'new' ? 'new' : edit.id} program={edit === 'new' ? null : edit} onClose={() => setEdit(null)} /> : null}
       {view ? <ProgramPreviewDialog title={view.name} orientation={view.layout?.orientation ?? (view.target_type === 'tv' ? 'landscape' : 'portrait')} zones={view.layout?.zones ?? null} ids={view.items.map((i) => i.creative_id)} zoneOf={Object.fromEntries(view.items.map((i) => [i.creative_id, i.zone_id ?? null]))} header={view.header} footer={view.footer} onClose={() => setView(null)} /> : null}
       {usb ? <UsbDialog program={usb} onClose={() => setUsb(null)} /> : null}
       <span hidden>{t('Hủy')}</span>
     </>
-  );
-}
-
-function ProgramDialog({ program, onClose }: { program: Broadcast | null; onClose: () => void }) {
-  const t = useT();
-  const act = useAct();
-  const [f, setF] = useState({
-    name: program?.name ?? '',
-    target_type: program?.target_type ?? 'elevator',
-    regions: (program?.regions ?? []).join(', '),
-    start_date: program?.start_date ?? '',
-    end_date: program?.end_date ?? '',
-    start: toTime(program?.start_min ?? 0),
-    end: program?.end_min === 1440 || !program ? '24:00' : toTime(program.end_min),
-    priority: String(program?.priority ?? 3),
-    header: program?.header ?? '',
-    footer: program?.footer ?? '',
-  });
-  const [ids, setIds] = useState<string[]>(program?.items.map((i) => i.creative_id) ?? []);
-  // bo cuc da vung (tuy chon): chep tu mau hoac sua tay; tep gan vao vung bang itemZones
-  const [zones, setZones] = useState<Zone[] | null>((program?.layout?.zones as Zone[] | undefined) ?? null);
-  const [orientation, setOrientation] = useState<Orientation>(program?.layout?.orientation ?? ((program?.target_type ?? 'elevator') === 'tv' ? 'landscape' : 'portrait'));
-  const [templateId, setTemplateId] = useState<string | null>(program?.layout?.template_id ?? null);
-  const [itemZones, setItemZones] = useState<Record<string, string>>(Object.fromEntries((program?.items ?? []).flatMap((i) => (i.zone_id ? [[i.creative_id, i.zone_id] as [string, string]] : []))));
-  const [showPreview, setShowPreview] = useState(false);
-  const tpls = useQuery({ queryKey: ['/admin/v1/layout-templates', 'pick'], queryFn: () => api.get('/admin/v1/layout-templates', { query: { page_size: 100 }, schema: listOf(templateSchema) }) });
-  const mediaZones = (zones ?? []).filter(isMediaZone);
-  const pickTemplate = (id: string) => {
-    if (!id) { setZones(null); setTemplateId(null); setItemZones({}); return; }
-    const preset = PRESETS.find((p) => p.id === id);
-    const tp = tpls.data?.items.find((x) => x.id === id);
-    const src = preset ?? tp;
-    if (!src) return;
-    setZones(src.zones.map((z) => ({ ...z })));
-    setOrientation(src.orientation);
-    setTemplateId(tp ? tp.id : null);
-    setItemZones((cur) => { const ok = new Set(src.zones.filter(isMediaZone).map((z) => z.id)); return Object.fromEntries(Object.entries(cur).filter(([, z]) => ok.has(z))); });
-  };
-  const layoutErr = zones ? layoutError(zones) : '';
-  const prev = usePreviewItems(showPreview ? ids : [], itemZones);
-  const media = useQuery({ queryKey: ['/admin/v1/media', 'broadcast-pick'], queryFn: () => api.get('/admin/v1/media', { query: { page_size: 200, status: 'approved' }, schema: listOf(mediaSchema) }) });
-  const pool = useMemo(() => (media.data?.items ?? []).filter((m) => (m as { campaign_id?: unknown }).campaign_id == null || ids.includes(m.id)), [media.data, ids]);
-  const signage = f.target_type === 'elevator' || f.target_type === 'led_p5';
-  const move = (i: number, d: number) => setIds((cur) => { const n = [...cur]; const j = i + d; if (j < 0 || j >= n.length) return cur; [n[i], n[j]] = [n[j]!, n[i]!]; return n; });
-  const nameOf = (id: string) => media.data?.items.find((m) => m.id === id)?.name ?? program?.items.find((i) => i.creative_id === id)?.name ?? id;
-  const submit = async () => {
-    const endMin = f.end === '24:00' ? 1440 : toMin(f.end);
-    const body = {
-      name: f.name.trim(),
-      target_type: f.target_type,
-      regions: f.regions.split(',').map((x) => x.trim()).filter(Boolean),
-      start_date: f.start_date || null,
-      end_date: f.end_date || null,
-      start_min: toMin(f.start),
-      end_min: endMin,
-      priority: Number(f.priority),
-      ...(signage ? { header: f.header.trim() === '' ? null : f.header, footer: f.footer.trim() === '' ? null : f.footer } : {}),
-      creative_ids: ids,
-      layout: zones ? { template_id: templateId, orientation, zones } : null,
-      item_zones: zones ? Object.fromEntries(Object.entries(itemZones).filter(([k]) => ids.includes(k))) : {},
-    };
-    const r = await act(() => (program ? api.put(`${BASE}/${program.id}`, { body }) : api.post(BASE, { body })), program ? 'Đã lưu chương trình.' : 'Đã tạo chương trình (bản nháp).');
-    if (r !== undefined) onClose();
-  };
-  return (
-    <Dialog open onClose={onClose} size="lg" label="Chương trình phát sóng">
-      <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>{program ? 'Sửa chương trình' : 'Tạo chương trình phát sóng'}</h2>
-        <Field label="Tên chương trình"><input required maxLength={120} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-        <Field label="Loại màn hình"><select value={f.target_type} onChange={(e) => setF({ ...f, target_type: e.target.value })}>{TARGETS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></Field>
-        <Field label="Khu vực" hint="Mã khu vực cách nhau bằng dấu phẩy (vd HN, HCM). Để trống = tất cả thiết bị đã duyệt."><input value={f.regions} onChange={(e) => setF({ ...f, regions: e.target.value })} /></Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Từ ngày"><input type="date" value={f.start_date} onChange={(e) => setF({ ...f, start_date: e.target.value })} /></Field>
-          <Field label="Đến ngày"><input type="date" value={f.end_date} onChange={(e) => setF({ ...f, end_date: e.target.value })} /></Field>
-          <Field label="Giờ bắt đầu"><input type="time" step={1800} value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></Field>
-          <Field label="Giờ kết thúc" hint="24:00 = hết ngày"><input type={f.end === '24:00' ? 'text' : 'time'} step={1800} value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} /></Field>
-        </div>
-        <Field label="Bố cục hiển thị" hint="Không chọn = một video/ảnh phủ toàn màn hình như trước. Tạo mẫu riêng ở trang Mẫu bố cục.">
-          <select value={zones ? (templateId ?? '') : ''} onChange={(e) => pickTemplate(e.target.value)} aria-label="Bố cục hiển thị">
-            <option value="">Toàn màn hình (một vùng)</option>
-            {tpls.data?.items.length ? <optgroup label="Mẫu của bạn">{tpls.data.items.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup> : null}
-            <optgroup label="Mẫu có sẵn">{PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
-          </select>
-        </Field>
-        {zones && !templateId && !PRESETS.some((p) => JSON.stringify(p.zones) === JSON.stringify(zones)) ? <Note>Bố cục tùy chỉnh ({zones.length} vùng) đã chép vào chương trình này.</Note> : null}
-        {layoutErr ? <p role="alert" style={{ color: 'var(--bad, #c0392b)' }}>{layoutErr}</p> : null}
-        <Field label="Ưu tiên (1–5)"><select value={f.priority} onChange={(e) => setF({ ...f, priority: e.target.value })}>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}</select></Field>
-        {signage ? (
-          <>
-            <Field label="Chữ header (đầu màn hình)" hint="Để trống = dùng chữ chung của loại màn."><input maxLength={120} value={f.header} onChange={(e) => setF({ ...f, header: e.target.value })} /></Field>
-            <Field label="Chữ footer (cuối màn hình)"><input maxLength={200} value={f.footer} onChange={(e) => setF({ ...f, footer: e.target.value })} /></Field>
-          </>
-        ) : null}
-        <h3 style={{ margin: '14px 0 6px', fontSize: 15 }}>Tệp phát ({ids.length})</h3>
-        {ids.length ? (
-          <ol style={{ margin: '0 0 8px', paddingLeft: 20 }}>
-            {ids.map((id, i) => (
-              <li key={id} style={{ marginBottom: 4 }}>{nameOf(id)}{' '}
-                {zones && mediaZones.length ? <select aria-label={`Vùng phát của ${nameOf(id)}`} value={itemZones[id] ?? ''} onChange={(e) => setItemZones((cur) => { const n = { ...cur }; if (e.target.value) n[id] = e.target.value; else delete n[id]; return n; })}><option value="">Vùng chính (mặc định)</option>{mediaZones.map((z) => <option key={z.id} value={z.id}>{zoneName(z, zones.indexOf(z))}</option>)}</select> : null}{' '}
-                <button type="button" className="btn sm" aria-label={`Lên ${nameOf(id)}`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>{' '}
-                <button type="button" className="btn sm" aria-label={`Xuống ${nameOf(id)}`} disabled={i === ids.length - 1} onClick={() => move(i, 1)}>↓</button>{' '}
-                <button type="button" className="btn sm d" aria-label={`Bỏ ${nameOf(id)}`} onClick={() => setIds(ids.filter((x) => x !== id))}>Bỏ</button></li>
-            ))}
-          </ol>
-        ) : <p style={{ color: 'var(--mut)', margin: '0 0 8px' }}>Chưa chọn tệp nào.</p>}
-        <Field label="Thêm tệp từ kho (đã duyệt, chưa gắn chiến dịch)">
-          <select value="" onChange={(e) => { if (e.target.value) setIds([...ids, e.target.value]); }}>
-            <option value="">{media.isLoading ? 'Đang tải…' : '— chọn tệp —'}</option>
-            {pool.filter((m) => !ids.includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}{m.width && m.height ? ` · ${m.width}×${m.height}` : ''}</option>)}
-          </select>
-        </Field>
-        {showPreview ? (prev.loading ? <p>Đang tải bản xem trước…</p> : ids.length === 0 ? <p>Chọn ít nhất một tệp để xem trước.</p> : <LivePreview orientation={orientation} zones={zones ?? PRESETS.find((p) => p.orientation === orientation && p.id.startsWith('full'))!.zones} items={prev.items} header={signage ? f.header : null} footer={signage ? f.footer : null} />) : null}
-        <div className="da" style={{ marginTop: 14 }}><button type="button" className="btn" onClick={() => setShowPreview((v) => !v)} disabled={ids.length === 0}>{showPreview ? 'Ẩn xem trước' : 'Xem trước phát'}</button><button type="button" className="btn" onClick={onClose}>{t('Hủy')}</button><button className="btn p" type="submit" disabled={!!layoutErr}>{t('Lưu')}</button></div>
-      </form>
-    </Dialog>
   );
 }
 

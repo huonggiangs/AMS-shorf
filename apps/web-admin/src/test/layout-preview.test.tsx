@@ -159,20 +159,24 @@ describe('Chuong trinh phat song: bo cuc + xem truoc', () => {
     await waitFor(() => expect(live.querySelector('[data-zone="tvc"] video')?.getAttribute('src')).toBe('https://m/sig/a.mp4'));
     expect(live.querySelector('[data-zone="bar"]')?.textContent).toContain('Giảm 50%');
   });
-  it('Sua: gui layout + item_zones; doi vung phat cua tep', async () => {
-    handlers.push(me(['view', 'write']), on('/admin/v1/broadcast', { items: [prog], total: 1 }), on('/admin/v1/broadcast/p1', prog), on('/admin/v1/broadcast/p1', prog, 'PUT'), on('/admin/v1/media', { items: [], total: 0 }));
+  it('Sua (wizard 4 buoc): di qua cac buoc, Luu nhap gui layout + item_zones + device_ids', async () => {
+    handlers.push(me(['view', 'write']), on('/admin/v1/broadcast', { items: [prog], total: 1 }), on('/admin/v1/broadcast/p1', prog), on('/admin/v1/broadcast/p1', prog, 'PUT'), on('/admin/v1/media', { items: [], total: 0 }), on('/admin/v1/broadcast/devices-pick', { items: [{ id: 'd1', name: 'TM-01', region: 'HN', kind: 'elevator', online: true }], truncated: false }));
     vi.stubGlobal('fetch', mockFetch());
     const user = userEvent.setup();
     mount('/broadcast');
     await user.click(await screen.findByRole('button', { name: 'Sửa' }));
-    const sel = await screen.findByLabelText('Vùng phát của Quang cao');
-    expect((sel as HTMLSelectElement).value).toBe('tvc');
-    await user.selectOptions(sel, '');
-    await user.selectOptions(sel, 'tvc');
-    await user.click(screen.getByRole('button', { name: 'Lưu' }));
+    expect(await screen.findByText('01. Thông tin chung')).toBeInTheDocument();
+    expect(screen.getByText('04. Lập lịch & Phát hành')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Bước tiếp theo/ }));
+    expect(await screen.findByText(/Danh sách lớp thành phần \(3\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Bước tiếp theo/ }));
+    await user.click(await screen.findByRole('button', { name: 'Chọn từng thiết bị' }));
+    await user.click(await screen.findByLabelText('Chọn TM-01'));
+    await user.click(screen.getByRole('button', { name: /Bước tiếp theo/ }));
+    await user.click(await screen.findByRole('button', { name: 'Lưu nháp' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
     const put = calls.find((c) => c.method === 'PUT')!;
-    expect(put.body).toMatchObject({ creative_ids: ['m1'], item_zones: { m1: 'tvc' }, layout: { orientation: 'portrait' } });
+    expect(put.body).toMatchObject({ creative_ids: ['m1'], item_zones: { m1: 'tvc' }, device_ids: ['d1'], layout: { orientation: 'portrait' } });
     expect((put.body!.layout as { zones: unknown[] }).zones).toHaveLength(3);
   });
 });

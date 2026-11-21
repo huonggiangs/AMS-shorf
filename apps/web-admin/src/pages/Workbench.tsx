@@ -2,10 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { summarySchema } from '../api/schemasBp';
-import { ErrorBlock, EmptyBlock, Kpi, LoadingBlock, Note, PageHead, StatusTag } from '../components/ui';
+import { ErrorBlock, EmptyBlock, Kpi, LoadingBlock, Note, PageHead } from '../components/ui';
 import { Btn } from '../components/ui';
 import { useAuth } from '../auth/AuthProvider';
 import { fmtDateTime } from '../lib/format';
+import { ProgramList } from '../components/ProgramList';
 
 const TARGET: Record<string, string> = { tv: 'TV', elevator: 'Thang máy', led: 'LED', led_p5: 'LED P5', all: 'Tất cả' };
 
@@ -19,7 +20,7 @@ export default function Workbench() {
   return (
     <>
       <PageHead eyebrow="Phát sóng nội bộ" title="Bàn làm việc" sub="Tình hình chương trình phát sóng, kho tư liệu và mạng lưới thiết bị trong một màn hình."
-        actions={w ? <><Btn tone="p" icon="plus" onClick={() => nav('/broadcast')}>Tạo chương trình</Btn><Btn icon="bell" onClick={() => nav('/notice')}>Gửi thông báo khẩn</Btn><Btn icon="img" onClick={() => nav('/media')}>Tải media</Btn></> : undefined} />
+        actions={w ? <><Btn tone="p" icon="plus" onClick={() => nav('/broadcast?new=1')}>Tạo chương trình</Btn><Btn icon="bell" onClick={() => nav('/notice')}>Gửi thông báo khẩn</Btn><Btn icon="img" onClick={() => nav('/media')}>Tải media</Btn></> : undefined} />
       {q.isLoading ? <LoadingBlock /> : q.isError ? <ErrorBlock error={q.error} onRetry={() => void q.refetch()} /> : d ? (
         <>
           <div className="g g4">
@@ -28,18 +29,11 @@ export default function Workbench() {
             <Kpi label="Thiết bị trực tuyến" icon="tv" value={d.devices.online} foot={`${d.devices.offline} ngoại tuyến${d.devices.awaiting_approval ? ` · ${d.devices.awaiting_approval} chờ cấp quyền` : ''}`} />
             <Kpi label="Lệnh đang chờ" icon="clock" value={d.queue.pending + d.queue.delivered} foot={`${d.queue.failed} lệnh lỗi`} />
           </div>
+          <div className="card cp" style={{ marginBottom: 14 }}>
+            <div className="ch"><div><h2>Chương trình phát sóng gần đây</h2><p>Cập nhật mới nhất · phát sóng nội bộ trên AMS</p></div><Btn onClick={() => nav('/schedule')}>Xem tất cả</Btn></div>
+            <ProgramList limit={8} compact showFilter={false} />
+          </div>
           <div className="g g21">
-            <div className="card cp">
-              <div className="ch"><div><h2>Chương trình gần đây</h2><p>Cập nhật mới nhất</p></div><Btn onClick={() => nav('/broadcast')}>Xem tất cả</Btn></div>
-              {!d.programs.recent.length ? <EmptyBlock>Chưa có chương trình nào.</EmptyBlock> : (
-                <table className="tbl">
-                  <thead><tr><th>Tên</th><th>Loại màn</th><th>Tệp</th><th>Trạng thái</th></tr></thead>
-                  <tbody>{d.programs.recent.map((p) => (
-                    <tr key={p.id}><td>{p.name}</td><td>{TARGET[p.target_type] ?? p.target_type}</td><td className="mono">{p.item_count}</td><td>{p.live ? <b>Đang phát</b> : <StatusTag status={p.status} />}</td></tr>
-                  ))}</tbody>
-                </table>
-              )}
-            </div>
             <div className="card cp">
               <div className="ch"><div><h2>Thiết bị theo khu vực</h2><p>Trực tuyến / tổng (đã duyệt)</p></div><Btn onClick={() => nav('/devices')}>Mạng lưới</Btn></div>
               {!d.devices.regions.length ? <EmptyBlock>Chưa có thiết bị đã duyệt.</EmptyBlock> : (

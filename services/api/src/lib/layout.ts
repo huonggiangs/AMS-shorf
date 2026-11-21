@@ -1,7 +1,7 @@
 // Bo cuc da vung (migration 0021): kiem tra zod dung chung cho mau bo cuc va chuong trinh phat song. Toa do tinh theo % khung (0..100).
 import { z } from 'zod';
 
-export const ZONE_TYPES = ['video', 'image', 'marquee', 'clock', 'weather', 'qr'] as const;
+export const ZONE_TYPES = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr'] as const;
 export const MEDIA_ZONE_TYPES = ['video', 'image'] as const;
 export const MAX_ZONES = 8;
 

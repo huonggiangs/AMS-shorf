@@ -269,3 +269,73 @@ describe('thong bao khan + goi USB', () => {
     expect((await rt.db.query('SELECT 1 FROM broadcast_item_zones WHERE program_id = ?', [pid])).length).toBe(0);
   });
 });
+
+describe('chuong trinh gan theo tung thiet bi + day refresh_manifest', () => {
+  it('chon thiet bi: chi thiet bi do nhan; xuat ban/go/doi day lenh refresh_manifest; liet ke + tinh trang giao', async () => {
+    const chosen = await elevator('DV');
+    const sameRegion = await elevator('DV');
+    const unapproved = await elevator('DV');
+    await rt.db.run('UPDATE devices SET trust_level = 1 WHERE id IN (?, ?)', [chosen.id, sameRegion.id]);
+    const m = await libraryMedia();
+    const pick = await content.json('GET', '/admin/v1/broadcast/devices-pick?target=elevator&regions=DV');
+    expect(pick.status).toBe(200);
+    expect(pick.body.items.map((d: any) => d.id).sort()).toEqual([chosen.id, sameRegion.id].sort());
+    expect(pick.body.items[0]).toMatchObject({ region: 'DV' });
+    expect((await finance.json('GET', '/admin/v1/broadcast/devices-pick')).status).toBe(403);
+
+    const bad = await content.json('POST', '/admin/v1/broadcast', { name: 'x', target_type: 'elevator', creative_ids: [m], device_ids: [unapproved.id] });
+    expect(bad.status).toBe(422);
+    expect(bad.body.error.code).toBe('device_not_approved');
+    expect((await content.json('POST', '/admin/v1/broadcast', { name: 'x', target_type: 'tv', creative_ids: [], device_ids: [chosen.id] })).body.error.code).toBe('device_kind_mismatch');
+
+    const created = await content.json('POST', '/admin/v1/broadcast', { name: 'Rieng thiet bi', target_type: 'elevator', regions: [], creative_ids: [m], device_ids: [chosen.id] });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body).toMatchObject({ device_count: 1, device_ids: [chosen.id] });
+    expect(created.body.devices[0]).toMatchObject({ id: chosen.id, region: 'DV', online: false });
+    const pid = created.body.id as string;
+
+    const pub = await content.json('POST', `/admin/v1/broadcast/${pid}/publish`, {});
+    expect(pub.status, JSON.stringify(pub.body)).toBe(200);
+    expect(pub.body.push).toMatchObject({ matched: 1, pushed: 1, skipped: 0 });
+    const cmds = await rt.db.query<{ device_id: string; type: string }>("SELECT device_id, type FROM device_commands WHERE type = 'refresh_manifest'");
+    expect(cmds.filter((x) => x.device_id === chosen.id)).toHaveLength(1);
+    expect(cmds.some((x) => x.device_id === sameRegion.id)).toBe(false);
+
+    expect((await chosen.manifest()).schedule.some((x: any) => x.slot_id === `bp_${pid}`)).toBe(true);
+    expect((await sameRegion.manifest()).schedule.some((x: any) => x.slot_id === `bp_${pid}`)).toBe(false);
+
+    const del = await content.json('GET', `/admin/v1/broadcast/${pid}/delivery`);
+    expect(del.status).toBe(200);
+    expect(del.body.items).toHaveLength(1);
+    expect(del.body.items[0]).toMatchObject({ id: chosen.id, command: { status: 'pending' } });
+
+    // doi sang thiet bi khac khi dang phat: thiet bi cu bi go va cung duoc bao lam moi
+    const swap = await content.json('PUT', `/admin/v1/broadcast/${pid}`, { device_ids: [sameRegion.id] });
+    expect(swap.status, JSON.stringify(swap.body)).toBe(200);
+    expect(swap.body.push).toMatchObject({ matched: 2, pushed: 2 });
+    expect((await chosen.manifest()).schedule.some((x: any) => x.slot_id === `bp_${pid}`)).toBe(false);
+    expect((await sameRegion.manifest()).schedule.some((x: any) => x.slot_id === `bp_${pid}`)).toBe(true);
+
+    const off = await content.json('POST', `/admin/v1/broadcast/${pid}/unpublish`, {});
+    expect(off.body.push).toMatchObject({ pushed: 1 });
+    expect((await sameRegion.manifest()).schedule.some((x: any) => x.slot_id === `bp_${pid}`)).toBe(false);
+    expect((await admin.json('DELETE', `/admin/v1/broadcast/${pid}`)).status).toBe(200);
+    expect((await rt.db.query('SELECT 1 FROM broadcast_program_devices WHERE program_id = ?', [pid])).length).toBe(0);
+  });
+
+  it('khong chon thiet bi: day refresh_manifest theo loai man + khu vuc cua cac thiet bi da duyet', async () => {
+    const a = await elevator('RG');
+    const b = await elevator('RG');
+    const other = await elevator('RH');
+    await rt.db.run('UPDATE devices SET trust_level = 1 WHERE id IN (?, ?, ?)', [a.id, b.id, other.id]);
+    const m = await libraryMedia();
+    const created = await content.json('POST', '/admin/v1/broadcast', { name: 'Theo khu vuc', target_type: 'elevator', regions: ['RG'], creative_ids: [m] });
+    const pub = await content.json('POST', `/admin/v1/broadcast/${created.body.id}/publish`, {});
+    expect(pub.body.push).toMatchObject({ matched: 2, pushed: 2 });
+    const cmds = await rt.db.query<{ device_id: string }>("SELECT device_id FROM device_commands WHERE type = 'refresh_manifest' AND device_id IN (?, ?, ?)", [a.id, b.id, other.id]);
+    expect(cmds.map((x) => x.device_id).sort()).toEqual([a.id, b.id].sort());
+    // go chuong trinh: lenh moi (khoa idempotency theo phien ban) toi cung 2 thiet bi
+    const off = await content.json('POST', `/admin/v1/broadcast/${created.body.id}/unpublish`, {});
+    expect(off.body.push).toMatchObject({ pushed: 2 });
+  });
+});

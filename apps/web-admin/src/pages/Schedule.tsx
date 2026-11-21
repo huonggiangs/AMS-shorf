@@ -4,7 +4,8 @@ import { api } from '../api/client';
 import { campaignSchema, listOf, partnerSchema, slotSchema, type Slot } from '../api/schemas';
 import { useAct } from '../api/hooks';
 import { useAuth } from '../auth/AuthProvider';
-import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, Note, PageHead } from '../components/ui';
+import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, Note, PageHead, Tabs } from '../components/ui';
+import { ProgramList } from '../components/ProgramList';
 import { Dialog } from '../components/Dialog';
 import { useT } from '../i18n';
 import { SlotTextDialog } from '../components/SignageOps';
@@ -20,12 +21,15 @@ export const snapMove = (start: number, end: number, deltaMin: number): [number,
   return [s, s + len];
 };
 
+type SchedTab = 'programs' | 'campaigns';
+
 export default function Schedule() {
   const t = useT();
   const { can } = useAuth();
   const act = useAct();
   const qc = useQueryClient();
   const [add, setAdd] = useState(false);
+  const [tab, setTab] = useState<SchedTab>(can('schedule', 'view') ? 'programs' : 'campaigns');
   const [textSlot, setTextSlot] = useState<Slot | null>(null);
   const slots = useQuery({ queryKey: ['/admin/v1/schedule'], queryFn: () => api.get('/admin/v1/schedule', { query: { page_size: 200 }, schema: listOf(slotSchema) }) });
   const partners = useQuery({ queryKey: ['/admin/v1/partners', 'cards'], queryFn: () => api.get('/admin/v1/partners', { query: { page_size: 50 }, schema: listOf(partnerSchema) }) });
@@ -33,7 +37,14 @@ export default function Schedule() {
   const save = (s: Slot, a: number, b: number) => act(() => api.put(`/admin/v1/schedule/${s.id}`, { body: { start_min: a, end_min: b } }), `Đã đổi giờ phát: ${fmtMin(a)}–${fmtMin(b)}`);
   return (
     <>
-      <PageHead eyebrow="SmartTV programmatic CMS / 24h schedule grid" title="Lịch phát" sub="Phân phối khung giờ, tích hợp sàn đấu thầu programmatic RTB và mạng lưới Digital OOH." actions={canWrite ? <Btn tone="p" icon="plus" onClick={() => setAdd(true)}>Tạo lịch phát mới</Btn> : null} />
+      <PageHead eyebrow="SmartTV programmatic CMS / 24h schedule grid" title="Lịch phát" sub="Phân phối khung giờ, tích hợp sàn đấu thầu programmatic RTB và mạng lưới Digital OOH." actions={canWrite && tab === 'campaigns' ? <Btn tone="p" icon="plus" onClick={() => setAdd(true)}>Tạo lịch phát mới</Btn> : null} />
+      <Tabs<SchedTab> label="Loại lịch phát" value={tab} onChange={setTab} items={[{ id: 'programs', label: 'Chương trình phát sóng nội bộ' }, { id: 'campaigns', label: 'Lịch chiến dịch' }]} />
+      {tab === 'programs' ? (
+        <div className="card cp" style={{ margin: '14px 0' }}>
+          <div className="ch"><div><h2>Danh sách Chương trình Phát sóng</h2><p>Chương trình nội bộ gửi xuống thiết bị đã duyệt, không qua hợp đồng/thanh toán.</p></div></div>
+          <ProgramList />
+        </div>
+      ) : (<>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0 12px', flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ fontSize: 17, margin: 0 }}>Mạng lưới đối tác & API ingestion RTB</h2>
       </div>
@@ -68,6 +79,7 @@ export default function Schedule() {
         )}
       </div>
       <Note>Doanh thu theo giờ và giám sát thiết bị trực tiếp sẽ hiện khi máy chủ cung cấp điểm cuối tương ứng.</Note>
+      </>)}
       <NewSlot open={add} onClose={() => setAdd(false)} />
       {textSlot ? <SlotTextDialog key={textSlot.id} slot={textSlot} onClose={() => setTextSlot(null)} /> : null}
     </>

@@ -846,7 +846,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:240",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:314",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -883,7 +883,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:307",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:411",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -1379,6 +1379,45 @@
         ]
       }
     },
+    "/admin/v1/broadcast/devices-pick": {
+      "get": {
+        "operationId": "adminGetBroadcastDevicesPick",
+        "tags": [
+          "broadcast"
+        ],
+        "summary": "GET /admin/v1/broadcast/devices-pick",
+        "parameters": [],
+        "x-ams-permission": {
+          "module": "schedule",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/routes/broadcast.ts:380",
+        "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/admin/v1/broadcast/notice": {
       "get": {
         "operationId": "adminGetBroadcastNotice",
@@ -1391,7 +1430,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:247",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:321",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1428,7 +1467,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:254",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:328",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -1487,7 +1526,7 @@
           "module": "schedule",
           "action": "delete"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:399",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:511",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1534,7 +1573,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:305",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:409",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1580,7 +1619,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:332",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:438",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -1618,6 +1657,54 @@
         ]
       }
     },
+    "/admin/v1/broadcast/{id}/delivery": {
+      "get": {
+        "operationId": "adminGetBroadcastByIdDelivery",
+        "tags": [
+          "broadcast"
+        ],
+        "summary": "GET /admin/v1/broadcast/{id}/delivery",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "schedule",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/routes/broadcast.ts:394",
+        "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/admin/v1/broadcast/{id}/publish": {
       "post": {
         "operationId": "adminPostBroadcastByIdPublish",
@@ -1639,7 +1726,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:368",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:478",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1688,7 +1775,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:386",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:497",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1737,7 +1824,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:280",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:354",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -16290,6 +16377,7 @@
                             "video",
                             "image",
                             "marquee",
+                            "text",
                             "clock",
                             "weather",
                             "qr"
@@ -16393,6 +16481,15 @@
               "minLength": 1,
               "maxLength": 64
             }
+          },
+          "device_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "maxItems": 500
           }
         },
         "required": [
@@ -17676,6 +17773,7 @@
                     "video",
                     "image",
                     "marquee",
+                    "text",
                     "clock",
                     "weather",
                     "qr"
@@ -18859,6 +18957,7 @@
                             "video",
                             "image",
                             "marquee",
+                            "text",
                             "clock",
                             "weather",
                             "qr"
@@ -18962,6 +19061,15 @@
               "minLength": 1,
               "maxLength": 64
             }
+          },
+          "device_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "maxItems": 500
           }
         },
         "additionalProperties": true
@@ -19868,6 +19976,7 @@
                     "video",
                     "image",
                     "marquee",
+                    "text",
                     "clock",
                     "weather",
                     "qr"

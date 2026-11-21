@@ -1,9 +1,9 @@
 // Bo cuc da vung (kieu QuangBao Cloud): kieu du lieu + mau co san + ham dung chung cho trinh soan, trinh xem truoc va chuong trinh phat song.
 import { z } from 'zod';
 
-export const ZONE_TYPES = ['video', 'image', 'marquee', 'clock', 'weather', 'qr'] as const;
+export const ZONE_TYPES = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr'] as const;
 export type ZoneType = (typeof ZONE_TYPES)[number];
-export const ZONE_LABEL: Record<ZoneType, string> = { video: 'Video', image: 'Ảnh', marquee: 'Chữ chạy', clock: 'Đồng hồ', weather: 'Thời tiết', qr: 'Mã QR' };
+export const ZONE_LABEL: Record<ZoneType, string> = { video: 'Video', image: 'Ảnh', marquee: 'Chữ chạy', text: 'Văn bản', clock: 'Đồng hồ', weather: 'Thời tiết', qr: 'Mã QR' };
 export const TRANSITIONS = [
   { id: 'none', label: 'Không' },
   { id: 'fade', label: 'Mờ dần' },
@@ -61,6 +61,7 @@ export function newZone(type: ZoneType, existing: Zone[]): Zone {
   while (existing.some((z) => z.id === `z${n}`)) n++;
   const base: Zone = { id: `z${n}`, type, x: 10, y: 10, w: 50, h: 40, z: Math.min(20, existing.length), transition: type === 'video' || type === 'image' ? 'fade' : 'none' };
   if (type === 'marquee') return { ...base, x: 0, y: 88, w: 100, h: 12, text: 'Nhập nội dung chữ chạy', bg_color: '#DC2626', text_color: '#FFFFFF', font_size: 18, scroll_speed: 60 };
+  if (type === 'text') return { ...base, w: 40, h: 20, text: 'Nhập nội dung văn bản', bg_color: '#111827', text_color: '#FFFFFF', font_size: 24 };
   if (type === 'clock') return { ...base, w: 30, h: 15, bg_color: '#111827', text_color: '#FFFFFF', font_size: 28 };
   if (type === 'weather') return { ...base, w: 30, h: 15, bg_color: '#1D4ED8', text_color: '#FFFFFF' };
   if (type === 'qr') return { ...base, w: 20, h: 20, url: 'https://anio.vn' };

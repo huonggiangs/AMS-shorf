@@ -127,3 +127,33 @@ describe('chuong trinh phat song noi bo -> manifest', () => {
     expect(m.schedule.find((s: any) => s.slot_id === `bp_${plain}`).layout).toBeUndefined();
   });
 });
+
+describe('nhom manifest rieng cua thiet bi (chuong trinh gan thiet bi, migration 0022)', () => {
+  it('groupString/parseGroup hai chieu; duong cong khai khong tra nhom thiet bi', async () => {
+    const { groupString, parseGroup } = await import('../src/manifest.js');
+    const g = { region: 'HN', daypart: 'all', modelClass: 'elevator_1080x1920', device: 'dev_abc-1' };
+    expect(groupString(g)).toBe('HN.all.elevator_1080x1920.d-dev_abc-1');
+    expect(parseGroup(groupString(g))).toEqual(g);
+    expect(parseGroup('HN.all.elevator_1080x1920')).toEqual({ region: 'HN', daypart: 'all', modelClass: 'elevator_1080x1920' });
+    const res = await h.gw.app.request(`/v1/manifest/g/${encodeURIComponent(groupString(g))}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('thiet bi duoc chon nhan chuong trinh trong manifest rieng; thiet bi cung khu vuc khong nhan; bo chon thi tro ve nhom khu vuc', async () => {
+    const a = await el({ region: 'DG', px_w: 1080, px_h: 1920, orientation: 'portrait' });
+    const b = await el({ region: 'DG', px_w: 1080, px_h: 1920, orientation: 'portrait' });
+    const lib = await libraryCreative();
+    const pd = await program({ creatives: [lib.id] });
+    await h.rt.db.run('INSERT INTO broadcast_program_devices (program_id, device_id) VALUES (?, ?)', [pd, a.id]);
+    await bump();
+    const ma = await J(await a.call('GET', '/v1/manifest'));
+    const mb = await J(await b.call('GET', '/v1/manifest'));
+    expect(ma.schedule.some((x: any) => x.slot_id === `bp_${pd}`)).toBe(true);
+    expect(ma.group).toContain(`.d-${a.id}`);
+    expect(mb.schedule.some((x: any) => x.slot_id === `bp_${pd}`)).toBe(false);
+    expect(mb.group).not.toContain('.d-');
+    await h.rt.db.run('DELETE FROM broadcast_program_devices WHERE program_id = ?', [pd]);
+    await bump();
+    expect((await J(await b.call('GET', '/v1/manifest'))).schedule.some((x: any) => x.slot_id === `bp_${pd}`)).toBe(true);
+  });
+});

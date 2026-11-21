@@ -290,6 +290,20 @@ export type Slot = z.infer<typeof slotSchema>;
 export const broadcastItemSchema = z
   .object({ creative_id: z.string(), position: z.coerce.number(), name: z.string().nullish(), kind: z.string().nullish(), width: z.coerce.number().nullish(), height: z.coerce.number().nullish(), duration_s: z.coerce.number().nullish(), review_state: z.string(), state: z.string(), ready: z.boolean(), in_campaign: z.boolean(), zone_id: z.string().nullish() })
   .passthrough();
+export const broadcastDeviceSchema = z
+  .object({ id: z.string(), name: z.string().nullish(), kind: z.string().nullish(), region: z.string().nullish(), last_seen_at: z.string().nullish(), online: z.boolean().default(false) })
+  .passthrough();
+export type BroadcastDevice = z.infer<typeof broadcastDeviceSchema>;
+export const broadcastDeliverySchema = z
+  .object({
+    program_id: z.string(),
+    status: z.string(),
+    version: z.coerce.number(),
+    total: z.coerce.number(),
+    items: z.array(broadcastDeviceSchema.extend({ command: z.object({ status: z.string(), at: z.string(), acked_at: z.string().nullish() }).passthrough().nullish() })),
+  })
+  .passthrough();
+export const broadcastDevicePickSchema = z.object({ items: z.array(broadcastDeviceSchema), truncated: z.boolean().default(false) }).passthrough();
 export const broadcastSchema = z
   .object({
     id: idStr,
@@ -306,9 +320,13 @@ export const broadcastSchema = z
     status: z.string(), // draft | published | ended
     version: z.coerce.number().default(1),
     item_count: z.coerce.number().default(0),
+    device_count: z.coerce.number().default(0),
     updated_at: z.string().nullish(),
     published_at: z.string().nullish(),
     items: z.array(broadcastItemSchema).default([]),
+    device_ids: z.array(z.string()).default([]),
+    devices: z.array(broadcastDeviceSchema).default([]),
+    push: z.object({ matched: z.coerce.number(), pushed: z.coerce.number(), skipped: z.coerce.number() }).nullish(),
     layout: z.object({ template_id: z.string().nullish(), orientation: z.enum(['landscape', 'portrait']), zones: z.array(zoneSchema) }).passthrough().nullish(),
   })
   .passthrough();

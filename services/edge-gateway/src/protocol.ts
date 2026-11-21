@@ -194,7 +194,7 @@ export interface ManifestSlot {
 }
 export interface ManifestZone {
   id: string;
-  type: 'video' | 'image' | 'marquee' | 'clock' | 'weather' | 'qr';
+  type: 'video' | 'image' | 'marquee' | 'text' | 'clock' | 'weather' | 'qr';
   x: number;
   y: number;
   w: number;

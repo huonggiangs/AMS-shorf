@@ -286,6 +286,8 @@ Không ký, nội dung giống bản có ký, `Cache-Control: public, max-age=60
 - Disk cache: giữ creative theo `sha256`, **không xóa creative đang phát hoặc còn nằm trong bản manifest hiện hành**; dọn LRU khi đầy. Chuyển lịch mới nguyên tử: chỉ đổi khi tải/kiểm xong.
 - Tuyệt đối đừng phát creative không có trong manifest hiện hành (sự kiện của nó bị từ chối, mục 8.4). Creative của bản manifest ngay trước đó vẫn được chấp nhận (để phát nốt lúc đổi lịch).
 
+> **Nhóm manifest theo thiết bị.** Chương trình phát sóng chọn thiết bị cụ thể (bảng `broadcast_program_devices`) chỉ có trong nhóm `region.daypart.modelClass.d-<deviceId>`. Thiết bị đã xác thực nhận `manifest_url: /v1/manifest` (không phải `/v1/manifest/g/...`) và gateway tự chọn nhóm; route công khai theo nhóm từ chối hậu tố `.d-`. Sau khi xuất bản/sửa/dừng chương trình, backend xếp lệnh `refresh_manifest` tới thiết bị đích để tải ngay.
+
 ## 8. `POST /v1/events`
 
 Chữ ký thiết bị. Lô **tối đa 50 sự kiện** (`422 validation_failed` nếu 0 hoặc >50), thân tối đa 16 KB. Tối đa 30 lô/phút/thiết bị.

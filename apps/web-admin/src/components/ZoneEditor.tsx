@@ -2,7 +2,7 @@ import { useRef, useState, type PointerEvent } from 'react';
 import { Field } from './ui';
 import { ASPECT, MAX_ZONES, TRANSITIONS, ZONE_LABEL, ZONE_TYPES, clampZone, isMediaZone, newZone, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
 
-const COLORS: Record<string, string> = { video: '#2563EB', image: '#059669', marquee: '#DC2626', clock: '#7C3AED', weather: '#0891B2', qr: '#B45309' };
+const COLORS: Record<string, string> = { video: '#2563EB', image: '#059669', marquee: '#DC2626', text: '#475569', clock: '#7C3AED', weather: '#0891B2', qr: '#B45309' };
 type Drag = { id: string; mode: 'move' | 'resize'; sx: number; sy: number; orig: Zone };
 
 /** Trinh soan vung: keo de di chuyen, keo goc duoi-phai de doi kich thuoc (theo % khung), kem bang thuoc tinh cua vung dang chon. */
@@ -86,6 +86,16 @@ export function ZoneEditor({ orientation, zones, onChange, selected, onSelect }:
                   <Field label="Màu chữ"><input type="color" value={sel.text_color ?? '#FFFFFF'} onChange={(e) => set(sel.id, { text_color: e.target.value.toUpperCase() })} /></Field>
                   <Field label="Cỡ chữ"><input type="number" min={8} max={200} value={sel.font_size ?? 18} onChange={(e) => set(sel.id, { font_size: Number(e.target.value) })} /></Field>
                   <Field label="Tốc độ (0–100)"><input type="number" min={0} max={100} value={sel.scroll_speed ?? 60} onChange={(e) => set(sel.id, { scroll_speed: Number(e.target.value) })} /></Field>
+                </div>
+              </>
+            ) : null}
+            {sel.type === 'text' ? (
+              <>
+                <Field label="Nội dung văn bản"><textarea maxLength={200} rows={3} value={sel.text ?? ''} onChange={(e) => set(sel.id, { text: e.target.value })} /></Field>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <Field label="Màu nền"><input type="color" value={sel.bg_color ?? '#111827'} onChange={(e) => set(sel.id, { bg_color: e.target.value.toUpperCase() })} /></Field>
+                  <Field label="Màu chữ"><input type="color" value={sel.text_color ?? '#FFFFFF'} onChange={(e) => set(sel.id, { text_color: e.target.value.toUpperCase() })} /></Field>
+                  <Field label="Cỡ chữ"><input type="number" min={8} max={200} value={sel.font_size ?? 24} onChange={(e) => set(sel.id, { font_size: Number(e.target.value) })} /></Field>
                 </div>
               </>
             ) : null}

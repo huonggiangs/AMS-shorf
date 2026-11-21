@@ -335,7 +335,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     const pairedCap = Number(dev.trust) >= 1 && pairedHbS > 0 ? pairedHbS : 0;
     const eff: IntervalCfg = pairedCap ? { playingS: Math.min(intervals.playingS, pairedCap), idleS: Math.min(intervals.idleS, pairedCap), errorS: Math.min(intervals.errorS, pairedCap), monitoredS: intervals.monitoredS } : intervals;
     const { base, next } = computeInterval(hb.state, monitored, loadFn(), cfg, eff, rng);
-    const group = groupOfDevice(dev);
+    const group = await manifests.groupFor(dev);
     const view = await manifests.get(group);
     const gs = groupString(group);
 
@@ -375,7 +375,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
       interval_base: base,
       manifest_etag: view.etag,
       manifest_group: gs,
-      manifest_url: `/v1/manifest/g/${encodeURIComponent(gs)}`,
+      manifest_url: group.device ? '/v1/manifest' : `/v1/manifest/g/${encodeURIComponent(gs)}`,
       commands,
       ...(minApp ? { min_app_version: minApp } : {}),
       ...(sg?.hotline ? { hotline: sg.hotline } : {}),
@@ -451,7 +451,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     await shedCheck('manifest');
     const dev = await authenticateDevice(c, deps, new Uint8Array());
     const dp = c.req.query('daypart');
-    return serveManifest(c, groupOfDevice(dev, dp && /^[a-z_]{1,16}$/.test(dp) ? dp : 'all'), false);
+    return serveManifest(c, await manifests.groupFor(dev, dp && /^[a-z_]{1,16}$/.test(dp) ? dp : 'all'), false);
   });
 
   // Duong cong khai co the cache o CDN: khong xac thuc, noi dung khong bi mat (URL media cong khai + sha256).
@@ -465,7 +465,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
       throw new HttpProblem('not_found', 'Nhom manifest khong ton tai.');
     }
     const g = parseGroup(raw);
-    if (!g || !(await manifests.known(g))) throw new HttpProblem('not_found', 'Nhom manifest khong ton tai.');
+    if (!g || g.device || !(await manifests.known(g))) throw new HttpProblem('not_found', 'Nhom manifest khong ton tai.');
     return serveManifest(c, g, true);
   });
 
@@ -478,7 +478,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     const parsed = parseJson<{ events?: unknown }>(body) as { events?: unknown };
     if (!Array.isArray(parsed?.events) || parsed.events.length < 1) throw new HttpProblem('validation_failed', 'Can mang events (1..50 su kien).');
     if (parsed.events.length > 50) throw new HttpProblem('validation_failed', 'Toi da 50 su kien moi lo.', { max: 50, got: parsed.events.length });
-    const view = await manifests.get(groupOfDevice(dev));
+    const view = await manifests.get(await manifests.groupFor(dev));
     const campIds = parsed.events.flatMap((e) => (typeof (e as { campaign_id?: unknown })?.campaign_id === 'string' ? [(e as { campaign_id: string }).campaign_id] : []));
     const rewardModels = await rewardCfg.get(campIds);
     const { result, msg } = await processEvents(rt, dev, parsed.events, view, policy, rewardModels);

@@ -33,6 +33,7 @@ interface ProgramRow {
   updated_at: string;
   published_at: string | null;
   item_count?: number;
+  device_count?: number;
 }
 
 interface ItemRow {
@@ -51,7 +52,8 @@ interface ItemRow {
 }
 
 const P_SELECT = `p.id, p.name, p.target_type, p.regions, p.start_date, p.end_date, p.start_min, p.end_min, p.priority, p.header, p.footer, p.status, p.version,
-  p.created_by, p.created_at, p.updated_at, p.published_at, (SELECT COUNT(*) FROM broadcast_program_items i WHERE i.program_id = p.id) AS item_count`;
+  p.created_by, p.created_at, p.updated_at, p.published_at, (SELECT COUNT(*) FROM broadcast_program_items i WHERE i.program_id = p.id) AS item_count,
+  (SELECT COUNT(*) FROM broadcast_program_devices d WHERE d.program_id = p.id) AS device_count`;
 const P_FROM = 'FROM broadcast_programs p';
 
 const present = (p: ProgramRow) => ({
@@ -69,6 +71,7 @@ const present = (p: ProgramRow) => ({
   status: p.status,
   version: num(p.version, 1),
   item_count: num(p.item_count),
+  device_count: num(p.device_count),
   created_at: p.created_at,
   updated_at: p.updated_at,
   published_at: p.published_at,
@@ -101,6 +104,8 @@ const fields = z.object({
   // Bo cuc da vung (null = man don) va tep nao phat o vung nao (creative_id -> zone_id). Xem migrations/0021.
   layout: layoutSchema.nullable().optional(),
   item_zones: z.record(z.string().min(1).max(64), z.string().min(1).max(32)).optional(),
+  // Chon rieng tung thiet bi (rong = theo loai man + khu vuc). Xem migrations/0022.
+  device_ids: z.array(z.string().min(1).max(64)).max(500).optional(),
 });
 
 async function loadProgram(c: Ctx, id: string): Promise<ProgramRow> {
@@ -137,7 +142,76 @@ async function presentFull(c: Ctx, id: string) {
   const items = await rt.db.query<ItemRow>(ITEM_SQL, [id]);
   const zrows = await rt.db.query<{ creative_id: string; zone_id: string }>('SELECT creative_id, zone_id FROM broadcast_item_zones WHERE program_id = ?', [id]);
   const zoneOf = new Map(zrows.map((z) => [z.creative_id, z.zone_id]));
-  return { ...present(p), layout: await loadLayout(c, id), items: items.map((i) => ({ ...presentItem(i), zone_id: zoneOf.get(i.creative_id) ?? null })) };
+  const devices = await loadDevices(c, id);
+  return { ...present(p), layout: await loadLayout(c, id), devices, device_ids: devices.map((d) => d.id), items: items.map((i) => ({ ...presentItem(i), zone_id: zoneOf.get(i.creative_id) ?? null })) };
+}
+
+const ONLINE_MS = 20 * 60_000;
+interface DevRow { id: string; name: string | null; kind: string; region_id: string | null; last_seen_at: string | null }
+const presentDevice = (c: Ctx, d: DevRow) => ({
+  id: d.id,
+  name: d.name ?? d.id,
+  kind: d.kind,
+  region: d.region_id,
+  last_seen_at: d.last_seen_at,
+  online: d.last_seen_at !== null && getRt(c).clock.now().getTime() - new Date(d.last_seen_at).getTime() < ONLINE_MS,
+});
+
+async function loadDevices(c: Ctx, id: string) {
+  const rows = await getRt(c).db.query<DevRow>(
+    'SELECT d.id, d.name, d.kind, d.region_id, d.last_seen_at FROM broadcast_program_devices bd JOIN devices d ON d.id = bd.device_id WHERE bd.program_id = ? ORDER BY d.name, d.id',
+    [id],
+  );
+  return rows.map((d) => presentDevice(c, d));
+}
+
+/** Thiet bi duoc chon phai ton tai, da duyet, khong bi khoa va dung loai man cua chuong trinh. */
+async function checkDevices(c: Ctx, target: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  if (new Set(ids).size !== ids.length) throw unprocessable('Danh sách thiết bị có thiết bị trùng.', 'duplicate_devices');
+  const rows = await getRt(c).db.query<{ id: string; name: string | null; kind: string; trust_level: number; blocked: number }>(
+    `SELECT id, name, kind, trust_level, blocked FROM devices WHERE id IN (${placeholders(ids.length)})`,
+    ids,
+  );
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const kinds = NOTICE_KINDS[target] ?? [];
+  for (const id of ids) {
+    const d = byId.get(id);
+    if (!d) throw unprocessable('Có thiết bị không còn trong hệ thống.', 'device_not_found');
+    if (num(d.trust_level) < 1 || num(d.blocked) === 1) throw unprocessable(`Thiết bị "${d.name ?? id}" chưa được duyệt hoặc đang bị khóa.`, 'device_not_approved');
+    if (!kinds.includes(d.kind)) throw unprocessable(`Thiết bị "${d.name ?? id}" không đúng loại màn của chương trình.`, 'device_kind_mismatch');
+  }
+}
+
+async function saveDevices(db: { run: (sql: string, p: unknown[]) => Promise<unknown> }, id: string, ids: string[]): Promise<void> {
+  await db.run('DELETE FROM broadcast_program_devices WHERE program_id = ?', [id]);
+  for (const d of ids) await db.run('INSERT INTO broadcast_program_devices (program_id, device_id) VALUES (?,?)', [id, d]);
+}
+
+/**
+ * Day lenh `refresh_manifest` toi thiet bi dich de noi dung len man hinh ngay (khong cho chu ky dong bo).
+ * Dich: thiet bi da chon trong chuong trinh; neu khong co thi thiet bi da duyet cung loai man + khu vuc. `extraIds` = thiet bi vua bi go khoi chuong trinh.
+ */
+async function pushRefresh(c: Ctx, p: { id: string; target_type: string; regions: string | null }, version: number, extraIds: string[] = []): Promise<{ matched: number; pushed: number; skipped: number }> {
+  const rt = getRt(c);
+  const u = c.get('user');
+  const chosen = (await rt.db.query<{ device_id: string }>('SELECT device_id FROM broadcast_program_devices WHERE program_id = ?', [p.id])).map((x) => x.device_id);
+  const ids = new Set<string>(extraIds);
+  if (chosen.length) chosen.forEach((x) => ids.add(x));
+  else for (const d of await noticeDevices(c, p.target_type, jsonParse<string[]>(p.regions, []))) ids.add(d.id);
+  const list = [...ids].slice(0, NOTICE_MAX_DEVICES);
+  let pushed = 0;
+  let skipped = 0;
+  for (const id of list) {
+    try {
+      await enqueueCommand(rt, id, { type: 'refresh_manifest', args: {} }, { ttlS: NOTICE_TTL_S, createdBy: u.id, ip: c.get('ip') ?? null, idempotencyKey: `bp:${p.id}:v${version}` });
+      pushed++;
+    } catch (e) {
+      if (e instanceof CommandError) skipped++;
+      else throw e;
+    }
+  }
+  return { matched: ids.size, pushed, skipped: skipped + Math.max(0, ids.size - list.length) };
 }
 
 /** Kiem tra gan tep vao vung: vung phai ton tai trong bo cuc, kieu video/image, tep thuoc chuong trinh. */
@@ -302,6 +376,36 @@ export function broadcastRoutes(): Hono<AppEnv> {
     return c.json({ program_id: p.id, name: p.name, folder: 'ANIO', playlist, files, expires_in_s: USB_URL_TTL_S, total_bytes: files.reduce((a, f) => a + f.size_bytes, 0) });
   });
 
+  // Danh sach thiet bi de chon o buoc 3 cua trinh tao chuong trinh: da duyet, khong bi khoa, dung loai man.
+  r.get('/devices-pick', requirePerm('schedule', 'view'), async (c) => {
+    const target = dbTarget(c.req.query('target') ?? 'elevator');
+    const regions = (c.req.query('regions') ?? '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 30);
+    const q = (c.req.query('q') ?? '').trim().slice(0, 60);
+    const kinds = NOTICE_KINDS[target] ?? [];
+    const where = ['trust_level >= 1', 'blocked = 0', `kind IN (${placeholders(kinds.length)})`];
+    const params: unknown[] = [...kinds];
+    if (regions.length) { where.push(`region_id IN (${placeholders(regions.length)})`); params.push(...regions); }
+    if (q) { where.push('(LOWER(COALESCE(name, \'\')) LIKE ? OR LOWER(id) LIKE ?)'); params.push(`%${q.toLowerCase()}%`, `%${q.toLowerCase()}%`); }
+    const rows = await getRt(c).db.query<DevRow>(`SELECT id, name, kind, region_id, last_seen_at FROM devices WHERE ${where.join(' AND ')} ORDER BY region_id, name, id LIMIT 501`, params);
+    return c.json({ items: rows.slice(0, 500).map((d) => presentDevice(c, d)), truncated: rows.length > 500 });
+  });
+
+  // Tinh trang giao tung thiet bi: lenh refresh_manifest moi nhat + lan thay thiet bi gan nhat.
+  r.get('/:id/delivery', requirePerm('schedule', 'view'), async (c) => {
+    const rt = getRt(c);
+    const p = await loadProgram(c, c.req.param('id'));
+    const chosen = await loadDevices(c, p.id);
+    const targets = chosen.length ? chosen : (await noticeDevices(c, p.target_type, jsonParse<string[]>(p.regions, []))).slice(0, NOTICE_MAX_DEVICES).map((d) => ({ id: d.id, name: d.id, kind: d.kind, region: null, last_seen_at: null, online: false }));
+    const out = [];
+    for (const d of targets) {
+      const cmd = (await rt.db.query<{ status: string; created_at: string; acked_at: string | null }>("SELECT status, created_at, acked_at FROM device_commands WHERE device_id = ? AND type = 'refresh_manifest' ORDER BY created_at DESC LIMIT 1", [d.id]))[0];
+      const dev = chosen.length ? d : (await rt.db.query<DevRow>('SELECT id, name, kind, region_id, last_seen_at FROM devices WHERE id = ?', [d.id]))[0];
+      const pd = dev && !chosen.length ? presentDevice(c, dev as DevRow) : d;
+      out.push({ ...pd, command: cmd ? { status: cmd.status, at: cmd.created_at, acked_at: cmd.acked_at } : null });
+    }
+    return c.json({ program_id: p.id, status: p.status, version: num(p.version, 1), items: out, total: out.length });
+  });
+
   r.get('/:id', requirePerm('schedule', 'view'), async (c) => c.json(await presentFull(c, c.req.param('id'))));
 
   r.post('/', requirePerm('schedule', 'write'), async (c) => {
@@ -314,6 +418,7 @@ export function broadcastRoutes(): Hono<AppEnv> {
     const text = checkText(target, b, { header: null, footer: null });
     await checkItems(c, target, b.creative_ids);
     checkItemZones(b.layout ?? null, b.item_zones, b.creative_ids);
+    await checkDevices(c, target, b.device_ids ?? []);
     const id = rt.id();
     const now = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
@@ -324,6 +429,7 @@ export function broadcastRoutes(): Hono<AppEnv> {
       );
       for (const [i, cid] of b.creative_ids.entries()) await db.run('INSERT INTO broadcast_program_items (program_id, creative_id, position) VALUES (?,?,?)', [id, cid, i]);
       if (b.layout) await saveLayout(db, id, b.layout, true, b.item_zones ?? {}, b.creative_ids, now);
+      if (b.device_ids?.length) await saveDevices(db, id, b.device_ids);
       await auditCtx(c, db, { action: 'broadcast.create', objectType: 'broadcast_program', objectId: id, diff: { name: b.name, target_type: target, items: b.creative_ids.length } });
     });
     return c.json(await presentFull(c, id), 201);
@@ -347,6 +453,8 @@ export function broadcastRoutes(): Hono<AppEnv> {
     const existingZones = b.layout === null ? {} : Object.fromEntries((await rt.db.query<{ creative_id: string; zone_id: string }>('SELECT creative_id, zone_id FROM broadcast_item_zones WHERE program_id = ?', [p.id])).map((z) => [z.creative_id, z.zone_id]));
     const effItemZones: Record<string, string> = b.item_zones ?? existingZones;
     if (b.item_zones) checkItemZones(effLayout, b.item_zones, ids);
+    if (b.device_ids !== undefined) await checkDevices(c, target, b.device_ids);
+    const oldDevs = b.device_ids !== undefined ? (await rt.db.query<{ device_id: string }>('SELECT device_id FROM broadcast_program_devices WHERE program_id = ?', [p.id])).map((x) => x.device_id) : [];
     const now = rt.clock.now().toISOString();
     const live = p.status === 'published';
     await rt.db.tx(async (db) => {
@@ -359,10 +467,12 @@ export function broadcastRoutes(): Hono<AppEnv> {
         for (const [i, cid] of ids.entries()) await db.run('INSERT INTO broadcast_program_items (program_id, creative_id, position) VALUES (?,?,?)', [p.id, cid, i]);
       }
       if (b.layout !== undefined || b.item_zones !== undefined || b.creative_ids) await saveLayout(db, p.id, effLayout, b.layout !== undefined, effItemZones, ids, now);
+      if (b.device_ids !== undefined) await saveDevices(db, p.id, b.device_ids);
       await auditCtx(c, db, { action: 'broadcast.update', objectType: 'broadcast_program', objectId: p.id, diff: { name: b.name ?? p.name, items: ids.length, live } });
     });
     if (live) await bumpManifest(rt);
-    return c.json(await presentFull(c, p.id));
+    const push = live ? await pushRefresh(c, p, num(p.version, 1) + 1, oldDevs) : null;
+    return c.json({ ...(await presentFull(c, p.id)), push });
   });
 
   r.post('/:id/publish', requirePerm('schedule', 'write'), async (c) => {
@@ -380,7 +490,8 @@ export function broadcastRoutes(): Hono<AppEnv> {
       await auditCtx(c, db, { action: 'broadcast.publish', objectType: 'broadcast_program', objectId: p.id, diff: { status: { from: p.status, to: 'published' }, items: items.length } });
     });
     await bumpManifest(rt);
-    return c.json(await presentFull(c, p.id));
+    const push = await pushRefresh(c, p, num(p.version, 1) + 1);
+    return c.json({ ...(await presentFull(c, p.id)), push });
   });
 
   r.post('/:id/unpublish', requirePerm('schedule', 'write'), async (c) => {
@@ -393,21 +504,28 @@ export function broadcastRoutes(): Hono<AppEnv> {
       await auditCtx(c, db, { action: 'broadcast.unpublish', objectType: 'broadcast_program', objectId: p.id, diff: { status: { from: 'published', to: 'draft' } } });
     });
     await bumpManifest(rt);
-    return c.json(await presentFull(c, p.id));
+    const push = await pushRefresh(c, p, num(p.version, 1) + 1);
+    return c.json({ ...(await presentFull(c, p.id)), push });
   });
 
   r.delete('/:id', requirePerm('schedule', 'delete'), async (c) => {
     const rt = getRt(c);
     const p = await loadProgram(c, c.req.param('id'));
+    const pushTargets = p.status === 'published' ? (await rt.db.query<{ device_id: string }>('SELECT device_id FROM broadcast_program_devices WHERE program_id = ?', [p.id])).map((x) => x.device_id) : [];
     await rt.db.tx(async (db) => {
+      await db.run('DELETE FROM broadcast_program_devices WHERE program_id = ?', [p.id]);
       await db.run('DELETE FROM broadcast_item_zones WHERE program_id = ?', [p.id]);
       await db.run('DELETE FROM broadcast_program_layouts WHERE program_id = ?', [p.id]);
       await db.run('DELETE FROM broadcast_program_items WHERE program_id = ?', [p.id]);
       await db.run('DELETE FROM broadcast_programs WHERE id = ?', [p.id]);
       await auditCtx(c, db, { action: 'broadcast.delete', objectType: 'broadcast_program', objectId: p.id, diff: { name: p.name } });
     });
-    if (p.status === 'published') await bumpManifest(rt);
-    return c.json({ ok: true });
+    let push: { matched: number; pushed: number; skipped: number } | null = null;
+    if (p.status === 'published') {
+      await bumpManifest(rt);
+      push = await pushRefresh(c, p, num(p.version, 1) + 1, pushTargets);
+    }
+    return c.json({ ok: true, push });
   });
 
   return r;
