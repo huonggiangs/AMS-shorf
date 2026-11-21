@@ -285,6 +285,33 @@ export const slotSchema = z
   .passthrough();
 export type Slot = z.infer<typeof slotSchema>;
 
+/* ---------- broadcast programs (chương trình phát sóng nội bộ) ---------- */
+export const broadcastItemSchema = z
+  .object({ creative_id: z.string(), position: z.coerce.number(), name: z.string().nullish(), kind: z.string().nullish(), width: z.coerce.number().nullish(), height: z.coerce.number().nullish(), duration_s: z.coerce.number().nullish(), review_state: z.string(), state: z.string(), ready: z.boolean(), in_campaign: z.boolean() })
+  .passthrough();
+export const broadcastSchema = z
+  .object({
+    id: idStr,
+    name: z.string(),
+    target_type: z.string(),
+    regions: z.array(z.string()).default([]),
+    start_date: z.string().nullish(),
+    end_date: z.string().nullish(),
+    start_min: z.coerce.number(),
+    end_min: z.coerce.number(),
+    priority: z.coerce.number(),
+    header: z.string().nullish(),
+    footer: z.string().nullish(),
+    status: z.string(), // draft | published | ended
+    version: z.coerce.number().default(1),
+    item_count: z.coerce.number().default(0),
+    updated_at: z.string().nullish(),
+    published_at: z.string().nullish(),
+    items: z.array(broadcastItemSchema).default([]),
+  })
+  .passthrough();
+export type Broadcast = z.infer<typeof broadcastSchema>;
+
 /* ---------- finance ---------- */
 export const walletSchema = z
   .object({ customer_id: z.string(), customer_name: z.string().nullish(), balance_vnd: money, reserved_vnd: money, spent_vnd: money, available_vnd: money.optional() })

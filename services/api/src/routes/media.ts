@@ -18,7 +18,7 @@ import { abortOpenMultipart, getTransfer, lazySweepStaleUploads, partsOf } from 
 import { mediaMultipartRoutes } from './media-multipart.js';
 import { assertContentVersion, assertLockPolicy, bumpContentVersion, recordApproval, syncKidFlags } from '../lib/creative-security.js';
 import { NEEDS_MANUAL_REVIEW, mediaScanReviewRoutes } from './media-scan-review.js';
-import { UNSCANNED_STATES, allowUnscannedCreatives, assertScanOk, scanVerdict } from './creatives-scan.js';
+import { allowUnscannedCreatives, assertScanOk, scanVerdict } from './creatives-scan.js';
 import { probeMp4, rangeReaderFor } from '../lib/mp4-probe.js';
 import { probeWebm } from '../lib/webm-probe.js';
 import { parseDiag, saveDiag } from '../lib/creative-diag.js';
@@ -197,7 +197,7 @@ export const present = (m: MediaRow, external = false): Record<string, unknown> 
   scan_state: m.scan_state,
   scan_reasons: reasonsOf(m.scan_detail),
   blocker: blockerOf(m),
-  scan_warning: (UNSCANNED_STATES as readonly string[]).includes(m.scan_state) ? 'Chưa quét mã độc' : m.scan_state === 'needs_manual_review' ? 'Chờ kiểm tra thủ công (không có quét mã độc)' : null,
+  scan_warning: m.scan_state === 'needs_manual_review' ? 'Chờ kiểm tra thủ công (định dạng bất thường)' : null,
   format: isAdFormat(m.format) ? m.format : 'fullscreen',
   overlay: overlayOf(m.overlay),
   sha256: m.sha256,
@@ -298,6 +298,9 @@ const importBody = z.object({
   url: z.string().trim().min(8).max(2048),
   name: z.string().trim().max(200).optional(),
   customer_id: z.string().max(64).optional().nullable(),
+  // mo ta hien thi (giong tai len tu may): dinh dang + lop phu (chu/QR/hotline)
+  format: z.string().max(20).optional(),
+  overlay: overlayInput,
 });
 
 async function emailOwner(rt: Runtime, customerId: string, subject: string, html: string): Promise<void> {
@@ -598,6 +601,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const u = c.get('user');
     const b = await parseBody(c, importBody);
     const customerId = await resolveOwner(c, b.customer_id);
+    const fo = checkFormatOverlay(b.format, b.overlay, external);
     if (b.source === 'youtube') throw unprocessable(YOUTUBE_MSG, 'youtube_unsupported');
     const chk = checkImportUrl(b.source as LinkSource, b.url);
     if (!chk.ok) throw unprocessable(chk.message, 'bad_media_url');
@@ -617,13 +621,14 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
       await db.run(
-        `INSERT INTO creatives (id, campaign_id, customer_id, name, kind, source, source_url, uploaded_by, uploader_kind, scan_state, review_state, state, created_at)
-         VALUES (?,NULL,?,?,'link',?,?,?,?,'pending','pending','importing',?)`,
-        [id, customerId, name.slice(0, 200), plan.source, url, u.id, u.kind, nowIso],
+        `INSERT INTO creatives (id, campaign_id, customer_id, name, kind, source, source_url, uploaded_by, uploader_kind, scan_state, review_state, state, format, overlay, created_at)
+         VALUES (?,NULL,?,?,'link',?,?,?,?,'pending','pending','importing',?,?,?)`,
+        [id, customerId, name.slice(0, 200), plan.source, url, u.id, u.kind, fo.format ?? 'fullscreen', fo.overlay ?? null, nowIso],
       );
+      await syncKidFlags(db, id, fo.overlay ?? null, nowIso); // cot kid_safe/lock_context dong bo nhu route /overlay
       await db.run("INSERT INTO creative_transfers (creative_id, kind, status, parts, bytes_done, attempts, started_at, updated_at) VALUES (?,'import','queued','[]',0,0,?,?)", [id, nowIso, nowIso]);
       await enqueueMediaImport(db, rt, id, '1');
-      await auditCtx(c, db, { action: 'media.import', objectType: 'creative', objectId: id, customerId, diff: { source: plan.source, host: chk.url.hostname } });
+      await auditCtx(c, db, { action: 'media.import', objectType: 'creative', objectId: id, customerId, diff: { source: plan.source, host: chk.url.hostname, format: fo.format ?? 'fullscreen', overlay: fo.overlay ? 'set' : 'none' } });
     });
     try {
       await runOutbox(rt, c.get('finance')); // day ngay cho consumer; loi thi cron thu lai

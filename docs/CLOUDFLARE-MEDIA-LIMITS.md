@@ -6,7 +6,7 @@
 Đường kiểm tra dưới đây **không phải phần mềm diệt virus**. Nó không phát hiện mã độc nhúng trong dữ liệu hợp lệ về cấu trúc (ví dụ khai thác lỗi giải mã của một trình phát, metadata/EXIF độc, dữ liệu sau khung hình), không chạy chữ ký, không giải mã/chuyển mã. 'clean' ở đây nghĩa là "tệp thuộc danh sách cho phép hẹp và cấu trúc container nhất quán", **không** nghĩa là "đã quét sạch". Rủi ro còn lại: tệp độc có cấu trúc đúng sẽ được đánh dấu clean. Giảm thiểu: duyệt nội dung bằng mắt (bắt buộc, `media:approve`), TV phát bằng trình phát hệ thống sandbox, và tắt `CF_VALIDATOR_MARK_CLEAN` nếu muốn mọi tệp đều qua tay người.
 
 ## Vì sao cần đường riêng
-Worker không chạy được `ffmpeg` hay `clamd` (xem `docs/DEPLOY-CLOUDFLARE.md`). Trước đây creative tải lên trên Cloudflare mãi ở `scan_state='pending'`, cổng duyệt/manifest (đúng) chặn chúng, nên không ai phát được quảng cáo mới.
+Worker không chạy được `ffmpeg` (xem `docs/DEPLOY-CLOUDFLARE.md`). Trước đây creative tải lên trên Cloudflare mãi ở `scan_state='pending'`, cổng duyệt/manifest (đúng) chặn chúng, nên không ai phát được quảng cáo mới.
 
 ## Luồng (API Worker, `services/api/src/lib/cf-creative-validate.ts`)
 1. `POST /media/:id/confirm` (đã có): kiểm kích thước/độ phân giải/thời lượng khai báo, tính sha256 nếu ≤128 MB, ghi outbox `media.uploaded` cùng giao dịch.
@@ -70,16 +70,16 @@ Nguyên nhân gốc báo cáo "Super admin tải video vẫn phải chờ duyệ
 Worker không có ffmpeg, nên web-admin tự tạo: `<video>`+canvas lấy khung ~1 s (hoặc 10% thời lượng nếu video < 10 s), rộng 320 px, JPEG chất lượng 0,7 (giảm dần đến khi <= 150 KB; ảnh thì co chính ảnh). Sau `PUT` tệp chính và `/confirm`, gửi `PUT /media/:id/thumbnail` (raw body JPEG/WebP, quyền `media:write`, theo phạm vi khách hàng như các route media khác, <= 150 KB, kiểm tra magic bytes). Lưu ở kho tệp key `media/{customer}/{id}/thumb.jpg`, bảng `creative_thumbnails` (migration 0016). `GET /media/:id/thumbnail` stream từ kho (xác thực bằng cookie phiên, `Cache-Control: private`); `thumb_url` trả `/api/{admin|portal}/v1/media/{id}/thumbnail?v=<thời điểm tạo>`. Lỗi tạo/gửi ảnh không làm hỏng việc tải lên. Tệp tải trước đây chưa có ảnh: khi mở trang Media, web-admin tự tạo tuần tự tối đa 3 tệp mỗi lần (im lặng khi lỗi), và thẻ có nút "Tạo ảnh đại diện" để làm thủ công.
 - **CORS R2 cho GET**: tạo ảnh từ tệp đã tải lên dùng `<video crossOrigin="anonymous">` đọc URL ký GET trên R2; thiếu CORS `GET` thì canvas bị chặn (tainted) và tệp cũ chỉ không có ảnh (tệp mới tạo ảnh từ tệp trên máy, không cần CORS). `scripts/deploy-cloudflare.mjs` (`ensureMediaCors`) đã đặt origin `https://ams.anio.vn` với `GET, PUT, HEAD`, header `*`, nên chạy lại `scripts\DEPLOY-AMS-ANIO-VN.bat` là đủ; nếu đặt tay: R2 > bucket media > Settings > CORS policy, thêm `GET` và `HEAD`.
 
-## Còn thiếu so với đường VPS (media-worker + ClamAV)
+## Còn thiếu so với đường VPS (media-worker)
 | | Cloudflare (đường này) | VPS: `services/media-worker` + ClamAV |
 |---|---|---|
-| Quét chữ ký mã độc | **không** | có (clamd, `CLAMAV_REQUIRED=1` thì bắt buộc) |
+| Quét chữ ký mã độc | **bỏ hẳn (cả hai đường)**: tệp ảnh/video chuẩn không chứa mã thực thi; kiểm tra cấu trúc + chuyển mã làm sạch tệp | bỏ hẳn |
 | Giải mã/ffprobe thật | không: chỉ đọc header container | có: ffprobe, phát hiện tệp hỏng |
 | Chuyển mã về hồ sơ TV-safe, rendition, manifest | không | có (ffmpeg) |
 | Tệp lớn (>48 MB, video 500 MB cho TV) | vào duyệt tay (không đọc được) | xử lý (đọc theo giới hạn `MEDIA_MAX_BYTES`) |
 | WebM / MOV | duyệt tay | hỗ trợ |
 | Tệp liên kết (YouTube/Drive/Dropbox) | không tải về | chưa (xem `ops/agents/m1-media-worker.requests.md`) |
-| Phán quyết | 'clean' = allow-list + cấu trúc | 'clean' = clamd sạch |
+| Phán quyết | 'clean' = allow-list + cấu trúc | 'clean' = qua kiểm tra cấu trúc + chuyển mã |
 
 Khuyến nghị: khách trả tiền, đặc biệt tệp lớn và video, nên dùng đường VPS (`COMMERCIAL-READINESS` 2.6, P1-8). Đường Cloudflare phù hợp pilot với ảnh PNG/JPG và MP4 nhỏ do nhân viên kiểm soát.
 

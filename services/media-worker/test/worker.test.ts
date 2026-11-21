@@ -1,11 +1,9 @@
-import { createServer } from 'node:net';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestRuntime, type TestRuntime } from '@ams/runtime';
-import { ClamdScanner, FakeScanner } from '../src/clamav.js';
 import { FakeMedia, FfmpegTools } from '../src/media.js';
 import { MEDIA_TOPIC, createMediaWorker } from '../src/worker.js';
 import { sniff } from '../src/sniff.js';
@@ -47,7 +45,7 @@ describe('sniff', () => {
 });
 
 describe('media worker (ban gia)', () => {
-  const mk = (o: Parameters<typeof createMediaWorker>[1] = {}) => createMediaWorker(rt, { scanner: new FakeScanner(), media: new FakeMedia({ probe: { kind: 'image', width: 1, height: 1, durationS: null, codec: 'png', hasAudio: false, bitrate: null } }), ...o });
+  const mk = (o: Parameters<typeof createMediaWorker>[1] = {}) => createMediaWorker(rt, { media: new FakeMedia({ probe: { kind: 'image', width: 1, height: 1, durationS: null, codec: 'png', hasAudio: false, bitrate: null } }), ...o });
 
   it('tep sach: scan_state=clean, sha256 dung, idempotent', async () => {
     const id = await seed(PNG);
@@ -60,24 +58,10 @@ describe('media worker (ban gia)', () => {
     expect((await w.process(id)).outcome).toBe('skipped');
   });
 
-  it('EICAR: infected + tu choi, khong bao gio clean', async () => {
-    const eicar = Buffer.concat([PNG, Buffer.from('X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*')]);
-    const id = await seed(eicar);
-    const res = await mk().process(id);
-    expect(res).toMatchObject({ outcome: 'rejected', code: 'malware_detected' });
-    const r = await row(id);
-    expect(r['scan_state']).toBe('infected');
-    expect(r['review_state']).toBe('rejected');
-    expect(r['state']).toBe('invalid');
-  });
-
-  it('clamd khong san sang: unscanned (khong phai clean); bat buoc thi giu pending', async () => {
+  it('tep qua kiem tra cau truc => clean ngay (khong con quet virus)', async () => {
     const id = await seed(PNG);
-    expect((await mk({ scanner: new FakeScanner({ down: true }) }).process(id)).scan_state).toBe('unscanned');
-    expect((await row(id))['scan_state']).toBe('unscanned');
-    const id2 = await seed(PNG);
-    expect((await mk({ scanner: new FakeScanner({ down: true }), clamRequired: true }).process(id2)).outcome).toBe('deferred');
-    expect((await row(id2))['scan_state']).toBe('pending');
+    expect((await mk().process(id)).scan_state).toBe('clean');
+    expect((await row(id))['scan_state']).toBe('clean');
   });
 
   it('tu choi: sai magic bytes, lech MIME, qua lon, kich thuoc that khac khai bao', async () => {
@@ -114,36 +98,6 @@ describe('media worker (ban gia)', () => {
   });
 });
 
-describe('clamd TCP adapter (server gia)', () => {
-  function fakeClamd(reply: string) {
-    return new Promise<{ port: number; got: Buffer[]; close(): void }>((resolve) => {
-      const got: Buffer[] = [];
-      const srv = createServer((s) => {
-        let all = Buffer.alloc(0);
-        s.on('data', (d) => {
-          got.push(d);
-          all = Buffer.concat([all, d]);
-          if (all.subarray(-4).equals(Buffer.alloc(4))) s.end(reply + '\0');
-        });
-      });
-      srv.listen(0, '127.0.0.1', () => resolve({ port: (srv.address() as { port: number }).port, got, close: () => srv.close() }));
-    });
-  }
-  it('OK / FOUND / loi / khong ket noi', async () => {
-    const ok = await fakeClamd('stream: OK');
-    expect(await new ClamdScanner({ host: '127.0.0.1', port: ok.port, chunkSize: 4 }).scan(Buffer.from('hello world'))).toEqual({ status: 'clean' });
-    expect(Buffer.concat(ok.got).toString('latin1').startsWith('zINSTREAM\0')).toBe(true);
-    ok.close();
-    const bad = await fakeClamd('stream: Win.Test.EICAR_HDB-1 FOUND');
-    expect(await new ClamdScanner({ host: '127.0.0.1', port: bad.port }).scan(Buffer.from('x'))).toEqual({ status: 'infected', signature: 'Win.Test.EICAR_HDB-1' });
-    bad.close();
-    const err = await fakeClamd('INSTREAM size limit exceeded. ERROR');
-    expect((await new ClamdScanner({ host: '127.0.0.1', port: err.port }).scan(Buffer.from('x'))).status).toBe('unavailable');
-    err.close();
-    expect((await new ClamdScanner({ host: '127.0.0.1', port: 1, timeoutMs: 500 }).scan(Buffer.from('x'))).status).toBe('unavailable');
-  });
-});
-
 describe.skipIf(!hasFf)('ffmpeg that', () => {
   const dir = mkdtempSync(join(tmpdir(), 'mw-test-'));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -159,7 +113,7 @@ describe.skipIf(!hasFf)('ffmpeg that', () => {
        VALUES (?,'C1','v','elevator',1080,1920,'video','upload',?,'video/mp4',?,'pending','pending','pending_review',?)`,
       [id, key, mp4.length, NOW],
     );
-    const w = createMediaWorker(rt, { scanner: new FakeScanner(), media: new FfmpegTools() });
+    const w = createMediaWorker(rt, { media: new FfmpegTools() });
     expect((await w.process(id)).outcome).toBe('processed');
     const r = await row(id);
     expect(r['scan_state']).toBe('clean');
@@ -174,7 +128,7 @@ describe.skipIf(!hasFf)('ffmpeg that', () => {
   it('anh PNG that -> webp; tep gia mao (magic PNG, ruot rac) bi tu choi', async () => {
     const png = gen('in.png', ['-f', 'lavfi', '-i', 'testsrc=size=1920x1080', '-frames:v', '1']);
     const id = await seed(png, { w: 1920, h: 1080 });
-    const w = createMediaWorker(rt, { scanner: new FakeScanner(), media: new FfmpegTools() });
+    const w = createMediaWorker(rt, { media: new FfmpegTools() });
     expect((await w.process(id)).outcome).toBe('processed');
     expect(await rt.objects.head(`renditions/C1/${id}/tv-safe-webp.webp`)).not.toBeNull();
     const fake = await seed(Buffer.concat([PNG.subarray(0, 8), Buffer.from('garbage garbage garbage')]));

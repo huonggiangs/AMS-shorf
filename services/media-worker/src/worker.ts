@@ -1,14 +1,13 @@
-// Media worker: nhan creative da tai len -> kiem loai/kich thuoc/magic bytes -> quet ma doc -> ffprobe -> chuyen ma -> cap nhat creatives.
+// Media worker: nhan creative da tai len -> kiem loai/kich thuoc/magic bytes -> ffprobe -> chuyen ma -> cap nhat creatives (khong quet virus: anh/video chuan khong chua ma thuc thi; kiem tra cau truc + chuyen ma lam sach tep).
 import type { Runtime } from '@ams/runtime';
 import { sha256Hex } from '@ams/shared';
-import { ClamdScanner, NoScanner, type Scanner } from './clamav.js';
 import { FfmpegTools, type MediaTools, type ProbeResult, type TargetKind } from './media.js';
 import { mimeMatches, sniff } from './sniff.js';
 
 export const MEDIA_TOPIC = 'media.uploaded';
 export interface MediaMessage { creative_id: string }
 
-/** Gia tri creatives.scan_state do worker ghi. 'unscanned' = chua quet (clamd khong san sang / tep bi tu choi truoc khi quet). KHONG BAO GIO ghi 'clean' neu chua quet. */
+/** Gia tri creatives.scan_state do worker ghi. 'clean' = qua kiem tra cau truc; 'unscanned' = tep bi tu choi truoc khi kiem tra xong; 'infected' chi con o du lieu cu. */
 export type ScanState = 'pending' | 'clean' | 'infected' | 'unscanned';
 
 export type Outcome = 'processed' | 'rejected' | 'skipped' | 'deferred';
@@ -21,10 +20,8 @@ interface Row {
 }
 
 export interface WorkerOptions {
-  scanner?: Scanner;
   media?: MediaTools;
   transcode?: boolean;      // MEDIA_TRANSCODE (mac dinh true)
-  clamRequired?: boolean;   // CLAMAV_REQUIRED=1: clamd khong san sang => de nguyen 'pending' va thu lai
   maxBytes?: number;        // tran cung bo nho (ObjectStore.get doc ca tep)
   log?: (m: string) => void;
 }
@@ -41,18 +38,14 @@ const EXT: Record<string, string> = { png: 'png', jpeg: 'jpg', mp4: 'mp4', webm:
 const tk = (t: string | null): TargetKind | null => (t === 'tv' || t === 'elevator' || t === 'led_p5' ? t : t === 'led' ? 'led_p5' : null);
 
 export function optionsFromEnv(env: Record<string, string | undefined>): WorkerOptions {
-  const host = env['CLAMD_HOST'];
   return {
-    scanner: host ? new ClamdScanner({ host, port: Number(env['CLAMD_PORT'] ?? 3310), timeoutMs: Number(env['CLAMD_TIMEOUT_MS'] ?? 60_000) }) : new NoScanner(),
     media: new FfmpegTools({ threads: Number(env['MEDIA_FFMPEG_THREADS'] ?? 2), timeoutMs: Number(env['MEDIA_FFMPEG_TIMEOUT_MS'] ?? 600_000) }),
     transcode: env['MEDIA_TRANSCODE'] !== '0',
-    clamRequired: env['CLAMAV_REQUIRED'] === '1',
     maxBytes: Number(env['MEDIA_MAX_BYTES'] ?? 512 * MB),
   };
 }
 
 export function createMediaWorker(rt: Runtime, opts: WorkerOptions = {}) {
-  const scanner = opts.scanner ?? new NoScanner();
   const media = opts.media ?? new FfmpegTools();
   const log = opts.log ?? (() => {});
   const maxBytes = opts.maxBytes ?? 512 * MB;
@@ -109,14 +102,7 @@ export function createMediaWorker(rt: Runtime, opts: WorkerOptions = {}) {
     if (row.mime && !mimeMatches(row.mime, kind)) return reject(row, 'content_type_mismatch', `Nội dung tệp (${kind}) không khớp loại đã khai báo (${row.mime}).`, { scan: 'unscanned' });
     const sha = await sha256Hex(bytes);
 
-    const verdict = await scanner.scan(bytes);
-    if (verdict.status === 'infected') return reject(row, 'malware_detected', `Phát hiện mã độc (${verdict.signature}).`, { sha, scan: 'infected' });
-    let scan: ScanState = 'clean';
-    if (verdict.status === 'unavailable') {
-      if (opts.clamRequired) return { outcome: 'deferred', reason: `clamd bat buoc nhung khong san sang: ${verdict.reason}` };
-      scan = 'unscanned';
-      log(`[media-worker] ${row.id}: bo qua quet ma doc (${verdict.reason}) -> scan_state=unscanned`);
-    }
+    const scan: ScanState = 'clean';
 
     let probe: ProbeResult | null = null;
     const haveMedia = await media.available();

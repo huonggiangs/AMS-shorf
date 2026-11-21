@@ -1,0 +1,276 @@
+// Chuong trinh phat song NOI BO: van hanh chon media trong kho + loai man + khu vuc + khung gio roi xuat ban, KHONG qua hop dong/thanh toan.
+// Gateway dua chuong trinh 'published' vao manifest (campaign_id = 'bp_<id>', khong co gia chot nen khong tinh tien). Xem migrations/0020.
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { audit as auditCtx } from '../lib/audit-ctx.js';
+import { dbTarget, fitsTarget } from '../lib/creative.js';
+import { SIGNAGE_LIMITS, validateDisplayText, type FieldError } from '@ams/shared';
+import { conflict, notFound, unprocessable } from '../lib/errors.js';
+import { eq, getRt, jsonParse, num, parseBody, placeholders, runList } from '../lib/http.js';
+import type { Ctx, ListSpec } from '../lib/http.js';
+import { bumpManifest } from '../lib/manifest.js';
+import { requirePerm } from '../auth/middleware.js';
+import type { AppEnv } from '../types.js';
+
+interface ProgramRow {
+  id: string;
+  name: string;
+  target_type: string;
+  regions: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  start_min: number;
+  end_min: number;
+  priority: number;
+  header: string | null;
+  footer: string | null;
+  status: string;
+  version: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+  item_count?: number;
+}
+
+interface ItemRow {
+  creative_id: string;
+  position: number;
+  name: string | null;
+  kind: string | null;
+  px_w: number | null;
+  px_h: number | null;
+  duration_s: number | null;
+  review_state: string;
+  state: string;
+  scan_state: string;
+  campaign_id: string | null;
+  target_type: string | null;
+}
+
+const P_SELECT = `p.id, p.name, p.target_type, p.regions, p.start_date, p.end_date, p.start_min, p.end_min, p.priority, p.header, p.footer, p.status, p.version,
+  p.created_by, p.created_at, p.updated_at, p.published_at, (SELECT COUNT(*) FROM broadcast_program_items i WHERE i.program_id = p.id) AS item_count`;
+const P_FROM = 'FROM broadcast_programs p';
+
+const present = (p: ProgramRow) => ({
+  id: p.id,
+  name: p.name,
+  target_type: p.target_type,
+  regions: jsonParse<string[]>(p.regions, []),
+  start_date: p.start_date,
+  end_date: p.end_date,
+  start_min: num(p.start_min),
+  end_min: num(p.end_min),
+  priority: num(p.priority),
+  header: p.header,
+  footer: p.footer,
+  status: p.status,
+  version: num(p.version, 1),
+  item_count: num(p.item_count),
+  created_at: p.created_at,
+  updated_at: p.updated_at,
+  published_at: p.published_at,
+});
+
+const spec: ListSpec = {
+  from: P_FROM,
+  select: P_SELECT,
+  search: ['p.name'],
+  sorts: { updated_at: 'p.updated_at', name: 'p.name', status: 'p.status' },
+  defaultSort: 'updated_at:desc',
+  tiebreak: 'p.id',
+  filters: { status: eq('p.status'), target_type: eq('p.target_type') },
+};
+
+const minute = z.coerce.number().int().min(0).max(1440).refine((n) => n % 30 === 0, 'Phải là bội số của 30 phút');
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày dạng YYYY-MM-DD').nullable();
+const fields = z.object({
+  name: z.string().trim().min(1).max(120),
+  target_type: z.enum(['tv', 'elevator', 'led', 'led_p5']),
+  regions: z.array(z.string().trim().min(1).max(16)).max(30).default([]),
+  start_date: day.optional(),
+  end_date: day.optional(),
+  start_min: minute.default(0),
+  end_min: minute.default(1440),
+  priority: z.coerce.number().int().min(1).max(5).default(3),
+  header: z.string().nullable().optional(),
+  footer: z.string().nullable().optional(),
+  creative_ids: z.array(z.string().min(1).max(64)).max(100).default([]),
+});
+
+async function loadProgram(c: Ctx, id: string): Promise<ProgramRow> {
+  const r = (await getRt(c).db.query<ProgramRow>(`SELECT ${P_SELECT} ${P_FROM} WHERE p.id = ?`, [id]))[0];
+  if (!r) throw notFound('Không tìm thấy chương trình phát sóng.');
+  return r;
+}
+
+const ITEM_SQL = `SELECT i.creative_id, i.position, cr.name, cr.kind, cr.px_w, cr.px_h, cr.duration_s, cr.review_state, cr.state, cr.scan_state, cr.campaign_id, cr.target_type
+  FROM broadcast_program_items i JOIN creatives cr ON cr.id = i.creative_id WHERE i.program_id = ? ORDER BY i.position, i.creative_id`;
+
+const presentItem = (i: ItemRow) => ({
+  creative_id: i.creative_id,
+  position: num(i.position),
+  name: i.name,
+  kind: i.kind,
+  width: i.px_w === null ? null : num(i.px_w),
+  height: i.px_h === null ? null : num(i.px_h),
+  duration_s: i.duration_s === null ? null : num(i.duration_s),
+  review_state: i.review_state,
+  state: i.state,
+  ready: i.review_state === 'approved' && i.state === 'ready' && !['infected', 'failed', 'needs_manual_review', 'pending'].includes(i.scan_state),
+  in_campaign: i.campaign_id !== null,
+});
+
+async function presentFull(c: Ctx, id: string) {
+  const p = await loadProgram(c, id);
+  const items = await getRt(c).db.query<ItemRow>(ITEM_SQL, [id]);
+  return { ...present(p), items: items.map(presentItem) };
+}
+
+/** Kiem tra danh sach tep: ton tai, chua gan chien dich (tranh tinh tien nham), khop loai man. Tra ve loi dau tien (tieng Viet). */
+async function checkItems(c: Ctx, target: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  if (new Set(ids).size !== ids.length) throw unprocessable('Danh sách tệp có tệp trùng.', 'duplicate_items');
+  const rows = await getRt(c).db.query<ItemRow & { id: string }>(
+    `SELECT id, id AS creative_id, 0 AS position, name, kind, px_w, px_h, duration_s, review_state, state, scan_state, campaign_id, target_type FROM creatives WHERE id IN (${placeholders(ids.length)})`,
+    ids,
+  );
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  for (const id of ids) {
+    const r = byId.get(id);
+    if (!r) throw unprocessable('Có tệp không còn trong kho media.', 'media_not_found');
+    if (r.campaign_id !== null) throw unprocessable(`Tệp "${r.name ?? id}" đang gắn với chiến dịch quảng cáo. Chỉ chọn tệp trong kho chưa gắn chiến dịch.`, 'media_in_campaign');
+    if (r.state === 'uploading' || r.state === 'importing' || r.state === 'invalid') throw unprocessable(`Tệp "${r.name ?? id}" chưa tải xong hoặc không hợp lệ.`, 'media_not_ready');
+    if (r.review_state === 'rejected' || r.review_state === 'returned') throw unprocessable(`Tệp "${r.name ?? id}" đã bị trả lại.`, 'media_rejected');
+    const w = num(r.px_w);
+    const h = num(r.px_h);
+    if (target === 'led_p5') {
+      if (r.target_type && r.target_type !== 'led_p5') throw unprocessable(`Tệp "${r.name ?? id}" không dành cho màn LED.`, 'creative_size_mismatch');
+    } else if (w && h) {
+      const fit = fitsTarget(target as 'tv' | 'elevator', w, h);
+      if (!fit.ok) throw unprocessable(`Tệp "${r.name ?? id}": ${fit.message}`, 'creative_size_mismatch');
+    }
+  }
+}
+
+function checkText(target: string, b: { header?: string | null; footer?: string | null }, cur: { header: string | null; footer: string | null }) {
+  const errs: FieldError[] = [];
+  const signage = target === 'elevator' || target === 'led_p5';
+  if (!signage && ((b.header ?? null) !== null || (b.footer ?? null) !== null)) {
+    throw unprocessable('Chữ header/footer chỉ áp dụng cho chương trình thang máy / LED.', 'slot_not_signage');
+  }
+  const header = b.header === undefined ? cur.header : b.header === null ? null : validateDisplayText(b.header, SIGNAGE_LIMITS.header, 'header', errs);
+  const footer = b.footer === undefined ? cur.footer : b.footer === null ? null : validateDisplayText(b.footer, SIGNAGE_LIMITS.footer, 'footer', errs);
+  if (errs.length) throw unprocessable(`Chữ không hợp lệ (${errs[0]!.path}): ${errs[0]!.message}`, 'validation_error', { errors: errs });
+  return { header, footer };
+}
+
+export function broadcastRoutes(): Hono<AppEnv> {
+  const r = new Hono<AppEnv>();
+
+  r.get('/', requirePerm('schedule', 'view'), async (c) => {
+    const res = await runList<ProgramRow>(c, spec);
+    return c.json({ ...res, items: res.items.map(present) });
+  });
+
+  r.get('/:id', requirePerm('schedule', 'view'), async (c) => c.json(await presentFull(c, c.req.param('id'))));
+
+  r.post('/', requirePerm('schedule', 'write'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const b = await parseBody(c, fields);
+    if (b.end_min <= b.start_min) throw unprocessable('Giờ kết thúc phải sau giờ bắt đầu.', 'bad_times');
+    if (b.start_date && b.end_date && b.end_date < b.start_date) throw unprocessable('Ngày kết thúc phải sau ngày bắt đầu.', 'bad_dates');
+    const target = dbTarget(b.target_type);
+    const text = checkText(target, b, { header: null, footer: null });
+    await checkItems(c, target, b.creative_ids);
+    const id = rt.id();
+    const now = rt.clock.now().toISOString();
+    await rt.db.tx(async (db) => {
+      await db.run(
+        `INSERT INTO broadcast_programs (id, name, target_type, regions, start_date, end_date, start_min, end_min, priority, header, footer, status, version, created_by, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,'draft',1,?,?,?)`,
+        [id, b.name, target, JSON.stringify(b.regions), b.start_date ?? null, b.end_date ?? null, b.start_min, b.end_min, b.priority, text.header, text.footer, u.id, now, now],
+      );
+      for (const [i, cid] of b.creative_ids.entries()) await db.run('INSERT INTO broadcast_program_items (program_id, creative_id, position) VALUES (?,?,?)', [id, cid, i]);
+      await auditCtx(c, db, { action: 'broadcast.create', objectType: 'broadcast_program', objectId: id, diff: { name: b.name, target_type: target, items: b.creative_ids.length } });
+    });
+    return c.json(await presentFull(c, id), 201);
+  });
+
+  r.put('/:id', requirePerm('schedule', 'write'), async (c) => {
+    const rt = getRt(c);
+    const p = await loadProgram(c, c.req.param('id'));
+    const b = await parseBody(c, fields.partial({ target_type: true, creative_ids: true, name: true }).extend({ regions: fields.shape.regions.optional(), start_min: fields.shape.start_min.optional(), end_min: fields.shape.end_min.optional(), priority: fields.shape.priority.optional() }));
+    const target = b.target_type ? dbTarget(b.target_type) : p.target_type;
+    const start = b.start_min ?? num(p.start_min);
+    const end = b.end_min ?? num(p.end_min);
+    if (end <= start) throw unprocessable('Giờ kết thúc phải sau giờ bắt đầu.', 'bad_times');
+    const sd = b.start_date === undefined ? p.start_date : b.start_date;
+    const ed = b.end_date === undefined ? p.end_date : b.end_date;
+    if (sd && ed && ed < sd) throw unprocessable('Ngày kết thúc phải sau ngày bắt đầu.', 'bad_dates');
+    const text = checkText(target, b, { header: p.header, footer: p.footer });
+    const ids = b.creative_ids ?? (await rt.db.query<{ creative_id: string }>('SELECT creative_id FROM broadcast_program_items WHERE program_id = ? ORDER BY position', [p.id])).map((x) => x.creative_id);
+    await checkItems(c, target, ids);
+    const now = rt.clock.now().toISOString();
+    const live = p.status === 'published';
+    await rt.db.tx(async (db) => {
+      await db.run(
+        'UPDATE broadcast_programs SET name = ?, target_type = ?, regions = ?, start_date = ?, end_date = ?, start_min = ?, end_min = ?, priority = ?, header = ?, footer = ?, version = version + 1, updated_at = ? WHERE id = ?',
+        [b.name ?? p.name, target, JSON.stringify(b.regions ?? jsonParse<string[]>(p.regions, [])), sd ?? null, ed ?? null, start, end, b.priority ?? p.priority, text.header, text.footer, now, p.id],
+      );
+      if (b.creative_ids) {
+        await db.run('DELETE FROM broadcast_program_items WHERE program_id = ?', [p.id]);
+        for (const [i, cid] of ids.entries()) await db.run('INSERT INTO broadcast_program_items (program_id, creative_id, position) VALUES (?,?,?)', [p.id, cid, i]);
+      }
+      await auditCtx(c, db, { action: 'broadcast.update', objectType: 'broadcast_program', objectId: p.id, diff: { name: b.name ?? p.name, items: ids.length, live } });
+    });
+    if (live) await bumpManifest(rt);
+    return c.json(await presentFull(c, p.id));
+  });
+
+  r.post('/:id/publish', requirePerm('schedule', 'write'), async (c) => {
+    const rt = getRt(c);
+    const p = await loadProgram(c, c.req.param('id'));
+    const items = await rt.db.query<ItemRow>(ITEM_SQL, [p.id]);
+    if (items.length === 0) throw unprocessable('Chương trình chưa có tệp nào để phát.', 'no_items');
+    const bad = items.find((i) => !presentItem(i).ready);
+    if (bad) throw unprocessable(`Tệp "${bad.name ?? bad.creative_id}" chưa được duyệt hoặc chưa sẵn sàng. Duyệt tệp trong trang Nội dung & Media trước khi xuất bản.`, 'media_not_ready', { creative_id: bad.creative_id });
+    const inCamp = items.find((i) => i.campaign_id !== null);
+    if (inCamp) throw unprocessable(`Tệp "${inCamp.name ?? inCamp.creative_id}" đã gắn vào chiến dịch quảng cáo.`, 'media_in_campaign');
+    const now = rt.clock.now().toISOString();
+    await rt.db.tx(async (db) => {
+      await db.run("UPDATE broadcast_programs SET status = 'published', published_at = ?, updated_at = ?, version = version + 1 WHERE id = ?", [now, now, p.id]);
+      await auditCtx(c, db, { action: 'broadcast.publish', objectType: 'broadcast_program', objectId: p.id, diff: { status: { from: p.status, to: 'published' }, items: items.length } });
+    });
+    await bumpManifest(rt);
+    return c.json(await presentFull(c, p.id));
+  });
+
+  r.post('/:id/unpublish', requirePerm('schedule', 'write'), async (c) => {
+    const rt = getRt(c);
+    const p = await loadProgram(c, c.req.param('id'));
+    if (p.status !== 'published') throw conflict('Chương trình chưa được xuất bản.', 'invalid_state');
+    const now = rt.clock.now().toISOString();
+    await rt.db.tx(async (db) => {
+      await db.run("UPDATE broadcast_programs SET status = 'draft', updated_at = ?, version = version + 1 WHERE id = ?", [now, p.id]);
+      await auditCtx(c, db, { action: 'broadcast.unpublish', objectType: 'broadcast_program', objectId: p.id, diff: { status: { from: 'published', to: 'draft' } } });
+    });
+    await bumpManifest(rt);
+    return c.json(await presentFull(c, p.id));
+  });
+
+  r.delete('/:id', requirePerm('schedule', 'delete'), async (c) => {
+    const rt = getRt(c);
+    const p = await loadProgram(c, c.req.param('id'));
+    await rt.db.tx(async (db) => {
+      await db.run('DELETE FROM broadcast_program_items WHERE program_id = ?', [p.id]);
+      await db.run('DELETE FROM broadcast_programs WHERE id = ?', [p.id]);
+      await auditCtx(c, db, { action: 'broadcast.delete', objectType: 'broadcast_program', objectId: p.id, diff: { name: p.name } });
+    });
+    if (p.status === 'published') await bumpManifest(rt);
+    return c.json({ ok: true });
+  });
+
+  return r;
+}

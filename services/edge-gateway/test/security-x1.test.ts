@@ -54,9 +54,9 @@ describe('R1-09 gioi han than yeu cau', () => {
   });
 });
 
-describe('R1-03 manifest chi phat tep da quet sach', () => {
+describe('R1-03 manifest chi phat tep da qua kiem tra cau truc', () => {
   const ids = (m: any) => (m.creatives as { id: string }[]).map((c) => c.id);
-  it('pending/unscanned bi loai; clean duoc phat; setting allow_unscanned_creatives cho phep', async () => {
+  it('pending/infected bi loai; clean va unscanned (du lieu cu) duoc phat', async () => {
     const he = await harness({ fixture: { creativesPerCampaign: 3 } });
     try {
       const [a, b, c] = he.fixture.campaigns[0]!.creatives;
@@ -64,11 +64,11 @@ describe('R1-03 manifest chi phat tep da quet sach', () => {
       await he.rt.db.run("UPDATE creatives SET scan_state = 'unscanned' WHERE id = ?", [c!.id]);
       const d = await paired(he);
       let m = await J(await d.call('GET', '/v1/manifest'));
-      expect(ids(m)).toEqual([a!.id]);
-      await he.rt.db.run("INSERT INTO settings (key, value, updated_at) VALUES ('allow_unscanned_creatives', '1', ?)", [he.rt.clock.now().toISOString()]);
+      expect(ids(m).sort()).toEqual([a!.id, c!.id].sort());
+      await he.rt.db.run("UPDATE creatives SET scan_state = 'infected' WHERE id = ?", [c!.id]);
       he.rt.clock.advance(3600_000); // het han bo nho manifest
       m = await J(await d.call('GET', '/v1/manifest?etag=none'));
-      expect(ids(m).sort()).toEqual([a!.id, b!.id, c!.id].sort());
+      expect(ids(m)).toEqual([a!.id]);
     } finally {
       await he.close();
     }

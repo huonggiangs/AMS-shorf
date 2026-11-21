@@ -34,6 +34,7 @@ import { quoteRoutes } from './routes/pricing-quote.js';
 import { revenueRoutes } from './routes/revenue.js';
 import { rtbFloorRoutes } from './routes/rtb-floors.js';
 import { scheduleRoutes } from './routes/schedule.js';
+import { broadcastRoutes } from './routes/broadcast.js';
 import { screenRoutes } from './routes/screens.js';
 import { tvExperienceRoutes } from './routes/tv-experience.js';
 import { permissionRoutes, userRoutes } from './routes/users.js';
@@ -101,6 +102,7 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
   admin.route('/media', mediaRoutes(false));
   admin.route('/screens', screenRoutes());
   admin.route('/schedule', scheduleRoutes());
+  admin.route('/broadcast', broadcastRoutes());
   admin.route('/users', userRoutes());
   admin.route('/permissions', permissionRoutes());
   admin.route('/audit-log', auditRoutes());

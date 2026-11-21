@@ -100,6 +100,25 @@ describe('Tai noi dung moi: MOT luong', () => {
     expect(done).toHaveTextContent('Đã chuyển sang chuẩn phát được');
   });
 
+  it('nhap tu lien ket: gui kem format + overlay (mo ta hien thi), overlay sai thi chan truoc khi gui', async () => {
+    routes.push(me, customers, (u: URL, mth: string) => (u.pathname === '/api/admin/v1/media/import' && mth === 'POST' ? { id: 'l1', status: 'processing' } : undefined));
+    vi.stubGlobal('fetch', mockFetch());
+    mount();
+    const dlg = await openDialog();
+    await userEvent.type(within(dlg).getByLabelText('Liên kết Google Drive hoặc Dropbox'), 'https://drive.google.com/file/d/1cfoXZesra4gI_XZNDOFXMpYXo2BgFIvF/view?usp=sharing');
+    await userEvent.type(within(dlg).getByLabelText('Liên kết voucher / QR (https)'), 'http://sai.vn');
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Nhập từ liên kết' }));
+    expect(await within(dlg).findByRole('alert')).toHaveTextContent('https://');
+    expect(calls.some((c) => c.path.endsWith('/media/import'))).toBe(false);
+    await userEvent.clear(within(dlg).getByLabelText('Liên kết voucher / QR (https)'));
+    await userEvent.type(within(dlg).getByLabelText('Liên kết voucher / QR (https)'), 'https://anio.vn/v/abc');
+    await userEvent.type(within(dlg).getByLabelText('Tiêu đề'), 'Giam 20%');
+    await userEvent.selectOptions(within(dlg).getByLabelText('Định dạng quảng cáo'), 'l_banner');
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Nhập từ liên kết' }));
+    await waitFor(() => expect(calls.some((c) => c.path.endsWith('/media/import'))).toBe(true));
+    expect(calls.find((c) => c.path.endsWith('/media/import'))!.body).toMatchObject({ source: 'drive', customer_id: 'c1', format: 'l_banner', overlay: { headline: 'Giam 20%', qr: { url: 'https://anio.vn/v/abc' } } });
+  });
+
   it('huy giua chung khi dang chuyen: dung, bao "Da huy chuyen video", KHONG tai gi len', async () => {
     routes.push(me, customers, ...uploadRoutes());
     vi.stubGlobal('fetch', mockFetch());

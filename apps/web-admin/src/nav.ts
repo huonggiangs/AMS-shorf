@@ -14,6 +14,7 @@ export const PAGE_DEFS: PageDef[] = [
   { id: 'screens', path: '/screens', label: 'Màn hình thang máy & LED', module: 'screens' },
   { id: 'formats', path: '/formats', label: 'Mẫu hiển thị TV', module: 'campaigns' },
   { id: 'schedule', path: '/schedule', label: 'Lịch phát', module: 'schedule' },
+  { id: 'broadcast', path: '/broadcast', label: 'Chương trình phát sóng', module: 'schedule' },
   { id: 'finance', path: '/finance', label: 'Thanh toán & thuế', module: 'finance' },
   { id: 'integrity', path: '/integrity', label: 'Kiểm soát hoa hồng', module: 'finance' },
   { id: 'history', path: '/history', label: 'Lịch sử xem', module: 'finance' },
@@ -33,7 +34,7 @@ export const PAGE_BY_ID = Object.fromEntries(PAGE_DEFS.map((p) => [p.id, p])) as
 export interface GroupDef { id: string; label: string; icon: string; pages: string[] }
 export const GROUPS: GroupDef[] = [
   { id: 'g1', label: 'Tổng quan', icon: 'home', pages: ['overview', 'devices', 'tvexp'] },
-  { id: 'g2', label: 'Quảng cáo', icon: 'ads', pages: ['ads', 'customers', 'contractDoc', 'approvals', 'media', 'creativeReview', 'screens', 'formats', 'schedule', 'kyc'] },
+  { id: 'g2', label: 'Quảng cáo', icon: 'ads', pages: ['ads', 'customers', 'contractDoc', 'approvals', 'media', 'creativeReview', 'screens', 'formats', 'schedule', 'broadcast', 'kyc'] },
   { id: 'g3', label: 'Doanh thu', icon: 'coin', pages: ['finance', 'billing', 'integrity', 'history'] },
   { id: 'g4', label: 'Đối tác', icon: 'link', pages: ['partners', 'integrations'] },
   { id: 'g5', label: 'Quản trị', icon: 'users', pages: ['access', 'audit', 'alerts', 'legal', 'compliance', 'profile'] },

@@ -8,7 +8,7 @@ export async function startMediaWorker(env: Record<string, string | undefined> =
   const opts = optionsFromEnv(env);
   const worker = createMediaWorker(rt, { ...opts, log: (m) => console.log(m) });
   const haveFf = await opts.media!.available();
-  console.log(`[media-worker] ffmpeg=${haveFf ? 'co' : 'khong'} clamd=${env['CLAMD_HOST'] ?? 'khong'} transcode=${opts.transcode}`);
+  console.log(`[media-worker] ffmpeg=${haveFf ? 'co' : 'khong'} transcode=${opts.transcode}`);
   worker.subscribe();
   const timer = setInterval(() => void worker.sweep().catch((e) => console.error('[media-worker] sweep', e)), Number(env['MEDIA_SWEEP_S'] ?? 60) * 1000);
   const server = createServer((req, res) => {

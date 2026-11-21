@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Xu ly creative tai len: kiem magic bytes, quet ClamAV, ffprobe, chuyen ma ve ho so TV-safe",
+  "description": "Xu ly creative tai len: kiem magic bytes, ffprobe, chuyen ma ve ho so TV-safe",
   "main": "./src/worker.ts",
   "types": "./src/worker.ts",
   "exports": {

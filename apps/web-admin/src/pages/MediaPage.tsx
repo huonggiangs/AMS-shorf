@@ -317,7 +317,7 @@ function Blocker({ m, canApprove, onReview, onAction, onReject, onPickFile }: { 
   );
 }
 
-/** Xem trước phát được + lý do + duyệt MỘT BƯỚC (ghi chú bắt buộc, ghi nhật ký) hoặc trả lại. Dùng cho tệp 'chờ kiểm tra thủ công' (Cloudflare không có quét mã độc). */
+/** Xem trước phát được + lý do + duyệt MỘT BƯỚC (ghi chú bắt buộc, ghi nhật ký) hoặc trả lại. Dùng cho tệp 'chờ kiểm tra thủ công' (kiểm tra cấu trúc phát hiện điểm bất thường). */
 function ReviewDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const base = useBase();
   const act = useAct();

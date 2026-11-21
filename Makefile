@@ -26,7 +26,7 @@ config: env-check ## Kiểm cú pháp docker compose (mọi profile)
 build: env-check ## Build image các dịch vụ
 	@$(DC) --profile core build
 
-up: env-check ## Chạy profile core (postgres, redis, mailpit, api, web-admin, edge-gateway, ingest-consumer, media-worker, clamav, proxy)
+up: env-check ## Chạy profile core (postgres, redis, mailpit, api, web-admin, edge-gateway, ingest-consumer, media-worker, proxy)
 	@$(DC) --profile core up -d --build
 	@node scripts/setup.mjs creds
 

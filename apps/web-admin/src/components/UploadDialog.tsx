@@ -276,7 +276,7 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
     setStage('working');
     setProg({ phase: 'upload', percent: 10, label: 'Đang gửi yêu cầu…' });
     try {
-      await api.post(`${base.media}/import`, { body: { source: linkSource, url: url.trim(), ...(customerId ? { customer_id: customerId } : {}) } });
+      await api.post(`${base.media}/import`, { body: { source: linkSource, url: url.trim(), ...(customerId ? { customer_id: customerId } : {}), format: ov.format, ...(overlayPayload(ov) ? { overlay: overlayPayload(ov) } : {}) } });
       await act(async () => undefined, 'Đã gửi yêu cầu tải từ liên kết. Tiến độ hiện ở thẻ tệp (tự cập nhật); nếu tệp cần chuyển sang H.264, hệ thống sẽ hướng dẫn bạn tải tệp về máy rồi kéo vào ô tải lên.', [base.media, '/admin/v1/media', '/portal/v1/media']);
       reset();
       onClose();
@@ -406,17 +406,15 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
                 <Field label="Hoặc dán liên kết Google Drive / Dropbox" hint="Drive: chia sẻ ở chế độ “Bất kỳ ai có đường liên kết”. Tệp tối đa 200 MB. Nếu tệp cần chuyển sang H.264, hãy tải về máy rồi kéo vào ô trên, hệ thống sẽ tự chuyển.">
                   <input type="url" aria-label="Liên kết Google Drive hoặc Dropbox" placeholder="https://…" value={url} disabled={working} onChange={(e) => { setUrl(e.target.value); setErr(''); }} />
                 </Field>
-                {linkSource === 'youtube' ? <p role="status" style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--bad)' }}>Chưa hỗ trợ tải từ YouTube. Hãy tải video về máy rồi kéo vào ô tải lên (hệ thống tự chuyển sang chuẩn phát được).</p> : null}
+                {linkSource === 'youtube' ? <p role="status" style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--bad)' }}>Chưa hỗ trợ tải từ YouTube. Hãy tải video về máy rồi kéo vào ô tải lên (hệ thống tự chuyển sang chuẩn phát được). Phần mô tả hiển thị bạn nhập bên dưới được giữ nguyên và áp dụng cho tệp tải lên.</p> : null}
                 {linkCheck && linkSource !== 'youtube' ? <p role="status" style={{ margin: '4px 0 0', fontSize: 13, color: linkCheck.ok ? 'var(--mut)' : 'var(--bad)' }}>{linkCheck.message}</p> : null}
               </div>
             ) : null}
 
-            {file ? (
-              <details style={{ marginTop: 6 }}>
-                <summary style={{ cursor: 'pointer', fontSize: 13 }}>Tùy chọn hiển thị (không bắt buộc)</summary>
-                <OverlayForm value={ov} onChange={setOv} />
-              </details>
-            ) : null}
+            <details style={{ marginTop: 6 }} open={!file && !!url.trim()}>
+              <summary style={{ cursor: 'pointer', fontSize: 13 }}>{file ? 'Tùy chọn hiển thị (không bắt buộc)' : 'Mô tả hiển thị cho liên kết (không bắt buộc)'}</summary>
+              <OverlayForm value={ov} onChange={setOv} />
+            </details>
 
             <details style={{ marginTop: 6 }}>
               <summary style={{ cursor: 'pointer', fontSize: 13 }}>Giới hạn và quy định</summary>

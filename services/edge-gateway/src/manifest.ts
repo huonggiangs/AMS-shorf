@@ -64,6 +64,16 @@ interface SlotRow {
   slot_footer: string | null;
 }
 
+interface LiveProgram {
+  id: string;
+  start_min: number;
+  end_min: number;
+  priority: number;
+  header: string | null;
+  footer: string | null;
+  items: string[];
+}
+
 export interface ManifestOpts {
   mediaBaseUrl: string;
   ttlS: number; // TTL cache de xuat cho thiet bi/CDN
@@ -330,7 +340,14 @@ export class ManifestService {
 
     // Signage Player (thang may/LED): cau hinh chung theo loai man. TV khong nhan cac truong nay (giu nguyen hop dong TV).
     const signage = type === 'tv' ? null : await this.signage(type, true); // doc moi tu DB: ban dung ra duoc cache toi buildTtlS, khong duoc dung cau hinh cu
-    const creativeRows = (await this.queryCreatives(type)).filter((r) => campaignIds.has(r.campaign_id));
+    const programs = await this.livePrograms(type, g, now);
+    const programIds = new Set(programs.map((p) => `bp_${p.id}`));
+    const creativeRows = [
+      ...(await this.queryCreatives(type)).filter((r) => campaignIds.has(r.campaign_id)),
+      // chuong trinh phat song noi bo: tep trong kho (chua gan chien dich), campaign_id = 'bp_<id>' (khong co gia chot => khong tinh tien)
+      ...(programs.length ? (await this.queryProgramCreatives(type)).filter((r) => programIds.has(r.campaign_id)) : []),
+    ];
+    const seenCreative = new Set<string>();
     const lockAllowed = await this.lockAdsEnabled();
     const creatives: ManifestCreative[] = [];
     // Thang may co nhom theo bac (elevator_<w>x<h>): moi chien dich chi giu creative o bac CAO NHAT khong vuot bac cua thiet bi
@@ -344,6 +361,7 @@ export class ManifestService {
       }
     }
     for (const r of creativeRows) {
+      if (seenCreative.has(r.id)) continue; // cung tep o nhieu chuong trinh: chi dua vao manifest mot lan
       if (type === 'elevator') {
         const known = !!r.px_w && !!r.px_h;
         if (known && !isElevatorResolution(Number(r.px_w), Number(r.px_h))) continue; // chi creative doc 9:16 HD-4K
@@ -377,6 +395,7 @@ export class ManifestService {
       const fmt = isAdFormat(r.format) ? r.format : isAdFormat(r.kind) ? r.kind : 'fullscreen';
       const { ov, drop } = parseOverlayJson(r.overlay, lockAllowed, Number(r.kr_kid ?? 0) === 1 && r.kr_version != null && Number(r.kr_version) === Number(r.content_version ?? 1));
       if (drop) continue; // creative chi-man-khoa khi man khoa/tre em chua duoc bat (hoac khong kid_safe): khong phat o man thuong
+      seenCreative.add(r.id);
       creatives.push({
         id: r.id,
         campaign_id: r.campaign_id,
@@ -411,6 +430,22 @@ export class ManifestService {
         reward_points: Number(s.reward_points),
         ...(signage && s.slot_header !== null && s.slot_header !== undefined ? { header: s.slot_header } : {}),
         ...(signage && s.slot_footer !== null && s.slot_footer !== undefined ? { footer: s.slot_footer } : {}),
+      });
+    }
+    for (const p of programs) {
+      const ids = p.items.filter((id) => seenCreative.has(id));
+      if (ids.length === 0) continue; // chuong trinh chua co tep hop le cho nhom nay
+      schedule.push({
+        slot_id: `bp_${p.id}`,
+        campaign_id: `bp_${p.id}`,
+        creative_ids: ids,
+        daypart: 'custom',
+        start_min: Number(p.start_min),
+        end_min: Number(p.end_min),
+        priority: Number(p.priority),
+        reward_points: 0,
+        ...(signage && p.header !== null ? { header: p.header } : {}),
+        ...(signage && p.footer !== null ? { footer: p.footer } : {}),
       });
     }
     schedule.sort((a, b) => (a.slot_id < b.slot_id ? -1 : 1));
@@ -459,14 +494,6 @@ export class ManifestService {
     }
   }
 
-  /** Chi cho phat tep chua quet khi quan tri bat ro rang (settings.allow_unscanned_creatives = '1'/'true'). Mac dinh: chi `clean` (R1-03). */
-  private async allowUnscanned(): Promise<boolean> {
-    // loi DB KHONG duoc nuot (tra false se am tham go moi creative chua quet): de loi noi len, rebuild() dung ban cu
-    const r = (await this.rt.db.query<{ value: string }>("SELECT value FROM settings WHERE key = 'allow_unscanned_creatives'"))[0];
-    const v = String(r?.value ?? '').trim().toLowerCase().replace(/^"|"$/g, '');
-    return v === '1' || v === 'true';
-  }
-
   /** Ban chuyen ma (media-worker ghi `renditions/<customer>/<id>/manifest.json`); null neu chua co. */
   private async renditionOf(r: CreativeRow & { customer_id?: string | null }, ctx: BuildCtx): Promise<{ key: string; sha256: string; size: number | null; content_type: string } | null> {
     if (!r.customer_id) return null;
@@ -505,15 +532,52 @@ export class ManifestService {
     }
   }
 
+  /** Chuong trinh phat song noi bo dang xuat ban, con hieu luc (ngay Viet Nam), dung loai man + khu vuc cua nhom; kem danh sach tep theo thu tu. */
+  private async livePrograms(type: string, g: GroupKey, now: Date): Promise<LiveProgram[]> {
+    if (g.daypart !== 'all') return []; // lich noi bo la 'custom', khong thuoc khung gio dat san
+    const today = new Date(now.getTime() + 7 * 3600_000).toISOString().slice(0, 10);
+    const rows = await this.rt.db.query<{ id: string; regions: string | null; start_date: string | null; end_date: string | null; start_min: number; end_min: number; priority: number; header: string | null; footer: string | null }>(
+      "SELECT id, regions, start_date, end_date, start_min, end_min, priority, header, footer FROM broadcast_programs WHERE status = 'published' AND target_type = ? ORDER BY id",
+      [type],
+    );
+    const out: LiveProgram[] = [];
+    for (const r of rows) {
+      if (r.start_date && r.start_date > today) continue;
+      if (r.end_date && r.end_date < today) continue;
+      try {
+        const rs = JSON.parse(r.regions ?? '[]') as string[];
+        if (rs.length > 0 && g.region !== 'ALL' && !rs.includes(g.region)) continue;
+      } catch {
+        /* regions hong: coi nhu moi khu vuc */
+      }
+      const items = await this.rt.db.query<{ creative_id: string }>('SELECT creative_id FROM broadcast_program_items WHERE program_id = ? ORDER BY position, creative_id', [r.id]);
+      out.push({ ...r, items: items.map((i) => i.creative_id) });
+    }
+    return out;
+  }
+
+  /** Tep cua cac chuong trinh noi bo: da duyet + san sang, chua gan chien dich; campaign_id tra ve = 'bp_<program_id>'. */
+  private async queryProgramCreatives(type: string): Promise<CreativeRow[]> {
+    return this.rt.db.query<CreativeRow>(
+      `SELECT cr.id, 'bp_' || bp.id AS campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay, cr.customer_id, cr.scan_state,
+              COALESCE(cs.content_version, 1) AS content_version, kr.kid_safe AS kr_kid, kr.content_version AS kr_version
+         FROM broadcast_programs bp JOIN broadcast_program_items i ON i.program_id = bp.id JOIN creatives cr ON cr.id = i.creative_id
+         LEFT JOIN creative_security cs ON cs.creative_id = cr.id LEFT JOIN creative_kid_review kr ON kr.creative_id = cr.id
+        WHERE bp.status = 'published' AND bp.target_type = ? AND cr.campaign_id IS NULL AND cr.review_state = 'approved' AND cr.state = 'ready'
+          AND cr.scan_state NOT IN ('infected','failed','needs_manual_review','pending')
+          AND NOT (cs.approved_version IS NOT NULL AND cs.approved_version <> cs.content_version)`,
+      [type],
+    );
+  }
+
   private async queryCreatives(type: string): Promise<CreativeRow[]> {
-    const allowUnscanned = await this.allowUnscanned();
     return this.rt.db.query<CreativeRow>(
       `SELECT cr.id, cr.campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay, cr.customer_id, cr.scan_state,
               COALESCE(cs.content_version, 1) AS content_version, kr.kid_safe AS kr_kid, kr.content_version AS kr_version
          FROM creatives cr JOIN campaigns c ON c.id = cr.campaign_id LEFT JOIN creative_security cs ON cs.creative_id = cr.id LEFT JOIN creative_kid_review kr ON kr.creative_id = cr.id
         WHERE c.state = 'active' AND cr.target_type = ? AND cr.review_state = 'approved' AND cr.state = 'ready'
           AND NOT (cs.approved_version IS NOT NULL AND cs.approved_version <> cs.content_version)
-          ${allowUnscanned ? "AND cr.scan_state NOT IN ('infected','failed')" : "AND cr.scan_state = 'clean'"}`,
+          AND cr.scan_state NOT IN ('infected','failed','needs_manual_review','pending')`,
       [type],
     );
   }

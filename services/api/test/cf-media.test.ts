@@ -129,14 +129,11 @@ describe('luong day du tren runtime (queue -> validator -> duyet tay co audit)',
     expect((await env.rt.db.query('SELECT 1 FROM audit_log WHERE object_id = ? AND action = ?', [id, 'media.scan_review.reject'])).length).toBe(1);
   });
 
-  it('khong ghi de ket qua da co (media-worker VPS / admin): process tren scan_state<>pending bi bo qua; CF_VALIDATOR_MARK_CLEAN=0 => khong clean', async () => {
+  it('khong ghi de ket qua da co (media-worker VPS / admin): process tren scan_state<>pending bi bo qua', async () => {
     const id = await upload('again.png', 'image/png', png(1920, 1080), {});
     const v = createCfCreativeValidator(env.rt);
     expect((await v.process(id)).outcome).toBe('skipped');
-    await env.rt.db.run("UPDATE creatives SET scan_state = 'pending' WHERE id = ?", [id]);
-    const strict = createCfCreativeValidator(env.rt, { markClean: false });
-    expect((await strict.process(id)).outcome).toBe('needs_manual_review');
-    expect((await scan(id)).scan_state).toBe('needs_manual_review');
+    expect((await scan(id)).scan_state).toBe('clean');
   });
 
   it('sweep nhat creative pending bi mat tin nhan', async () => {

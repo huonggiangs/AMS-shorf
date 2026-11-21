@@ -505,3 +505,28 @@ describe('don tep ket o trang thai "uploading"', () => {
     expect((await get(admin, '/admin/v1', fresh)).status).toBe('rejected');
   });
 });
+
+describe('mo ta hien thi khi nhap tu link (chay cuoi file: dung han muc tep/ngay chung)', () => {
+  it('mo ta hien thi: nhap tu link luu format + overlay ngay luc tao va KHONG bi ghi de sau khi nhap xong; overlay sai -> 422', async () => {
+    const b = bigMp4(1080, 1920, 15, 300_000);
+    handler = () => mp4Res(b, {});
+    const overlay = { headline: 'Giam 20% hom nay', hotline: { number: '1900 1234', label: 'Dat hang' }, qr: { url: 'https://anio.vn/v/abc' } };
+    const bad = await importLink(admin, '/admin/v1', { source: 'drive', url: DRIVE_LINK, format: 'l_banner', overlay: { qr: { url: 'http://khong-https.vn' } } });
+    expect(bad.status).toBe(422);
+    const badFmt = await importLink(admin, '/admin/v1', { source: 'drive', url: DRIVE_LINK, format: 'khong_co' });
+    expect(badFmt.status).toBe(422);
+    const yt = await importLink(admin, '/admin/v1', { source: 'youtube', url: 'https://www.youtube.com/watch?v=abc123', format: 'l_banner', overlay });
+    expect(yt.status).toBe(422);
+    expect(yt.body.error.code).toBe('youtube_unsupported');
+    const r = await importLink(admin, '/admin/v1', { source: 'drive', url: DRIVE_LINK, format: 'l_banner', overlay });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const before = (await rows('SELECT format, overlay FROM creatives WHERE id = ?', [r.body.id]))[0];
+    expect(before.format).toBe('l_banner');
+    expect(JSON.parse(before.overlay)).toMatchObject({ headline: 'Giam 20% hom nay', hotline: { number: '1900 1234' }, qr: { url: 'https://anio.vn/v/abc' } });
+    await settle();
+    const after = (await rows('SELECT format, overlay FROM creatives WHERE id = ?', [r.body.id]))[0];
+    expect(after.format).toBe('l_banner');
+    expect(after.overlay).toBe(before.overlay);
+    // (khong tao them tep: han muc tep/ngay cua admin trong file nay rat sat; mac dinh fullscreen duoc kiem o cac test khac)
+  });
+});

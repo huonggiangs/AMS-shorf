@@ -148,25 +148,17 @@ describe('w1: media.uploaded + cua quet ma doc', () => {
     expect([r.status, r.body.status]).toEqual([200, 'approved']);
   });
 
-  it("'unscanned': chan mac dinh (creative_not_scanned); cho qua khi bat allow_unscanned_creatives; hien canh bao", async () => {
+  it("'unscanned' (du lieu cu) duoc duyet binh thuong, khong canh bao; 'infected' van bi chan", async () => {
     const id = await upload('b.png');
     await lan.json('POST', `/portal/v1/media/${id}/confirm`, {});
     await setScan(id, 'unscanned');
     const view = await admin.json('GET', `/admin/v1/media/${id}`);
-    expect(view.body.scan_warning).toMatch(/Chưa quét/);
-    expect((await admin.json('POST', `/admin/v1/media/${id}/approve`)).body.error.code).toBe('creative_not_scanned');
-    await setPolicy('0');
-    expect((await admin.json('POST', `/admin/v1/media/${id}/approve`)).status).toBe(422);
-    await setPolicy('1');
+    expect(view.body.scan_warning).toBeNull();
     expect((await admin.json('POST', `/admin/v1/media/${id}/approve`)).status).toBe(200);
-    await setPolicy(null);
-    // infected khong bao gio qua du bat setting
     const id2 = await upload('c.png');
     await lan.json('POST', `/portal/v1/media/${id2}/confirm`, {});
     await setScan(id2, 'infected');
-    await setPolicy('1');
     expect((await admin.json('POST', `/admin/v1/media/${id2}/approve`)).status).toBe(422);
-    await setPolicy(null);
   });
 
   it('tep lien ket (import) chua tai ve: khong duyet duoc (dang nhap tu lien ket -> invalid_state)', async () => {

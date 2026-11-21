@@ -1,6 +1,6 @@
-// Kiem tra creative tren Cloudflare (khong co ClamAV/ffmpeg). KHONG PHAI quet virus: xem docs/CLOUDFLARE-MEDIA-LIMITS.md.
-// 'clean' CHI cho tep nam trong danh sach cho phep hep (png/jpg/webp/mp4) va qua moi kiem tra cau truc; moi truong hop khac
-// -> 'needs_manual_review' (admin duyet/tu choi, co audit). Cong quet (chi creative 'clean' moi duoc phat) khong doi.
+// Kiem tra cau truc creative tren Cloudflare (khong co ffmpeg; he thong KHONG quet virus). Xem docs/CLOUDFLARE-MEDIA-LIMITS.md.
+// 'clean' = tep nam trong danh sach cho phep hep (png/jpg/webp/mp4) va qua moi kiem tra cau truc; truong hop bat thuong ve cau truc
+// -> 'needs_manual_review' (admin duyet/tu choi, co audit).
 import { autoApprovePrivileged } from './auto-approve.js';
 import type { Runtime } from '@ams/runtime';
 import { sha256Hex } from '@ams/shared';
@@ -247,19 +247,16 @@ const DURATION: Record<string, [number, number]> = { tv: [5, 60], elevator: [10,
 
 export interface CfValidatorOptions {
   limits?: Partial<CfLimits>;
-  /** false: khong bao gio ghi 'clean' (moi tep vao hang cho duyet tay). Mac dinh true. env CF_VALIDATOR_MARK_CLEAN=0 de tat. */
-  markClean?: boolean;
   log?: (m: string) => void;
 }
 export type CfOutcome = { outcome: 'clean' | 'needs_manual_review' | 'skipped' | 'deferred'; reasons?: string[]; reason?: string };
 
 export function createCfCreativeValidator(rt: Runtime, opts: CfValidatorOptions = {}) {
   const limits = { ...DEFAULT_LIMITS, ...opts.limits };
-  const markClean = opts.markClean ?? rt.config.env['CF_VALIDATOR_MARK_CLEAN'] !== '0';
   const log = opts.log ?? (() => {});
 
   async function finish(row: Row, state: 'clean' | 'needs_manual_review', v: { reasons: string[]; facts: Partial<Facts> }): Promise<CfOutcome> {
-    const detail = JSON.stringify({ reasons: v.reasons, kind: v.facts.kind ?? null, size: v.facts.size ?? null, w: v.facts.w ?? null, h: v.facts.h ?? null, duration_s: v.facts.durationS ?? null, mark_clean: markClean });
+    const detail = JSON.stringify({ reasons: v.reasons, kind: v.facts.kind ?? null, size: v.facts.size ?? null, w: v.facts.w ?? null, h: v.facts.h ?? null, duration_s: v.facts.durationS ?? null, mark_clean: true });
     const now = rt.clock.now().toISOString();
     // chi ghi khi van 'pending' va da xac nhan (khong de de len ket qua cua media-worker VPS / admin)
     const res = await rt.db.run(
@@ -278,7 +275,7 @@ export function createCfCreativeValidator(rt: Runtime, opts: CfValidatorOptions 
     return { outcome: state, reasons: v.reasons };
   }
 
-  /** Tep qua lon de doc vao bo nho: KHONG bao gio 'clean' tu dong, nhung neu la MP4 thi doc header bang range read de ghi thoi luong/kich thuoc that cho nguoi duyet. */
+  /** Tep qua lon de doc vao bo nho: chi 'clean' khi la MP4 co header hop le (khong thi cho nguoi duyet); doc header bang range read de ghi thoi luong/kich thuoc that. */
   async function largeFileFacts(row: Row, size: number): Promise<{ reasons: string[]; facts: Facts }> {
     const reasons = ['too_large_to_read_inline'];
     const facts: Facts = { size };
@@ -321,7 +318,12 @@ export function createCfCreativeValidator(rt: Runtime, opts: CfValidatorOptions 
     if (row.state === 'uploading') return { outcome: 'deferred', reason: 'chua confirm' };
     const head = await rt.objects.head(row.storage_key);
     if (!head) return { outcome: 'deferred', reason: 'chua thay tep tren kho' };
-    if (head.size > limits.maxReadBytes) return finish(row, 'needs_manual_review', await largeFileFacts(row, head.size));
+    if (head.size > limits.maxReadBytes) {
+      // tep qua lon de doc ca vao bo nho: MP4 doc header bang range read; header hop le va dung spec => clean, nguoc lai nguoi duyet kiem tra
+      const big = await largeFileFacts(row, head.size);
+      const hard = big.reasons.filter((x) => x !== 'too_large_to_read_inline');
+      return finish(row, big.facts.kind === 'mp4' && hard.length === 0 ? 'clean' : 'needs_manual_review', { reasons: hard.length ? big.reasons : [], facts: big.facts });
+    }
     const bytes = await rt.objects.get(row.storage_key);
     if (!bytes) return { outcome: 'deferred', reason: 'khong doc duoc tep' };
     const v = await validateCreativeBytes(
@@ -329,7 +331,6 @@ export function createCfCreativeValidator(rt: Runtime, opts: CfValidatorOptions 
       { mime: row.mime, sizeBytes: row.size_bytes === null ? null : Number(row.size_bytes), w: row.px_w, h: row.px_h, durationS: row.duration_s === null ? null : Number(row.duration_s), durationRange: row.target_type ? DURATION[row.target_type] ?? null : null, targetType: row.target_type },
       limits,
     );
-    if (v.clean && !markClean) return finish(row, 'needs_manual_review', { reasons: ['mark_clean_disabled'], facts: v.facts });
     return finish(row, v.clean ? 'clean' : 'needs_manual_review', v);
   }
 

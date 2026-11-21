@@ -115,7 +115,6 @@ describe('blockerOf: moi trang thai khong duyet duoc deu co giai thich + hanh do
     [{ state: 'invalid', review_state: 'rejected' }, 'invalid', 'reupload'],
     [{ scan_state: 'pending' }, 'creative_scan_pending', 'recheck'],
     [{ scan_state: 'needs_manual_review' }, 'creative_needs_manual_review', 'manual_review'],
-    [{ scan_state: 'unscanned' }, 'creative_not_scanned', 'recheck'],
     [{ scan_state: 'infected' }, 'creative_infected', 'reupload'],
     [{ scan_state: 'pending', source: 'youtube' }, 'creative_link_not_ingested', 'none'],
   ] as const)('%j', (o, code, action) => {
@@ -162,8 +161,16 @@ describe('luong day du tren runtime kieu Cloudflare', () => {
     expect((await row(id)).campaign_id).toBe(c.body.id);
   });
 
-  it('video 45 s, 60 MB, moov o cuoi (khong doc het): vao needs_manual_review kem thoi luong that + ly do; duyet 1 buoc bang ghi chu', async () => {
+  it('video 45 s, 60 MB, moov o cuoi, dung khai bao: header hop le => clean ngay (khong con quet virus)', async () => {
     const bytes = bigMp4(1920, 1080, 45, 60 * MB);
+    const id = await put('big-ok.mp4', bytes, { width: 1920, height: 1080, duration_sec: 45 });
+    expect((await admin.json('POST', `/admin/v1/media/${id}/confirm`, { width: 1920, height: 1080, duration_sec: 45 })).status).toBe(200);
+    await env.rt.queue.drain();
+    expect(await row(id)).toMatchObject({ scan_state: 'clean', px_w: 1920, duration_s: 45 });
+  });
+
+  it('video 60 MB co byte thua cuoi tep (bat thuong cau truc): vao needs_manual_review kem ly do; duyet 1 buoc bang ghi chu', async () => {
+    const bytes = cat(bigMp4(1920, 1080, 45, 60 * MB), [1, 2, 3]);
     const id = await put('journey.mp4', bytes, { width: 1920, height: 1080, duration_sec: 45 });
     expect((await admin.json('POST', `/admin/v1/media/${id}/confirm`, { width: 1920, height: 1080, duration_sec: 45 })).status).toBe(200);
     await env.rt.queue.drain();
@@ -172,12 +179,12 @@ describe('luong day du tren runtime kieu Cloudflare', () => {
 
     const g = await admin.json('GET', `/admin/v1/media/${id}`);
     expect(g.body.status).toBe('pending');
-    expect(g.body.scan_reasons).toEqual(['too_large_to_read_inline']);
+    expect(g.body.scan_reasons).toEqual(['too_large_to_read_inline', 'mp4_trailing_bytes']);
     expect(g.body.blocker).toMatchObject({ code: 'creative_needs_manual_review', action: 'manual_review' });
     expect(g.body.preview_url).toBeTruthy(); // xem truoc phat duoc
 
     const q = await admin.json('GET', '/admin/v1/media/scan-review/queue');
-    expect(q.body.items.find((x: any) => x.id === id)).toMatchObject({ duration_s: 45, width: 1920, reasons: ['too_large_to_read_inline'] });
+    expect(q.body.items.find((x: any) => x.id === id)).toMatchObject({ duration_s: 45, width: 1920, reasons: ['too_large_to_read_inline', 'mp4_trailing_bytes'] });
 
     // duyet that bai khi thieu ghi chu: van bi chan nhu cu
     const blocked = await admin.json('POST', `/admin/v1/media/${id}/approve`, {});
@@ -199,9 +206,9 @@ describe('luong day du tren runtime kieu Cloudflare', () => {
     expect(c.status).toBe(201);
   });
 
-  it('tep MP4 lech khai bao thoi luong: ly do duration_mismatch; recheck dua ve pending roi validator chay lai', async () => {
-    const bytes = bigMp4(1920, 1080, 50, 60 * MB);
-    const id = await put('lech.mp4', bytes, { width: 1920, height: 1080, duration_sec: 30 });
+  it('tep MP4 bat thuong cau truc (byte thua): recheck dua ve pending roi validator chay lai, van duyet tay', async () => {
+    const bytes = cat(bigMp4(1920, 1080, 50, 60 * MB), [1, 2, 3]);
+    const id = await put('lech.mp4', bytes, { width: 1920, height: 1080 });
     expect((await admin.json('POST', `/admin/v1/media/${id}/confirm`, { width: 1920, height: 1080 })).status).toBe(200);
     await env.rt.queue.drain();
     const g = await admin.json('GET', `/admin/v1/media/${id}`);
