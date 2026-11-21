@@ -472,7 +472,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:171
+      x-ams-source: services/api/src/routes/broadcast.ts:205
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -501,7 +501,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:178
+      x-ams-source: services/api/src/routes/broadcast.ts:272
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -514,6 +514,72 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/AdminPostBroadcastRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/broadcast/notice:
+    get:
+      operationId: adminGetBroadcastNotice
+      tags:
+        - broadcast
+      summary: GET /admin/v1/broadcast/notice
+      parameters: []
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/broadcast.ts:212
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostBroadcastNotice
+      tags:
+        - broadcast
+      summary: POST /admin/v1/broadcast/notice
+      parameters: []
+      x-ams-permission:
+        module: schedule
+        action: write
+      x-ams-source: services/api/src/routes/broadcast.ts:219
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostBroadcastNoticeRequest"
       responses:
         "201":
           description: Đã tạo
@@ -543,7 +609,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: delete
-      x-ams-source: services/api/src/routes/broadcast.ts:263
+      x-ams-source: services/api/src/routes/broadcast.ts:357
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -578,7 +644,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:176
+      x-ams-source: services/api/src/routes/broadcast.ts:270
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -612,7 +678,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:201
+      x-ams-source: services/api/src/routes/broadcast.ts:295
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -654,7 +720,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:232
+      x-ams-source: services/api/src/routes/broadcast.ts:326
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -690,7 +756,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:250
+      x-ams-source: services/api/src/routes/broadcast.ts:344
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -711,6 +777,41 @@ paths:
       security:
         - cookieAuth: []
           csrfToken: []
+  /admin/v1/broadcast/{id}/usb-package:
+    get:
+      operationId: adminGetBroadcastByIdUsbPackage
+      tags:
+        - broadcast
+      summary: GET /admin/v1/broadcast/{id}/usb-package
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/broadcast.ts:245
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
   /admin/v1/campaigns:
     get:
       operationId: adminGetCampaigns
@@ -10036,6 +10137,37 @@ components:
             additionalProperties: true
       required:
         - items
+      additionalProperties: true
+    AdminPostBroadcastNoticeRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 200
+        duration_s:
+          type: integer
+          minimum: 3
+          maximum: 120
+          default: 30
+        target:
+          type: string
+          enum:
+            - all
+            - tv
+            - elevator
+            - led_p5
+          default: all
+        regions:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 16
+          maxItems: 30
+          default: []
+      required:
+        - text
       additionalProperties: true
     AdminPostBroadcastRequest:
       type: object

@@ -311,6 +311,21 @@ export const broadcastSchema = z
   })
   .passthrough();
 export type Broadcast = z.infer<typeof broadcastSchema>;
+export const noticeHistorySchema = z
+  .object({ id: idStr, at: z.string(), actor: z.string(), text: z.string().nullish(), duration_s: z.coerce.number().nullish(), target: z.string().nullish(), regions: z.array(z.string()).nullish(), matched: z.coerce.number().nullish(), queued: z.coerce.number().nullish(), skipped: z.coerce.number().nullish() })
+  .passthrough();
+export const noticeResultSchema = z.object({ matched: z.coerce.number(), queued: z.coerce.number(), skipped: z.coerce.number(), ttl_s: z.coerce.number() }).passthrough();
+export const usbPackageSchema = z
+  .object({
+    program_id: z.string(),
+    name: z.string(),
+    folder: z.string().default('ANIO'),
+    playlist: z.record(z.unknown()),
+    files: z.array(z.object({ name: z.string(), url: z.string(), sha256: z.string().nullish(), size_bytes: z.coerce.number() })),
+    total_bytes: z.coerce.number().default(0),
+  })
+  .passthrough();
+export type UsbPackage = z.infer<typeof usbPackageSchema>;
 
 /* ---------- finance ---------- */
 export const walletSchema = z

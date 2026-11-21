@@ -19,7 +19,7 @@ let content: Session;
 let finance: Session;
 let customerId: string;
 
-async function elevator(region = 'HN'): Promise<{ manifest: () => Promise<any> }> {
+async function elevator(region = 'HN'): Promise<{ id: string; manifest: () => Promise<any> }> {
   const keys = await generateEd25519KeyPair();
   const nowS = () => Math.floor(rt.clock.now().getTime() / 1000);
   const body = JSON.stringify({ pubkey: keys.publicKey, kind: 'elevator', model: 'RK3568', os: 'android-11', app_version: '1.0.3', region, px_w: 1080, px_h: 1920, orientation: 'portrait' });
@@ -28,6 +28,7 @@ async function elevator(region = 'HN'): Promise<{ manifest: () => Promise<any> }
   expect(res.status).toBe(201);
   const id = ((await res.json()) as any).device_id as string;
   return {
+    id,
     manifest: async () => {
       await rt.kv.incr(MANIFEST_EPOCH_KEY).catch(() => undefined);
       await gw.manifests.invalidate();
@@ -149,5 +150,51 @@ describe('chuong trinh phat song noi bo qua API', () => {
     expect(del.status).toBe(200);
     expect((await dev.manifest()).schedule.some((x: any) => x.slot_id === `bp_${p.id}`)).toBe(false);
     expect((await content.json('GET', `/admin/v1/broadcast/${p.id}`)).status).toBe(404);
+  });
+});
+
+describe('thong bao khan + goi USB', () => {
+  it('thong bao khan: chi thiet bi da duyet khop khu vuc nhan lenh message (duration_s), quyen schedule:write, audit + lich su', async () => {
+    const ok = await elevator('ZZ');
+    const pending = await elevator('ZZ');
+    const other = await elevator('YY');
+    await rt.db.run('UPDATE devices SET trust_level = 1 WHERE id IN (?, ?)', [ok.id, other.id]);
+    expect((await finance.json('POST', '/admin/v1/broadcast/notice', { text: 'x' })).status).toBe(403);
+    expect((await content.json('POST', '/admin/v1/broadcast/notice', { text: '' })).status).toBe(422);
+    expect((await content.json('POST', '/admin/v1/broadcast/notice', { text: 'x', duration_s: 500 })).status).toBe(422);
+    const r = await content.json('POST', '/admin/v1/broadcast/notice', { text: 'Bảo trì thang máy 14h', duration_s: 45, target: 'elevator', regions: ['ZZ'] });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body).toMatchObject({ matched: 1, queued: 1, skipped: 0 });
+    const cmds = await rt.db.query<{ device_id: string; type: string; args: string }>("SELECT device_id, type, args FROM device_commands WHERE type = 'message'");
+    expect(cmds.filter((x) => x.device_id === ok.id).map((x) => JSON.parse(x.args))).toEqual([{ text: 'Bảo trì thang máy 14h', duration_s: 45 }]);
+    expect(cmds.some((x) => x.device_id === pending.id || x.device_id === other.id)).toBe(false);
+    const none = await content.json('POST', '/admin/v1/broadcast/notice', { text: 'x', target: 'led_p5', regions: ['ZZ'] });
+    expect(none.status).toBe(422);
+    expect(none.body.error.code).toBe('no_devices');
+    const hist = await content.json('GET', '/admin/v1/broadcast/notice');
+    expect(hist.body.items[0]).toMatchObject({ text: 'Bảo trì thang máy 14h', queued: 1, target: 'elevator' });
+    expect((await audit('broadcast.notice')).length).toBe(1);
+  });
+
+  it('goi USB: playlist.json dung dinh dang app (items[].file/url/duration/checksum) + tep ky; chua san sang thi 422', async () => {
+    const a = await libraryMedia();
+    const b = await libraryMedia();
+    const p = (await content.json('POST', '/admin/v1/broadcast', { name: 'USB thu', target_type: 'elevator', header: 'Chào', footer: 'Hotline', creative_ids: [b, a] })).body;
+    const r = await content.json('GET', `/admin/v1/broadcast/${p.id}/usb-package`);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.folder).toBe('ANIO');
+    expect(r.body.playlist).toMatchObject({ header: 'Chào', footer: 'Hotline' });
+    expect(r.body.playlist.items.map((i: any) => i.id)).toEqual([b, a]);
+    expect(r.body.playlist.items[0]).toMatchObject({ type: 'video', duration: 15, file: r.body.files[0].name, url: r.body.files[0].name });
+    expect(r.body.files).toHaveLength(2);
+    expect(r.body.files[0].url).toMatch(/^https?:/);
+    expect(r.body.files[0].name).toMatch(/^001-.*\.mp4$/);
+    const pend = await libraryMedia({ review: 'pending' });
+    const q = (await content.json('POST', '/admin/v1/broadcast', { name: 'USB cho', target_type: 'elevator', creative_ids: [pend] })).body;
+    const bad = await content.json('GET', `/admin/v1/broadcast/${q.id}/usb-package`);
+    expect(bad.status).toBe(422);
+    expect(bad.body.error.code).toBe('media_not_ready');
+    const empty = (await content.json('POST', '/admin/v1/broadcast', { name: 'USB rong', target_type: 'elevator' })).body;
+    expect((await content.json('GET', `/admin/v1/broadcast/${empty.id}/usb-package`)).body.error.code).toBe('no_items');
   });
 });

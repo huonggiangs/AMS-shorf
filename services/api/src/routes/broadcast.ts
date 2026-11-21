@@ -2,10 +2,11 @@
 // Gateway dua chuong trinh 'published' vao manifest (campaign_id = 'bp_<id>', khong co gia chot nen khong tinh tien). Xem migrations/0020.
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { CommandError, enqueueCommand } from '@ams/edge-gateway';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { dbTarget, fitsTarget } from '../lib/creative.js';
 import { SIGNAGE_LIMITS, validateDisplayText, type FieldError } from '@ams/shared';
-import { conflict, notFound, unprocessable } from '../lib/errors.js';
+import { conflict, notFound, tooMany, unprocessable } from '../lib/errors.js';
 import { eq, getRt, jsonParse, num, parseBody, placeholders, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { bumpManifest } from '../lib/manifest.js';
@@ -165,12 +166,105 @@ function checkText(target: string, b: { header?: string | null; footer?: string 
   return { header, footer };
 }
 
+
+// ---------------------------------------------------------------- Thong bao khan (chu chay gui ngay xuong thiet bi da duyet)
+const NOTICE_MAX_DEVICES = 500;
+const NOTICE_TTL_S = 600; // thong bao qua han thi bo, khong hien muon
+const noticeBody = z.object({
+  text: z.string().trim().min(1, 'Nhập nội dung thông báo').max(200, 'Tối đa 200 ký tự'),
+  duration_s: z.coerce.number().int().min(3, 'Từ 3 đến 120 giây').max(120, 'Từ 3 đến 120 giây').default(30),
+  target: z.enum(['all', 'tv', 'elevator', 'led_p5']).default('all'),
+  regions: z.array(z.string().trim().min(1).max(16)).max(30).default([]),
+});
+const NOTICE_KINDS: Record<string, string[]> = { tv: ['tv', 'phone', 'virtual'], elevator: ['elevator'], led_p5: ['led_p5'] };
+const SIGNAGE_KINDS = ['elevator', 'led_p5'];
+
+async function noticeDevices(c: Ctx, target: string, regions: string[]): Promise<{ id: string; kind: string }[]> {
+  const kinds = NOTICE_KINDS[target];
+  const where = ['trust_level >= 1', 'blocked = 0'];
+  const params: unknown[] = [];
+  if (kinds) { where.push(`kind IN (${placeholders(kinds.length)})`); params.push(...kinds); }
+  if (regions.length) { where.push(`region_id IN (${placeholders(regions.length)})`); params.push(...regions); }
+  return getRt(c).db.query<{ id: string; kind: string }>(`SELECT id, kind FROM devices WHERE ${where.join(' AND ')} ORDER BY id LIMIT ${NOTICE_MAX_DEVICES + 1}`, params);
+}
+
+/** Tai lieu goi USB: playlist.json (dinh dang app Signage Player doc: items[{id,type,url,duration,checksum,header,footer,fit}]) + tep kem URL ky co han. */
+const USB_URL_TTL_S = 3600;
+const IMAGE_DEFAULT_S = 10;
+const extOf = (name: string | null, mime: string | null, kind: string | null): string => {
+  const m = /\.([A-Za-z0-9]{2,5})$/.exec(name ?? '');
+  if (m) return m[1]!.toLowerCase();
+  if (mime === 'video/quicktime') return 'mov';
+  if (mime?.startsWith('image/')) return mime.slice(6).replace('jpeg', 'jpg');
+  return kind === 'image' ? 'jpg' : 'mp4';
+};
+
 export function broadcastRoutes(): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
 
   r.get('/', requirePerm('schedule', 'view'), async (c) => {
     const res = await runList<ProgramRow>(c, spec);
     return c.json({ ...res, items: res.items.map(present) });
+  });
+
+
+  // Thong bao khan: dat lenh `message` (chu chay) vao hang doi cua tung thiet bi da duyet; thiet bi nhan o lan dong bo/heartbeat ke tiep.
+  r.get('/notice', requirePerm('schedule', 'view'), async (c) => {
+    const rows = await getRt(c).db.query<{ id: string; ts: string; actor_id: string | null; actor_name: string | null; diff: string | null }>(
+      "SELECT l.id, l.ts, l.actor_id, a.name AS actor_name, l.diff FROM audit_log l LEFT JOIN admins a ON a.id = l.actor_id WHERE l.action = 'broadcast.notice' ORDER BY l.ts DESC, l.id DESC LIMIT 30",
+    );
+    return c.json({ items: rows.map((x) => ({ id: x.id, at: x.ts, actor: x.actor_name ?? x.actor_id ?? 'system', ...jsonParse<Record<string, unknown>>(x.diff, {}) })), total: rows.length });
+  });
+
+  r.post('/notice', requirePerm('schedule', 'write'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const b = await parseBody(c, noticeBody);
+    const bucket = Math.floor(rt.clock.now().getTime() / 600_000);
+    if ((await rt.kv.incr(`rl:notice:u:${u.id}:${bucket}`, 600)) > 10) throw tooMany('Bạn gửi thông báo quá nhiều, thử lại sau ít phút.', 300);
+    const devices = await noticeDevices(c, b.target, b.regions);
+    if (devices.length === 0) throw unprocessable('Không có thiết bị đã duyệt nào khớp loại màn / khu vực đã chọn.', 'no_devices');
+    if (devices.length > NOTICE_MAX_DEVICES) throw unprocessable(`Có hơn ${NOTICE_MAX_DEVICES} thiết bị khớp. Hãy chọn thêm khu vực hoặc loại màn để gửi theo đợt.`, 'too_many_devices', { max: NOTICE_MAX_DEVICES });
+    let queued = 0;
+    let skipped = 0;
+    for (const d of devices) {
+      const args = SIGNAGE_KINDS.includes(d.kind) ? { text: b.text, duration_s: b.duration_s } : { text: b.text, seconds: Math.max(5, b.duration_s) };
+      try {
+        await enqueueCommand(rt, d.id, { type: 'message', args }, { ttlS: NOTICE_TTL_S, createdBy: u.id, ip: c.get('ip') ?? null });
+        queued++;
+      } catch (e) {
+        if (e instanceof CommandError) skipped++;
+        else throw e;
+      }
+    }
+    await auditCtx(c, rt.db, { action: 'broadcast.notice', objectType: 'broadcast_notice', objectId: null, diff: { text: b.text, duration_s: b.duration_s, target: b.target, regions: b.regions, matched: devices.length, queued, skipped } });
+    return c.json({ matched: devices.length, queued, skipped, ttl_s: NOTICE_TTL_S }, 201);
+  });
+
+  // Goi USB cho Signage Player (thu muc ANIO tren o USB): chi chuong trinh co tep san sang.
+  r.get('/:id/usb-package', requirePerm('schedule', 'view'), async (c) => {
+    const rt = getRt(c);
+    const p = await loadProgram(c, c.req.param('id'));
+    const rows = await rt.db.query<ItemRow & { storage_key: string | null; mime: string | null; sha256: string | null; size_bytes: number | null }>(
+      `SELECT i.creative_id, i.position, cr.name, cr.kind, cr.px_w, cr.px_h, cr.duration_s, cr.review_state, cr.state, cr.scan_state, cr.campaign_id, cr.target_type, cr.storage_key, cr.mime, cr.sha256, cr.size_bytes
+       FROM broadcast_program_items i JOIN creatives cr ON cr.id = i.creative_id WHERE i.program_id = ? ORDER BY i.position, i.creative_id`,
+      [p.id],
+    );
+    if (rows.length === 0) throw unprocessable('Chương trình chưa có tệp nào.', 'no_items');
+    const bad = rows.find((i) => !presentItem(i).ready || !i.storage_key);
+    if (bad) throw unprocessable(`Tệp "${bad.name ?? bad.creative_id}" chưa sẵn sàng để chép ra USB.`, 'media_not_ready', { creative_id: bad.creative_id });
+    const signage = p.target_type === 'elevator' || p.target_type === 'led_p5';
+    const items: Record<string, unknown>[] = [];
+    const files: { name: string; url: string; sha256: string | null; size_bytes: number }[] = [];
+    for (const [i, x] of rows.entries()) {
+      const isVideo = x.kind === 'video' || (x.mime ?? '').startsWith('video/');
+      const name = `${String(i + 1).padStart(3, '0')}-${x.creative_id.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 24)}.${extOf(x.name, x.mime, x.kind)}`;
+      const size = x.size_bytes === null ? (await rt.objects.head(x.storage_key!))?.size ?? 0 : num(x.size_bytes);
+      files.push({ name, url: await rt.objects.getSigned(x.storage_key!, USB_URL_TTL_S), sha256: x.sha256 ?? null, size_bytes: size });
+      items.push({ id: x.creative_id, type: isVideo ? 'video' : 'image', url: name, file: name, duration: isVideo ? num(x.duration_s, IMAGE_DEFAULT_S) : IMAGE_DEFAULT_S, ...(x.sha256 ? { checksum: x.sha256 } : {}) });
+    }
+    const playlist = { version: `bp${p.id}-v${num(p.version, 1)}`, name: p.name, ...(signage && p.header ? { header: p.header } : {}), ...(signage && p.footer ? { footer: p.footer } : {}), items };
+    return c.json({ program_id: p.id, name: p.name, folder: 'ANIO', playlist, files, expires_in_s: USB_URL_TTL_S, total_bytes: files.reduce((a, f) => a + f.size_bytes, 0) });
   });
 
   r.get('/:id', requirePerm('schedule', 'view'), async (c) => c.json(await presentFull(c, c.req.param('id'))));

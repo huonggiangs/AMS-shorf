@@ -25,6 +25,7 @@ const pages = {
   formats: lazy(() => import('./pages/Formats')),
   schedule: lazy(() => import('./pages/Schedule')),
   broadcast: lazy(() => import('./pages/Broadcast')),
+  notice: lazy(() => import('./pages/EmergencyNotice')),
   finance: lazy(() => import('./pages/Finance')),
   integrity: lazy(() => import('./pages/Integrity')),
   history: lazy(() => import('./pages/History')),

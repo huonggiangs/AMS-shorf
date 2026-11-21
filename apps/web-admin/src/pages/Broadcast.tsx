@@ -8,6 +8,8 @@ import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, Note, PageHead, Tag }
 import { Dialog } from '../components/Dialog';
 import { useT } from '../i18n';
 import { fmtMin } from '../lib/format';
+import { usbPackageSchema } from '../api/schemas';
+import { copyToUsb, usbSupported } from '../lib/usbExport';
 
 const TARGETS: { id: string; label: string }[] = [
   { id: 'elevator', label: 'Thang máy (9:16)' },
@@ -29,6 +31,7 @@ export default function Broadcast() {
   const { can } = useAuth();
   const act = useAct();
   const [edit, setEdit] = useState<Broadcast | 'new' | null>(null);
+  const [usb, setUsb] = useState<Broadcast | null>(null);
   const list = useQuery({ queryKey: [BASE], queryFn: () => api.get(BASE, { query: { page_size: 100 }, schema: listOf(broadcastSchema) }) });
   const canWrite = can('schedule', 'write');
   const canDelete = can('schedule', 'delete');
@@ -51,6 +54,7 @@ export default function Broadcast() {
                   <td className="mono">{p.item_count}</td>
                   <td><Tag tone={STATUS[p.status]?.tone ?? 'info'}>{STATUS[p.status]?.label ?? p.status}</Tag></td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    {p.item_count > 0 ? <button type="button" className="btn sm" onClick={() => setUsb(p)}>Chép ra USB</button> : null}{' '}
                     {canWrite ? <button type="button" className="btn sm" onClick={() => void api.get(`${BASE}/${p.id}`, { schema: broadcastSchema }).then(setEdit)}>Sửa</button> : null}{' '}
                     {canWrite && p.status !== 'published' ? <button type="button" className="btn sm p" onClick={() => void run(p, 'publish', 'Đã xuất bản. Thiết bị sẽ nhận trong ít phút.')}>Xuất bản</button> : null}
                     {canWrite && p.status === 'published' ? <button type="button" className="btn sm" onClick={() => void run(p, 'unpublish', 'Đã dừng phát.')}>Dừng phát</button> : null}{' '}
@@ -64,6 +68,7 @@ export default function Broadcast() {
       )}
       <Note>Chỉ chọn được tệp đã duyệt và chưa gắn vào chiến dịch quảng cáo. Chương trình nội bộ không tính tiền và không có báo cáo doanh thu.</Note>
       {edit ? <ProgramDialog key={edit === 'new' ? 'new' : edit.id} program={edit === 'new' ? null : edit} onClose={() => setEdit(null)} /> : null}
+      {usb ? <UsbDialog program={usb} onClose={() => setUsb(null)} /> : null}
       <span hidden>{t('Hủy')}</span>
     </>
   );
@@ -146,6 +151,39 @@ function ProgramDialog({ program, onClose }: { program: Broadcast | null; onClos
         </Field>
         <div className="da" style={{ marginTop: 14 }}><button type="button" className="btn" onClick={onClose}>{t('Hủy')}</button><button className="btn p" type="submit">{t('Lưu')}</button></div>
       </form>
+    </Dialog>
+  );
+}
+
+function UsbDialog({ program, onClose }: { program: Broadcast; onClose: () => void }) {
+  const [log, setLog] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const supported = usbSupported();
+  const start = async () => {
+    setBusy(true);
+    setErr('');
+    setLog([]);
+    try {
+      const pkg = await api.get(`${BASE}/${program.id}/usb-package`, { schema: usbPackageSchema });
+      await copyToUsb(pkg, (m) => setLog((l) => [...l.slice(-40), m]));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Không chép được ra USB.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onClose={onClose} size="lg" label="Chép ra USB">
+      <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Chép “{program.name}” ra USB</h2>
+      <p style={{ margin: '0 0 10px' }}>Tạo thư mục <b>ANIO</b> trên ổ USB gồm các tệp phát và <b>playlist.json</b>. Cắm USB vào thiết bị chạy Signage Player (nguồn phát USB) để phát không cần mạng.</p>
+      {supported ? <Note>Bấm “Chọn ổ USB”, chọn ổ/thư mục gốc của USB rồi cho phép ghi. Trình duyệt Chrome/Edge trên máy tính.</Note> : <Note warn>Trình duyệt này không cho ghi thẳng ra USB. Bấm “Tải danh sách” để lấy playlist.json và danh sách liên kết, rồi chép tay vào thư mục ANIO.</Note>}
+      {err ? <p role="alert" style={{ color: 'var(--bad, #c0392b)' }}>{err}</p> : null}
+      {log.length ? <pre style={{ maxHeight: 200, overflow: 'auto', fontSize: 12 }}>{log.join('\n')}</pre> : null}
+      <div className="da" style={{ marginTop: 14 }}>
+        <button type="button" className="btn" onClick={onClose}>Đóng</button>
+        <button type="button" className="btn p" disabled={busy} onClick={() => void start()}>{busy ? 'Đang chép…' : supported ? 'Chọn ổ USB' : 'Tải danh sách'}</button>
+      </div>
     </Dialog>
   );
 }
