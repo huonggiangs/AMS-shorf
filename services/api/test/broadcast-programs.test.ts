@@ -197,4 +197,75 @@ describe('thong bao khan + goi USB', () => {
     const empty = (await content.json('POST', '/admin/v1/broadcast', { name: 'USB rong', target_type: 'elevator' })).body;
     expect((await content.json('GET', `/admin/v1/broadcast/${empty.id}/usb-package`)).body.error.code).toBe('no_items');
   });
+
+  it('mau bo cuc: CRUD + kiem tra vung (vuot khung, trung ma, qua 8 vung); quyen xem/ghi', async () => {
+    const zones = [
+      { id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 80, z: 0, transition: 'fade' },
+      { id: 'bar', type: 'marquee', x: 0, y: 80, w: 100, h: 20, z: 1, text: 'Khuyen mai', bg_color: '#DC2626', text_color: '#FFFFFF', font_size: 20, scroll_speed: 60 },
+    ];
+    const c = await content.json('POST', '/admin/v1/layout-templates', { name: 'Chinh + chu chay', orientation: 'portrait', zones });
+    expect(c.status, JSON.stringify(c.body)).toBe(201);
+    expect(c.body).toMatchObject({ name: 'Chinh + chu chay', orientation: 'portrait' });
+    expect(c.body.zones).toHaveLength(2);
+    const bad = await content.json('POST', '/admin/v1/layout-templates', { name: 'Hong', zones: [{ id: 'a', type: 'video', x: 60, y: 0, w: 60, h: 50 }] });
+    expect(bad.status).toBe(422);
+    const dup = await content.json('POST', '/admin/v1/layout-templates', { name: 'Trung', zones: [zones[0], zones[0]] });
+    expect(dup.status).toBe(422);
+    const many = Array.from({ length: 9 }, (_, i) => ({ id: `z${i}`, type: 'image', x: 0, y: 0, w: 10, h: 10 }));
+    expect((await content.json('POST', '/admin/v1/layout-templates', { name: 'Nhieu', zones: many })).status).toBe(422);
+    const sys = await content.json('GET', '/admin/v1/layout-templates?page_size=50');
+    const names = sys.body.items.filter((t: any) => t.system).map((t: any) => t.name);
+    expect(names).toEqual(expect.arrayContaining(['Chia đôi Dọc (TVC 50% + Poster 50%)', 'Bán lẻ 3 vùng', 'Sảnh Tòa nhà Ngang', 'Sân bay Quốc tế', 'Menu Quầy Gọi món F&B', 'Kiosk Y tế & Bệnh viện']));
+    expect(sys.body.items.find((t: any) => t.name === 'Sân bay Quốc tế').zones).toHaveLength(4);
+    expect((await admin.json('PUT', '/admin/v1/layout-templates/sys_retail3', { name: 'x' })).body.error.code).toBe('system_template');
+    expect((await admin.json('DELETE', '/admin/v1/layout-templates/sys_retail3')).status).toBe(422);
+    const list = await content.json('GET', '/admin/v1/layout-templates');
+    expect(list.body.items.map((t: any) => t.id)).toContain(c.body.id);
+    const up = await content.json('PUT', `/admin/v1/layout-templates/${c.body.id}`, { name: 'Doi ten' });
+    expect(up.body.name).toBe('Doi ten');
+    expect(up.body.zones).toHaveLength(2);
+    expect((await finance.json('POST', '/admin/v1/layout-templates', { name: 'x', zones })).status).toBe(403);
+    expect((await admin.json('DELETE', `/admin/v1/layout-templates/${c.body.id}`)).status).toBe(200);
+    expect((await content.json('GET', `/admin/v1/layout-templates/${c.body.id}`)).status).toBe(404);
+  });
+
+  it('chuong trinh co bo cuc: luu vung + gan tep vao vung, manifest co layout; gan sai vung bi tu choi; bo bo cuc thi het layout', async () => {
+    const a = await libraryMedia();
+    const b = await libraryMedia();
+    const layout = { orientation: 'portrait', zones: [
+      { id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 75, z: 0, transition: 'fade' },
+      { id: 'side', type: 'image', x: 0, y: 75, w: 60, h: 25, z: 1 },
+      { id: 'bar', type: 'marquee', x: 60, y: 75, w: 40, h: 25, z: 2, text: 'Xin chao' },
+    ] };
+    const bad = await content.json('POST', '/admin/v1/broadcast', { name: 'Sai vung', target_type: 'elevator', creative_ids: [a], layout, item_zones: { [a]: 'bar' } });
+    expect(bad.status).toBe(422);
+    expect(bad.body.error.code).toBe('bad_item_zone');
+    const nolay = await content.json('POST', '/admin/v1/broadcast', { name: 'Khong bo cuc', target_type: 'elevator', creative_ids: [a], item_zones: { [a]: 'main' } });
+    expect(nolay.body.error.code).toBe('no_layout');
+    const created = await content.json('POST', '/admin/v1/broadcast', { name: 'Da vung', target_type: 'elevator', regions: ['HN'], creative_ids: [a, b], layout, item_zones: { [b]: 'side' } });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body.layout.zones).toHaveLength(3);
+    expect(created.body.items.find((i: any) => i.creative_id === b).zone_id).toBe('side');
+    expect(created.body.items.find((i: any) => i.creative_id === a).zone_id).toBeNull();
+    const pid = created.body.id as string;
+    await content.json('POST', `/admin/v1/broadcast/${pid}/publish`, {});
+    const dev = await elevator('HN');
+    const slot = (await dev.manifest()).schedule.find((x: any) => x.slot_id === `bp_${pid}`);
+    expect(slot.layout.orientation).toBe('portrait');
+    expect(slot.layout.zones.find((z: any) => z.id === 'main').creative_ids).toEqual([a]);
+    expect(slot.layout.zones.find((z: any) => z.id === 'side').creative_ids).toEqual([b]);
+    // sua ten khong lam mat bo cuc; doi danh sach tep giu gan vung cua tep con lai
+    const ren = await content.json('PUT', `/admin/v1/broadcast/${pid}`, { name: 'Da vung 2' });
+    expect(ren.body.layout.zones).toHaveLength(3);
+    expect(ren.body.items.find((i: any) => i.creative_id === b).zone_id).toBe('side');
+    const only = await content.json('PUT', `/admin/v1/broadcast/${pid}`, { creative_ids: [b] });
+    expect(only.body.items).toHaveLength(1);
+    expect(only.body.items[0].zone_id).toBe('side');
+    const off = await content.json('PUT', `/admin/v1/broadcast/${pid}`, { layout: null });
+    expect(off.body.layout).toBeNull();
+    expect(off.body.items[0].zone_id).toBeNull();
+    expect((await dev.manifest()).schedule.find((x: any) => x.slot_id === `bp_${pid}`).layout).toBeUndefined();
+    expect((await admin.json('DELETE', `/admin/v1/broadcast/${pid}`)).status).toBe(200);
+    expect((await rt.db.query('SELECT 1 FROM broadcast_item_zones WHERE program_id = ?', [pid])).length).toBe(0);
+  });
 });

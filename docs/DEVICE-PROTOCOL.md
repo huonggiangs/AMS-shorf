@@ -256,6 +256,8 @@ Phản hồi đầy đủ `200`:
 - `reward_points`: điểm thưởng nếu người xem xem đủ (chỉ TV có tài khoản; `format = reward` hiển thị lời nhắc).
 - Quy tắc xoay vòng: xem mục 7.5 (thang máy/LED đã chốt; TV vẫn là gợi ý). Chuyển sang bản đầy đủ khi `etag` đổi chỉ sau khi tải xong mọi creative mới.
 
+**Bố cục đa vùng (tùy chọn, chỉ lịch nội bộ `bp_*`)**: slot có thể kèm `layout: {orientation: 'landscape'|'portrait', zones:[{id, type, x, y, w, h, z, transition, text?, bg_color?, text_color?, font_size?, scroll_speed?, url?, creative_ids?}]}`. `type` ∈ `video|image|marquee|clock|weather|qr`; `x,y,w,h` là **phần trăm khung** (0..100); `z` = lớp vẽ (lớn hơn vẽ sau); `transition` ∈ `none|fade|slide-left|slide-right|zoom`. Vùng `video`/`image` có `creative_ids` (tệp phát ở vùng đó, theo thứ tự, lặp vô hạn); `creative_ids` của slot vẫn liệt kê **toàn bộ** tệp theo thứ tự nên thiết bị chưa hỗ trợ `layout` cứ phát tuần tự một vùng như trước (thiết bị cũ bỏ qua trường lạ). Vắng `layout` = màn đơn.
+
 Chỉ đưa vào manifest: chiến dịch `active` trong `[start_at, end_at]`, slot khớp loại màn hình và vùng (slot để trống vùng = mọi vùng), creative `review_state=approved`, `state=ready`, không nhiễm mã độc, và **tệp đã xác minh được sha256** ở kho đối tượng. Nhóm chưa có chiến dịch: `creatives` và `schedule` rỗng (hợp lệ).
 
 ### 7.2 Delta

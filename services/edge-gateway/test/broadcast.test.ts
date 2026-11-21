@@ -100,4 +100,30 @@ describe('chuong trinh phat song noi bo -> manifest', () => {
     expect(m.schedule.find((s: any) => s.slot_id === `bp_${p1}`).creative_ids).toEqual([z.id]);
     expect(m.schedule.find((s: any) => s.slot_id === `bp_${p2}`).creative_ids).toEqual([z.id]);
   });
+
+  it('chuong trinh co bo cuc da vung: slot co layout kem creative_ids theo vung; chuong trinh khong co bo cuc thi khong co truong layout', async () => {
+    const a = await libraryCreative();
+    const b = await libraryCreative();
+    const c2 = await libraryCreative();
+    const plain = await program({ creatives: [a.id] });
+    const pid = await program({ creatives: [a.id, b.id, c2.id] });
+    const zones = [
+      { id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 80, z: 0, transition: 'fade' },
+      { id: 'side', type: 'image', x: 0, y: 80, w: 50, h: 20, z: 1, transition: 'none' },
+      { id: 'tick', type: 'marquee', x: 50, y: 80, w: 50, h: 20, z: 2, text: 'Xin chao', bg_color: '#DC2626' },
+    ];
+    const now = h.rt.clock.now().toISOString();
+    await h.rt.db.run('INSERT INTO broadcast_program_layouts (program_id, template_id, orientation, zones, updated_at) VALUES (?,?,?,?,?)', [pid, null, 'portrait', JSON.stringify(zones), now]);
+    await h.rt.db.run('INSERT INTO broadcast_item_zones (program_id, creative_id, zone_id) VALUES (?,?,?)', [pid, b.id, 'side']);
+    await bump();
+    const d = await el({ px_w: 1080, px_h: 1920, region: 'HN' });
+    const m = await J(await d.call('GET', '/v1/manifest'));
+    const slot = m.schedule.find((s: any) => s.slot_id === `bp_${pid}`);
+    expect(slot.layout.orientation).toBe('portrait');
+    expect(slot.layout.zones.find((z: any) => z.id === 'main').creative_ids).toEqual([a.id, c2.id]); // tep chua gan vung roi vao vung media dau
+    expect(slot.layout.zones.find((z: any) => z.id === 'side').creative_ids).toEqual([b.id]);
+    expect(slot.layout.zones.find((z: any) => z.id === 'tick').creative_ids).toBeUndefined();
+    expect(slot.creative_ids).toEqual([a.id, b.id, c2.id]); // thiet bi cu van phat tuan tu nhu truoc
+    expect(m.schedule.find((s: any) => s.slot_id === `bp_${plain}`).layout).toBeUndefined();
+  });
 });

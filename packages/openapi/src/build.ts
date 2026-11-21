@@ -67,6 +67,8 @@ const SRC: { file: string; prefixes: string[] }[] = [
   { file: 'services/api/src/routes/screens.ts', prefixes: ['/admin/v1/screens'] },
   { file: 'services/api/src/routes/schedule.ts', prefixes: ['/admin/v1/schedule'] },
   { file: 'services/api/src/routes/broadcast.ts', prefixes: ['/admin/v1/broadcast'] },
+  { file: 'services/api/src/routes/layout-templates.ts', prefixes: ['/admin/v1/layout-templates'] },
+  { file: 'services/api/src/routes/broadcast-insights.ts', prefixes: ['/admin/v1/broadcast-insights'] },
   { file: 'services/api/src/routes/users.ts', prefixes: ['/admin/v1/users', '/admin/v1/permissions'] },
   { file: 'services/api/src/routes/audit-log.ts', prefixes: ['/admin/v1/audit-log'] },
   { file: 'services/api/src/routes/dashboard.ts', prefixes: ['/admin/v1/dashboard'] },

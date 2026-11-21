@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { broadcastSchema, listOf, mediaSchema, type Broadcast } from '../api/schemas';
@@ -10,6 +11,10 @@ import { useT } from '../i18n';
 import { fmtMin } from '../lib/format';
 import { usbPackageSchema } from '../api/schemas';
 import { copyToUsb, usbSupported } from '../lib/usbExport';
+import { ProgramPreviewDialog } from '../components/PreviewDialogs';
+import { LivePreview } from '../components/LivePreview';
+import { usePreviewItems } from '../components/PreviewDialogs';
+import { PRESETS, isMediaZone, layoutError, templateSchema, zoneName, type Orientation, type Zone } from '../lib/layout';
 
 const TARGETS: { id: string; label: string }[] = [
   { id: 'elevator', label: 'Thang máy (9:16)' },
@@ -32,8 +37,19 @@ export default function Broadcast() {
   const act = useAct();
   const [edit, setEdit] = useState<Broadcast | 'new' | null>(null);
   const [usb, setUsb] = useState<Broadcast | null>(null);
+  const [view, setView] = useState<Broadcast | null>(null);
   const list = useQuery({ queryKey: [BASE], queryFn: () => api.get(BASE, { query: { page_size: 100 }, schema: listOf(broadcastSchema) }) });
   const canWrite = can('schedule', 'write');
+  const [sp, setSp] = useSearchParams();
+  useEffect(() => {
+    const pid = sp.get('program');
+    if (sp.get('new') === '1' && canWrite) setEdit('new');
+    else if (pid && list.data) {
+      const found = list.data.items.find((x) => x.id === pid);
+      if (found && canWrite) setEdit(found);
+    } else return;
+    setSp({}, { replace: true });
+  }, [sp, list.data, canWrite, setSp]);
   const canDelete = can('schedule', 'delete');
   const run = (p: Broadcast, action: 'publish' | 'unpublish', ok: string) => act(() => api.post(`${BASE}/${p.id}/${action}`, { body: {} }), ok);
   return (
@@ -54,6 +70,7 @@ export default function Broadcast() {
                   <td className="mono">{p.item_count}</td>
                   <td><Tag tone={STATUS[p.status]?.tone ?? 'info'}>{STATUS[p.status]?.label ?? p.status}</Tag></td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    {p.item_count > 0 ? <button type="button" className="btn sm" onClick={() => void api.get(`${BASE}/${p.id}`, { schema: broadcastSchema }).then(setView)}>Xem trước</button> : null}{' '}
                     {p.item_count > 0 ? <button type="button" className="btn sm" onClick={() => setUsb(p)}>Chép ra USB</button> : null}{' '}
                     {canWrite ? <button type="button" className="btn sm" onClick={() => void api.get(`${BASE}/${p.id}`, { schema: broadcastSchema }).then(setEdit)}>Sửa</button> : null}{' '}
                     {canWrite && p.status !== 'published' ? <button type="button" className="btn sm p" onClick={() => void run(p, 'publish', 'Đã xuất bản. Thiết bị sẽ nhận trong ít phút.')}>Xuất bản</button> : null}
@@ -68,6 +85,7 @@ export default function Broadcast() {
       )}
       <Note>Chỉ chọn được tệp đã duyệt và chưa gắn vào chiến dịch quảng cáo. Chương trình nội bộ không tính tiền và không có báo cáo doanh thu.</Note>
       {edit ? <ProgramDialog key={edit === 'new' ? 'new' : edit.id} program={edit === 'new' ? null : edit} onClose={() => setEdit(null)} /> : null}
+      {view ? <ProgramPreviewDialog title={view.name} orientation={view.layout?.orientation ?? (view.target_type === 'tv' ? 'landscape' : 'portrait')} zones={view.layout?.zones ?? null} ids={view.items.map((i) => i.creative_id)} zoneOf={Object.fromEntries(view.items.map((i) => [i.creative_id, i.zone_id ?? null]))} header={view.header} footer={view.footer} onClose={() => setView(null)} /> : null}
       {usb ? <UsbDialog program={usb} onClose={() => setUsb(null)} /> : null}
       <span hidden>{t('Hủy')}</span>
     </>
@@ -90,6 +108,27 @@ function ProgramDialog({ program, onClose }: { program: Broadcast | null; onClos
     footer: program?.footer ?? '',
   });
   const [ids, setIds] = useState<string[]>(program?.items.map((i) => i.creative_id) ?? []);
+  // bo cuc da vung (tuy chon): chep tu mau hoac sua tay; tep gan vao vung bang itemZones
+  const [zones, setZones] = useState<Zone[] | null>((program?.layout?.zones as Zone[] | undefined) ?? null);
+  const [orientation, setOrientation] = useState<Orientation>(program?.layout?.orientation ?? ((program?.target_type ?? 'elevator') === 'tv' ? 'landscape' : 'portrait'));
+  const [templateId, setTemplateId] = useState<string | null>(program?.layout?.template_id ?? null);
+  const [itemZones, setItemZones] = useState<Record<string, string>>(Object.fromEntries((program?.items ?? []).flatMap((i) => (i.zone_id ? [[i.creative_id, i.zone_id] as [string, string]] : []))));
+  const [showPreview, setShowPreview] = useState(false);
+  const tpls = useQuery({ queryKey: ['/admin/v1/layout-templates', 'pick'], queryFn: () => api.get('/admin/v1/layout-templates', { query: { page_size: 100 }, schema: listOf(templateSchema) }) });
+  const mediaZones = (zones ?? []).filter(isMediaZone);
+  const pickTemplate = (id: string) => {
+    if (!id) { setZones(null); setTemplateId(null); setItemZones({}); return; }
+    const preset = PRESETS.find((p) => p.id === id);
+    const tp = tpls.data?.items.find((x) => x.id === id);
+    const src = preset ?? tp;
+    if (!src) return;
+    setZones(src.zones.map((z) => ({ ...z })));
+    setOrientation(src.orientation);
+    setTemplateId(tp ? tp.id : null);
+    setItemZones((cur) => { const ok = new Set(src.zones.filter(isMediaZone).map((z) => z.id)); return Object.fromEntries(Object.entries(cur).filter(([, z]) => ok.has(z))); });
+  };
+  const layoutErr = zones ? layoutError(zones) : '';
+  const prev = usePreviewItems(showPreview ? ids : [], itemZones);
   const media = useQuery({ queryKey: ['/admin/v1/media', 'broadcast-pick'], queryFn: () => api.get('/admin/v1/media', { query: { page_size: 200, status: 'approved' }, schema: listOf(mediaSchema) }) });
   const pool = useMemo(() => (media.data?.items ?? []).filter((m) => (m as { campaign_id?: unknown }).campaign_id == null || ids.includes(m.id)), [media.data, ids]);
   const signage = f.target_type === 'elevator' || f.target_type === 'led_p5';
@@ -108,6 +147,8 @@ function ProgramDialog({ program, onClose }: { program: Broadcast | null; onClos
       priority: Number(f.priority),
       ...(signage ? { header: f.header.trim() === '' ? null : f.header, footer: f.footer.trim() === '' ? null : f.footer } : {}),
       creative_ids: ids,
+      layout: zones ? { template_id: templateId, orientation, zones } : null,
+      item_zones: zones ? Object.fromEntries(Object.entries(itemZones).filter(([k]) => ids.includes(k))) : {},
     };
     const r = await act(() => (program ? api.put(`${BASE}/${program.id}`, { body }) : api.post(BASE, { body })), program ? 'Đã lưu chương trình.' : 'Đã tạo chương trình (bản nháp).');
     if (r !== undefined) onClose();
@@ -125,6 +166,15 @@ function ProgramDialog({ program, onClose }: { program: Broadcast | null; onClos
           <Field label="Giờ bắt đầu"><input type="time" step={1800} value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></Field>
           <Field label="Giờ kết thúc" hint="24:00 = hết ngày"><input type={f.end === '24:00' ? 'text' : 'time'} step={1800} value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} /></Field>
         </div>
+        <Field label="Bố cục hiển thị" hint="Không chọn = một video/ảnh phủ toàn màn hình như trước. Tạo mẫu riêng ở trang Mẫu bố cục.">
+          <select value={zones ? (templateId ?? '') : ''} onChange={(e) => pickTemplate(e.target.value)} aria-label="Bố cục hiển thị">
+            <option value="">Toàn màn hình (một vùng)</option>
+            {tpls.data?.items.length ? <optgroup label="Mẫu của bạn">{tpls.data.items.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup> : null}
+            <optgroup label="Mẫu có sẵn">{PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
+          </select>
+        </Field>
+        {zones && !templateId && !PRESETS.some((p) => JSON.stringify(p.zones) === JSON.stringify(zones)) ? <Note>Bố cục tùy chỉnh ({zones.length} vùng) đã chép vào chương trình này.</Note> : null}
+        {layoutErr ? <p role="alert" style={{ color: 'var(--bad, #c0392b)' }}>{layoutErr}</p> : null}
         <Field label="Ưu tiên (1–5)"><select value={f.priority} onChange={(e) => setF({ ...f, priority: e.target.value })}>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}</select></Field>
         {signage ? (
           <>
@@ -137,6 +187,7 @@ function ProgramDialog({ program, onClose }: { program: Broadcast | null; onClos
           <ol style={{ margin: '0 0 8px', paddingLeft: 20 }}>
             {ids.map((id, i) => (
               <li key={id} style={{ marginBottom: 4 }}>{nameOf(id)}{' '}
+                {zones && mediaZones.length ? <select aria-label={`Vùng phát của ${nameOf(id)}`} value={itemZones[id] ?? ''} onChange={(e) => setItemZones((cur) => { const n = { ...cur }; if (e.target.value) n[id] = e.target.value; else delete n[id]; return n; })}><option value="">Vùng chính (mặc định)</option>{mediaZones.map((z) => <option key={z.id} value={z.id}>{zoneName(z, zones.indexOf(z))}</option>)}</select> : null}{' '}
                 <button type="button" className="btn sm" aria-label={`Lên ${nameOf(id)}`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>{' '}
                 <button type="button" className="btn sm" aria-label={`Xuống ${nameOf(id)}`} disabled={i === ids.length - 1} onClick={() => move(i, 1)}>↓</button>{' '}
                 <button type="button" className="btn sm d" aria-label={`Bỏ ${nameOf(id)}`} onClick={() => setIds(ids.filter((x) => x !== id))}>Bỏ</button></li>
@@ -149,7 +200,8 @@ function ProgramDialog({ program, onClose }: { program: Broadcast | null; onClos
             {pool.filter((m) => !ids.includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}{m.width && m.height ? ` · ${m.width}×${m.height}` : ''}</option>)}
           </select>
         </Field>
-        <div className="da" style={{ marginTop: 14 }}><button type="button" className="btn" onClick={onClose}>{t('Hủy')}</button><button className="btn p" type="submit">{t('Lưu')}</button></div>
+        {showPreview ? (prev.loading ? <p>Đang tải bản xem trước…</p> : ids.length === 0 ? <p>Chọn ít nhất một tệp để xem trước.</p> : <LivePreview orientation={orientation} zones={zones ?? PRESETS.find((p) => p.orientation === orientation && p.id.startsWith('full'))!.zones} items={prev.items} header={signage ? f.header : null} footer={signage ? f.footer : null} />) : null}
+        <div className="da" style={{ marginTop: 14 }}><button type="button" className="btn" onClick={() => setShowPreview((v) => !v)} disabled={ids.length === 0}>{showPreview ? 'Ẩn xem trước' : 'Xem trước phát'}</button><button type="button" className="btn" onClick={onClose}>{t('Hủy')}</button><button className="btn p" type="submit" disabled={!!layoutErr}>{t('Lưu')}</button></div>
       </form>
     </Dialog>
   );

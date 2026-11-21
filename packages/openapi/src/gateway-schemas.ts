@@ -80,6 +80,23 @@ export const manifestCreative = z.object({
   size_bytes: z.number().nullable(),
   fit: z.enum(['fit', 'cover']).optional().describe('CHI thang may/LED: cach hien trong khung (mac dinh fit = vua khung, giu ti le, co vien den neu lech; cover = phu kin, co the cat mep)'),
 });
+const manifestZone = z.object({
+  id: z.string(),
+  type: z.enum(['video', 'image', 'marquee', 'clock', 'weather', 'qr']),
+  x: z.number().describe('% khung, 0..100'),
+  y: z.number(),
+  w: z.number(),
+  h: z.number(),
+  z: z.number().int().optional(),
+  transition: z.enum(['none', 'fade', 'slide-left', 'slide-right', 'zoom']).optional(),
+  text: z.string().optional(),
+  bg_color: z.string().optional(),
+  text_color: z.string().optional(),
+  font_size: z.number().int().optional(),
+  scroll_speed: z.number().int().optional(),
+  url: z.string().optional(),
+  creative_ids: z.array(z.string()).optional().describe('CHI vung video/image: tep phat o vung nay, theo thu tu'),
+});
 export const manifestSlot = z.object({
   slot_id: z.string(),
   campaign_id: z.string(),
@@ -91,6 +108,7 @@ export const manifestSlot = z.object({
   reward_points: z.number().int(),
   header: z.string().optional().describe('CHI thang may/LED: ghi de header cap manifest cho lich nay (chuoi rong = an)'),
   footer: z.string().optional().describe('CHI thang may/LED: ghi de footer cap manifest cho lich nay (chuoi rong = an)'),
+  layout: z.object({ orientation: z.enum(['landscape', 'portrait']), zones: z.array(manifestZone) }).optional().describe('CHI lich noi bo (slot bp_*) co bo cuc da vung; thiet bi cu bo qua truong la'),
 });
 const signageExtra = {
   header: z.string().optional().describe('CHI thang may/LED: chu header (rong = an)'),

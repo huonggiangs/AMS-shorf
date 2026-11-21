@@ -10,6 +10,7 @@ import { conflict, notFound, tooMany, unprocessable } from '../lib/errors.js';
 import { eq, getRt, jsonParse, num, parseBody, placeholders, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { bumpManifest } from '../lib/manifest.js';
+import { layoutSchema, MEDIA_ZONE_TYPES, type Layout, type Zone } from '../lib/layout.js';
 import { requirePerm } from '../auth/middleware.js';
 import type { AppEnv } from '../types.js';
 
@@ -97,6 +98,9 @@ const fields = z.object({
   header: z.string().nullable().optional(),
   footer: z.string().nullable().optional(),
   creative_ids: z.array(z.string().min(1).max(64)).max(100).default([]),
+  // Bo cuc da vung (null = man don) va tep nao phat o vung nao (creative_id -> zone_id). Xem migrations/0021.
+  layout: layoutSchema.nullable().optional(),
+  item_zones: z.record(z.string().min(1).max(64), z.string().min(1).max(32)).optional(),
 });
 
 async function loadProgram(c: Ctx, id: string): Promise<ProgramRow> {
@@ -122,10 +126,41 @@ const presentItem = (i: ItemRow) => ({
   in_campaign: i.campaign_id !== null,
 });
 
+async function loadLayout(c: Ctx, id: string): Promise<{ template_id: string | null; orientation: string; zones: Zone[] } | null> {
+  const r = (await getRt(c).db.query<{ template_id: string | null; orientation: string; zones: string | null }>('SELECT template_id, orientation, zones FROM broadcast_program_layouts WHERE program_id = ?', [id]))[0];
+  return r ? { template_id: r.template_id, orientation: r.orientation, zones: jsonParse<Zone[]>(r.zones, []) } : null;
+}
+
 async function presentFull(c: Ctx, id: string) {
   const p = await loadProgram(c, id);
-  const items = await getRt(c).db.query<ItemRow>(ITEM_SQL, [id]);
-  return { ...present(p), items: items.map(presentItem) };
+  const rt = getRt(c);
+  const items = await rt.db.query<ItemRow>(ITEM_SQL, [id]);
+  const zrows = await rt.db.query<{ creative_id: string; zone_id: string }>('SELECT creative_id, zone_id FROM broadcast_item_zones WHERE program_id = ?', [id]);
+  const zoneOf = new Map(zrows.map((z) => [z.creative_id, z.zone_id]));
+  return { ...present(p), layout: await loadLayout(c, id), items: items.map((i) => ({ ...presentItem(i), zone_id: zoneOf.get(i.creative_id) ?? null })) };
+}
+
+/** Kiem tra gan tep vao vung: vung phai ton tai trong bo cuc, kieu video/image, tep thuoc chuong trinh. */
+function checkItemZones(layout: Layout | null, itemZones: Record<string, string> | undefined, ids: string[]): void {
+  if (!itemZones || Object.keys(itemZones).length === 0) return;
+  if (!layout) throw unprocessable('Chưa chọn bố cục nên không thể gán tệp vào vùng.', 'no_layout');
+  const byId = new Map(layout.zones.map((z) => [z.id, z]));
+  for (const [cid, zid] of Object.entries(itemZones)) {
+    if (!ids.includes(cid)) throw unprocessable('Có tệp gán vùng nhưng không nằm trong chương trình.', 'bad_item_zone');
+    const z = byId.get(zid);
+    if (!z) throw unprocessable(`Vùng "${zid}" không có trong bố cục.`, 'bad_item_zone');
+    if (!(MEDIA_ZONE_TYPES as readonly string[]).includes(z.type)) throw unprocessable(`Vùng "${z.name ?? zid}" không phát được video/ảnh.`, 'bad_item_zone');
+  }
+}
+
+async function saveLayout(db: { run: (sql: string, p: unknown[]) => Promise<unknown> }, id: string, layout: Layout | null, replaceLayout: boolean, itemZones: Record<string, string>, ids: string[], now: string): Promise<void> {
+  if (replaceLayout) {
+    await db.run('DELETE FROM broadcast_program_layouts WHERE program_id = ?', [id]);
+    if (layout) await db.run('INSERT INTO broadcast_program_layouts (program_id, template_id, orientation, zones, updated_at) VALUES (?,?,?,?,?)', [id, layout.template_id ?? null, layout.orientation, JSON.stringify(layout.zones), now]);
+  }
+  await db.run('DELETE FROM broadcast_item_zones WHERE program_id = ?', [id]);
+  const zoneIds = new Set((layout?.zones ?? []).map((z) => z.id));
+  for (const [cid, zid] of Object.entries(itemZones)) if (ids.includes(cid) && zoneIds.has(zid)) await db.run('INSERT INTO broadcast_item_zones (program_id, creative_id, zone_id) VALUES (?,?,?)', [id, cid, zid]);
 }
 
 /** Kiem tra danh sach tep: ton tai, chua gan chien dich (tranh tinh tien nham), khop loai man. Tra ve loi dau tien (tieng Viet). */
@@ -278,6 +313,7 @@ export function broadcastRoutes(): Hono<AppEnv> {
     const target = dbTarget(b.target_type);
     const text = checkText(target, b, { header: null, footer: null });
     await checkItems(c, target, b.creative_ids);
+    checkItemZones(b.layout ?? null, b.item_zones, b.creative_ids);
     const id = rt.id();
     const now = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
@@ -287,6 +323,7 @@ export function broadcastRoutes(): Hono<AppEnv> {
         [id, b.name, target, JSON.stringify(b.regions), b.start_date ?? null, b.end_date ?? null, b.start_min, b.end_min, b.priority, text.header, text.footer, u.id, now, now],
       );
       for (const [i, cid] of b.creative_ids.entries()) await db.run('INSERT INTO broadcast_program_items (program_id, creative_id, position) VALUES (?,?,?)', [id, cid, i]);
+      if (b.layout) await saveLayout(db, id, b.layout, true, b.item_zones ?? {}, b.creative_ids, now);
       await auditCtx(c, db, { action: 'broadcast.create', objectType: 'broadcast_program', objectId: id, diff: { name: b.name, target_type: target, items: b.creative_ids.length } });
     });
     return c.json(await presentFull(c, id), 201);
@@ -306,6 +343,10 @@ export function broadcastRoutes(): Hono<AppEnv> {
     const text = checkText(target, b, { header: p.header, footer: p.footer });
     const ids = b.creative_ids ?? (await rt.db.query<{ creative_id: string }>('SELECT creative_id FROM broadcast_program_items WHERE program_id = ? ORDER BY position', [p.id])).map((x) => x.creative_id);
     await checkItems(c, target, ids);
+    const effLayout = (b.layout === undefined ? await loadLayout(c, p.id) : b.layout) as Layout | null;
+    const existingZones = b.layout === null ? {} : Object.fromEntries((await rt.db.query<{ creative_id: string; zone_id: string }>('SELECT creative_id, zone_id FROM broadcast_item_zones WHERE program_id = ?', [p.id])).map((z) => [z.creative_id, z.zone_id]));
+    const effItemZones: Record<string, string> = b.item_zones ?? existingZones;
+    if (b.item_zones) checkItemZones(effLayout, b.item_zones, ids);
     const now = rt.clock.now().toISOString();
     const live = p.status === 'published';
     await rt.db.tx(async (db) => {
@@ -317,6 +358,7 @@ export function broadcastRoutes(): Hono<AppEnv> {
         await db.run('DELETE FROM broadcast_program_items WHERE program_id = ?', [p.id]);
         for (const [i, cid] of ids.entries()) await db.run('INSERT INTO broadcast_program_items (program_id, creative_id, position) VALUES (?,?,?)', [p.id, cid, i]);
       }
+      if (b.layout !== undefined || b.item_zones !== undefined || b.creative_ids) await saveLayout(db, p.id, effLayout, b.layout !== undefined, effItemZones, ids, now);
       await auditCtx(c, db, { action: 'broadcast.update', objectType: 'broadcast_program', objectId: p.id, diff: { name: b.name ?? p.name, items: ids.length, live } });
     });
     if (live) await bumpManifest(rt);
@@ -358,6 +400,8 @@ export function broadcastRoutes(): Hono<AppEnv> {
     const rt = getRt(c);
     const p = await loadProgram(c, c.req.param('id'));
     await rt.db.tx(async (db) => {
+      await db.run('DELETE FROM broadcast_item_zones WHERE program_id = ?', [p.id]);
+      await db.run('DELETE FROM broadcast_program_layouts WHERE program_id = ?', [p.id]);
       await db.run('DELETE FROM broadcast_program_items WHERE program_id = ?', [p.id]);
       await db.run('DELETE FROM broadcast_programs WHERE id = ?', [p.id]);
       await auditCtx(c, db, { action: 'broadcast.delete', objectType: 'broadcast_program', objectId: p.id, diff: { name: p.name } });

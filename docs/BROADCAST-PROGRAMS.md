@@ -31,3 +31,23 @@ Trang **Thông báo khẩn** (menu Quảng cáo, quyền `schedule`): nhập n�
 ```
 
 `file` dành cho nguồn USB (`UsbScanner.spec` đọc `items[].file` + `duration`), `url`/`id`/`checksum` dành cho `PlaylistIo.parse`. Ảnh mặc định 10 giây. Tên tệp `NNN-<id>.<đuôi>` giữ đúng thứ tự phát. URL tệp ký có hạn 1 giờ. Trên web, nút **Chép ra USB** dùng File System Access API (`showDirectoryPicker`, Chrome/Edge): tạo thư mục `ANIO`, tải từng tệp, kiểm sha256 rồi ghi `playlist.json`; trình duyệt khác tải `playlist.json` + `danh-sach-tep.txt` để chép tay. Lưu ý: `UsbScanner` hiện chưa đọc `header`/`footer` trong playlist (cần app bổ sung nếu muốn chữ đầu/cuối khi phát từ USB).
+
+## Bàn làm việc, Phân phối thông minh, Hàng đợi & Nhật ký
+
+Nhóm menu **Phát sóng nội bộ** (tham khảo QuangBáo Cloud). API đều ở `/admin/v1/broadcast-insights` (file `services/api/src/routes/broadcast-insights.ts`), chỉ đọc dữ liệu có sẵn, **không thêm bảng/migration**; chỉ ghi audit `broadcast.recommend`.
+
+- **Bàn làm việc** (`GET /summary`, `schedule:view`): số chương trình đang phát / đã xuất bản / nháp / hết hạn, tệp kho chờ duyệt, thiết bị đã duyệt trực tuyến/ngoại tuyến theo khu vực (trực tuyến = có tín hiệu trong 20 phút), thiết bị chờ cấp quyền, 5 thông báo khẩn gần nhất và số lệnh chờ/lỗi. Lối tắt: tạo chương trình, gửi thông báo khẩn, tải media.
+- **Phân phối thông minh** (`POST /recommend`, `GET /recommend` = lịch sử, `schedule:view`): nhập loại địa điểm, giờ, đối tượng, mật độ, thời tiết, ghi chú. Chấm điểm 0–100 các chương trình nháp/đã xuất bản bằng **luật** (không cần khóa AI, `engine: "rules"`): khung giờ bao trùm giờ chọn (+15 / −20), loại màn hợp địa điểm (+20/+10/−5), đối tượng trẻ em/thanh thiếu niên cần mọi tệp `kid_safe` (+15 / −40), mật độ, từ khóa ghi chú trùng tên chương trình (+10 mỗi từ), ưu tiên, bản nháp (−15), chương trình trống hoặc tệp chưa duyệt (−30), không có thiết bị khớp hoặc đều ngoại tuyến (−25/−10). Kết quả kèm lý do tiếng Việt, cảnh báo, nhóm thiết bị đích (khu vực, trực tuyến/tổng) và gợi ý tệp kho chưa dùng. Mỗi lần đề xuất ghi audit `broadcast.recommend` (lịch sử quyết định). Nút **Áp dụng** mở `/broadcast?program=<id>` (mở trang Chương trình phát sóng; trang đó có thể đọc tham số để mở sẵn chương trình). Chưa gọi mô hình AI ngoài; có thể bổ sung diễn giải bằng khóa riêng sau.
+- **Hàng đợi & Nhật ký** (3 tab):
+  - *Hàng đợi lệnh* `GET /queue` (`devices:view`; lọc `status`, `type`, `device_id`, `kind`, tìm kiếm, phân trang; kèm đếm theo trạng thái; lệnh quá hạn hiện `expired`). Hủy dùng `POST /admin/v1/devices/:id/commands/:cid/cancel`, thử lại tạo lệnh mới bằng `POST /admin/v1/devices/:id/commands` (cần `devices:write`).
+  - *Nhật ký phát sóng* `GET /logs` (`schedule:view`): `audit_log` có action `broadcast.*`, tìm kiếm + lọc hành động + phân trang.
+  - *Sự kiện thiết bị* `GET /events/logs` (bảng `device_logs`) và `GET /events/heartbeat` (bảng `ev_heartbeat`), `devices:view`. Nhật ký thiết bị giữ 7 ngày, heartbeat theo chính sách lưu giữ.
+
+
+## Mẫu bố cục đa vùng + xem trước (migration 0021)
+
+- **Mẫu bố cục** (`/admin/v1/layout-templates`, quyền `schedule`): danh sách vùng theo % khung 9:16 hoặc 16:9; loại vùng `video`, `image`, `marquee` (chữ chạy), `clock`, `weather`, `qr`; tối đa 8 vùng, không vượt khung, mã vùng không trùng. 6 mẫu hệ thống (id `sys_*`: Chia đôi Dọc, Bán lẻ 3 vùng, Sảnh Tòa nhà Ngang, Sân bay Quốc tế, Menu Quầy Gọi món F&B, Kiosk Y tế & Bệnh viện) được nạp bởi migration; chỉ xem/dùng, không sửa/xóa (`422 system_template`).
+- **Chương trình**: `layout` (`null` = màn đơn) được **chép** từ mẫu nên sửa/xóa mẫu không đổi chương trình đang phát; `item_zones` gán tệp vào vùng (`{creative_id: zone_id}`; tệp chưa gán vào vùng video/ảnh đầu tiên). Bảng phụ `broadcast_program_layouts`, `broadcast_item_zones` (không dùng ALTER TABLE như 0017/0018).
+- **Manifest**: slot `bp_*` có thêm `layout` (xem DEVICE-PROTOCOL.md) kèm `creative_ids` theo vùng; `creative_ids` của slot không đổi nên thiết bị cũ vẫn phát tuần tự.
+- **Web**: trang *Mẫu bố cục* (thẻ mẫu, trình soạn kéo-thả/đổi kích thước, nút *Sử dụng mẫu này* tạo chương trình nháp); *Xem trước* trong Chương trình phát sóng (trình phát mô phỏng với video/ảnh thật, chữ chạy, đồng hồ, header/footer, Tạm dừng/Phát lại, 9:16/16:9) và nút *Xem trước* ở từng tệp trong Kho tư liệu.
+- **Hạn chế**: Signage Player hiện chưa vẽ nhiều vùng (vẫn phát tuần tự một vùng); thời tiết và mã QR trong bản xem trước là hình minh họa.

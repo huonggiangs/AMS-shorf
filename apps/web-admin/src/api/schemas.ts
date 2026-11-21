@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { zoneSchema } from '../lib/layout';
 
 /* ---------- RBAC (PLAN §4): 12 modules x 4 actions ---------- */
 export const MODULES = [
@@ -287,7 +288,7 @@ export type Slot = z.infer<typeof slotSchema>;
 
 /* ---------- broadcast programs (chương trình phát sóng nội bộ) ---------- */
 export const broadcastItemSchema = z
-  .object({ creative_id: z.string(), position: z.coerce.number(), name: z.string().nullish(), kind: z.string().nullish(), width: z.coerce.number().nullish(), height: z.coerce.number().nullish(), duration_s: z.coerce.number().nullish(), review_state: z.string(), state: z.string(), ready: z.boolean(), in_campaign: z.boolean() })
+  .object({ creative_id: z.string(), position: z.coerce.number(), name: z.string().nullish(), kind: z.string().nullish(), width: z.coerce.number().nullish(), height: z.coerce.number().nullish(), duration_s: z.coerce.number().nullish(), review_state: z.string(), state: z.string(), ready: z.boolean(), in_campaign: z.boolean(), zone_id: z.string().nullish() })
   .passthrough();
 export const broadcastSchema = z
   .object({
@@ -308,6 +309,7 @@ export const broadcastSchema = z
     updated_at: z.string().nullish(),
     published_at: z.string().nullish(),
     items: z.array(broadcastItemSchema).default([]),
+    layout: z.object({ template_id: z.string().nullish(), orientation: z.enum(['landscape', 'portrait']), zones: z.array(zoneSchema) }).passthrough().nullish(),
   })
   .passthrough();
 export type Broadcast = z.infer<typeof broadcastSchema>;

@@ -1,6 +1,6 @@
 import type { Runtime } from '@ams/runtime';
 import { ANY, MANIFEST_EPOCH_KEY, elevatorTierFor, isElevatorResolution, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
-import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestSlot } from './protocol.js';
+import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestLayout, type ManifestSlot, type ManifestZone } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 
 export interface GroupKey {
@@ -64,6 +64,21 @@ interface SlotRow {
   slot_footer: string | null;
 }
 
+/** Gan tep (da loc hop le, giu thu tu) vao vung media; tep chua gan vung roi vao vung media dau tien. */
+function programLayout(layout: { orientation: 'landscape' | 'portrait'; zones: ManifestZone[] }, itemZones: Record<string, string>, ids: string[]): ManifestLayout {
+  const media = layout.zones.filter((z) => z.type === 'video' || z.type === 'image');
+  const first = media[0]?.id;
+  const known = new Set(media.map((z) => z.id));
+  return {
+    orientation: layout.orientation,
+    zones: layout.zones.map((z) => {
+      if (z.type !== 'video' && z.type !== 'image') return z;
+      const creative_ids = ids.filter((id) => (known.has(itemZones[id] ?? '') ? itemZones[id] : first) === z.id);
+      return { ...z, creative_ids };
+    }),
+  };
+}
+
 interface LiveProgram {
   id: string;
   start_min: number;
@@ -72,6 +87,9 @@ interface LiveProgram {
   header: string | null;
   footer: string | null;
   items: string[];
+  /** bo cuc da vung (0021) + tep theo vung; khong co = man don */
+  layout: { orientation: 'landscape' | 'portrait'; zones: ManifestZone[] } | null;
+  itemZones: Record<string, string>;
 }
 
 export interface ManifestOpts {
@@ -446,6 +464,7 @@ export class ManifestService {
         reward_points: 0,
         ...(signage && p.header !== null ? { header: p.header } : {}),
         ...(signage && p.footer !== null ? { footer: p.footer } : {}),
+        ...(p.layout ? { layout: programLayout(p.layout, p.itemZones, ids) } : {}),
       });
     }
     schedule.sort((a, b) => (a.slot_id < b.slot_id ? -1 : 1));
@@ -551,7 +570,18 @@ export class ManifestService {
         /* regions hong: coi nhu moi khu vuc */
       }
       const items = await this.rt.db.query<{ creative_id: string }>('SELECT creative_id FROM broadcast_program_items WHERE program_id = ? ORDER BY position, creative_id', [r.id]);
-      out.push({ ...r, items: items.map((i) => i.creative_id) });
+      const lay = (await this.rt.db.query<{ orientation: string; zones: string | null }>('SELECT orientation, zones FROM broadcast_program_layouts WHERE program_id = ?', [r.id]))[0];
+      let layout: LiveProgram['layout'] = null;
+      if (lay) {
+        try {
+          const zones = JSON.parse(lay.zones ?? '[]') as ManifestZone[];
+          if (Array.isArray(zones) && zones.length > 0) layout = { orientation: lay.orientation === 'portrait' ? 'portrait' : 'landscape', zones };
+        } catch {
+          /* bo cuc hong: phat man don */
+        }
+      }
+      const zr = layout ? await this.rt.db.query<{ creative_id: string; zone_id: string }>('SELECT creative_id, zone_id FROM broadcast_item_zones WHERE program_id = ?', [r.id]) : [];
+      out.push({ ...r, items: items.map((i) => i.creative_id), layout, itemZones: Object.fromEntries(zr.map((z) => [z.creative_id, z.zone_id])) });
     }
     return out;
   }

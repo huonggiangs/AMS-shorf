@@ -25,6 +25,7 @@ tags:
   - name: auth
   - name: billing
   - name: broadcast
+  - name: broadcast-insights
   - name: campaigns
   - name: compliance
   - name: contract-docs
@@ -37,6 +38,7 @@ tags:
   - name: history
   - name: invoices
   - name: kyc
+  - name: layout-templates
   - name: legal
   - name: me
   - name: media
@@ -472,7 +474,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:205
+      x-ams-source: services/api/src/routes/broadcast.ts:240
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -501,7 +503,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:272
+      x-ams-source: services/api/src/routes/broadcast.ts:307
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -528,6 +530,242 @@ paths:
       security:
         - cookieAuth: []
           csrfToken: []
+  /admin/v1/broadcast-insights/events/heartbeat:
+    get:
+      operationId: adminGetBroadcastInsightsEventsHeartbeat
+      tags:
+        - broadcast-insights
+      summary: GET /admin/v1/broadcast-insights/events/heartbeat
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: devices
+        action: view
+      x-ams-source: services/api/src/routes/broadcast-insights.ts:325
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/broadcast-insights/events/logs:
+    get:
+      operationId: adminGetBroadcastInsightsEventsLogs
+      tags:
+        - broadcast-insights
+      summary: GET /admin/v1/broadcast-insights/events/logs
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: devices
+        action: view
+      x-ams-source: services/api/src/routes/broadcast-insights.ts:321
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/broadcast-insights/logs:
+    get:
+      operationId: adminGetBroadcastInsightsLogs
+      tags:
+        - broadcast-insights
+      summary: GET /admin/v1/broadcast-insights/logs
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/broadcast-insights.ts:315
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/broadcast-insights/queue:
+    get:
+      operationId: adminGetBroadcastInsightsQueue
+      tags:
+        - broadcast-insights
+      summary: GET /admin/v1/broadcast-insights/queue
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: devices
+        action: view
+      x-ams-source: services/api/src/routes/broadcast-insights.ts:295
+      description: |-
+        Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/broadcast-insights/recommend:
+    get:
+      operationId: adminGetBroadcastInsightsRecommend
+      tags:
+        - broadcast-insights
+      summary: GET /admin/v1/broadcast-insights/recommend
+      parameters: []
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/broadcast-insights.ts:287
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostBroadcastInsightsRecommend
+      tags:
+        - broadcast-insights
+      summary: POST /admin/v1/broadcast-insights/recommend
+      parameters: []
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/broadcast-insights.ts:246
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostBroadcastInsightsRecommendRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/broadcast-insights/summary:
+    get:
+      operationId: adminGetBroadcastInsightsSummary
+      tags:
+        - broadcast-insights
+      summary: GET /admin/v1/broadcast-insights/summary
+      parameters: []
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/broadcast-insights.ts:194
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
   /admin/v1/broadcast/notice:
     get:
       operationId: adminGetBroadcastNotice
@@ -538,7 +776,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:212
+      x-ams-source: services/api/src/routes/broadcast.ts:247
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -567,7 +805,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:219
+      x-ams-source: services/api/src/routes/broadcast.ts:254
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -609,7 +847,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: delete
-      x-ams-source: services/api/src/routes/broadcast.ts:357
+      x-ams-source: services/api/src/routes/broadcast.ts:399
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -644,7 +882,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:270
+      x-ams-source: services/api/src/routes/broadcast.ts:305
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -678,7 +916,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:295
+      x-ams-source: services/api/src/routes/broadcast.ts:332
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -720,7 +958,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:326
+      x-ams-source: services/api/src/routes/broadcast.ts:368
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -756,7 +994,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:344
+      x-ams-source: services/api/src/routes/broadcast.ts:386
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -792,7 +1030,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:245
+      x-ams-source: services/api/src/routes/broadcast.ts:280
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4477,6 +4715,188 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/AdminPostInvoicesByIdVoidRequest"
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/layout-templates:
+    get:
+      operationId: adminGetLayoutTemplates
+      tags:
+        - layout-templates
+      summary: GET /admin/v1/layout-templates
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/layout-templates.ts:58
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: adminPostLayoutTemplates
+      tags:
+        - layout-templates
+      summary: POST /admin/v1/layout-templates
+      parameters: []
+      x-ams-permission:
+        module: schedule
+        action: write
+      x-ams-source: services/api/src/routes/layout-templates.ts:65
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostLayoutTemplatesRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+  /admin/v1/layout-templates/{id}:
+    delete:
+      operationId: adminDeleteLayoutTemplatesById
+      tags:
+        - layout-templates
+      summary: DELETE /admin/v1/layout-templates/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: schedule
+        action: delete
+      x-ams-source: services/api/src/routes/layout-templates.ts:90
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Đã xóa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
+    get:
+      operationId: adminGetLayoutTemplatesById
+      tags:
+        - layout-templates
+      summary: GET /admin/v1/layout-templates/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/layout-templates.ts:63
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+    put:
+      operationId: adminPutLayoutTemplatesById
+      tags:
+        - layout-templates
+      summary: PUT /admin/v1/layout-templates/{id}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: schedule
+        action: write
+      x-ams-source: services/api/src/routes/layout-templates.ts:77
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPutLayoutTemplatesByIdRequest"
       responses:
         "200":
           description: Thành công
@@ -10138,6 +10558,56 @@ components:
       required:
         - items
       additionalProperties: true
+    AdminPostBroadcastInsightsRecommendRequest:
+      type: object
+      properties:
+        place:
+          type: string
+          enum:
+            - building
+            - office
+            - hospital
+            - school
+            - mall
+            - restaurant
+            - street
+            - home
+            - other
+          default: other
+        hour:
+          type: integer
+          minimum: 0
+          maximum: 23
+        audience:
+          type: string
+          enum:
+            - child
+            - teen
+            - adult
+            - senior
+            - mixed
+          default: mixed
+        density:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+          default: medium
+        weather:
+          type: string
+          enum:
+            - any
+            - sunny
+            - rain
+            - hot
+            - cold
+          default: any
+        note:
+          type: string
+          maxLength: 200
+          default: ""
+      additionalProperties: true
     AdminPostBroadcastNoticeRequest:
       type: object
       properties:
@@ -10232,6 +10702,113 @@ components:
             maxLength: 64
           maxItems: 100
           default: []
+        layout:
+          anyOf:
+            - type: object
+              properties:
+                template_id:
+                  anyOf:
+                    - type: string
+                      maxLength: 64
+                    - type: "null"
+                orientation:
+                  type: string
+                  enum:
+                    - landscape
+                    - portrait
+                  default: landscape
+                zones:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^[A-Za-z0-9_-]{1,32}$
+                      name:
+                        type: string
+                        maxLength: 60
+                      type:
+                        type: string
+                        enum:
+                          - video
+                          - image
+                          - marquee
+                          - clock
+                          - weather
+                          - qr
+                      x:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+                      y:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+                      w:
+                        type: number
+                        minimum: 1
+                        maximum: 100
+                      h:
+                        type: number
+                        minimum: 1
+                        maximum: 100
+                      z:
+                        type: integer
+                        minimum: 0
+                        maximum: 20
+                        default: 0
+                      transition:
+                        type: string
+                        enum:
+                          - none
+                          - fade
+                          - slide-left
+                          - slide-right
+                          - zoom
+                        default: none
+                      text:
+                        type: string
+                        maxLength: 200
+                      bg_color:
+                        type: string
+                        pattern: ^#[0-9A-Fa-f]{6}$
+                      text_color:
+                        type: string
+                        pattern: ^#[0-9A-Fa-f]{6}$
+                      font_size:
+                        type: integer
+                        minimum: 8
+                        maximum: 200
+                      scroll_speed:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      url:
+                        type: string
+                        maxLength: 500
+                    required:
+                      - id
+                      - type
+                      - x
+                      - y
+                      - w
+                      - h
+                    additionalProperties: true
+                  maxItems: 8
+              required:
+                - zones
+              additionalProperties: true
+            - type: "null"
+        item_zones:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 32
+          propertyNames:
+            minLength: 1
+            maxLength: 64
       required:
         - name
         - target_type
@@ -11016,6 +11593,102 @@ components:
         - amount_vnd
         - vat_rate
       additionalProperties: true
+    AdminPostLayoutTemplatesRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        orientation:
+          type: string
+          enum:
+            - landscape
+            - portrait
+          default: landscape
+        zones:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                pattern: ^[A-Za-z0-9_-]{1,32}$
+              name:
+                type: string
+                maxLength: 60
+              type:
+                type: string
+                enum:
+                  - video
+                  - image
+                  - marquee
+                  - clock
+                  - weather
+                  - qr
+              x:
+                type: number
+                minimum: 0
+                maximum: 100
+              y:
+                type: number
+                minimum: 0
+                maximum: 100
+              w:
+                type: number
+                minimum: 1
+                maximum: 100
+              h:
+                type: number
+                minimum: 1
+                maximum: 100
+              z:
+                type: integer
+                minimum: 0
+                maximum: 20
+                default: 0
+              transition:
+                type: string
+                enum:
+                  - none
+                  - fade
+                  - slide-left
+                  - slide-right
+                  - zoom
+                default: none
+              text:
+                type: string
+                maxLength: 200
+              bg_color:
+                type: string
+                pattern: ^#[0-9A-Fa-f]{6}$
+              text_color:
+                type: string
+                pattern: ^#[0-9A-Fa-f]{6}$
+              font_size:
+                type: integer
+                minimum: 8
+                maximum: 200
+              scroll_speed:
+                type: integer
+                minimum: 0
+                maximum: 100
+              url:
+                type: string
+                maxLength: 500
+            required:
+              - id
+              - type
+              - x
+              - y
+              - w
+              - h
+            additionalProperties: true
+          maxItems: 8
+      required:
+        - name
+        - zones
+      additionalProperties: true
     AdminPostLegalDocumentsByIdPublishRequest:
       type: object
       properties:
@@ -11713,6 +12386,113 @@ components:
             maxLength: 64
           maxItems: 100
           default: []
+        layout:
+          anyOf:
+            - type: object
+              properties:
+                template_id:
+                  anyOf:
+                    - type: string
+                      maxLength: 64
+                    - type: "null"
+                orientation:
+                  type: string
+                  enum:
+                    - landscape
+                    - portrait
+                  default: landscape
+                zones:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^[A-Za-z0-9_-]{1,32}$
+                      name:
+                        type: string
+                        maxLength: 60
+                      type:
+                        type: string
+                        enum:
+                          - video
+                          - image
+                          - marquee
+                          - clock
+                          - weather
+                          - qr
+                      x:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+                      y:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+                      w:
+                        type: number
+                        minimum: 1
+                        maximum: 100
+                      h:
+                        type: number
+                        minimum: 1
+                        maximum: 100
+                      z:
+                        type: integer
+                        minimum: 0
+                        maximum: 20
+                        default: 0
+                      transition:
+                        type: string
+                        enum:
+                          - none
+                          - fade
+                          - slide-left
+                          - slide-right
+                          - zoom
+                        default: none
+                      text:
+                        type: string
+                        maxLength: 200
+                      bg_color:
+                        type: string
+                        pattern: ^#[0-9A-Fa-f]{6}$
+                      text_color:
+                        type: string
+                        pattern: ^#[0-9A-Fa-f]{6}$
+                      font_size:
+                        type: integer
+                        minimum: 8
+                        maximum: 200
+                      scroll_speed:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      url:
+                        type: string
+                        maxLength: 500
+                    required:
+                      - id
+                      - type
+                      - x
+                      - y
+                      - w
+                      - h
+                    additionalProperties: true
+                  maxItems: 8
+              required:
+                - zones
+              additionalProperties: true
+            - type: "null"
+        item_zones:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 32
+          propertyNames:
+            minLength: 1
+            maxLength: 64
       additionalProperties: true
     AdminPutCampaignsByIdRequest:
       type: object
@@ -12227,6 +13007,99 @@ components:
           maximum: 1000000000000
         vat_rate:
           type: integer
+      additionalProperties: true
+    AdminPutLayoutTemplatesByIdRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        orientation:
+          type: string
+          enum:
+            - landscape
+            - portrait
+          default: landscape
+        zones:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                pattern: ^[A-Za-z0-9_-]{1,32}$
+              name:
+                type: string
+                maxLength: 60
+              type:
+                type: string
+                enum:
+                  - video
+                  - image
+                  - marquee
+                  - clock
+                  - weather
+                  - qr
+              x:
+                type: number
+                minimum: 0
+                maximum: 100
+              y:
+                type: number
+                minimum: 0
+                maximum: 100
+              w:
+                type: number
+                minimum: 1
+                maximum: 100
+              h:
+                type: number
+                minimum: 1
+                maximum: 100
+              z:
+                type: integer
+                minimum: 0
+                maximum: 20
+                default: 0
+              transition:
+                type: string
+                enum:
+                  - none
+                  - fade
+                  - slide-left
+                  - slide-right
+                  - zoom
+                default: none
+              text:
+                type: string
+                maxLength: 200
+              bg_color:
+                type: string
+                pattern: ^#[0-9A-Fa-f]{6}$
+              text_color:
+                type: string
+                pattern: ^#[0-9A-Fa-f]{6}$
+              font_size:
+                type: integer
+                minimum: 8
+                maximum: 200
+              scroll_speed:
+                type: integer
+                minimum: 0
+                maximum: 100
+              url:
+                type: string
+                maxLength: 500
+            required:
+              - id
+              - type
+              - x
+              - y
+              - w
+              - h
+            additionalProperties: true
+          maxItems: 8
       additionalProperties: true
     AdminPutLegalDocumentsByIdRequest:
       type: object

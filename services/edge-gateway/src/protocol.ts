@@ -189,6 +189,29 @@ export interface ManifestSlot {
   /** CHI thang may/LED va CHI khi lich co ghi de: chuoi rong = an; vang mat = dung gia tri cap manifest */
   header?: string;
   footer?: string;
+  /** CHI lich noi bo (slot `bp_*`) co chon bo cuc da vung; thiet bi cu bo qua truong la. Vung media co `creative_ids` (tep phat o vung do, theo thu tu). */
+  layout?: ManifestLayout;
+}
+export interface ManifestZone {
+  id: string;
+  type: 'video' | 'image' | 'marquee' | 'clock' | 'weather' | 'qr';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z?: number;
+  transition?: string;
+  text?: string;
+  bg_color?: string;
+  text_color?: string;
+  font_size?: number;
+  scroll_speed?: number;
+  url?: string;
+  creative_ids?: string[];
+}
+export interface ManifestLayout {
+  orientation: 'landscape' | 'portrait';
+  zones: ManifestZone[];
 }
 /** Quy tac xoay vong (thang may/LED). Hien chi 'sequential': theo priority tang dan, lap vo han, cung priority theo slot_id. */
 export interface ManifestRotation {

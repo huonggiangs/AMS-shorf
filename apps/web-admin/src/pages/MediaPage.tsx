@@ -1,3 +1,4 @@
+import { MediaPreviewDialog } from '../components/PreviewDialogs';
 import { useEffect, useRef, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_BASE, api, errMsg, putBlob } from '../api/client';
@@ -64,6 +65,7 @@ export default function MediaPage() {
   const [autoPick, setAutoPick] = useState(false);
   const [rej, setRej] = useState<string | null>(null);
   const [rev, setRev] = useState<string | null>(null);
+  const [prevId, setPrevId] = useState<string | null>(null);
   const canDelete = can('media', 'delete') && !base.isExternal;
   const [picked, setPicked] = useState<Picked>({});
   const [delOpen, setDelOpen] = useState(false);
@@ -134,7 +136,7 @@ export default function MediaPage() {
   };
   return (
     <>
-      <PageHead title="Nội dung & Media" sub="Kho tệp quảng cáo và trạng thái kiểm duyệt." actions={can('media', 'write') ? <Btn tone="p" icon="plus" onClick={() => { setAutoPick(false); setUp(true); }}>{t('Tải nội dung mới')}</Btn> : null} />
+      <PageHead title="Kho tư liệu" sub="Kho tệp quảng cáo và trạng thái kiểm duyệt." actions={can('media', 'write') ? <Btn tone="p" icon="plus" onClick={() => { setAutoPick(false); setUp(true); }}>{t('Tải nội dung mới')}</Btn> : null} />
       <div className="tb" style={{ marginBottom: 12, background: 'none', padding: 0 }}>
         <label className="sr"><input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder={t('Tìm…')} aria-label={t('Tìm…')} /></label>
         <Tabs value={status} onChange={(v) => { setStatus(v); setPage(1); }} items={[{ id: '', label: 'Tất cả' }, { id: 'processing', label: 'Đang xử lý' }, { id: 'pending', label: 'Chờ duyệt' }, { id: 'approved', label: 'Đã duyệt' }, { id: 'rejected', label: 'Cần chỉnh sửa' }]} />
@@ -151,7 +153,7 @@ export default function MediaPage() {
       ) : null}
       {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.items.length ? <EmptyBlock /> : (
         <div className="g g3">
-          {query.data.items.map((m) => <MediaCard key={m.id} m={m} canApprove={canApprove} internal={!base.isExternal} onPickFile={canWrite ? () => { setAutoPick(true); setUp(true); } : undefined} selectable={canDelete} selected={!!picked[m.id]} onToggle={() => toggle(m)} onMakeThumb={canWrite && thumbSupported() ? () => void makeThumb(m) : undefined} onReview={() => setRev(m.id)} onAction={(a) => void act(() => api.post(`${base.media}/${m.id}/${a === 'retry' ? 'import/retry' : a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : a === 'retry' ? 'Đã xếp lại việc tải từ liên kết.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.')} onApprove={() => void act(() => api.post(`${base.media}/${m.id}/approve`), 'Đã duyệt media.')} onReject={() => setRej(m.id)} />)}
+          {query.data.items.map((m) => <MediaCard key={m.id} m={m} canApprove={canApprove} internal={!base.isExternal} onPickFile={canWrite ? () => { setAutoPick(true); setUp(true); } : undefined} selectable={canDelete} selected={!!picked[m.id]} onToggle={() => toggle(m)} onMakeThumb={canWrite && thumbSupported() ? () => void makeThumb(m) : undefined} onReview={() => setRev(m.id)} onPreview={() => setPrevId(m.id)} onAction={(a) => void act(() => api.post(`${base.media}/${m.id}/${a === 'retry' ? 'import/retry' : a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : a === 'retry' ? 'Đã xếp lại việc tải từ liên kết.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.')} onApprove={() => void act(() => api.post(`${base.media}/${m.id}/approve`), 'Đã duyệt media.')} onReject={() => setRej(m.id)} />)}
         </div>
       )}
       <div className="tf" style={{ background: 'none' }}>
@@ -161,12 +163,13 @@ export default function MediaPage() {
       <UploadDialog open={up} autoPick={autoPick} onClose={() => { setUp(false); setAutoPick(false); }} />
       {delOpen ? <DeleteSelectedDialog items={Object.entries(picked).map(([id, v]) => ({ id, ...v }))} onClose={() => setDelOpen(false)} onDone={(ids) => setPicked((p) => { const n = { ...p }; for (const id of ids) delete n[id]; return n; })} /> : null}
       {rev ? <ReviewDialog id={rev} onClose={() => setRev(null)} /> : null}
+      {prevId ? <MediaPreviewDialog id={prevId} onClose={() => setPrevId(null)} /> : null}
       <PromptDialog open={!!rej} title="Trả lại media" label="Lý do (khách hàng nhận email kèm lý do)" onClose={() => setRej(null)} onSubmit={async (reason) => { if (rej) await act(() => api.post(`${base.media}/${rej}/reject`, { body: { reason } }), 'Đã trả lại.'); }} />
     </>
   );
 }
 
-function MediaCard({ m, canApprove, internal, selectable, selected, onToggle, onMakeThumb, onApprove, onReject, onReview, onAction, onPickFile }: { m: Media; canApprove: boolean; internal?: boolean; onPickFile?: () => void; selectable?: boolean; selected?: boolean; onToggle?: () => void; onMakeThumb?: (() => void) | undefined; onApprove: () => void; onReject: () => void; onReview: () => void; onAction: (a: 'confirm' | 'recheck' | 'retry') => void }) {
+function MediaCard({ m, canApprove, internal, selectable, selected, onToggle, onMakeThumb, onApprove, onReject, onReview, onPreview, onAction, onPickFile }: { m: Media; canApprove: boolean; internal?: boolean; onPickFile?: () => void; selectable?: boolean; selected?: boolean; onToggle?: () => void; onMakeThumb?: (() => void) | undefined; onApprove: () => void; onReject: () => void; onReview: () => void; onPreview?: () => void; onAction: (a: 'confirm' | 'recheck' | 'retry') => void }) {
   const t = useT();
   const fmtLabel = m.format && m.format !== 'fullscreen' ? AD_FORMAT_OPTIONS.find((o) => o.id === m.format)?.label : null;
   const meta = [m.mime?.split('/')[1]?.toUpperCase(), fmtLabel, m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_sec ? `${m.duration_sec} giây` : null].filter(Boolean).join(' · ');
@@ -182,7 +185,7 @@ function MediaCard({ m, canApprove, internal, selectable, selected, onToggle, on
         {m.reject_reason ? <div style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 8 }}>{m.reject_reason}</div> : null}
         <TransferBar m={m} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <StatusTag status={m.status} />
+          <span><StatusTag status={m.status} />{onPreview && m.kind !== 'link' && m.status !== 'processing' ? <> <Btn className="sm" onClick={onPreview} aria-label={`Xem trước ${m.name}`}>Xem trước</Btn></> : null}</span>
           {m.status === 'pending' && canApprove && !m.blocker ? <span><Btn tone="p" className="sm" onClick={onApprove}>{t('Duyệt')}</Btn> <Btn className="sm" onClick={onReject}>{t('Trả lại')}</Btn></span> : null}
         </div>
         {m.warnings?.length ? <ul aria-label="Lưu ý về tệp" style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12.5, color: 'var(--warn, #B45309)' }}>{m.warnings.map((w) => <li key={w}>{w}</li>)}</ul> : null}

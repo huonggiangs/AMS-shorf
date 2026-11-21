@@ -1629,6 +1629,79 @@ components:
               footer:
                 type: string
                 description: "CHI thang may/LED: ghi de footer cap manifest cho lich nay (chuoi rong = an)"
+              layout:
+                type: object
+                properties:
+                  orientation:
+                    type: string
+                    enum:
+                      - landscape
+                      - portrait
+                  zones:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                          enum:
+                            - video
+                            - image
+                            - marquee
+                            - clock
+                            - weather
+                            - qr
+                        x:
+                          type: number
+                          description: "% khung, 0..100"
+                        y:
+                          type: number
+                        w:
+                          type: number
+                        h:
+                          type: number
+                        z:
+                          type: integer
+                        transition:
+                          type: string
+                          enum:
+                            - none
+                            - fade
+                            - slide-left
+                            - slide-right
+                            - zoom
+                        text:
+                          type: string
+                        bg_color:
+                          type: string
+                        text_color:
+                          type: string
+                        font_size:
+                          type: integer
+                        scroll_speed:
+                          type: integer
+                        url:
+                          type: string
+                        creative_ids:
+                          type: array
+                          items:
+                            type: string
+                          description: "CHI vung video/image: tep phat o vung nay, theo thu tu"
+                      required:
+                        - id
+                        - type
+                        - x
+                        - y
+                        - w
+                        - h
+                      additionalProperties: true
+                required:
+                  - orientation
+                  - zones
+                additionalProperties: true
+                description: CHI lich noi bo (slot bp_*) co bo cuc da vung; thiet bi cu bo qua truong la
             required:
               - slot_id
               - campaign_id
@@ -1831,6 +1904,79 @@ components:
               footer:
                 type: string
                 description: "CHI thang may/LED: ghi de footer cap manifest cho lich nay (chuoi rong = an)"
+              layout:
+                type: object
+                properties:
+                  orientation:
+                    type: string
+                    enum:
+                      - landscape
+                      - portrait
+                  zones:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                          enum:
+                            - video
+                            - image
+                            - marquee
+                            - clock
+                            - weather
+                            - qr
+                        x:
+                          type: number
+                          description: "% khung, 0..100"
+                        y:
+                          type: number
+                        w:
+                          type: number
+                        h:
+                          type: number
+                        z:
+                          type: integer
+                        transition:
+                          type: string
+                          enum:
+                            - none
+                            - fade
+                            - slide-left
+                            - slide-right
+                            - zoom
+                        text:
+                          type: string
+                        bg_color:
+                          type: string
+                        text_color:
+                          type: string
+                        font_size:
+                          type: integer
+                        scroll_speed:
+                          type: integer
+                        url:
+                          type: string
+                        creative_ids:
+                          type: array
+                          items:
+                            type: string
+                          description: "CHI vung video/image: tep phat o vung nay, theo thu tu"
+                      required:
+                        - id
+                        - type
+                        - x
+                        - y
+                        - w
+                        - h
+                      additionalProperties: true
+                required:
+                  - orientation
+                  - zones
+                additionalProperties: true
+                description: CHI lich noi bo (slot bp_*) co bo cuc da vung; thiet bi cu bo qua truong la
             required:
               - slot_id
               - campaign_id
