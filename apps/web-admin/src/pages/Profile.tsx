@@ -6,6 +6,7 @@ import { useUi } from '../state/ui';
 import { ROLE_LABEL } from '../lib/status';
 import { fmtDateTime } from '../lib/format';
 import { KycPanel } from '../components/KycPanel';
+import { MfaSetup } from '../components/MfaSetup';
 
 export { ChangePasswordForm, pwHint } from '../components/ChangePasswordForm';
 
@@ -47,6 +48,7 @@ export default function Profile() {
           </div>
           <div className="ch" style={{ marginTop: 18 }}><h2>Đổi mật khẩu</h2></div>
           <ChangePasswordForm onDone={() => { void reload(); }} />
+          {!isExternal ? <MfaSetup /> : null}
         </div>
       </div>
       {isExternal && u.role === 'customer' ? (

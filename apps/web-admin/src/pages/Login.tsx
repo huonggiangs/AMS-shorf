@@ -1,3 +1,4 @@
+import { TotpQr } from '../components/MfaSetup';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
@@ -115,7 +116,7 @@ export default function Login() {
               {step === 'enroll' && enroll ? (
                 <div style={{ marginBottom: 12 }}>
                   <Note>Tài khoản bắt buộc bật xác thực hai bước (TOTP). Thêm khóa vào ứng dụng xác thực (Google Authenticator, Authy…) rồi nhập mã 6 số.</Note>
-                  {enroll.qr_url ? <img src={enroll.qr_url} alt="QR TOTP" width={160} height={160} style={{ display: 'block', margin: '12px auto', background: '#fff', borderRadius: 8 }} /> : null}
+                  {enroll.otpauth_url ? <TotpQr url={enroll.otpauth_url} size={160} /> : enroll.qr_url ? <img src={enroll.qr_url} alt="QR TOTP" width={160} height={160} style={{ display: 'block', margin: '12px auto', background: '#fff', borderRadius: 8 }} /> : null}
                   <div className="fd"><label>Khóa thiết lập</label><b className="mono" style={{ overflowWrap: 'anywhere' }}>{enroll.secret}</b></div>
                   {enroll.otpauth_url ? <a href={enroll.otpauth_url}>Mở trong ứng dụng xác thực</a> : null}
                 </div>

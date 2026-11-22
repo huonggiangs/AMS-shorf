@@ -36,7 +36,7 @@ const MODE_TEXT: Record<string, string> = {
 };
 
 export function SepayConnectCard() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const act = useAct();
   const { notify } = useUi();
   const canView = can('finance', 'view');
@@ -186,9 +186,14 @@ export function SepayConnectCard() {
             <input aria-label="Tên chủ tài khoản" value={holder} onChange={(e) => setHolder(e.target.value)} disabled={!canEdit} />
           </Field>
         </div>
+        {canEdit && me?.user.mfa_enabled === false ? (
+          <div className="note warn" style={{ marginTop: 10, display: 'block' }}>
+            <b>Chưa có mã 6 số vì tài khoản chưa bật xác thực hai bước.</b> Vào <a href="/profile#mfa-setup">Hồ sơ của tôi &gt; Xác thực hai bước</a>, quét mã QR bằng Google Authenticator/Authy trên điện thoại, rồi quay lại đây.
+          </div>
+        ) : null}
         {canEdit ? (
           <div style={{ marginTop: 10, maxWidth: 320 }}>
-            <Field label="Mã xác thực 6 số (TOTP)" hint="Bắt buộc để lưu, xóa khóa hoặc duyệt thay đổi. Đổi ngân hàng/số tài khoản cần thêm một người khác duyệt.">
+            <Field label="Mã xác thực 6 số (TOTP)" hint="Lấy từ ứng dụng xác thực trên điện thoại (Google Authenticator/Authy), đổi mỗi 30 giây. Bắt buộc để lưu, xóa khóa hoặc duyệt. Nếu hệ thống có người duyệt thứ hai, đổi số tài khoản cần họ duyệt.">
               <input aria-label="Mã TOTP xác nhận" inputMode="numeric" maxLength={6} value={totp} onChange={(e) => setTotp(e.target.value.replace(/\D/g, ''))} autoComplete="one-time-code" />
             </Field>
           </div>

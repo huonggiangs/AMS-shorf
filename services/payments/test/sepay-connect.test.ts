@@ -181,6 +181,8 @@ describe('R1-02: step-up TOTP + hai nguoi cho doi tai khoan nhan tien', () => {
     expect(sent.join()).not.toContain('abcdefgh-12345');
 
     // doi tai khoan: chua ap dung
+    const { saveSepayConfig: seedCfg } = await import('../src/index.js');
+    await seedCfg(rt, rt.db, { account_number: '9700000001' }, 'test'); // da co tai khoan that: doi tai khoan can nguoi thu hai
     const before = (await (await app.request(url, { headers: h1 })).json()) as any;
     const pr = await call(h1, url, 'PUT', { account_number: '9704999888', bank: 'Vietcombank', totp: await code(rt, 'F1') });
     expect(pr.status).toBe(202);

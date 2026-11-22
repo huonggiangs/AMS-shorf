@@ -349,6 +349,10 @@ for (const dialect of ['postgres', 'sqlite'] as const) {
       const g = (await (await app.request('/admin/v1/settings/sepay', { headers: f })).json()) as Record<string, any>;
       expect(g).toMatchObject({ bank: 'MBBank', prefix: 'AMS', env: 'mock', dev_mode: false, has_secret: true, sample_account: true });
       expect((await app.request('/admin/v1/settings/sepay', { method: 'PUT', headers: f, body: JSON.stringify({ bank: 'FakeBank', totp: await code(rt, 'F1') }) })).status).toBe(400);
+      // lan cau hinh dau (con tai khoan mau) ap dung ngay, 200
+      const first = await app.request('/admin/v1/settings/sepay', { method: 'PUT', headers: f, body: JSON.stringify({ bank: 'MBBank', account_number: '9700000001', account_holder: 'cong ty abc', totp: await code(rt, 'F1') }) });
+      expect(first.status).toBe(200);
+      expect(((await first.json()) as { account_number: string }).account_number).toBe('9700000001');
       const put = await app.request('/admin/v1/settings/sepay', { method: 'PUT', headers: f, body: JSON.stringify({ bank: 'Vietcombank', account_number: '9704123456', account_holder: 'cong ty abc', prefix: 'ams', min_activate_vnd: 5_000_000, totp: await code(rt, 'F1') }) });
       expect(put.status).toBe(202); // doi noi nhan tien: cho nguoi thu hai duyet
       const cid = ((await put.json()) as { pending_change_id: string }).pending_change_id;

@@ -538,7 +538,16 @@ export function mountFinance(app: Hono<any>, rt: Runtime, opts: MountOptions = {
       ...(b.auth_mode ? { auth_mode: b.auth_mode } : {}),
     }, a.id);
     let changeId: string | null = null;
-    if (Object.keys(payee).length) {
+    // Cho phep ap dung ngay khi: (1) lan cau hinh dau (chua co tai khoan that), hoac (2) khong con nguoi nao khac (super_admin/finance dang hoat dong) de duyet.
+    // Van can TOTP cua nguoi thao tac, van ghi audit va bao qua thong bao.
+    const others = (await rt.db.query<{ n: unknown }>("SELECT COUNT(*) AS n FROM admins WHERE account_kind = 'internal' AND status = 'active' AND role IN ('super_admin','finance') AND id <> ?", [a.id]))[0];
+    const firstSetup = !before.account_number || before.account_number === SAMPLE_ACCOUNT;
+    const noSecondPerson = Number(others?.n ?? 0) === 0;
+    if (Object.keys(payee).length && (firstSetup || noSecondPerson)) {
+      await saveSepayConfig(rt, rt.db, { ...(payee['enabled'] !== undefined ? { enabled: payee['enabled'] as boolean } : {}), ...(b.bank ? { bank: b.bank } : {}), ...(b.account_number ? { account_number: b.account_number } : {}), ...(payee['account_holder'] ? { account_holder: payee['account_holder'] as string } : {}) }, a.id);
+      await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.payee_applied', type: 'settings', id: 'sepay', ip: a.ip, diff: { fields: Object.keys(payee), reason: firstSetup ? 'first_setup' : 'no_second_approver', account: b.account_number ? mask(b.account_number) : undefined, bank: b.bank } });
+      await alertFinance(rt, { title: 'Tài khoản nhận tiền SePay đã được đặt', body: `${a.id} đã đặt thông tin nhận tiền (${Object.keys(payee).join(', ')}${b.account_number ? `, số tài khoản ${mask(b.account_number)}` : ''}) ${firstSetup ? 'lần đầu' : 'vì không có người duyệt thứ hai'}.`, refId: 'sepay' });
+    } else if (Object.keys(payee).length) {
       changeId = rt.id();
       await rt.db.run('INSERT INTO settings (key, value, updated_by, updated_at) VALUES (?,?,?,?)', [`${CHANGE_PREFIX}${changeId}`, JSON.stringify({ changes: payee, requested_by: a.id, requested_at: iso(rt), status: 'pending' }), a.id, iso(rt)]);
       await audit(rt.db, rt, { actor: a.id, action: 'finance.sepay.change_requested', type: 'settings', id: changeId, ip: a.ip, diff: { fields: Object.keys(payee), account: b.account_number ? mask(b.account_number) : undefined, bank: b.bank } });
