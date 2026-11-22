@@ -14,9 +14,14 @@ import { useT } from '../i18n';
 import { fmtBytes, redactUrl, uploadToStore } from '../lib/upload';
 import { UploadDialog, UPLOAD_LIMIT_TEXT } from '../components/UploadDialog';
 export { fmtBytes, redactUrl, uploadToStore, UploadDialog, UPLOAD_LIMIT_TEXT };
+import { MediaList } from './media/MediaList';
+import { MediaEditDialog } from './media/MediaEditDialog';
 import { captureThumbnail, pickBackfill, resolveThumbUrl, thumbSupported } from '../lib/thumbnail';
 
-const PAGE = 9;
+const PAGE_GRID = 9;
+const PAGE_LIST = 20;
+const VIEW_KEY = 'ams.media.view';
+const loadView = (): 'list' | 'grid' => { try { return localStorage.getItem(VIEW_KEY) === 'grid' ? 'grid' : 'list'; } catch { return 'list'; } };
 /** Tệp 'Đang xử lý' coi là kẹt: tạo hơn 30 phút trước mà không còn tiến độ chạy, hoặc nhập liên kết đã thất bại. */
 export const STUCK_AFTER_MS = 30 * 60_000;
 export function isStuck(m: Pick<Media, 'status' | 'created_at' | 'transfer'>, nowMs: number): boolean {
@@ -59,6 +64,10 @@ export default function MediaPage() {
   const base = useBase();
   const act = useAct();
   const [page, setPage] = useState(1);
+  const [view, setViewState] = useState<'list' | 'grid'>(loadView);
+  const [edit, setEdit] = useState<Media | null>(null);
+  const PAGE = view === 'list' ? PAGE_LIST : PAGE_GRID;
+  const setView = (v: 'list' | 'grid') => { setViewState(v); setPage(1); try { localStorage.setItem(VIEW_KEY, v); } catch { /* không lưu được: bỏ qua */ } };
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [up, setUp] = useState(false);
@@ -71,7 +80,7 @@ export default function MediaPage() {
   const [delOpen, setDelOpen] = useState(false);
   const [allBusy, setAllBusy] = useState(false);
   const query = useQuery({
-    queryKey: [base.media, page, q, status],
+    queryKey: [base.media, page, q, status, PAGE],
     placeholderData: keepPreviousData,
     // tep dang nhap tu lien ket / dang tai: tu cap nhat tien do moi 3 giay
     refetchInterval: (qq) => (qq.state.data?.items.some((m) => m.status === 'processing' && m.transfer && ['queued', 'running', 'open'].includes(m.transfer.status)) ? 3000 : false),
@@ -103,6 +112,16 @@ export default function MediaPage() {
     await act(async () => { if (!ok) throw new Error('Chưa tạo được ảnh đại diện (trình duyệt không đọc được video hoặc kho tệp chưa cho phép tải từ trình duyệt).'); }, 'Đã tạo ảnh đại diện.', [base.media]);
   };
   const canApprove = can('media', 'approve') && !base.isExternal;
+  const actOn = (m: Media, a: 'confirm' | 'recheck' | 'retry') => void act(() => api.post(`${base.media}/${m.id}/${a === 'retry' ? 'import/retry' : a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : a === 'retry' ? 'Đã xếp lại việc tải từ liên kết.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.');
+  const approveBtns = (m: Media) => (m.status === 'pending' && canApprove && !m.blocker ? <span><Btn tone="p" className="sm" onClick={() => void act(() => api.post(`${base.media}/${m.id}/approve`), 'Đã duyệt media.')}>{t('Duyệt')}</Btn> <Btn className="sm" onClick={() => setRej(m.id)}>{t('Trả lại')}</Btn></span> : null);
+  const listExtra = (m: Media) => (
+    <>
+      <TransferBar m={m} />
+      {m.warnings?.length ? <ul aria-label="Lưu ý về tệp" style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 12.5, color: 'var(--warn, #B45309)' }}>{m.warnings.map((w) => <li key={w}>{w}</li>)}</ul> : null}
+      {m.status !== 'approved' && m.blocker ? <Blocker m={m} canApprove={canApprove} onReview={() => setRev(m.id)} onAction={(a) => actOn(m, a)} onReject={() => setRej(m.id)} onPickFile={canWrite ? () => { setAutoPick(true); setUp(true); } : undefined} /> : null}
+      {!base.isExternal && m.diag ? <DiagBox d={m.diag} /> : null}
+    </>
+  );
   const pickedIds = Object.keys(picked);
   const pageItems = query.data?.items ?? [];
   const pageAllOn = pageItems.length > 0 && pageItems.every((m) => picked[m.id]);
@@ -139,6 +158,7 @@ export default function MediaPage() {
       <PageHead title="Kho tư liệu" sub="Kho tệp quảng cáo và trạng thái kiểm duyệt." actions={can('media', 'write') ? <Btn tone="p" icon="plus" onClick={() => { setAutoPick(false); setUp(true); }}>{t('Tải nội dung mới')}</Btn> : null} />
       <div className="tb" style={{ marginBottom: 12, background: 'none', padding: 0 }}>
         <label className="sr"><input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder={t('Tìm…')} aria-label={t('Tìm…')} /></label>
+        <Tabs<'list' | 'grid'> label="Kiểu hiển thị" value={view} onChange={setView} items={[{ id: 'list', label: 'Danh sách' }, { id: 'grid', label: 'Lưới' }]} />
         <Tabs value={status} onChange={(v) => { setStatus(v); setPage(1); }} items={[{ id: '', label: 'Tất cả' }, { id: 'processing', label: 'Đang xử lý' }, { id: 'pending', label: 'Chờ duyệt' }, { id: 'approved', label: 'Đã duyệt' }, { id: 'rejected', label: 'Cần chỉnh sửa' }]} />
       </div>
       {canDelete && pageItems.length ? (
@@ -151,7 +171,10 @@ export default function MediaPage() {
           <Btn tone="d" className="sm" disabled={!pickedIds.length} onClick={() => setDelOpen(true)}>{`Xóa đã chọn${pickedIds.length ? ` (${pickedIds.length})` : ''}`}</Btn>
         </div>
       ) : null}
-      {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.items.length ? <EmptyBlock /> : (
+      {query.isLoading ? <LoadingBlock /> : query.isError ? <ErrorBlock error={query.error} onRetry={() => void query.refetch()} /> : !query.data?.items.length ? <EmptyBlock /> : view === 'list' ? (
+        <MediaList items={pageItems} selected={new Set(pickedIds)} showOwner={!base.isExternal} canEdit={canWrite} canDelete={canDelete} onEdit={setEdit} onDelete={(m) => { setPicked({ [m.id]: { name: m.name, size: m.size_bytes ?? 0 } }); setDelOpen(true); }} extra={listExtra} rowActions={approveBtns}
+          onToggle={(id) => { const m = pageItems.find((x) => x.id === id); if (m) toggle(m); }} onToggleAll={() => togglePage()} />
+      ) : (
         <div className="g g3">
           {query.data.items.map((m) => <MediaCard key={m.id} m={m} canApprove={canApprove} internal={!base.isExternal} onPickFile={canWrite ? () => { setAutoPick(true); setUp(true); } : undefined} selectable={canDelete} selected={!!picked[m.id]} onToggle={() => toggle(m)} onMakeThumb={canWrite && thumbSupported() ? () => void makeThumb(m) : undefined} onReview={() => setRev(m.id)} onPreview={() => setPrevId(m.id)} onAction={(a) => void act(() => api.post(`${base.media}/${m.id}/${a === 'retry' ? 'import/retry' : a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : a === 'retry' ? 'Đã xếp lại việc tải từ liên kết.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.')} onApprove={() => void act(() => api.post(`${base.media}/${m.id}/approve`), 'Đã duyệt media.')} onReject={() => setRej(m.id)} />)}
         </div>
@@ -162,6 +185,7 @@ export default function MediaPage() {
       </div>
       <UploadDialog open={up} autoPick={autoPick} onClose={() => { setUp(false); setAutoPick(false); }} />
       {delOpen ? <DeleteSelectedDialog items={Object.entries(picked).map(([id, v]) => ({ id, ...v }))} onClose={() => setDelOpen(false)} onDone={(ids) => setPicked((p) => { const n = { ...p }; for (const id of ids) delete n[id]; return n; })} /> : null}
+      {edit ? <MediaEditDialog key={edit.id} m={edit} onClose={() => setEdit(null)} /> : null}
       {rev ? <ReviewDialog id={rev} onClose={() => setRev(null)} /> : null}
       {prevId ? <MediaPreviewDialog id={prevId} onClose={() => setPrevId(null)} /> : null}
       <PromptDialog open={!!rej} title="Trả lại media" label="Lý do (khách hàng nhận email kèm lý do)" onClose={() => setRej(null)} onSubmit={async (reason) => { if (rej) await act(() => api.post(`${base.media}/${rej}/reject`, { body: { reason } }), 'Đã trả lại.'); }} />

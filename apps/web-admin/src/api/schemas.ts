@@ -196,6 +196,11 @@ export const mediaSchema = z
     scan_reasons: z.array(z.string()).default([]),
     content_version: z.coerce.number().default(1),
     preview_url: z.string().nullish(),
+    description: z.string().nullish(),
+    tags: z.array(z.string()).default([]),
+    customer_id: z.string().nullish(),
+    customer_code: z.string().nullish(),
+    campaign_id: z.string().nullish(),
     /** vì sao chưa duyệt được + việc cần làm (confirm | recheck | manual_review | reupload | wait | none) */
     blocker: z.object({ code: z.string(), message: z.string(), action: z.string() }).nullish(),
     /** tiến độ tải từng phần / nhập từ liên kết (Drive...): kind multipart|import; status open|completed|queued|running|done|failed... */

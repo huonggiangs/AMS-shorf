@@ -115,5 +115,10 @@ export const MIGRATIONS: MigrationFile[] = [
     "name": "0022_broadcast_devices",
     "dialect": "all",
     "sql": "-- 0022: Chuong trinh phat song nhan theo TUNG THIET BI. Khong co dong = chuong trinh theo loai man + khu vuc nhu cu.\n-- Co dong = chi cac thiet bi nay nhan (manifest cua thiet bi duoc xay rieng, khong dung chung nhom khu vuc).\nCREATE TABLE IF NOT EXISTS broadcast_program_devices (\n  program_id TEXT NOT NULL REFERENCES broadcast_programs(id) ON DELETE CASCADE,\n  device_id TEXT NOT NULL,\n  PRIMARY KEY (program_id, device_id)\n);\nCREATE INDEX IF NOT EXISTS idx_bp_devices_device ON broadcast_program_devices(device_id);\n"
+  },
+  {
+    "name": "0023_media_manage",
+    "dialect": "all",
+    "sql": "-- 0023 (m-list): sua metadata media - mo ta + the (JSON). Xoa dung lai co che xoa that + don R2 co san.\n-- Chay duoc tren PostgreSQL 16 va SQLite/D1. Khong doi y nghia cac cot cu.\nALTER TABLE creatives ADD COLUMN description TEXT;\nALTER TABLE creatives ADD COLUMN tags TEXT;\n"
   }
 ];

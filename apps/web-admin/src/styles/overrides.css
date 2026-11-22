@@ -66,3 +66,4 @@ dialog.dlg.wiz[open]{display:flex;flex-direction:column}
   dialog.dlg form .fd{margin:10px 0}
   dialog.dlg form>.g{margin-bottom:0;gap:0 28px}
 }
+.mlist th,.mlist td{padding:10px 8px}.mlist td{vertical-align:middle}
