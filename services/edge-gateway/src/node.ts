@@ -1,3 +1,4 @@
+import { safeErr } from '@ams/shared';
 // Diem vao Node (Docker/PC): cong PORT (mac dinh 8788). RUNTIME=test chay bo nho (pglite/sqlite) — de thu, khong ben vung.
 import { serve } from '@hono/node-server';
 import { createDockerRuntime, createTestRuntime, type Runtime } from '@ams/runtime';
@@ -14,9 +15,9 @@ export async function startNode(env: Record<string, string | undefined> = proces
   const gw = createGateway(rt);
   // Che do mot tien trinh: consumer chay cung (test, hoac INGEST_INLINE=1). Docker compose chay consumer rieng.
   if (test || env['INGEST_INLINE'] === '1') createIngestConsumer(rt, { spend: spendFnFor(rt) }).subscribe();
-  const timer = setInterval(() => void gw.flush().catch((e) => console.error('[gateway] flush loi', e)), Number(env['TELEMETRY_FLUSH_MS'] ?? 10_000));
+  const timer = setInterval(() => void gw.flush().catch((e) => console.error('[gateway] flush loi', safeErr(e))), Number(env['TELEMETRY_FLUSH_MS'] ?? 10_000));
   timer.unref();
-  const sweeper = setInterval(() => void gw.sweep().catch((e) => console.error('[gateway] sweep loi', e)), Number(env['COMMAND_SWEEP_MS'] ?? 60_000));
+  const sweeper = setInterval(() => void gw.sweep().catch((e) => console.error('[gateway] sweep loi', safeErr(e))), Number(env['COMMAND_SWEEP_MS'] ?? 60_000));
   sweeper.unref();
   const port = Number(env['PORT'] ?? 8788);
   const server = serve({ fetch: gw.app.fetch, port, hostname: '0.0.0.0' });

@@ -6,6 +6,7 @@ import { bumpOpsCounter, type Runtime } from '@ams/runtime';
 import { isInvalidTransition } from '@ams/shared';
 import { HttpError } from './lib/errors.js';
 import { clientIp } from './lib/http.js';
+import { isHttps } from './auth/session.js';
 import { authenticate, csrfGuard, requireExternal, requireInternal } from './auth/middleware.js';
 import { authRoutes } from './auth/routes.js';
 import { nullFinancePort } from './ports.js';
@@ -62,7 +63,16 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
     c.set('finance', () => financePort);
     await next();
   });
-  app.use('*', secureHeaders({ referrerPolicy: 'no-referrer', crossOriginResourcePolicy: 'same-site' }));
+  // P2: API tra JSON/tep, khong HTML: CSP chan moi tai nguyen + khong cho nhung khung. HSTS 1 nam chi khi HTTPS (Workers luon https).
+  app.use('*', secureHeaders({
+    referrerPolicy: 'no-referrer',
+    crossOriginResourcePolicy: 'same-site',
+    crossOriginOpenerPolicy: 'same-origin',
+    xFrameOptions: 'DENY',
+    strictTransportSecurity: isHttps(rt) ? 'max-age=31536000; includeSubDomains' : false,
+    contentSecurityPolicy: { sandbox: [], defaultSrc: ["'none'"], frameAncestors: ["'none'"], baseUri: ["'none'"], formAction: ["'none'"] },
+    permissionsPolicy: { camera: [], microphone: [], geolocation: [], payment: [], usb: [], fullscreen: [] },
+  }));
   app.use('*', async (c, next) => {
     await next();
     // phan hoi API khong duoc cache o trung gian (co du lieu theo phien)

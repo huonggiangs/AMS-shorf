@@ -1,11 +1,14 @@
 import type { Runtime } from '@ams/runtime';
-import { decryptField, encryptField, randomBytes, sha256Hex, toBase64Url, blindIndex } from '@ams/shared';
+import { decryptField, encryptField, fieldKeyRingFromEnv, randomBytes, sha256Hex, toBase64Url, blindIndex, type KeyRing } from '@ams/shared';
 import { HttpError } from './errors.js';
 
-export function fieldKey(rt: Runtime): string {
-  const k = rt.config.env['FIELD_ENC_KEY'];
-  if (!k) throw new HttpError(500, 'config_missing', 'Máy chủ chưa cấu hình khóa mã hóa trường.');
-  return k;
+/** Vong khoa tu FIELD_ENC_KEY / FIELD_ENC_KEYS (xoay khoa theo key id, xem docs/ops/KEY-ROTATION.md). */
+export function fieldKey(rt: Runtime): KeyRing {
+  try {
+    return fieldKeyRingFromEnv(rt.config.env);
+  } catch {
+    throw new HttpError(500, 'config_missing', 'Máy chủ chưa cấu hình khóa mã hóa trường.');
+  }
 }
 export const encField = (rt: Runtime, plain: string, aad: string) => encryptField(fieldKey(rt), plain, aad);
 export const decField = (rt: Runtime, token: string, aad: string) => decryptField(fieldKey(rt), token, aad);

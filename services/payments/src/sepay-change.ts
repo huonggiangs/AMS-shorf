@@ -1,5 +1,5 @@
 import type { Runtime } from '@ams/runtime';
-import { decryptField, verifyTotp } from '@ams/shared';
+import { decryptField, fieldKeyRingFromEnv, verifyTotp } from '@ams/shared';
 import { FinanceError } from './port.js';
 import { iso, notify } from './util.js';
 
@@ -11,7 +11,8 @@ export const CHANGE_PREFIX = 'sepay_change:';
 export async function requireStepUp(rt: Runtime, adminId: string, code: unknown): Promise<void> {
   if (typeof code !== 'string' || !code.trim()) throw new FinanceError('step_up_required', 'Cần nhập lại mã xác thực 6 số (TOTP) để thực hiện thay đổi này', 403);
   const row = (await rt.db.query<{ totp_secret_enc: string | null }>('SELECT totp_secret_enc FROM admins WHERE id = ?', [adminId]))[0];
-  const key = rt.config.env['FIELD_ENC_KEY'];
+  let key: ReturnType<typeof fieldKeyRingFromEnv> | null = null;
+  try { key = fieldKeyRingFromEnv(rt.config.env); } catch { /* chua cau hinh */ }
   if (!row?.totp_secret_enc || !key) throw new FinanceError('mfa_not_enrolled', 'Tài khoản chưa bật xác thực hai bước nên không thể thực hiện thay đổi nhạy cảm', 403);
   let secret: string;
   try {

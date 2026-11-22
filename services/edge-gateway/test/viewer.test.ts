@@ -1,7 +1,7 @@
 // WP-18: phia nguoi xem. Chay tren SQLite (node:sqlite) va PostgreSQL (PGlite) cho luong chinh.
 import { afterEach, describe, expect, it } from 'vitest';
 import { TEST_FIELD_ENC_KEY } from '@ams/runtime';
-import { decryptField, uuidv7 } from '@ams/shared';
+import { decryptField, fieldKeyRingFromEnv, uuidv7 } from '@ams/shared';
 import { harness, impression, TestDevice, type Harness } from './helpers.js';
 import type { OtpSender } from '../src/gateway.js';
 
@@ -195,7 +195,7 @@ describe.each(['sqlite', 'postgres'] as const)('viewer API (%s)', (dialect) => {
     const row = (await h.rt.db.query<{ status: string; paid_at: string | null; external_ref: string | null; account_enc: string; account_last4: string; tax_mode: string; requested_via: string }>('SELECT status, paid_at, external_ref, account_enc, account_last4, tax_mode, requested_via FROM payouts WHERE id = ?', [p.payout_id]))[0]!;
     expect(row).toMatchObject({ status: 'pending', paid_at: null, external_ref: null, account_last4: '9012', tax_mode: 'auto_pay', requested_via: 'viewer_app' });
     expect(row.account_enc).not.toContain('0123456789012');
-    expect(JSON.parse(await decryptField(TEST_FIELD_ENC_KEY, row.account_enc, `payout:${p.payout_id}`))).toEqual({ n: bank.account_number, name: bank.account_name });
+    expect(JSON.parse(await decryptField(fieldKeyRingFromEnv({ FIELD_ENC_KEY: TEST_FIELD_ENC_KEY }), row.account_enc, `payout:${p.payout_id}`))).toEqual({ n: bank.account_number, name: bank.account_name });
     // idempotent: gui lai cung khoa => cung lenh, khong can OTP; doi so tien => 409
     const rep = await phone.call('POST', '/v1/withdraw', body());
     expect(rep.status).toBe(200);

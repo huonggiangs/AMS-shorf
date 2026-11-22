@@ -1,12 +1,14 @@
 import type { Runtime } from '@ams/runtime';
 import type { PermRow } from '@ams/config';
 import { deleteCookie, setCookie } from 'hono/cookie';
+import { cookieName, readCookieValue } from '@ams/shared';
 import { hashToken, newToken } from '../lib/crypto.js';
 import { jsonParse } from '../lib/http.js';
 import type { Ctx } from '../lib/http.js';
 import { forbidden, unauthorized } from '../lib/errors.js';
 import type { AccountKind, AuthUser } from '../types.js';
 
+/** Ten GOC cua cookie; khi HTTPS ten thuc la `__Host-<ten>` (R1-24, xem cookieName). */
 export const SESSION_COOKIE = 'ams_session';
 export const CSRF_COOKIE = 'ams_csrf';
 export const MFA_COOKIE = 'ams_mfa';
@@ -23,17 +25,38 @@ export const isHttps = (rt: Runtime): boolean => {
   return e === 'production' || e === 'staging';
 };
 
+/** Doc token phien (uu tien `__Host-ams_session`, roi `ams_session`). */
+export const readSessionToken = (c: Ctx): string | undefined => readCookieValue(c.req.header('cookie'), SESSION_COOKIE);
+export const readMfaCookie = (c: Ctx): string | undefined => readCookieValue(c.req.header('cookie'), MFA_COOKIE);
+
+/** `__Host-`: Secure + Path=/ + khong Domain. Chi khi HTTPS (isHttps); HTTP local dung ten thuong. */
 export function setSessionCookies(c: Ctx, rt: Runtime, token: string, csrf: string): void {
   const secure = isHttps(rt);
-  setCookie(c, SESSION_COOKIE, token, { httpOnly: true, sameSite: 'Lax', path: '/', secure, maxAge: SESSION_TTL_SEC });
+  setCookie(c, cookieName(SESSION_COOKIE, secure), token, { httpOnly: true, sameSite: 'Lax', path: '/', secure, maxAge: SESSION_TTL_SEC });
   // doc duoc bang JS de gui header X-CSRF-Token (double-submit); khong chua bi mat dang nhap
-  setCookie(c, CSRF_COOKIE, csrf, { httpOnly: false, sameSite: 'Lax', path: '/', secure, maxAge: SESSION_TTL_SEC });
+  setCookie(c, cookieName(CSRF_COOKIE, secure), csrf, { httpOnly: false, sameSite: 'Lax', path: '/', secure, maxAge: SESSION_TTL_SEC });
+  // don cookie ten cu (truoc khi doi sang __Host-) de khong con phien song song khong tien to
+  if (secure) {
+    deleteCookie(c, SESSION_COOKIE, { path: '/', secure });
+    deleteCookie(c, CSRF_COOKIE, { path: '/', secure });
+  }
+}
+export function setMfaCookie(c: Ctx, rt: Runtime, token: string): void {
+  const secure = isHttps(rt);
+  setCookie(c, cookieName(MFA_COOKIE, secure), token, { httpOnly: true, sameSite: 'Strict', path: '/', secure, maxAge: MFA_TTL_SEC });
+}
+export function clearMfaCookie(c: Ctx, rt: Runtime): void {
+  const secure = isHttps(rt);
+  deleteCookie(c, cookieName(MFA_COOKIE, secure), { path: '/', secure });
+  if (secure) deleteCookie(c, MFA_COOKIE, { path: '/', secure });
 }
 export function clearSessionCookies(c: Ctx, rt: Runtime): void {
   const secure = isHttps(rt);
-  deleteCookie(c, SESSION_COOKIE, { path: '/', secure });
-  deleteCookie(c, CSRF_COOKIE, { path: '/', secure });
-  deleteCookie(c, MFA_COOKIE, { path: '/', secure });
+  for (const b of [SESSION_COOKIE, CSRF_COOKIE]) {
+    deleteCookie(c, cookieName(b, secure), { path: '/', secure });
+    if (secure) deleteCookie(c, b, { path: '/', secure }); // ten cu
+  }
+  clearMfaCookie(c, rt);
 }
 
 export async function createSession(rt: Runtime, adminId: string, ip: string, ua: string | undefined, mfaVerified: boolean): Promise<{ token: string; csrf: string; id: string }> {

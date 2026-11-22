@@ -1,5 +1,5 @@
 import type { Runtime } from '@ams/runtime';
-import { ANY, MANIFEST_EPOCH_KEY, elevatorTierFor, isElevatorResolution, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
+import { ANY, MANIFEST_EPOCH_KEY, elevatorTierFor, isElevatorResolution, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, safeErr, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
 import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestLayout, type ManifestSlot, type ManifestZone } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 
@@ -337,7 +337,7 @@ export class ManifestService {
       man = await this.buildWith(g, ctx);
     } catch (e) {
       // DB/ha tang loi luc xay: dung ban cu (neu co) thay vi tra 5xx hang loat; khong co ban cu thi nem loi (gateway tra 5xx, thiet bi giu ban dang co)
-      console.error(`[manifest] xay ${key} that bai: ${(e as Error).message}`);
+      console.error(`[manifest] xay ${key} that bai: ${safeErr(e)}`);
       if (prev) return prev;
       throw e;
     }
@@ -449,7 +449,7 @@ export class ManifestService {
         try {
           sha = await this.sha256Of(r);
         } catch (e) {
-          console.error(`[manifest] bo qua creative ${r.id}: khong tinh duoc sha256: ${(e as Error).message}`);
+          console.error(`[manifest] bo qua creative ${r.id}: khong tinh duoc sha256: ${safeErr(e)}`);
           ctx.degraded.push(r.id); // loi tam thoi (khac 'tep khong ton tai' => null): khong duoc cache ban thieu nay
           sha = null;
         }

@@ -4,7 +4,7 @@
 // Tuong thich D1: thao tac tien dung mot cau lenh co dieu kien hoac db.batch (khong dua vao rollback cua tx).
 import type { Context, Hono } from 'hono';
 import type { Db, Runtime } from '@ams/runtime';
-import { decryptField, encryptField, fromBase64Url, fromUtf8, hmacSha256Hex, sha256Hex, timingSafeEqualStr, toBase64Url, utf8 } from '@ams/shared';
+import { decryptField, encryptField, fieldKeyRingFromEnv, type KeyRing, fromBase64Url, fromUtf8, hmacSha256Hex, sha256Hex, timingSafeEqualStr, toBase64Url, utf8 } from '@ams/shared';
 import { authenticateDevice, type AuthDeps } from './auth.js';
 import type { DeviceDirectory, DeviceRec } from './devices.js';
 import type { ManifestService } from './manifest.js';
@@ -150,10 +150,12 @@ export function normalizePhone(p: string): string {
   return p.startsWith('+84') ? '0' + p.slice(3) : p;
 }
 
-async function encKey(x: ViewerCtx): Promise<string> {
-  const k = x.rt.config.env['FIELD_ENC_KEY'];
-  if (!k) throw new HttpProblem('not_configured', 'May chu chua cau hinh khoa ma hoa truong (FIELD_ENC_KEY).');
-  return k;
+async function encKey(x: ViewerCtx): Promise<KeyRing> {
+  try {
+    return fieldKeyRingFromEnv(x.rt.config.env);
+  } catch {
+    throw new HttpProblem('not_configured', 'May chu chua cau hinh khoa ma hoa truong (FIELD_ENC_KEY).');
+  }
 }
 
 async function sumLedger(db: Db, userId: string): Promise<{ bal: number; views: number; inter: number }> {
@@ -184,7 +186,7 @@ async function currentTax(db: Db, userId: string): Promise<{ mode: string; conse
 
 // ------------------------------------------------------------------ OTP
 async function otpHash(x: ViewerCtx, purpose: string, userId: string, ctx: string, code: string): Promise<string> {
-  const secret = x.rt.config.env['VIEWER_OTP_SECRET'] ?? x.rt.config.env['FIELD_ENC_KEY'];
+  const secret = x.rt.config.env['VIEWER_OTP_SECRET'] ?? x.rt.config.env['FIELD_ENC_KEY'] ?? x.rt.config.env['FIELD_INDEX_KEY'];
   if (!secret) throw new HttpProblem('not_configured', 'May chu chua cau hinh khoa OTP.');
   return hmacSha256Hex(secret, `${purpose}|${userId}|${ctx}|${code}`);
 }
@@ -317,6 +319,7 @@ export function mountViewerRoutes(app: Hono, x: ViewerCtx): void {
   app.get('/v1/wallet', async (c) => {
     const dev = await authenticateDevice(c, x.deps, new Uint8Array());
     needPhone(dev);
+    await x.rateLimit(`vget:${dev.id}`, 120, 60, 'doc vi theo thiet bi');
     const base = { unit_price_vnd: policy.unitPriceVnd, payout_threshold_vnd: policy.thresholdVnd, interaction_reward_range_vnd: [20, policy.interactionMaxRewardVnd], daily_reward_cap_vnd: policy.dailyRewardCapVnd, withdraw_enabled: policy.withdrawEnabled };
     if (!dev.userId) return c.json({ paired: false, balance_vnd: 0, ledger_balance_vnd: 0, pending_payout_vnd: 0, total_paid_vnd: 0, views: 0, interactions: 0, payouts: [], devices: [], tax_mode: 'none', tax_authorization: 'none', phone_verified: false, ...base });
     const uid = dev.userId;
@@ -350,6 +353,7 @@ export function mountViewerRoutes(app: Hono, x: ViewerCtx): void {
   app.get('/v1/wallet/ledger', async (c) => {
     const dev = await authenticateDevice(c, x.deps, new Uint8Array());
     needPhone(dev);
+    await x.rateLimit(`vget:${dev.id}`, 120, 60, 'doc vi theo thiet bi');
     const uid = needUser(dev);
     const lim = Math.min(Math.max(Math.trunc(Number(c.req.query('limit') ?? 20)) || 20, 1), 100);
     let after: { t: string; id: string } | null = null;
@@ -389,7 +393,7 @@ export function mountViewerRoutes(app: Hono, x: ViewerCtx): void {
       return c.json({ otp_sent: true, expires_in: o.expiresIn, phone_masked: maskPhone(phone), ...(o.devCode ? { dev_otp: o.devCode } : {}) }, 202);
     }
     await verifyOtp(x, 'phone_verify', uid, phone, b.otp);
-    const hash = await hmacSha256Hex(key, `phone|${phone}`);
+    const hash = await hmacSha256Hex(key.indexKey, `phone|${phone}`);
     try {
       await rt.db.run('UPDATE end_users SET phone_hash = ?, phone_enc = ?, phone_verified_at = ? WHERE id = ?', [hash, await encryptField(key, phone, `phone:${uid}`), nowIso(), uid]);
     } catch {
@@ -413,6 +417,7 @@ export function mountViewerRoutes(app: Hono, x: ViewerCtx): void {
   app.get('/v1/tax-authorization', async (c) => {
     const dev = await authenticateDevice(c, x.deps, new Uint8Array());
     needPhone(dev);
+    await x.rateLimit(`vget:${dev.id}`, 120, 60, 'doc vi theo thiet bi');
     return c.json(taxView(dev.userId ? await currentTax(rt.db, dev.userId) : null));
   });
   app.post('/v1/tax-authorization', async (c) => {
@@ -441,6 +446,7 @@ export function mountViewerRoutes(app: Hono, x: ViewerCtx): void {
     const dev = await authenticateDevice(c, x.deps, body);
     needPhone(dev);
     const b: WithdrawBody = withdrawBody.parse(x.parseJson(body));
+    await x.rateLimit(`vwd:${dev.id}`, 20, 3600, 'rut tien theo thiet bi');
     if (!policy.withdrawEnabled) throw new HttpProblem('feature_disabled', 'Chi tra chua duoc bat (dang ra soat thue/KYC). So du van duoc tich luy.');
     const uid = needUser(dev);
     const last4 = b.bank.account_number.slice(-4);
@@ -607,17 +613,32 @@ export function mountViewerRoutes(app: Hono, x: ViewerCtx): void {
   });
 }
 
-/** CORS tuy chon cho app WebView (Capacitor) goi gateway. Chi bat khi VIEWER_CORS_ORIGINS co gia tri; xac thuc bang chu ky, khong cookie. */
+/**
+ * CORS tuy chon cho app WebView (Capacitor) goi gateway. Chi bat khi VIEWER_CORS_ORIGINS co gia tri; xac thuc bang chu ky, khong cookie.
+ * P2 (R1 CORS review): chi phan hoi dung nguyen van origin nam trong danh sach (so khop chinh xac); `*` va `null` chi duoc chap nhan o
+ * AMS_ENV local/test (o staging/production bi bo qua va canh bao khi khoi dong); khong bao gio gui Access-Control-Allow-Credentials;
+ * luon `Vary: Origin`; origin ngoai danh sach: preflight 403, yeu cau thuc khong co header CORS (trinh duyet tu chan).
+ */
 export function viewerCors(env: Record<string, string | undefined>): ((c: Context, next: () => Promise<void>) => Promise<Response | void>) | null {
-  const list = (env['VIEWER_CORS_ORIGINS'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const raw = (env['VIEWER_CORS_ORIGINS'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (raw.length === 0) return null;
+  const e = (env['AMS_ENV'] ?? '').trim().toLowerCase();
+  const local = e === 'local' || e === 'dev' || e === 'development' || e === 'test' || (!e && (env['RUNTIME'] ?? '').trim().toLowerCase() !== 'cloudflare' && (env['RUNTIME'] ?? '').trim().toLowerCase() !== 'k8s');
+  const list = raw.filter((o) => {
+    if (o === '*' || o === 'null') {
+      if (!local) console.warn(`[gateway] VIEWER_CORS_ORIGINS: bo qua "${o}" (chi cho phep o AMS_ENV local/test); liet ke origin cu the, vd https://localhost,capacitor://localhost.`);
+      return local;
+    }
+    return /^[a-z][a-z0-9+.-]*:\/\/[^/\s*]+$/i.test(o); // scheme://host[:port], khong duong dan/ky tu dai dien
+  });
   if (list.length === 0) return null;
   const allowAll = list.includes('*');
   return async (c, next) => {
     const origin = c.req.header('origin');
     const ok = !!origin && (allowAll || list.includes(origin));
-    const hdr: Record<string, string> = ok ? { 'access-control-allow-origin': origin!, vary: 'Origin' } : {};
+    const hdr: Record<string, string> = ok ? { 'access-control-allow-origin': origin!, vary: 'Origin' } : { vary: 'Origin' };
     if (c.req.method === 'OPTIONS') {
-      return new Response(null, { status: ok ? 204 : 403, headers: { ...hdr, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, x-device-id, x-timestamp, x-nonce, x-signature, if-none-match', 'access-control-max-age': '600' } });
+      return new Response(null, { status: ok ? 204 : 403, headers: { ...hdr, ...(ok ? { 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, x-device-id, x-timestamp, x-nonce, x-signature, if-none-match', 'access-control-max-age': '600' } : {}) } });
     }
     await next();
     for (const [k, v] of Object.entries(hdr)) c.res.headers.set(k, v);

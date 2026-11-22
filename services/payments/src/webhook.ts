@@ -1,5 +1,5 @@
 import type { Db, Runtime } from '@ams/runtime';
-import { encryptField, hmacSha256Hex, timingSafeEqualStr } from '@ams/shared';
+import { encryptField, fieldKeyRingFromEnv, hmacSha256Hex, timingSafeEqualStr } from '@ams/shared';
 import { z } from 'zod';
 import { runActivation } from './activation.js';
 import { PENDING_TOPUP_TTL_MS, extractPaymentCode, loadSecrets, loadSepayConfig } from './config.js';
@@ -136,10 +136,7 @@ export async function redactStoredPayload(rt: Runtime, raw: string): Promise<str
   }
   const acct = obj['accountNumber'];
   if (typeof acct === 'string' && acct) {
-    const key = rt.config.env['FIELD_ENC_KEY'];
-    if (key) {
-      try { obj['accountNumber_enc'] = await encryptField(key, acct, 'payment_webhooks.accountNumber'); } catch { /* chi giu ban che */ }
-    }
+    try { obj['accountNumber_enc'] = await encryptField(fieldKeyRingFromEnv(rt.config.env), acct, 'payment_webhooks.accountNumber'); } catch { /* chi giu ban che */ }
     obj['accountNumber'] = maskAcct(acct);
   }
   return JSON.stringify(obj);

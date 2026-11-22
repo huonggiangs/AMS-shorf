@@ -1,3 +1,4 @@
+import { safeErr } from '@ams/shared';
 import { serve } from '@hono/node-server';
 import type { AddressInfo } from 'node:net';
 import { createDockerRuntime } from '@ams/runtime/docker';
@@ -22,7 +23,7 @@ function startScheduler(rt: Runtime, port: () => FinancePort | undefined): () =>
       if ((await rt.kv.incr(lockKey, ttl)) !== 1) return;
       await port()?.scheduled?.(rt, cron);
     } catch (e) {
-      console.error(`[api] job "${cron}" loi:`, (e as Error).message);
+      console.error(`[api] job "${cron}" loi:`, safeErr(e));
     }
   };
   const lockedOps = async (prune: boolean) => {
@@ -30,7 +31,7 @@ function startScheduler(rt: Runtime, port: () => FinancePort | undefined): () =>
       if ((await rt.kv.incr(`cron:ops:${Math.floor(rt.clock.now().getTime() / 240_000)}`, 600)) !== 1) return;
       await opsTick(rt, { prune });
     } catch (e) {
-      console.error('[api] job ops loi:', (e as Error).message);
+      console.error('[api] job ops loi:', safeErr(e));
     }
   };
   // p4: thu lai hoa don dien tu moi 10 phut; nhac no/luu giu du lieu hang ngay (khoa kv chong chay trung giua cac ban sao)
@@ -40,7 +41,7 @@ function startScheduler(rt: Runtime, port: () => FinancePort | undefined): () =>
       if (daily) await billingDailyTick(rt);
       else await billingFrequentTick(rt);
     } catch (e) {
-      console.error('[api] job billing loi:', (e as Error).message);
+      console.error('[api] job billing loi:', safeErr(e));
     }
   };
   const tick = () => {
@@ -85,7 +86,7 @@ function startOutboxWorker(rt: Runtime, port: () => FinancePort | undefined, env
         await sweepMultipart(rt); // phien tai tung phan het han -> huy
         await sweepStaleUploads(rt); // tep ket 'uploading' qua 1 gio
       })
-      .catch((e) => console.error('[api] outbox loi:', (e as Error).message))
+      .catch((e) => console.error('[api] outbox loi:', safeErr(e)))
       .finally(() => (busy = false));
   }, every);
   o.unref();

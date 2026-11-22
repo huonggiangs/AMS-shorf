@@ -1,8 +1,7 @@
 import type { Runtime } from '@ams/runtime';
 import { can, type PermRow } from '@ams/config';
-import { sha256Hex, timingSafeEqualStr } from '@ams/shared';
+import { readCookieValue, sha256Hex, timingSafeEqualStr } from '@ams/shared';
 import type { Context } from 'hono';
-import { getCookie } from 'hono/cookie';
 import { FinanceError } from './port.js';
 
 export interface FinanceActor {
@@ -38,7 +37,7 @@ export const defaultResolveActor: ActorResolver = async (c, rt) => {
     const ip = (c as unknown as { get(k: string): unknown }).get('ip');
     return { id: u.id, role: u.role, account_kind: (u.kind ?? 'internal') as FinanceActor['account_kind'], customer_id: u.customerId ?? null, perms: u.perms ?? [], ip: typeof ip === 'string' ? ip : clientIp(c, rt) };
   }
-  const token = getCookie(c, 'ams_session');
+  const token = readCookieValue(c.req.header('cookie'), 'ams_session');
   if (!token) return null;
   const s = (await rt.db.query<{ admin_id: string; csrf_token: string; mfa_verified: unknown }>(
     'SELECT admin_id, csrf_token, mfa_verified FROM sessions WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?',

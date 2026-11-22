@@ -6,6 +6,7 @@ import { requirePerm } from '../auth/middleware.js';
 import { writeAudit } from '../lib/audit.js';
 import { conflict, notFound, unauthorized, unprocessable } from '../lib/errors.js';
 import { getRt, num, parseBody } from '../lib/http.js';
+import { reencryptFields } from '../lib/reencrypt.js';
 import { runOpsChecks } from '../ops/checks.js';
 import { loadAlertConfig, notifyIncident, saveAlertSettings, validateWebhookUrl } from '../ops/notifier.js';
 import { computePublicStatus } from '../ops/status.js';
@@ -94,6 +95,16 @@ export function opsRoutes(): Hono<AppEnv> {
     const rt = getRt(c);
     const res = await runOpsChecks(rt, { notify: c.req.query('notify') !== '0' });
     return c.json(res);
+  });
+
+  // P2 / R1-21: ma hoa lai truong nhay cam sang khoa ghi hien tai (xoay FIELD_ENC_KEY). Chi super_admin (admin:approve). Goi lap lai den khi pending = 0.
+  r.post('/reencrypt-fields', requirePerm('admin', 'approve'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const b = await parseBody(c, z.object({ dry_run: z.boolean().optional(), limit: z.number().int().min(1).max(1000).optional() }));
+    const rep = await reencryptFields(rt, { dryRun: b.dry_run === true, limit: b.limit });
+    if (!rep.dryRun) await writeAudit(rt.db, { rt, ip: c.get('ip'), actorId: u.id }, { action: 'ops.reencrypt_fields', objectType: 'settings', objectId: 'field_enc_key', diff: { primary_key_id: rep.primaryId, updated: rep.updated, failed: rep.failed, pending: rep.pending } });
+    return c.json(rep);
   });
 
   r.post('/test-notification', requirePerm('admin', 'write'), async (c) => {

@@ -21,7 +21,7 @@ export const setCsrfToken = (t: string | null) => {
 };
 const readCsrfCookie = (): string | null => {
   try {
-    const m = document.cookie.match(/(?:^|;\s*)ams_csrf=([^;]+)/);
+    const m = document.cookie.match(/(?:^|;\s*)__Host-ams_csrf=([^;]+)/) ?? document.cookie.match(/(?:^|;\s*)ams_csrf=([^;]+)/);
     return m ? decodeURIComponent(m[1]!) : null;
   } catch {
     return null;

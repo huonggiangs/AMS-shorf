@@ -1,3 +1,4 @@
+import { safeErr } from '@ams/shared';
 import { createCloudflareRuntime } from '@ams/runtime/cloudflare';
 import type { CloudflareEnv, CloudflareRuntime } from '@ams/runtime/cloudflare';
 import { createApp } from './app.js';
@@ -56,7 +57,7 @@ export default {
   async scheduled(event: ScheduledEvent, env: WorkerEnv, ctx: ExecCtx): Promise<void> {
     const r = ready(env);
     // outbox: moi lan cron (thu lai viec dang do; duong chinh la xu ly ngay sau commit trong request). Mot Queue consumer co the goi sweepOutbox y het.
-    ctx.waitUntil(sweepOutbox(r.rt, r.finance).catch((e) => console.error('[api] outbox loi:', (e as Error).message)));
+    ctx.waitUntil(sweepOutbox(r.rt, r.finance).catch((e) => console.error('[api] outbox loi:', safeErr(e))));
     ctx.waitUntil(sweepAutoApprove(r.rt).then(() => undefined, () => undefined)); // tep noi bo co quyen duyet, da qua quet
     ctx.waitUntil(r.media.sweep(5).then(() => undefined, () => undefined)); // creative con 'pending' (mat tin nhan)
     ctx.waitUntil(r.importer.sweep().then(() => undefined, () => undefined)); // nhap tu lien ket bi ket/loi tam thoi -> dat lai viec

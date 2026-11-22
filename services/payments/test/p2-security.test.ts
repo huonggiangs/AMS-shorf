@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TestRuntime } from '@ams/runtime';
-import { decryptField } from '@ams/shared';
+import { decryptField, fieldKeyRingFromEnv } from '@ams/shared';
 import { mkApp, mkCustomer, mkRt, sign, webhookBody } from './helpers.js';
 import { REJECTED_PER_IP_PER_MIN, pruneRejectedWebhooks } from '../src/webhook.js';
 
@@ -39,7 +39,7 @@ for (const dialect of ['postgres', 'sqlite'] as const) {
       expect(row.payload).not.toContain('0123456789');
       const p = JSON.parse(row.payload) as Record<string, string>;
       expect(p['accountNumber']).toBe('******6789');
-      expect(await decryptField(rt.config.env['FIELD_ENC_KEY']!, p['accountNumber_enc']!, 'payment_webhooks.accountNumber')).toBe('0123456789');
+      expect(await decryptField(fieldKeyRingFromEnv(rt.config.env), p['accountNumber_enc']!, 'payment_webhooks.accountNumber')).toBe('0123456789');
       // manual queue / matching still work off the parsed payload
       const t = (await rt.db.query<{ status: string }>("SELECT status FROM topups WHERE provider_txn_id = '770001'"))[0];
       expect(t?.status).toBe('credited');

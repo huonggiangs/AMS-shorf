@@ -30,6 +30,8 @@ export function defer(c: Context, p: Promise<unknown>): void {
 }
 
 export function clientIp(c: Context): string {
+  // R1-20: TRUST_PROXY=0 (cong lo truc tiep, khong qua Caddy/Cloudflare) => khong tin header do client dat
+  if ((c as { get(k: string): unknown }).get('trustProxy') === false) return 'unknown';
   const h = c.req.raw.headers;
   const cf = h.get('cf-connecting-ip');
   if (cf) return cf.trim();
