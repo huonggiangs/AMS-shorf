@@ -131,7 +131,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     profDirty = new Map();
     if (prof.size > 0) {
       const stmts = [...prof].map(([id, v]) => ({ sql: PROFILE_UPSERT, params: [id, null, null, null, v.source, v.cacheMb, v.ts] }));
-      for (let i = 0; i < stmts.length; i += 100) await rt.db.batch(stmts.slice(i, i + 100)).catch((e) => console.error('[gateway] ghi device_profiles loi:', (e as Error).message));
+      for (let i = 0; i < stmts.length; i += 100) await rt.db.batch(stmts.slice(i, i + 100)).catch((e) => console.error('[gateway] ghi device_profiles loi:', safeErr(e)));
     }
     if (rows.length > 0) await rt.events.append('heartbeat', rows as unknown as Record<string, unknown>[]);
     if (dirty.size > 0) {

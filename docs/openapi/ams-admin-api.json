@@ -10541,7 +10541,7 @@
           "action": "approve",
           "account": "internal"
         },
-        "x-ams-source": "services/payments/src/routes.ts:626",
+        "x-ams-source": "services/payments/src/routes.ts:635",
         "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -10592,7 +10592,7 @@
           "action": "view",
           "account": "internal"
         },
-        "x-ams-source": "services/payments/src/routes.ts:602",
+        "x-ams-source": "services/payments/src/routes.ts:611",
         "description": "Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -10632,7 +10632,7 @@
           "action": "approve",
           "account": "internal"
         },
-        "x-ams-source": "services/payments/src/routes.ts:609",
+        "x-ams-source": "services/payments/src/routes.ts:618",
         "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -10692,7 +10692,7 @@
           "action": "approve",
           "account": "internal"
         },
-        "x-ams-source": "services/payments/src/routes.ts:617",
+        "x-ams-source": "services/payments/src/routes.ts:626",
         "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -10743,7 +10743,7 @@
           "action": "approve",
           "account": "internal"
         },
-        "x-ams-source": "services/payments/src/routes.ts:636",
+        "x-ams-source": "services/payments/src/routes.ts:645",
         "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -12027,7 +12027,7 @@
           "action": "view",
           "account": "internal"
         },
-        "x-ams-source": "services/payments/src/routes.ts:559",
+        "x-ams-source": "services/payments/src/routes.ts:568",
         "description": "Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -12076,7 +12076,7 @@
           "action": "approve",
           "account": "internal"
         },
-        "x-ams-source": "services/payments/src/routes.ts:572",
+        "x-ams-source": "services/payments/src/routes.ts:581",
         "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -12136,7 +12136,7 @@
           "action": "approve",
           "account": "internal"
         },
-        "x-ams-source": "services/payments/src/routes.ts:592",
+        "x-ams-source": "services/payments/src/routes.ts:601",
         "description": "Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -12177,7 +12177,7 @@
           "action": "write",
           "account": "internal"
         },
-        "x-ams-source": "services/payments/src/routes.ts:646",
+        "x-ams-source": "services/payments/src/routes.ts:655",
         "description": "Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {

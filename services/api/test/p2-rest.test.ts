@@ -77,6 +77,28 @@ describe('R1-24 __Host- cookie', () => {
     expect(names).toEqual(expect.arrayContaining(['__Host-ams_session', '__Host-ams_csrf', 'ams_session', 'ams_csrf']));
   });
 
+  it('HTTPS: bat 2FA trong Ho so bang phien hien co (cookie __Host- + CSRF): enroll roi verify chi bang cookie', async () => {
+    const email = https.byRole('device_ops');
+    const { password } = https.cred(email);
+    await https.rt.db.run('UPDATE admins SET totp_secret_enc = NULL, mfa_required = 0 WHERE email = ?', [email]);
+    const r1 = await post(https, '/auth/login', { email, password });
+    expect(((await r1.json()) as any).mfa_required).toBe(false);
+    const cookie = jar(r1).filter((c) => !/Max-Age=0/i.test(c)).map((c) => c.split(';')[0]).join('; ');
+    expect(cookie).toContain('__Host-ams_session=');
+    const csrf = decodeURIComponent(/__Host-ams_csrf=([^;]+)/.exec(cookie)![1]!);
+    expect((await post(https, '/auth/mfa/enroll', {}, { cookie })).status).toBe(403); // thieu CSRF
+    const en = await post(https, '/auth/mfa/enroll', {}, { cookie, 'x-csrf-token': csrf });
+    expect(en.status).toBe(200);
+    const { secret } = (await en.json()) as { secret: string };
+    const mfaCookie = jar(en).find((c) => c.startsWith('__Host-ams_mfa='))!.split(';')[0]!;
+    https.rt.clock.advance(31_000);
+    const code = await totp(secret, https.rt.clock.now().getTime());
+    const v = await post(https, '/auth/mfa/verify', { code }, { cookie: `${cookie}; ${mfaCookie}` });
+    expect(v.status).toBe(200);
+    expect(jar(v).some((c) => c.startsWith('__Host-ams_session=') && !/Max-Age=0/i.test(c))).toBe(true);
+    expect((await https.rt.db.query<{ t: string | null }>('SELECT totp_secret_enc AS t FROM admins WHERE email = ?', [email]))[0]!.t).toMatch(/^v2:/);
+  });
+
   it('tieu de bao mat API: CSP none, DENY, Permissions-Policy; HSTS chi o HTTPS', async () => {
     const a = await https.app.request('/health');
     expect(a.headers.get('content-security-policy')).toMatch(/default-src 'none'/);
