@@ -12,6 +12,7 @@ import { Drawer } from '../components/Drawer';
 import { LineChart } from '../components/charts';
 import { fmtDateTime, num } from '../lib/format';
 import { DeviceCommands, OwnerForm, PairDialog } from '../components/DeviceOps';
+import { DevicePlacement } from '../components/DeviceTree';
 import { ApproveDevice, DeviceLogs, isSignage, kindLabel } from '../components/SignageOps';
 
 type DevEx = Device & { pairing_state?: string; trust_level?: number; paired_at?: string | null };
@@ -96,6 +97,7 @@ export function DeviceDrawer({ id, onClose, canWrite, canApprove }: { id: string
             <dt>Khu vực</dt><dd>{d.region ?? '—'}</dd><dt>Ứng dụng</dt><dd>{d.app_version ?? '—'}</dd>
             <dt>Heartbeat gần nhất</dt><dd>{fmtDateTime(d.last_seen_at)}</dd><dt>Lượt xem hợp lệ</dt><dd>{num(d.views)}</dd>
           </dl>
+          <DevicePlacement deviceId={d.id} canWrite={canWrite} />
           {canWrite ? <OwnerForm key={`${d.id}-${d.owner_name ?? ''}`} deviceId={d.id} current={d.owner_name} paired={isPaired(d)} /> : null}
           {isSignage(d.kind) ? <ApproveDevice deviceId={d.id} kind={d.kind!} grantState={d.grant_state} screenLabel={d.screen ? `${d.screen.venue_name ?? d.screen.venue_id ?? ''} (${d.screen.id})` : null} canApprove={mayApprove} /> : null}
           <DeviceCommands deviceId={d.id} paired={isPaired(d)} canWrite={canWrite} signage={isSignage(d.kind)} />

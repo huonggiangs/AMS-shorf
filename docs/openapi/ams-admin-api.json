@@ -57,6 +57,9 @@
       "name": "dashboard"
     },
     {
+      "name": "device-groups"
+    },
+    {
       "name": "devices"
     },
     {
@@ -79,6 +82,9 @@
     },
     {
       "name": "legal"
+    },
+    {
+      "name": "locations"
     },
     {
       "name": "me"
@@ -5518,6 +5524,494 @@
         ]
       }
     },
+    "/admin/v1/device-groups": {
+      "get": {
+        "operationId": "adminGetDeviceGroups",
+        "tags": [
+          "device-groups"
+        ],
+        "summary": "GET /admin/v1/device-groups",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:395",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "adminPostDeviceGroups",
+        "tags": [
+          "device-groups"
+        ],
+        "summary": "POST /admin/v1/device-groups",
+        "parameters": [],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:400",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostDeviceGroupsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đã tạo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/device-groups/assign": {
+      "put": {
+        "operationId": "adminPutDeviceGroupsAssign",
+        "tags": [
+          "device-groups"
+        ],
+        "summary": "PUT /admin/v1/device-groups/assign",
+        "parameters": [],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:415",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutDeviceGroupsAssignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/device-groups/devices": {
+      "get": {
+        "operationId": "adminGetDeviceGroupsDevices",
+        "tags": [
+          "device-groups"
+        ],
+        "summary": "GET /admin/v1/device-groups/devices",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:199",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/device-groups/devices/{deviceId}": {
+      "patch": {
+        "operationId": "adminPatchDeviceGroupsDevicesByDeviceId",
+        "tags": [
+          "device-groups"
+        ],
+        "summary": "PATCH /admin/v1/device-groups/devices/{deviceId}",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:241",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPatchDeviceGroupsDevicesByDeviceIdRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/device-groups/{id}": {
+      "delete": {
+        "operationId": "adminDeleteDeviceGroupsById",
+        "tags": [
+          "device-groups"
+        ],
+        "summary": "DELETE /admin/v1/device-groups/{id}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:462",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Đã xóa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "adminPatchDeviceGroupsById",
+        "tags": [
+          "device-groups"
+        ],
+        "summary": "PATCH /admin/v1/device-groups/{id}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:432",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPatchDeviceGroupsByIdRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/device-groups/{id}/volume": {
+      "post": {
+        "operationId": "adminPostDeviceGroupsByIdVolume",
+        "tags": [
+          "device-groups"
+        ],
+        "summary": "POST /admin/v1/device-groups/{id}/volume",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:325",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostDeviceGroupsByIdVolumeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
     "/admin/v1/devices": {
       "get": {
         "operationId": "adminGetDevices",
@@ -8050,6 +8544,339 @@
         },
         "x-ams-source": "services/api/src/legal/routes.ts:112",
         "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/locations": {
+      "get": {
+        "operationId": "adminGetLocations",
+        "tags": [
+          "locations"
+        ],
+        "summary": "GET /admin/v1/locations",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Tìm kiếm văn bản (các cột tìm kiếm của danh sách)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`<trường>:<asc|desc>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`khoá:giá trị,khoá:giá trị` hoặc truyền từng khoá bộ lọc làm query riêng",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:395",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "adminPostLocations",
+        "tags": [
+          "locations"
+        ],
+        "summary": "POST /admin/v1/locations",
+        "parameters": [],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:400",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostLocationsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đã tạo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/locations/assign": {
+      "put": {
+        "operationId": "adminPutLocationsAssign",
+        "tags": [
+          "locations"
+        ],
+        "summary": "PUT /admin/v1/locations/assign",
+        "parameters": [],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:415",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPutLocationsAssignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/locations/{id}": {
+      "delete": {
+        "operationId": "adminDeleteLocationsById",
+        "tags": [
+          "locations"
+        ],
+        "summary": "DELETE /admin/v1/locations/{id}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:462",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Đã xóa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "adminGetLocationsById",
+        "tags": [
+          "locations"
+        ],
+        "summary": "GET /admin/v1/locations/{id}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:425",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "adminPatchLocationsById",
+        "tags": [
+          "locations"
+        ],
+        "summary": "PATCH /admin/v1/locations/{id}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/device-groups.ts:432",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPatchLocationsByIdRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -16503,6 +17330,72 @@
         ],
         "additionalProperties": true
       },
+      "AdminPatchDeviceGroupsByIdRequest": {
+        "type": "object",
+        "additionalProperties": {}
+      },
+      "AdminPatchDeviceGroupsDevicesByDeviceIdRequest": {
+        "type": "object",
+        "properties": {
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mac": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 17
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "serial": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9._\\-/ ]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "additionalProperties": false
+      },
+      "AdminPatchLocationsByIdRequest": {
+        "type": "object",
+        "additionalProperties": {}
+      },
       "AdminPatchMediaByIdRequest": {
         "type": "object",
         "properties": {
@@ -17984,6 +18877,150 @@
         ],
         "additionalProperties": true
       },
+      "AdminPostDeviceGroupsByIdVolumeRequest": {
+        "type": "object",
+        "properties": {
+          "percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "include_children": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "percent"
+        ],
+        "additionalProperties": false
+      },
+      "AdminPostDeviceGroupsRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "province": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "district": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lng": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "venue_type": {
+            "type": "string",
+            "enum": [
+              "supermarket",
+              "airport",
+              "elevator",
+              "fnb",
+              "hospital",
+              "hotel",
+              "other"
+            ],
+            "default": "other"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contact_phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^[0-9+() .-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive"
+            ],
+            "default": "active"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
       "AdminPostDevicesBulkRequest": {
         "type": "object",
         "properties": {
@@ -18511,6 +19548,132 @@
           "body_md"
         ],
         "additionalProperties": true
+      },
+      "AdminPostLocationsRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "province": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "district": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lng": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "venue_type": {
+            "type": "string",
+            "enum": [
+              "supermarket",
+              "airport",
+              "elevator",
+              "fnb",
+              "hospital",
+              "hotel",
+              "other"
+            ],
+            "default": "other"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contact_phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20,
+                "pattern": "^[0-9+() .-]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive"
+            ],
+            "default": "active"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
       },
       "AdminPostMediaBulkDeleteRequest": {
         "type": "object",
@@ -20657,6 +21820,38 @@
         },
         "additionalProperties": true
       },
+      "AdminPutDeviceGroupsAssignRequest": {
+        "type": "object",
+        "properties": {
+          "device_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "minItems": 1,
+            "maxItems": 500
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "device_ids",
+          "location_id"
+        ],
+        "additionalProperties": false
+      },
       "AdminPutDevicesByIdOwnerRequest": {
         "type": "object",
         "properties": {
@@ -20961,6 +22156,38 @@
           }
         },
         "additionalProperties": true
+      },
+      "AdminPutLocationsAssignRequest": {
+        "type": "object",
+        "properties": {
+          "device_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "minItems": 1,
+            "maxItems": 500
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "device_ids",
+          "location_id"
+        ],
+        "additionalProperties": false
       },
       "AdminPutMediaByIdOverlayRequest": {
         "type": "object",

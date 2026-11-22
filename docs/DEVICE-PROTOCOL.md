@@ -172,6 +172,7 @@ Chữ ký thiết bị. Thân JSON nhỏ (mục tiêu <512 byte, **tối đa c�
 | `source` | `ams`\|`usb`\|`lan` | nguồn đang phát; hiện ở cột "Nguồn phát" trên admin |
 | `cache_mb` | số >= 0 | dung lượng cache (MB) đang dùng; hiện trên admin (nếu có `cache_used_mb` mà không có `cache_mb` thì dùng giá trị đó) |
 | `px_w`, `px_h`, `orientation`, `region` | tùy chọn | như `register`; đổi giá trị thì gateway cập nhật nhóm manifest ngay (không quá 1 lần/phút/thiết bị) |
+| `volume` | int 0..100 | (d-tree, tùy chọn, tương thích ngược) âm lượng **hiện tại** của thiết bị quy về phần trăm; app cũ không gửi vẫn hợp lệ. Gateway ghi vào `device_profiles.volume` khi đổi giá trị hoặc mỗi 30 phút; trang Nhóm thiết bị hiện "Thiết bị báo: N%". Ngoài 0..100 hoặc không nguyên: `422 validation_failed` |
 | `cmd_ack` | string[] <=20 | (cũ, vẫn nhận) id lệnh đã thực thi; nên dùng `POST /v1/commands/ack` (mục 6.1) |
 
 Phản hồi `200`:
@@ -197,10 +198,14 @@ Lệnh tạo ở admin (`POST /admin/v1/devices/{id}/commands`), thiết bị ph
 | `type` | `args` | TTL mặc định / tối đa | Ghi chú |
 |---|---|---|---|
 | `reset_pin` | `{}` | 15 phút / 1 giờ | xóa mật khẩu cài đặt của app: về `1234` và buộc đổi lại ở lần vào cài đặt kế tiếp; lệnh nhạy cảm nên hết hạn nhanh. **Không chứa mã PIN** (không có bí mật trong lệnh) |
-| `set_volume` | `{"percent":0..100}` | 1 giờ / 7 ngày | âm lượng |
+| `set_volume` | `{"percent":0..100}` | 1 giờ / 7 ngày | đặt âm lượng; áp dụng cho **mọi loại thiết bị** (TV, thang máy, LED). Sau khi đặt, app báo âm lượng thật trong `volume` của heartbeat và ack lệnh. Xem `TV-APP-INTEGRATION.md` mục 3c |
 | `set_orientation` | `{"orientation":"landscape"\|"portrait"}` | 1 giờ / 7 ngày | xoay hướng |
 | `message` | `{"text":<=200 ký tự,"duration_s"?:3..120}` | 1 giờ / 7 ngày | chữ chạy tạm thời; thiếu `duration_s` thì app tự chọn (gợi ý 15 giây). (TV dùng `seconds`, không phải `duration_s`) |
 | `refresh_manifest`, `reboot`, `set_monitor` | như cũ | | như mục 6 |
+
+**Đồng bộ lại ngay** ở trang Nhóm thiết bị dùng lại lệnh `refresh_manifest` (không thêm lệnh mới).
+
+**`screenshot` (CHƯA có trong app, chỉ là đặc tả để làm sau):** `args: {"max_w"?:320..1920}`; app chụp khung hình đang hiển thị, tải JPEG lên URL do máy chủ cấp, rồi ack kèm `result` là id ảnh. Chưa có endpoint tải ảnh trong gateway, nên **admin không gửi được lệnh này**; nút "Xem màn hình" bị khóa với chú thích "Cần bản app mới". Khi app và endpoint sẵn sàng sẽ mở nút.
 
 App bỏ qua `type` lạ và **vẫn ack**.
 

@@ -54,7 +54,7 @@ export const COMMANDS: CmdDef[] = [
     support: 'protocol',
     risky: true,
   },
-  { type: 'set_volume', label: 'Chỉnh âm lượng', desc: 'Đặt âm lượng 0-100%.', args: z.object({ percent: z.number().int().min(0, 'Âm lượng từ 0 đến 100').max(100, 'Âm lượng từ 0 đến 100') }).strict(), kinds: SIGNAGE, support: 'protocol' },
+  { type: 'set_volume', label: 'Chỉnh âm lượng', desc: 'Đặt âm lượng 0-100%.', args: z.object({ percent: z.number().int().min(0, 'Âm lượng từ 0 đến 100').max(100, 'Âm lượng từ 0 đến 100') }).strict(), support: 'protocol' }, // mọi loại màn (TV + thang máy/LED): TV app phải hỗ trợ, xem docs/TV-APP-INTEGRATION.md
   { type: 'set_orientation', label: 'Xoay màn hình', desc: 'Đặt hướng hiển thị: ngang (landscape) hoặc dọc (portrait).', args: z.object({ orientation: z.enum(['landscape', 'portrait']) }).strict(), kinds: SIGNAGE, support: 'protocol' },
   { type: 'set_monitor', label: 'Chế độ giám sát', desc: 'Bật chế độ giám sát (heartbeat dày, state=3) để theo dõi sát thiết bị.', args: z.object({ on: z.boolean().default(true) }).strict(), support: 'protocol' },
   { type: 'lock', label: 'Khóa TV', desc: 'Khóa màn hình TV (màn khóa phụ huynh).', args: z.object({ reason: z.string().trim().max(120).optional() }).strict(), kinds: TV_LIKE, support: 'brainrot', risky: true },
