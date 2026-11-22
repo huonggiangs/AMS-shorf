@@ -1,5 +1,6 @@
 // Chuong trinh phat song NOI BO: van hanh chon media trong kho + loai man + khu vuc + khung gio roi xuat ban, KHONG qua hop dong/thanh toan.
 // Gateway dua chuong trinh 'published' vao manifest (campaign_id = 'bp_<id>', khong co gia chot nen khong tinh tien). Xem migrations/0020.
+import { chunkForIn } from '@ams/runtime';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { CommandError, enqueueCommand } from '@ams/edge-gateway';
@@ -169,10 +170,13 @@ async function loadDevices(c: Ctx, id: string) {
 async function checkDevices(c: Ctx, target: string, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   if (new Set(ids).size !== ids.length) throw unprocessable('Danh sách thiết bị có thiết bị trùng.', 'duplicate_devices');
-  const rows = await getRt(c).db.query<{ id: string; name: string | null; kind: string; trust_level: number; blocked: number }>(
-    `SELECT id, name, kind, trust_level, blocked FROM devices WHERE id IN (${placeholders(ids.length)})`,
-    ids,
-  );
+  const rows: { id: string; name: string | null; kind: string; trust_level: number; blocked: number }[] = [];
+  for (const part of chunkForIn(ids)) { // D1: toi da 100 tham so/cau lenh (device_ids toi da 500)
+    rows.push(...(await getRt(c).db.query<{ id: string; name: string | null; kind: string; trust_level: number; blocked: number }>(
+      `SELECT id, name, kind, trust_level, blocked FROM devices WHERE id IN (${placeholders(part.length)})`,
+      part,
+    )));
+  }
   const byId = new Map(rows.map((r) => [r.id, r]));
   const kinds = NOTICE_KINDS[target] ?? [];
   for (const id of ids) {
@@ -241,10 +245,13 @@ async function saveLayout(db: { run: (sql: string, p: unknown[]) => Promise<unkn
 async function checkItems(c: Ctx, target: string, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   if (new Set(ids).size !== ids.length) throw unprocessable('Danh sách tệp có tệp trùng.', 'duplicate_items');
-  const rows = await getRt(c).db.query<ItemRow & { id: string }>(
-    `SELECT id, id AS creative_id, 0 AS position, name, kind, px_w, px_h, duration_s, review_state, state, scan_state, campaign_id, target_type FROM creatives WHERE id IN (${placeholders(ids.length)})`,
-    ids,
-  );
+  const rows: (ItemRow & { id: string })[] = [];
+  for (const part of chunkForIn(ids)) { // D1: toi da 100 tham so/cau lenh
+    rows.push(...(await getRt(c).db.query<ItemRow & { id: string }>(
+      `SELECT id, id AS creative_id, 0 AS position, name, kind, px_w, px_h, duration_s, review_state, state, scan_state, campaign_id, target_type FROM creatives WHERE id IN (${placeholders(part.length)})`,
+      part,
+    )));
+  }
   const byId = new Map(rows.map((r) => [r.id, r]));
   for (const id of ids) {
     const r = byId.get(id);

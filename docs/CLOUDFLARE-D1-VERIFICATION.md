@@ -10,7 +10,7 @@ pnpm test:cf          # = pnpm --filter @ams/cf-runtime-tests test:cf  (khoảng
 
 Bộ test ở `tests/cf-runtime/`:
 
-1. `src/global-setup.ts`: chạy `scripts/deploy-cloudflare.mjs --env production --fake-ids --dry-run` (sinh `wrangler.generated.toml` + bundle bằng `wrangler deploy --dry-run --outdir`), rồi `wrangler d1 migrations apply DB_CORE --local` (công cụ thật) áp migration 0001-0015 vào D1 SQLite cục bộ.
+1. `src/global-setup.ts`: chạy `scripts/deploy-cloudflare.mjs --env production --fake-ids --dry-run` (sinh `wrangler.generated.toml` + bundle bằng `wrangler deploy --dry-run --outdir`), rồi `wrangler d1 migrations apply DB_CORE --local` (công cụ thật) áp toan bo migration (0001-0022) vào D1 SQLite cục bộ.
 2. `src/world.ts`: dựng Miniflare với **bundle thật** của Worker `ams-edge-gateway-production` (kèm consumer hàng đợi `ams-ingest-production` + Durable Object `PresenceShard` SQLite) và `ams-api-production`. Binding, consumer hàng đợi, DO, biến môi trường lấy từ wrangler.toml production qua `unstable_getMiniflareWorkerOptions` (không viết tay). Phía Node dùng `createCloudflareRuntime` trên **cùng** D1/KV/R2 để gieo dữ liệu và đối chiếu.
 3. Test: `events` (thiết bị Ed25519 -> gateway -> D1 + queue -> consumer -> chi tiêu ví), `viewer`, `api`, `config`, `zz-measure`.
 
@@ -20,7 +20,7 @@ Thiết lập giống production: `ENVIRONMENT=production` (giá dự phòng b�
 
 | Hạng mục | Kết quả |
 |---|---|
-| Migration 0001-0015 áp bằng `wrangler d1 migrations apply --local` | pass |
+| Toàn bộ migration 0001-0022 áp bằng `wrangler d1 migrations apply --local` | pass |
 | Đăng ký thiết bị Ed25519 thật, heartbeat, manifest, chống replay nonce (Durable Object SQLite) | pass |
 | Impression hợp lệ -> D1 -> Queue -> consumer -> `spend_events`/ví; sổ cái == cache ví == chi tiêu chiến dịch (`reconcileLedger`) | pass |
 | Trần giờ/thiết bị (120): 130 event mới => đúng 120 hợp lệ + 10 `rate_cap`; giao lại không trừ trần lần hai (`kv_counters` upsert + `RETURNING` trong `D1.batch`) | pass |

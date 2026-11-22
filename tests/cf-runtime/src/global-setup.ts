@@ -1,7 +1,7 @@
 // Build bundle Worker that bang `wrangler deploy --dry-run --outdir` (moi truong production, ID gia) + ap migration 0001-0015
 // vao D1 cuc bo bang `wrangler d1 migrations apply --local` (cong cu that cua Cloudflare). Khong can token/mang Cloudflare.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,6 +22,9 @@ export default function setup(): void {
   rmSync(PERSIST, { recursive: true, force: true });
   mkdirSync(PERSIST, { recursive: true });
   const out = sh('npx', ['wrangler', 'd1', 'migrations', 'apply', 'DB_CORE', '--local', '--persist-to', PERSIST, '-c', 'infra/cloudflare/api/wrangler.generated.toml', '--env', 'production']);
-  if (!/0015_device_ops/.test(out)) throw new Error('migration 0015 khong duoc ap:\n' + out);
+  // TAT CA migration trong packages/db/migrations (bo .postgres.sql) phai duoc ap: lay danh sach tu thu muc nguon
+  const all = readdirSync(join(ROOT, 'packages/db/migrations')).filter((f) => f.endsWith('.sql') && !f.includes('.postgres.')).map((f) => f.replace('.sqlite', '').replace(/\.sql$/, ''));
+  const miss = all.filter((n) => !out.includes(n));
+  if (miss.length) throw new Error('migration khong duoc ap: ' + miss.join(', ') + '\n' + out);
   process.env['CF_TEST_MIGRATIONS_OUT'] = out;
 }

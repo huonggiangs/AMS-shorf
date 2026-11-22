@@ -19,8 +19,10 @@ async function adminSession(w: World, email: string, password: string, totpSecre
   const b1: any = await r1.json();
   let jar = cookiesOf(r1);
   let csrf: string = b1.csrf_token ?? '';
+  let usedCode = '';
   if (b1.mfa_required) {
-    const r2 = await w.api('/api/auth/mfa/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mfa_token: b1.mfa_token, code: await totp(totpSecret, Date.now()) }) });
+    usedCode = await totp(totpSecret, Date.now());
+    const r2 = await w.api('/api/auth/mfa/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mfa_token: b1.mfa_token, code: usedCode }) });
     expect(r2.status).toBe(200);
     jar = [...jar, ...cookiesOf(r2)];
     csrf = ((await r2.json()) as any).csrf_token;
@@ -30,7 +32,7 @@ async function adminSession(w: World, email: string, password: string, totpSecre
     const r = await w.api('/api' + path, { method, headers: { cookie, 'x-csrf-token': csrf, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
     return { status: r.status, body: (await r.json().catch(() => null)) as any };
   };
-  return { json, loginMs };
+  return { json, loginMs, usedCode };
 }
 
 describe('api Worker tren workerd', () => {
@@ -45,7 +47,7 @@ describe('api Worker tren workerd', () => {
     // TOTP da dung khong dung lai duoc (D1 counters nguyen tu)
     const r1 = await w.api('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: admin.email, password: admin.password }) });
     const b1: any = await r1.json();
-    const code = await totp(admin.totpSecret!, Date.now());
+    const code = ses.usedCode; // dung lai dung ma da dung (tranh bien cua so 30 giay khi may tai)
     const v = await w.api('/api/auth/mfa/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mfa_token: b1.mfa_token, code }) });
     expect(v.status).toBe(401); // cung ma TOTP vua dung o session tren (cung 30 giay) -> replay bi chan
 
