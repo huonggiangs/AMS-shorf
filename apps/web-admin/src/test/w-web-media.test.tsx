@@ -110,10 +110,10 @@ describe('Noi dung & Media: moi trang thai khong duyet duoc co giai thich + hanh
     mount('/media');
     await userEvent.click(await screen.findByRole('button', { name: /Tải nội dung mới/ }));
     const dlg = await screen.findByRole('dialog', { name: 'Tải nội dung' });
-    expect(dlg).toHaveTextContent('tối đa 100 MB'); // TV/LED
-    expect(dlg).toHaveTextContent('tối đa 200 MB'); // thang may
+    expect(dlg).toHaveTextContent('tối đa 1.600 MB'); // Kho chung: video mọi định dạng
+    expect(dlg).toHaveTextContent('tối đa 25 MB'); // ảnh
     expect(dlg).toHaveTextContent('AV1');
-    expect(dlg).toHaveTextContent('5–60 giây');
+    expect(dlg).toHaveTextContent('H.264');
     expect(dlg.className).toContain('lg');
   });
 });

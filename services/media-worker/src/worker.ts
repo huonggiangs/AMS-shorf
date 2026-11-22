@@ -14,7 +14,7 @@ export type Outcome = 'processed' | 'rejected' | 'skipped' | 'deferred';
 export interface Result { outcome: Outcome; scan_state?: ScanState; reason?: string; code?: string }
 
 interface Row {
-  id: string; customer_id: string; target_type: string | null; px_w: number | null; px_h: number | null;
+  id: string; customer_id: string; uploader_kind: string | null; name: string | null; target_type: string | null; px_w: number | null; px_h: number | null;
   source: string; storage_key: string | null; mime: string | null; size_bytes: number | null; duration_s: number | null;
   scan_state: string; state: string; review_state: string;
 }
@@ -63,7 +63,7 @@ export function createMediaWorker(rt: Runtime, opts: WorkerOptions = {}) {
   }
 
   async function process(id: string): Promise<Result> {
-    const row = (await rt.db.query<Row>('SELECT id, customer_id, target_type, px_w, px_h, source, storage_key, mime, size_bytes, duration_s, scan_state, state, review_state FROM creatives WHERE id = ?', [id]))[0];
+    const row = (await rt.db.query<Row>('SELECT id, customer_id, uploader_kind, name, target_type, px_w, px_h, source, storage_key, mime, size_bytes, duration_s, scan_state, state, review_state FROM creatives WHERE id = ?', [id]))[0];
     if (!row) return done({ outcome: 'skipped', reason: 'khong co creative' });
     if (row.scan_state !== 'pending') return done({ outcome: 'skipped', reason: `scan_state=${row.scan_state}` });
     if (row.source !== 'upload' || !row.storage_key) return done({ outcome: 'skipped', reason: 'nguon link: chua tai ve (xem requests.md)' });
@@ -87,6 +87,7 @@ export function createMediaWorker(rt: Runtime, opts: WorkerOptions = {}) {
     const key = row.storage_key!;
     const head = await rt.objects.head(key);
     if (!head) return { outcome: 'deferred', reason: 'chua thay tep tren kho' };
+    if (row.uploader_kind === 'internal') return runLibrary(row, head.size);
     const target = tk(row.target_type);
     const hires = target === 'elevator' && Number(row.px_w ?? 0) > 1080;
     const isVideo = (row.mime ?? '').toLowerCase().startsWith('video/');
@@ -151,6 +152,64 @@ export function createMediaWorker(rt: Runtime, opts: WorkerOptions = {}) {
     );
     if (res.changes === 0) return { outcome: 'skipped', reason: 'da duoc xu ly noi khac' };
     return { outcome: 'processed', scan_state: scan };
+  }
+
+
+  /** Kho chung (tai len noi bo): nhan moi dinh dang/codec, KHONG rang buoc loai man/thoi luong; video khong phai MP4 H.264 duoc chuyen sang MP4 H.264/AAC va THAY tep goc. */
+  async function runLibrary(row: Row, size: number): Promise<Result> {
+    const key = row.storage_key!;
+    const manual = async (why: string): Promise<Result> => {
+      const r = await rt.db.run("UPDATE creatives SET scan_state = 'needs_manual_review', review_note = ? WHERE id = ? AND scan_state = 'pending' AND state <> 'uploading'", [why, row.id]);
+      return r.changes === 0 ? { outcome: 'skipped', reason: 'da duoc xu ly noi khac' } : { outcome: 'processed', scan_state: 'unscanned', reason: why };
+    };
+    const isVideo = (row.mime ?? '').toLowerCase().startsWith('video/');
+    if (!(await media.available())) return manual('Cần media-worker (ffmpeg) để kiểm tra/chuyển mã tệp này; duyệt thủ công nếu thiết bị phát được.');
+    if (size > maxBytes) return manual(`Tệp ${(size / MB).toFixed(0)} MB quá lớn để chuyển mã tự động (giới hạn ${Math.floor(maxBytes / MB)} MB bộ nhớ worker): duyệt thủ công hoặc nén lại.`);
+    const bytes = await rt.objects.get(key);
+    if (!bytes) return { outcome: 'deferred', reason: 'khong doc duoc tep' };
+    const ext = (key.split('.').pop() ?? (isVideo ? 'mp4' : 'png')).toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+    const sha = await sha256Hex(bytes);
+    let probe: ProbeResult;
+    try {
+      probe = await media.probe(bytes, ext);
+    } catch {
+      return reject(row, 'unreadable_media', 'Không đọc được tệp (hỏng hoặc định dạng không được ffmpeg hỗ trợ).', { sha, scan: 'unscanned' });
+    }
+    let finalSha = sha;
+    let finalKey = key;
+    let finalSize = size;
+    let mime: string | null = null;
+    let codec = probe.codec;
+    let w = probe.width;
+    let h = probe.height;
+    let dur = probe.durationS;
+    const playable = probe.kind === 'video' && probe.codec === 'h264' && (ext === 'mp4' || ext === 'm4v' || ext === 'mov');
+    if (probe.kind === 'video' && !playable && opts.transcode !== false) {
+      try {
+        const r = await media.toPlayableMp4(bytes, ext, probe);
+        finalKey = `media/${row.customer_id}/${row.id}/v1-playable.mp4`;
+        await rt.objects.put(finalKey, r.body, 'video/mp4');
+        finalSha = await sha256Hex(r.body);
+        finalSize = r.body.length;
+        mime = 'video/mp4';
+        codec = r.codec;
+        w = r.width;
+        h = r.height;
+        if (finalKey !== key) { try { await rt.objects.delete?.(key); } catch { /* khoa goc mo coi: khong anh huong */ } }
+        log(`[media-worker] ${row.id}: kho chung chuyen ma ${probe.codec}/${ext} -> h264 mp4`);
+      } catch (e) {
+        stats.errors++;
+        return manual(`Chuyển mã tự động thất bại (${(e as Error).message.slice(0, 120)}): duyệt thủ công hoặc tải lại bằng MP4 H.264.`);
+      }
+    }
+    const res = await rt.db.run(
+      `UPDATE creatives SET scan_state = 'clean', sha256 = ?, codec = COALESCE(?, codec), duration_s = COALESCE(?, duration_s), px_w = ?, px_h = ?, orientation = ?,
+         size_bytes = ?, storage_key = ?, mime = COALESCE(?, mime), kind = ?, source = 'upload'
+       WHERE id = ? AND scan_state = 'pending' AND state <> 'uploading'`,
+      [finalSha, codec, dur == null ? null : Math.round(dur), w, h, w >= h ? 'landscape' : 'portrait', finalSize, finalKey, mime, probe.kind, row.id],
+    );
+    if (res.changes === 0) return { outcome: 'skipped', reason: 'da duoc xu ly noi khac' };
+    return { outcome: 'processed', scan_state: 'clean' };
   }
 
   /** Quet DB tim creative con 'pending' (phong khi mat tin nhan). */

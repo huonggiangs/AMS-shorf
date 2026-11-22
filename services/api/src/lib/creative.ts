@@ -101,6 +101,27 @@ export function videoSpecProblem(p: { w?: number | null; h?: number | null; code
   return null;
 }
 
+/** Kho chung (nguoi noi bo): nhan MOI container/codec video va anh pho bien; may chu/worker chuyen ma sang H.264/AAC MP4 de thiet bi phat duoc. */
+export const LIBRARY_VIDEO_MAX_BYTES = 1600 * MB;
+export const LIBRARY_IMAGE_MAX_BYTES = 25 * MB;
+const LIB_VIDEO_MIME: Record<string, string> = {
+  mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', avi: 'video/x-msvideo', flv: 'video/x-flv', rmvb: 'video/vnd.rn-realvideo',
+  rm: 'video/vnd.rn-realvideo', wmv: 'video/x-ms-wmv', asf: 'video/x-ms-asf', '3gp': 'video/3gpp', '3g2': 'video/3gpp2', mpg: 'video/mpeg', mpeg: 'video/mpeg', ts: 'video/mp2t', mts: 'video/mp2t', m2ts: 'video/mp2t',
+  vob: 'video/mpeg', ogv: 'video/ogg', f4v: 'video/x-f4v', divx: 'video/x-msvideo',
+};
+const LIB_IMAGE_MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif', tif: 'image/tiff', tiff: 'image/tiff' };
+/** Xac dinh loai tep kho chung tu duoi tep (uu tien) hoac Content-Type (khong nhan SVG/HTML: co the chua ma). null = khong phai anh/video. */
+export function libraryMime(name: string, contentType: string): { mime: string; kind: 'video' | 'image'; ext: string } | null {
+  const ext = (name.split('.').pop() ?? '').toLowerCase();
+  const ct = contentType.toLowerCase().split(';')[0]!.trim();
+  if (LIB_VIDEO_MIME[ext]) return { mime: LIB_VIDEO_MIME[ext]!, kind: 'video', ext };
+  if (LIB_IMAGE_MIME[ext]) return { mime: LIB_IMAGE_MIME[ext]!, kind: 'image', ext };
+  if (ct.startsWith('video/')) return { mime: ct, kind: 'video', ext: ext || 'bin' };
+  if (ct.startsWith('image/') && !ct.includes('svg')) return { mime: ct, kind: 'image', ext: ext || 'bin' };
+  return null;
+}
+/** Video can chuyen ma truoc khi len thiet bi? (khong phai MP4/MOV/WebM H.264 sach) */
+export const libraryNeedsTranscode = (mime: string, codec?: string | null): boolean => !(mime === 'video/mp4' || mime === 'video/quicktime') || (!!codec && !['avc1', 'avc3', 'h264'].includes(codec));
 export const ALLOWED_MIME = ['video/mp4', 'video/quicktime', 'video/webm', 'image/png', 'image/jpeg'] as const;
 export const isVideoMime = (m: string) => m.startsWith('video/');
 

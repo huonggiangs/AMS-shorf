@@ -78,6 +78,7 @@ export async function presentCustomer(rt: Runtime, r: CustRow): Promise<Record<s
 const spec: ListSpec = {
   from: C_FROM,
   select: C_SELECT,
+  where: [{ sql: "cu.id <> 'cu_shared_pool'", params: [] }], // 'Kho chung' (tep noi bo khong gan khach) khong phai khach hang
   search: ['cu.legal_name', 'cu.short_name', 'cu.payment_code', 'cu.contact_name', 'cu.industry', 'cu.phone'],
   sorts: { short_name: 'cu.short_name', code: 'cu.payment_code', debt_vnd: 'debt_vnd', created_at: 'cu.created_at', status: 'cu.state', owner: 'o.name', industry: 'cu.industry' },
   defaultSort: 'code:asc',

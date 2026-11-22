@@ -355,7 +355,7 @@ export async function finalizeUpload(o: FinalizeOpts): Promise<{ warnings: strin
     throw unprocessable(message, code);
   };
 
-  const library = m.uploader_kind === 'internal'; // kho chung: khong rang buoc loai man/codec/thoi luong; may chu/worker chuyen ma
+  const library = m.uploader_kind === 'internal' && m.customer_id === SHARED_POOL_ID; // kho chung: khong rang buoc loai man/codec/thoi luong; may chu/worker chuyen ma
   const declared = (m.mime ?? '').toLowerCase();
   const got = head.contentType.toLowerCase().split(';')[0]!.trim();
   if (declared && got && got !== declared && got !== 'application/octet-stream') await reject('content_type_mismatch', `Loại tệp tải lên (${got}) khác loại đã khai báo (${declared}).`);
@@ -493,7 +493,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const u = c.get('user');
     const b = await parseBody(c, uploadBody);
     const customerId = await resolveOwner(c, b.customer_id);
-    const library = u.kind === 'internal'; // kho chung: nguoi noi bo, nhan moi dinh dang/codec, chuyen ma sau
+    const library = u.kind === 'internal' && customerId === SHARED_POOL_ID; // kho chung: nguoi noi bo, nhan moi dinh dang/codec, chuyen ma sau
     let mime = b.content_type.toLowerCase().split(';')[0]!.trim();
     if (library) {
       const lm = libraryMime(b.name, mime);

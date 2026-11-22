@@ -122,3 +122,13 @@ Khuyến nghị: khách trả tiền, đặc biệt tệp lớn và video, nên 
 - **Chẩn đoán an toàn** (bảng `creative_diag`, migration 0019, và audit `media.import_failed.diff.diag`): mã HTTP, content-type, `<title>`, 200 ký tự đầu đã làm sạch (bỏ script/thẻ, che chuỗi giống token), URL bước cuối và các bước (chỉ tên miền + đường dẫn + TÊN tham số, không giá trị), không cookie. Chỉ trả về cho tài khoản nội bộ (`diag` trong `GET /admin/v1/media`); cổng khách `/portal` không có trường này.
 
 **Dọn tệp kẹt `uploading`**: tệp quá 1 giờ chưa xác nhận (và không có phiên multipart đang mở) tự chuyển `rejected`/`invalid` với lý do "Tải lên không hoàn tất, hãy tải lại.", xóa mảnh trong kho, audit `media.upload_stale`. Chạy bởi cron (Worker mỗi phút, API Node mỗi phút) và đọc lười khi liệt kê (`GET /media`, tối đa 1 lần/60 giây). Phiên multipart đang mở vẫn do `sweepMultipart` (3 giờ). Trang Media: bộ lọc "Đang xử lý" và "Cần chỉnh sửa" có nút "Xóa tất cả tệp bị kẹt/lỗi" (qua `POST /media/bulk-delete`, có hộp xác nhận, gõ XOA khi > 5 tệp; "Đang xử lý" chỉ chọn tệp quá 30 phút hoặc nhập liên kết đã thất bại).
+
+## Kho chung: tải ảnh/video không cần chọn khách hàng (nhân viên nội bộ)
+
+- Nhân viên nội bộ (kind `internal`) tải thẳng vào **Kho chung** (khách hàng hệ thống `cu_shared_pool`, tạo tự động, ẩn khỏi danh sách khách hàng). Không cần chọn khách hàng; vẫn chọn được nếu muốn gắn khách (khi đó giữ chuẩn nghiêm ngặt như cũ, chỉ nhận MP4/MOV/WebM, PNG/JPG).
+- Không giới hạn định dạng/codec: MP4, MOV, AVI, FLV, RMVB, MKV, WebM, WMV, 3GP, MPEG, TS, VOB… và ảnh PNG, JPG, GIF, WebP, BMP, AVIF, HEIC. SVG/HTML bị từ chối. Mime lấy theo đuôi tệp.
+- Giới hạn dung lượng: video **1.600 MB**, ảnh **25 MB**. Không kiểm tra codec/độ phân giải/thời lượng/hạn mức khách hàng.
+- Tự chuyển sang MP4 H.264/AAC (faststart): (1) trên trình duyệt nếu giải mã được (WebCodecs); (2) nếu không, **media-worker (ffmpeg)** chuyển mã phía máy chủ và thay tệp gốc bằng `v1-playable.mp4`; (3) chưa có worker/ffmpeg, tệp quá `MEDIA_MAX_BYTES` hoặc chuyển mã lỗi thì chuyển `needs_manual_review` (tệp gốc được giữ).
+- Cloudflare Workers không có ffmpeg → chỉ MP4 H.264 tự sạch; còn lại chờ worker hoặc duyệt thủ công.
+- Worker đọc cả tệp vào RAM: với tệp tới 1.600 MB cần đặt `MEDIA_MAX_BYTES` (ví dụ 2147483648) và đủ RAM; mặc định 512 MB.
+- Luồng đối tác/khách hàng (portal) không đổi.

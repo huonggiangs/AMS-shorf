@@ -63,6 +63,35 @@ const uploadRoutes = (status = 'approved', extra: Record<string, unknown> = {}) 
 beforeEach(() => { calls.length = 0; routes = []; localStorage.clear(); m.probe.mockReset(); m.transcode.mockReset(); m.supported.mockReset(); m.supported.mockReturnValue(true); });
 afterEach(() => vi.unstubAllGlobals());
 
+describe('Tai vao Kho chung (khong chon khach hang)', () => {
+  const openLibrary = async () => {
+    await userEvent.click(await screen.findByRole('button', { name: /Tải nội dung mới/ }));
+    return screen.findByRole('dialog', { name: 'Tải nội dung' });
+  };
+  it('nhan tep .avi, khong gui customer_id, mac dinh Kho chung', async () => {
+    routes.push(me, customers, ...uploadRoutes('approved'));
+    vi.stubGlobal('fetch', mockFetch());
+    m.probe.mockResolvedValue(src({ codec: 'mpeg4', container: 'avi', sizeBytes: 5 * MB }));
+    m.transcode.mockImplementation(async (f: File) => new File([f], 'x.mp4', { type: 'video/mp4' }));
+    mount();
+    const dlg = await openLibrary();
+    expect(within(dlg).getByLabelText('Khách hàng sở hữu nội dung')).toHaveValue('');
+    await pickFile(dlg, 'phim.avi', '');
+    await userEvent.click(await within(dlg).findByRole('button', { name: /Chuyển sang H.264 và tải lên|Tải lên/ }));
+    await waitFor(() => expect(calls.find((c) => c.path === '/api/admin/v1/media/upload-url')).toBeTruthy());
+    const body = calls.find((c) => c.path === '/api/admin/v1/media/upload-url')!.body as Record<string, unknown>;
+    expect(body.customer_id).toBeUndefined();
+  });
+  it('van chan tep khong phai video/anh (.exe)', async () => {
+    routes.push(me, customers);
+    vi.stubGlobal('fetch', mockFetch());
+    mount();
+    const dlg = await openLibrary();
+    await userEvent.upload(within(dlg).getByLabelText('Chọn tệp để tải lên'), new File([new Uint8Array(4)], 'setup.exe', { type: 'application/x-msdownload' }), { applyAccept: false });
+    expect(await within(dlg).findByText(/Chỉ nhận tệp video hoặc ảnh/)).toBeInTheDocument();
+  });
+});
+
 describe('Tai noi dung moi: MOT luong', () => {
   it('AV1 4K doc: bao can chuyen bang loi don gian, nut lon "Tu dong chuyen sang chuan phat duoc", mot thanh tien do chung (chuyen 0-60%, tai len 60%+), huy duoc, xong hien thong bao + da chuyen', async () => {
     routes.push(me, customers, ...uploadRoutes('approved'));

@@ -30,16 +30,24 @@ interface Dims { width?: number; height?: number; duration_sec?: number }
 interface Analysis { src: SourceInfo | null; isVideo: boolean; dims: Dims }
 interface Done { name: string; status: string | null; thumb: string | null; warnings: string[]; converted: boolean; sizeNote: string }
 
-const guessType = (f: File): string => {
-  if (f.type) return f.type;
-  if (/\.mp4$/i.test(f.name)) return 'video/mp4';
-  if (/\.mov$/i.test(f.name)) return 'video/quicktime';
-  if (/\.webm$/i.test(f.name)) return 'video/webm';
-  if (/\.png$/i.test(f.name)) return 'image/png';
-  if (/\.jpe?g$/i.test(f.name)) return 'image/jpeg';
-  return '';
+const EXT_MIME: Record<string, string> = {
+  mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', avi: 'video/x-msvideo', flv: 'video/x-flv', rmvb: 'video/vnd.rn-realvideo', rm: 'video/vnd.rn-realvideo',
+  wmv: 'video/x-ms-wmv', asf: 'video/x-ms-asf', '3gp': 'video/3gpp', '3g2': 'video/3gpp2', mpg: 'video/mpeg', mpeg: 'video/mpeg', ts: 'video/mp2t', mts: 'video/mp2t', m2ts: 'video/mp2t', vob: 'video/mpeg', ogv: 'video/ogg', f4v: 'video/x-f4v', divx: 'video/x-msvideo',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif', tif: 'image/tiff', tiff: 'image/tiff',
+};
+/** Kho chung (nhân viên): mọi video/ảnh phổ biến; trình duyệt thường để trống hoặc khai sai type cho AVI/MKV/FLV/RMVB → ưu tiên đuôi tệp. */
+export const guessType = (f: File): string => {
+  const ext = (f.name.split('.').pop() ?? '').toLowerCase();
+  if (EXT_MIME[ext]) return EXT_MIME[ext]!;
+  return f.type || '';
 };
 export const isAcceptedType = (t: string): boolean => /^(video\/(mp4|quicktime|webm)|image\/(png|jpeg))$/.test(t);
+/** Nhân viên: nhận mọi video và ảnh (trừ SVG); khách hàng/đối tác: giữ quy định cũ. */
+export const isLibraryType = (t: string): boolean => (t.startsWith('video/') || t.startsWith('image/') && !t.includes('svg') || /^application\/vnd\.rn-realmedia/.test(t));
+export const LIBRARY_VIDEO_MAX = 1600 * MB;
+export const LIBRARY_IMAGE_MAX = 25 * MB;
+export const LIBRARY_LIMIT_TEXT =
+  'Kho chung nhận mọi định dạng video (MP4, MOV, AVI, FLV, RMVB, MKV, WebM, WMV, 3GP, MPEG, TS…) với mọi chuẩn nén (H.264, H.265/HEVC, VP8/VP9, AV1, MPEG-2/4, ProRes…) tối đa 1.600 MB, và ảnh PNG, JPG, GIF, WebP, BMP, AVIF, HEIC tối đa 25 MB. Video không phải MP4 H.264 được tự động chuyển sang MP4 H.264/AAC: ngay trên trình duyệt nếu máy giải mã được, nếu không thì máy chủ chuyển mã (cần media-worker; chưa có worker thì tệp chờ duyệt thủ công). Không gắn khách hàng thì tệp nằm trong Kho chung và dùng được cho mọi chương trình phát sóng. Tệp lớn hơn 90 MB được tải lên từng phần (hiện % tiến độ, có thể hủy).';
 
 const readDims = (f: File): Promise<Dims> =>
   new Promise((res) => {
@@ -107,6 +115,7 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
   const fileInput = useRef<HTMLInputElement | null>(null);
   const custs = useQuery({ queryKey: ['/admin/v1/customers', 'pick'], enabled: open && !base.isExternal, queryFn: () => api.get('/admin/v1/customers', { query: { page_size: 200 }, schema: listOf(customerSchema) }) });
   const working = stage === 'working';
+  const library = !base.isExternal && !customerId; // nhân viên không gắn khách hàng: Kho chung, mọi định dạng/codec; chọn khách hàng cụ thể thì giữ chuẩn nghiêm ngặt
 
   // đang chuyển/tải: cảnh báo khi người dùng đóng tab
   useEffect(() => {
@@ -129,9 +138,9 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
     convertedRef.current = null;
     if (!f) { setFile(null); setAn(null); setStage('pick'); return; }
     const type = guessType(f);
-    if (!isAcceptedType(type)) {
+    if (!(library ? isLibraryType(type) : isAcceptedType(type))) {
       setFile(null); setAn(null); setStage('pick');
-      setErr('Chỉ nhận video MP4, MOV, WebM hoặc ảnh PNG, JPG.');
+      setErr(library ? 'Chỉ nhận tệp video hoặc ảnh (MP4, MOV, AVI, FLV, RMVB, MKV, WebM, PNG, JPG, GIF, WebP…).' : 'Chỉ nhận video MP4, MOV, WebM hoặc ảnh PNG, JPG.');
       return;
     }
     setFile(f);
@@ -169,17 +178,36 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
 
   const a = useMemo(() => (an?.src ? assessSource(an.src, target) : null), [an, target]);
   const canConvert = webCodecsSupported();
-  const required = !!a?.needsConvert;
-  const needTrim = !!a?.trimTo;
+  // Kho chung: chỉ chuyển khi codec/container chưa phải MP4 H.264 và trình duyệt giải mã được (không ép thời lượng/tỉ lệ/loại màn); còn lại máy chủ chuyển mã sau.
+  const libNeedsConvert = library && !!an?.src && (an.src.codec !== 'avc' || !['mp4', 'mov', 'm4v'].includes(an.src.container));
+  const required = !library && !!a?.needsConvert;
+  const needTrim = !library && !!a?.trimTo;
   // chuyển khi: bắt buộc, hoặc cần cắt ngắn, hoặc nên chuyển và người dùng để bật
-  const willConvert = !!a && (a.needsConvert || (needTrim && trim) || (a.offerConvert && autoConvert)) && (canConvert || a.needsConvert || (needTrim && trim));
-  const plan = useMemo(() => (an?.src ? pickSettings(an.src, target, { ceiling, trim: needTrim && trim }) : null), [an, target, ceiling, trim, needTrim]);
+  const willConvert = library
+    ? libNeedsConvert && canConvert && autoConvert
+    : !!a && (a.needsConvert || (needTrim && trim) || (a.offerConvert && autoConvert)) && (canConvert || a.needsConvert || (needTrim && trim));
+  const plan = useMemo(() => {
+    if (!an?.src) return null;
+    const p = pickSettings(an.src, target, { ceiling, trim: !library && needTrim && trim });
+    if (library) {
+      // bitrate theo bậc chuẩn, không bó theo tần dung lượng của loại màn (kho chung không giới hạn theo màn)
+      const tierBps = RULES[target].tiers.find((x) => x.label === p.settings.tierLabel)?.videoBps;
+      if (tierBps) p.settings.videoBps = tierBps;
+      return { ...p, tooBig: false };
+    }
+    return p;
+  }, [an, target, ceiling, trim, needTrim, library]);
   const blockers: string[] = [];
-  if (a && willConvert && !canConvert) blockers.push(TRANSCODE_MESSAGES.unsupported_browser);
-  if (a?.blockers.includes('too_short')) blockers.push(`Video quá ngắn (tối thiểu ${RULES[target].durationMin} giây cho màn này). Hãy chọn video dài hơn.`);
-  if (a && needTrim && !trim) blockers.push(`Video dài ${fmtDuration(an!.src!.durationSec)}, màn này nhận tối đa ${a.trimTo} giây. Hãy tích "Cắt lấy ${a.trimTo} giây đầu" bên dưới, hoặc chọn video ngắn hơn.`);
-  if (plan?.tooBig && willConvert) blockers.push(TRANSCODE_MESSAGES.too_big);
-  if (an && !an.isVideo && file && file.size > MAX_IMAGE_BYTES) blockers.push(`Ảnh ${fmtMb(file.size)} lớn hơn giới hạn ${MAX_IMAGE_BYTES / MB} MB.`);
+  if (!library) {
+    if (a && willConvert && !canConvert) blockers.push(TRANSCODE_MESSAGES.unsupported_browser);
+    if (a?.blockers.includes('too_short')) blockers.push(`Video quá ngắn (tối thiểu ${RULES[target].durationMin} giây cho màn này). Hãy chọn video dài hơn.`);
+    if (a && needTrim && !trim) blockers.push(`Video dài ${fmtDuration(an!.src!.durationSec)}, màn này nhận tối đa ${a.trimTo} giây. Hãy tích "Cắt lấy ${a.trimTo} giây đầu" bên dưới, hoặc chọn video ngắn hơn.`);
+    if (plan?.tooBig && willConvert) blockers.push(TRANSCODE_MESSAGES.too_big);
+    if (an && !an.isVideo && file && file.size > MAX_IMAGE_BYTES) blockers.push(`Ảnh ${fmtMb(file.size)} lớn hơn giới hạn ${MAX_IMAGE_BYTES / MB} MB.`);
+  } else if (file && an) {
+    if (an.isVideo && file.size > LIBRARY_VIDEO_MAX) blockers.push(`Video ${fmtMb(file.size)} lớn hơn giới hạn ${LIBRARY_VIDEO_MAX / MB} MB.`);
+    if (!an.isVideo && file.size > LIBRARY_IMAGE_MAX) blockers.push(`Ảnh ${fmtMb(file.size)} lớn hơn giới hạn ${LIBRARY_IMAGE_MAX / MB} MB.`);
+  }
 
   const linkSource = url.trim() ? detectLinkSource(url) : null;
   const linkCheck = url.trim() && linkSource ? checkMediaUrl(linkSource, url) : url.trim() ? { ok: false, message: 'Liên kết không hợp lệ.' } : null;
@@ -208,7 +236,7 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
       }
       dims = { width: plan.settings.width, height: plan.settings.height, duration_sec: Math.round(plan.settings.outDurationSec) };
       const cap = RULES[target].maxBytes;
-      if (toSend.size > cap) throw new TranscodeError('too_big', `${TRANSCODE_MESSAGES.too_big} (${fmtMb(toSend.size)} / ${cap / MB} MB)`);
+      if (!library && toSend.size > cap) throw new TranscodeError('too_big', `${TRANSCODE_MESSAGES.too_big} (${fmtMb(toSend.size)} / ${cap / MB} MB)`);
     }
     const sendType = guessType(toSend);
     const fkey = `${toSend.name}|${toSend.size}|${toSend.lastModified}`;
@@ -248,7 +276,6 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
 
   const submit = async () => {
     setErr('');
-    if (!base.isExternal && !customerId) return setErr('Chọn khách hàng sở hữu nội dung này.');
     const oe = overlayError(ov);
     if (oe) return setErr(oe);
     if (file) {
@@ -293,7 +320,7 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
   const src = an?.src ?? null;
   const reasons: Reason[] = a ? [...a.required, ...a.recommended.filter((r) => r !== 'container' || !a.required.length)] : [];
   const eta = plan && willConvert ? estimateSeconds(plan.settings.outDurationSec, plan.settings.width, plan.settings.height) : 0;
-  const primaryLabel = working ? t('Đang tải…') : file ? (willConvert ? 'Tự động chuyển sang chuẩn phát được' : 'Tải lên') : 'Nhập từ liên kết';
+  const primaryLabel = working ? t('Đang tải…') : file ? (willConvert ? (library ? 'Chuyển sang H.264 và tải lên' : 'Tự động chuyển sang chuẩn phát được') : 'Tải lên') : 'Nhập từ liên kết';
   const canSubmit = !working && (file ? stage === 'ready' && !blockers.length : !!linkCheck?.ok && linkSource !== 'youtube') && !(stage === 'checking');
 
   return (
@@ -322,9 +349,9 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
         ) : (
           <>
             {!base.isExternal ? (
-              <Field label="Khách hàng sở hữu nội dung" hint="Nội dung do nhân viên tải lên được gắn vào ví và hợp đồng của khách hàng này.">
-                <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required aria-label="Khách hàng sở hữu nội dung" disabled={working}>
-                  <option value="">— Chọn khách hàng —</option>
+              <Field label="Gắn khách hàng (không bắt buộc)" hint="Để trống: tệp vào Kho chung, dùng được cho mọi chương trình phát sóng. Chọn khách hàng nếu nội dung thuộc ví và hợp đồng của họ.">
+                <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label="Khách hàng sở hữu nội dung" disabled={working}>
+                  <option value="">Kho chung (không gắn khách hàng)</option>
                   {(custs.data?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.short_name || c.legal_name}{c.code ? ` (${c.code})` : ''}</option>)}
                 </select>
               </Field>
@@ -337,8 +364,8 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
               onDrop={(e) => { e.preventDefault(); setDrag(false); if (!working) void pick(e.dataTransfer.files?.[0] ?? null); }}
               style={{ display: 'block', border: `2px dashed ${drag ? 'var(--pri, #2563EB)' : 'var(--line, #CBD5E1)'}`, borderRadius: 16, padding: '22px 16px', textAlign: 'center', cursor: working ? 'default' : 'pointer', background: drag ? 'var(--pri-t, #EFF6FF)' : 'transparent', margin: '8px 0' }}
             >
-              <input ref={fileInput} type="file" aria-label="Chọn tệp để tải lên" accept="video/mp4,video/quicktime,video/webm,image/png,image/jpeg" disabled={working} onChange={(e) => void pick(e.target.files?.[0] ?? null)} style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }} />
-              {file ? <><b>{file.name}</b><div style={{ color: 'var(--mut)', fontSize: 13 }}>{fmtMb(file.size)} · bấm để chọn tệp khác</div></> : <><b>Kéo tệp vào đây</b> hoặc bấm để chọn<div style={{ color: 'var(--mut)', fontSize: 13, marginTop: 4 }}>Video (MP4, MOV, WebM) hoặc ảnh (PNG, JPG)</div></>}
+              <input ref={fileInput} type="file" aria-label="Chọn tệp để tải lên" accept={library ? 'video/*,image/*,.mkv,.avi,.flv,.rmvb,.rm,.wmv,.3gp,.mpg,.mpeg,.ts,.m2ts,.vob,.heic,.heif' : 'video/mp4,video/quicktime,video/webm,image/png,image/jpeg'} disabled={working} onChange={(e) => void pick(e.target.files?.[0] ?? null)} style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }} />
+              {file ? <><b>{file.name}</b><div style={{ color: 'var(--mut)', fontSize: 13 }}>{fmtMb(file.size)} · bấm để chọn tệp khác</div></> : <><b>Kéo tệp vào đây</b> hoặc bấm để chọn<div style={{ color: 'var(--mut)', fontSize: 13, marginTop: 4 }}>{library ? 'Mọi định dạng video (MP4, MOV, AVI, FLV, RMVB, MKV, WebM…) hoặc ảnh (PNG, JPG, GIF, WebP…)' : 'Video (MP4, MOV, WebM) hoặc ảnh (PNG, JPG)'}</div></>}
             </label>
 
             {stage === 'checking' ? <p role="status" style={{ margin: '8px 0' }}>Đang kiểm tra tệp…</p> : null}
@@ -346,7 +373,33 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
             {/* kết quả kiểm tra, ngôn ngữ đơn giản */}
             {stage !== 'checking' && file && an ? (
               <div style={{ margin: '8px 0' }}>
-                {an.isVideo && src && a ? (
+                {library ? (
+                  <>
+                    <p role="status" aria-label="Kết quả kiểm tra" style={{ margin: '0 0 6px', padding: '10px 12px', borderRadius: 12, background: an.isVideo && (!src || libNeedsConvert) ? 'var(--warn-t, #FEF3C7)' : 'var(--ok-t, #DCFCE7)' }}>
+                      {!an.isVideo
+                        ? 'Ảnh sẽ được tải lên Kho chung.'
+                        : !src
+                          ? 'Trình duyệt chưa đọc được video này (định dạng/codec đặc biệt). Tệp vẫn được tải lên nguyên bản; máy chủ sẽ chuyển sang MP4 H.264/AAC (cần media-worker, nếu chưa có thì chờ duyệt thủ công).'
+                          : libNeedsConvert
+                            ? (willConvert ? 'Video sẽ được tự động chuyển sang MP4 H.264/AAC ngay trên máy bạn rồi tải lên.' : 'Video sẽ được tải nguyên bản; máy chủ chuyển sang MP4 H.264/AAC sau khi tải (cần media-worker).')
+                            : 'Video đã là MP4 H.264, tải lên ngay được.'}
+                    </p>
+                    <p aria-label="Thông tin tệp" style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--mut)' }}>
+                      {src
+                        ? `Phát hiện: ${src.container.toUpperCase()} · ${src.codec ? src.codec.toUpperCase() : 'không rõ codec'} · ${src.width}×${src.height} · ${fmtDuration(src.durationSec)} · ${fmtMb(src.sizeBytes)}`
+                        : `Phát hiện: ${(file.name.split('.').pop() ?? '').toUpperCase()}${an.dims.width ? ` · ${an.dims.width}×${an.dims.height}` : ''} · ${fmtMb(file.size)}`}
+                    </p>
+                    {libNeedsConvert && canConvert ? (
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0', fontSize: 14 }}>
+                        <input type="checkbox" checked={autoConvert} disabled={working} onChange={(e) => setAutoConvert(e.target.checked)} />
+                        Chuyển sang MP4 H.264 ngay trên máy tôi trước khi tải (không cần chờ máy chủ)
+                      </label>
+                    ) : null}
+                    {libNeedsConvert && canConvert && autoConvert && plan ? (
+                      <p style={{ margin: '6px 0', fontSize: 13, color: 'var(--mut)' }}>{`Thông số: ${plan.settings.tierLabel}, dự kiến khoảng ${fmtDuration(eta)}. Hãy giữ tab này mở trong lúc chuyển.`}</p>
+                    ) : null}
+                  </>
+                ) : an.isVideo && src && a ? (
                   <>
                     <p role="status" aria-label="Kết quả kiểm tra" style={{ margin: '0 0 6px', padding: '10px 12px', borderRadius: 12, background: a.needsConvert ? 'var(--warn-t, #FEF3C7)' : 'var(--ok-t, #DCFCE7)' }}>
                       {a.needsConvert ? 'Tệp này cần chuyển sang chuẩn phát được trước khi tải lên.' : a.offerConvert ? 'Tệp dùng được, nhưng nên chuyển sang chuẩn phổ biến nhất để phát mượt hơn.' : 'Tệp đạt chuẩn, có thể tải lên ngay.'}
@@ -418,7 +471,7 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
 
             <details style={{ marginTop: 6 }}>
               <summary style={{ cursor: 'pointer', fontSize: 13 }}>Giới hạn và quy định</summary>
-              <p style={{ fontSize: 12.5, color: 'var(--mut)' }}>{UPLOAD_LIMIT_TEXT}</p>
+              <p style={{ fontSize: 12.5, color: 'var(--mut)' }}>{library ? LIBRARY_LIMIT_TEXT : UPLOAD_LIMIT_TEXT}</p>
             </details>
 
             {prog ? (

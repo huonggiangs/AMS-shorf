@@ -135,3 +135,92 @@ describe.skipIf(!hasFf)('ffmpeg that', () => {
     expect((await w.process(fake)).code).toBe('unreadable_media');
   });
 });
+
+describe('kho chung (tai len noi bo): moi dinh dang/codec, chuyen ma THAY tep goc', () => {
+  async function seedLib(bytes: Uint8Array, name: string, mime: string): Promise<string> {
+    const id = `CR${++n}`;
+    const key = `media/C1/${id}/${name}`;
+    await rt.objects.put(key, bytes, mime);
+    await rt.db.run(
+      `INSERT INTO creatives (id, customer_id, name, target_type, px_w, px_h, kind, source, storage_key, mime, size_bytes, uploader_kind, scan_state, review_state, state, created_at)
+       VALUES (?,?,?,NULL,NULL,NULL,'video','upload',?,?,?,'internal','pending','pending','pending_review',?)`,
+      [id, 'C1', name, key, mime, bytes.length, NOW],
+    );
+    return id;
+  }
+  const probeOf = (codec: string, w = 1920, h = 1080, dur = 120) => ({ kind: 'video' as const, width: w, height: h, durationS: dur, codec, hasAudio: true, bitrate: 4_000_000 });
+
+  it('AVI/HEVC: khong rang buoc loai man/thoi luong (120 s, 1920x1080); chuyen sang MP4 H.264, THAY storage_key/mime, xoa tep goc, clean', async () => {
+    const id = await seedLib(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9]), 'phim.avi', 'video/x-msvideo');
+    const fake = new FakeMedia({ probe: probeOf('hevc') });
+    const w = createMediaWorker(rt, { media: fake });
+    expect((await w.process(id)).outcome).toBe('processed');
+    const r = await row(id);
+    expect(r['scan_state']).toBe('clean');
+    expect(r['mime']).toBe('video/mp4');
+    expect(String(r['storage_key'])).toMatch(/v1-playable\.mp4$/);
+    expect(r['px_w']).toBe(1280); // thong so tu ban chuyen ma (FakeMedia)
+    expect(r['codec']).toBe('h264');
+    expect(await rt.objects.head(`media/C1/${id}/phim.avi`)).toBeNull();
+    expect(await rt.objects.head(String(r['storage_key']))).not.toBeNull();
+    expect(fake.transcodes).toBe(1);
+  });
+  it('MP4 H.264 san co: khong chuyen ma lai, chi ghi kich thuoc/thoi luong that', async () => {
+    const id = await seedLib(Buffer.from('\0\0\0\x18ftypmp42\0\0\0\0mp42isom'), 'ok.mp4', 'video/mp4');
+    const fake = new FakeMedia({ probe: probeOf('h264', 1080, 1920, 45) });
+    await createMediaWorker(rt, { media: fake }).process(id);
+    const r = await row(id);
+    expect(fake.transcodes).toBe(0);
+    expect(r).toMatchObject({ scan_state: 'clean', px_w: 1080, px_h: 1920, orientation: 'portrait', duration_s: 45 });
+    expect(String(r['storage_key'])).toMatch(/ok\.mp4$/);
+  });
+  it('khong co ffmpeg: cho duyet thu cong voi ly do ro rang (khong tu choi, khong ket vinh vien o pending)', async () => {
+    const id = await seedLib(new Uint8Array([9, 9, 9]), 'x.mkv', 'video/x-matroska');
+    const res = await createMediaWorker(rt, { media: new FakeMedia({ unavailable: true }) }).process(id);
+    expect(res.outcome).toBe('processed');
+    const r = await row(id);
+    expect(r['scan_state']).toBe('needs_manual_review');
+    expect(String(r['review_note'])).toContain('media-worker');
+  });
+  it('tep khong doc duoc: tu choi voi thong bao tieng Viet', async () => {
+    const id = await seedLib(new Uint8Array([0, 1]), 'hong.flv', 'video/x-flv');
+    const res = await createMediaWorker(rt, { media: new FakeMedia({ probe: new Error('invalid data') }) }).process(id);
+    expect(res.outcome).toBe('rejected');
+    expect(res.code).toBe('unreadable_media');
+  });
+  it('chuyen ma loi: cho duyet thu cong, giu tep goc', async () => {
+    const id = await seedLib(new Uint8Array([1, 2, 3]), 'l.rmvb', 'video/vnd.rn-realvideo');
+    const bad = new FakeMedia({ probe: probeOf('rv40') });
+    bad.toPlayableMp4 = async () => { throw new Error('ffmpeg crashed'); };
+    await createMediaWorker(rt, { media: bad }).process(id);
+    const r = await row(id);
+    expect(r['scan_state']).toBe('needs_manual_review');
+    expect(await rt.objects.head(`media/C1/${id}/l.rmvb`)).not.toBeNull();
+  });
+});
+
+describe.skipIf(!hasFf)('kho chung voi ffmpeg that', () => {
+  it.each([['avi', 'mpeg4'], ['mkv', 'libx265'], ['flv', 'flv'], ['webm', 'libvpx-vp9']])('chuyen .%s (%s) sang MP4 H.264 phat duoc', async (ext, codec) => {
+    const dir = mkdtempSync(join(tmpdir(), 'lib-'));
+    try {
+      const f = join(dir, `in.${ext}`);
+      execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=10:duration=2', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2', '-c:v', codec, ...(ext === 'flv' ? ['-c:a', 'mp3'] : ext === 'webm' ? ['-c:a', 'libopus'] : ['-c:a', 'aac']), '-shortest', f], { stdio: 'ignore' });
+      const bytes = readFileSync(f);
+      const id = `CR${++n}`;
+      const key = `media/C1/${id}/in.${ext}`;
+      await rt.objects.put(key, bytes, 'video/x-test');
+      await rt.db.run(
+        `INSERT INTO creatives (id, customer_id, name, kind, source, storage_key, mime, size_bytes, uploader_kind, scan_state, review_state, state, created_at) VALUES (?,?,?,'video','upload',?,?,?,'internal','pending','pending','pending_review',?)`,
+        [id, 'C1', `in.${ext}`, key, 'video/x-test', bytes.length, NOW],
+      );
+      const w = createMediaWorker(rt, { media: new FfmpegTools({ threads: 1 }) });
+      expect((await w.process(id)).outcome).toBe('processed');
+      const r = await row(id);
+      expect(r).toMatchObject({ scan_state: 'clean', mime: 'video/mp4', px_w: 320, px_h: 180, codec: 'h264' });
+      const out = await rt.objects.get(String(r['storage_key']));
+      expect(sniff(out!)).toBe('mp4');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+});

@@ -33,6 +33,8 @@ export interface MediaTools {
   available(): Promise<boolean>;
   probe(bytes: Uint8Array, ext: string): Promise<ProbeResult>;
   transcode(bytes: Uint8Array, ext: string, probe: ProbeResult, target: TargetKind): Promise<Rendition[]>;
+  /** Kho chung: chuyen MOI dinh dang/codec video sang MP4 H.264/AAC (giu kich thuoc/ti le, chan le -> chan) de thiet bi phat duoc. */
+  toPlayableMp4(bytes: Uint8Array, ext: string, probe: ProbeResult): Promise<Rendition>;
 }
 
 /** Ho so TV-safe (DAC-TA muc 6): H.264 yuv420p faststart; thang may <=1080x1920, <=8 Mbps; LED/thang may khong am thanh; anh -> webp (tru LED: can dung PNG/JPG). */
@@ -99,6 +101,19 @@ export class FfmpegTools implements MediaTools {
     });
   }
 
+  async toPlayableMp4(bytes: Uint8Array, ext: string, p: ProbeResult): Promise<Rendition> {
+    const threads = this.o.threads ?? 2;
+    return this.withTmp(async (dir) => {
+      const inp = join(dir, `in.${ext}`);
+      const out = join(dir, 'out.mp4');
+      await writeFile(inp, bytes);
+      const args = ['-y', '-v', 'error', '-i', inp, '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'libx264', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-threads', String(threads), out];
+      await exec(this.ff, args, { timeout: this.o.timeoutMs ?? 600_000, maxBuffer: 8 * 1024 * 1024 });
+      const rp = await this.probe(await readFile(out), 'mp4');
+      return { profile: 'library-h264', ext: 'mp4', contentType: 'video/mp4', body: await readFile(out), width: rp.width, height: rp.height, codec: rp.codec ?? 'h264' };
+    });
+  }
+
   async transcode(bytes: Uint8Array, ext: string, p: ProbeResult, target: TargetKind): Promise<Rendition[]> {
     const threads = this.o.threads ?? 2;
     return this.withTmp(async (dir) => {
@@ -131,5 +146,9 @@ export class FakeMedia implements MediaTools {
   async transcode(): Promise<Rendition[]> {
     this.transcodes++;
     return this.o.renditions ?? [];
+  }
+  async toPlayableMp4(): Promise<Rendition> {
+    this.transcodes++;
+    return this.o.renditions?.[0] ?? { profile: 'library-h264', ext: 'mp4', contentType: 'video/mp4', body: new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70]), width: 1280, height: 720, codec: 'h264' };
   }
 }
