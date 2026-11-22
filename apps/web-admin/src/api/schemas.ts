@@ -173,6 +173,27 @@ export type Contract = z.infer<typeof contractSchema>;
 export const contractRenderSchema = z.object({ html: z.string(), amount_in_words: z.string().optional() }).passthrough();
 
 /* ---------- media ---------- */
+export const streamInfoSchema = z.object({ codec: z.string().nullish(), audio_codec: z.string().nullish(), width: z.coerce.number().nullish(), height: z.coerce.number().nullish(), duration_s: z.coerce.number().nullish(), fps: z.coerce.number().nullish(), resolution_label: z.string().nullish() }).passthrough();
+export type StreamInfo = z.infer<typeof streamInfoSchema>;
+export const streamSchema = z
+  .object({
+    delivery: z.string().optional(),
+    stream_url: z.string(),
+    stream_host: z.string().optional(),
+    stream_kind: z.string(),
+    declared_duration_s: z.coerce.number(),
+    probe_status: z.string().default('ok'),
+    needs_review: z.boolean().default(false),
+    content_type: z.string().nullish(),
+    content_length: z.coerce.number().nullish(),
+    etag: z.string().nullish(),
+    last_modified: z.string().nullish(),
+    checked_at: z.string().nullish(),
+    info: streamInfoSchema.nullish(),
+    warnings: z.array(z.object({ code: z.string().optional(), message: z.string() })).default([]),
+    reason: z.string().nullish(),
+  })
+  .passthrough();
 export const mediaSchema = z
   .object({
     id: idStr,
@@ -217,6 +238,9 @@ export const mediaSchema = z
     warnings: z.array(z.string()).default([]),
     /** chẩn đoán kỹ thuật của lần nhập liên kết thất bại: CHỈ tài khoản nội bộ (admin) nhận được */
     diag: z.object({ code: z.string().optional(), http: z.number().nullish(), content_type: z.string().nullish(), title: z.string().nullish(), snippet: z.string().nullish(), final_url: z.string().nullish() }).passthrough().nullish(),
+    /** upload (mặc định) | stream (dán link: TV phát trực tiếp, máy chủ không giữ tệp) */
+    delivery: z.string().nullish(),
+    stream: streamSchema.nullish(),
   })
   .passthrough();
 export type Media = z.infer<typeof mediaSchema>;
@@ -566,6 +590,8 @@ export const scanQueueItemSchema = z
     sha256: z.string().nullish(),
     reasons: z.array(z.string()).default([]),
     preview_url: z.string().nullish(),
+    delivery: z.string().nullish(),
+    stream: streamSchema.nullish(),
   })
   .passthrough();
 export type ScanQueueItem = z.infer<typeof scanQueueItemSchema>;

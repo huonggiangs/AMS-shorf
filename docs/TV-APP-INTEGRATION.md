@@ -51,6 +51,10 @@ Vùng vẽ theo ADS.png (tỷ lệ theo chiều cao/1080): hàng trên (chip tà
 
 Cột `creatives.overlay`/`format` và các route `PUT /:id/overlay`, manifest có `overlay` đã được a1/a3 làm. Lược đồ TV khớp phần giao nhau; phần còn thiếu nằm ở mục 3 của tệp yêu cầu.
 
+### 3b. Creative dán link (`delivery: "stream"`)
+
+Manifest có thể chứa creative `delivery: "stream"` (`url`, `kind` mp4/webm/hls/dash, `duration_ms`, `etag`; không `sha256`, không `size_bytes`). App phải: phát trực tiếp bằng ExoPlayer/Media3 (không tải vào bộ nhớ đệm bắt buộc, không kiểm sha256), **bỏ qua và chuyển creative kế tiếp khi stream lỗi**, ghi log lỗi theo `creative_id` (chưa có loại sự kiện lỗi riêng trong giao thức; không gửi `impression` cho lượt lỗi), và gửi `impression` với `played_ms` thực (rebuffer làm `played_ms` ngắn đi; dưới 0.9 x `duration_ms` thì không hợp lệ). Không giảm bitrate/fps/độ phân giải khi phát. Chi tiết: `DEVICE-PROTOCOL.md` mục 7.0, `VIDEO-LINK.md`. Trang YouTube/Vimeo không phải stream trực tiếp: nằm ngoài phạm vi (AMS từ chối khi dán).
+
 ## 8. Rủi ro và tuân thủ
 
 (Mục số 8 được giữ để khớp tham chiếu trong PATCH-NOTES.)

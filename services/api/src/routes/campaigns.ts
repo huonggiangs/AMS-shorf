@@ -232,6 +232,13 @@ async function attachMedia(c: Ctx, db: Db, campaignId: string, customerId: strin
        ON CONFLICT (creative_id) DO NOTHING`,
       [newId, nowIso, m.id],
     );
+    // ban sao video dan link: giu nguyen URL/binding/trang thai kiem tra cua ban goc
+    await db.run(
+      `INSERT INTO creative_stream (creative_id, delivery, stream_url, stream_kind, declared_duration_s, content_type, content_length, etag, last_modified, body_hash, binding, probe_status, probe_detail, fail_count, needs_review, checked_at, full_view_by, full_view_at, approved_binding, approved_at, created_at)
+       SELECT ?, delivery, stream_url, stream_kind, declared_duration_s, content_type, content_length, etag, last_modified, body_hash, binding, probe_status, probe_detail, fail_count, needs_review, checked_at, full_view_by, full_view_at, approved_binding, approved_at, created_at FROM creative_stream WHERE creative_id = ?
+       ON CONFLICT (creative_id) DO NOTHING`,
+      [newId, m.id],
+    );
   }
 }
 

@@ -18,7 +18,7 @@ server {
     add_header X-Frame-Options DENY always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
     # CSP: media/ảnh có thể đến từ Caddy cục bộ (:9000) hoặc R2; QR SePay từ qr.sepay.vn
-    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob: https://qr.sepay.vn http://localhost:9000 https:; media-src 'self' blob: http://localhost:9000 https:; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:9000 https:; frame-ancestors 'none'; base-uri 'self'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://qr.sepay.vn http://localhost:9000 https:; media-src 'self' blob: http://localhost:9000 https:; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:9000 https:; frame-ancestors 'none'; base-uri 'self'" always;
 
     location = /healthz {
         access_log off;

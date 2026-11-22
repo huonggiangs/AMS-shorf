@@ -55,7 +55,9 @@ export async function syncKidFlags(db: Db, id: string, overlayJson: string | nul
 /** Ghi nhan duyet gan voi phien ban + dau van tay hien tai. */
 export async function recordApproval(db: Db, row: { id: string; sha256?: string | null; storage_key?: string | null; size_bytes?: unknown; source_url?: string | null; format?: string | null; overlay?: string | null }, nowIso: string): Promise<{ version: number; hash: string }> {
   const sec = await getCreativeSec(db, row.id);
-  const hash = await contentHash(row);
+  // creative stream (0023): khong co sha256/tep; dau van tay = binding (URL + ETag + do dai + Last-Modified), doi noi dung xa => doi hash
+  const sf = (await db.query<{ binding: string }>('SELECT binding FROM creative_stream WHERE creative_id = ?', [row.id]))[0];
+  const hash = await contentHash(sf ? { ...row, sha256: `stream:${sf.binding}` } : row);
   await db.run(
     `INSERT INTO creative_security (creative_id, content_version, approved_version, approved_hash, updated_at) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT (creative_id) DO UPDATE SET approved_version = excluded.approved_version, approved_hash = excluded.approved_hash, updated_at = excluded.updated_at`,

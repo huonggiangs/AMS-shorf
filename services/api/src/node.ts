@@ -10,6 +10,7 @@ import { pruneOutboxAll, sweepOutbox } from './outbox.js';
 import { mountFinanceRoutes } from './finance-mount.js';
 import type { FinancePort } from './ports.js';
 import { opsTick } from './ops/index.js';
+import { streamRecheckTick } from './lib/video-link.js';
 import { billingDailyTick, billingFrequentTick } from './billing/jobs.js';
 
 /**
@@ -43,8 +44,18 @@ function startScheduler(rt: Runtime, port: () => FinancePort | undefined): () =>
       console.error('[api] job billing loi:', (e as Error).message);
     }
   };
+  // video dan link (v-link): kiem tra lai moi 10 phut (moi creative toi da 1 lan/gio); khoa kv chong chay trung
+  const lockedStreams = async (lockKey: string) => {
+    try {
+      if ((await rt.kv.incr(lockKey, 900)) !== 1) return;
+      await streamRecheckTick(rt);
+    } catch (e) {
+      console.error('[api] job stream loi:', (e as Error).message);
+    }
+  };
   const tick = () => {
     const now = rt.clock.now();
+    if (now.getUTCMinutes() % 10 === 7) void lockedStreams(`cron:streams:${Math.floor(now.getTime() / 600_000)}`);
     if (now.getUTCMinutes() % 10 === 3) void lockedBilling(false, `cron:billing10:${Math.floor(now.getTime() / 600_000)}`, 900);
     if (now.getUTCHours() === 2 && now.getUTCMinutes() >= 20 && now.getUTCMinutes() < 30) void lockedBilling(true, `cron:billing-daily:${now.toISOString().slice(0, 10)}`, 86_400);
     // p3-ops: kiem tra canh bao moi 5 phut (khoa kv chong chay trung giua cac ban sao API); don dep hang ngay luc 03:30 UTC
