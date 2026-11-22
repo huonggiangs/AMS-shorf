@@ -90,6 +90,12 @@ describe('d-tree: trang Nhóm thiết bị', () => {
     await user.type(screen.getByLabelText('Tìm thiết bị'), 'AA:BB');
     await waitFor(() => expect(fetchedUrls().some((u) => u.includes('group_id=gN') && u.includes('status%3Aoffline') && u.includes('q=AA%3ABB'))).toBe(true), { timeout: 3000 });
   });
+  it('âm lượng đã xác nhận: hiện "Đang áp dụng: N% (qua trình phát)" khi TV box cố định âm lượng', async () => {
+    handlers.push(me(mk(all)), treeH, devsH([dev({ volume: 40, volume_cmd: { id: 'c1', state: 'acked', percent: 40, applied_percent: 40, mode: 'player', created_at: '2026-11-19T03:00:00.000Z' } })]));
+    vi.stubGlobal('fetch', mockFetch());
+    mount('/device-groups');
+    expect(await screen.findByText('Đang áp dụng: 40% (qua trình phát)')).toBeInTheDocument();
+  });
   it('thanh trượt âm lượng: debounce rồi gửi MỘT lệnh set_volume, hiện trạng thái chờ', async () => {
     handlers.push(me(mk(all)), treeH, devsH([dev({ volume_cmd: { id: 'c1', state: 'pending', percent: 35, created_at: '2026-11-19T03:00:00.000Z' } })]),
       (u, init) => (u.pathname === '/api/admin/v1/devices/d1/commands' && init?.method === 'POST' ? { status: 201, body: { id: 'c2', state: 'pending' } } : undefined));

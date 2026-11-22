@@ -3788,7 +3788,7 @@ paths:
       x-ams-permission:
         module: devices
         action: view
-      x-ams-source: services/api/src/routes/device-groups.ts:395
+      x-ams-source: services/api/src/routes/device-groups.ts:402
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3817,7 +3817,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/device-groups.ts:400
+      x-ams-source: services/api/src/routes/device-groups.ts:407
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3854,7 +3854,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/device-groups.ts:415
+      x-ams-source: services/api/src/routes/device-groups.ts:422
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3896,7 +3896,7 @@ paths:
       x-ams-permission:
         module: devices
         action: view
-      x-ams-source: services/api/src/routes/device-groups.ts:199
+      x-ams-source: services/api/src/routes/device-groups.ts:206
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3931,7 +3931,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/device-groups.ts:241
+      x-ams-source: services/api/src/routes/device-groups.ts:248
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3973,7 +3973,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/device-groups.ts:462
+      x-ams-source: services/api/src/routes/device-groups.ts:469
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4008,7 +4008,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/device-groups.ts:432
+      x-ams-source: services/api/src/routes/device-groups.ts:439
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4050,7 +4050,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/device-groups.ts:325
+      x-ams-source: services/api/src/routes/device-groups.ts:332
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5807,7 +5807,7 @@ paths:
       x-ams-permission:
         module: devices
         action: view
-      x-ams-source: services/api/src/routes/device-groups.ts:395
+      x-ams-source: services/api/src/routes/device-groups.ts:402
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5836,7 +5836,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/device-groups.ts:400
+      x-ams-source: services/api/src/routes/device-groups.ts:407
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5873,7 +5873,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/device-groups.ts:415
+      x-ams-source: services/api/src/routes/device-groups.ts:422
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5915,7 +5915,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/device-groups.ts:462
+      x-ams-source: services/api/src/routes/device-groups.ts:469
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5950,7 +5950,7 @@ paths:
       x-ams-permission:
         module: devices
         action: view
-      x-ams-source: services/api/src/routes/device-groups.ts:425
+      x-ams-source: services/api/src/routes/device-groups.ts:432
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5984,7 +5984,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/device-groups.ts:432
+      x-ams-source: services/api/src/routes/device-groups.ts:439
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 

@@ -148,7 +148,7 @@ export function VolumeSlider({ d, canWrite, onSent }: { d: TreeDevice; canWrite:
       </div>
       <div style={{ fontSize: 12, color: 'var(--mut)', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         {st ? <span style={{ color: st.tone === 'ok' ? 'var(--ok)' : st.tone === 'bad' ? 'var(--bad)' : st.tone === 'warn' ? 'var(--warn)' : undefined, fontWeight: 600 }}>{st.text}</span> : null}
-        <span>{d.volume != null ? `Thiết bị báo: ${d.volume}%` : 'Chưa nhận báo cáo âm lượng'}</span>
+        <span>{cmd?.state === 'acked' && cmd.applied_percent != null ? `Đang áp dụng: ${cmd.applied_percent}% (${cmd.mode === 'player' ? 'qua trình phát' : 'hệ thống'})` : d.volume != null ? `Thiết bị báo: ${d.volume}%` : 'Chưa nhận báo cáo âm lượng'}</span>
       </div>
     </div>
   );

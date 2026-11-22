@@ -466,6 +466,21 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     const dev = await authenticateDevice(c, deps, body);
     const parsed = commandAckBody.parse(parseJson(body));
     const r = await ackCommands(rt, dev.id, parsed.acks);
+    // set_volume duoc ack kem {applied_percent, mode}: ghi am luong THAT vao ho so ngay (khong cho heartbeat ke tiep) de web hien dung
+    try {
+      const withResult = parsed.acks.filter((a) => a.status !== 'failed' && a.result);
+      for (const a of withResult) {
+        const row = (await rt.db.query<{ type: string }>('SELECT type FROM device_commands WHERE id = ? AND device_id = ?', [a.id, dev.id]))[0];
+        if (row?.type !== 'set_volume') continue;
+        const v = Number((JSON.parse(a.result as string) as { applied_percent?: unknown }).applied_percent);
+        if (Number.isInteger(v) && v >= 0 && v <= 100) {
+          const ts = rt.clock.now().toISOString();
+          volDirty.set(dev.id, { volume: v, ts });
+          volSeen.set(dev.id, { v, at: Math.floor(rt.clock.now().getTime() / 1000) });
+          defer(c, flush());
+        }
+      }
+    } catch { /* result khong phai JSON: bo qua */ }
     return c.json({ ok: true, acked: r.acked, known: r.known, unknown: r.unknown });
   });
 

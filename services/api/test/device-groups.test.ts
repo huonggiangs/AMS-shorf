@@ -222,6 +222,22 @@ describe('3. am luong tu xa', () => {
     expect((await d.heartbeat({ volume: 12.5 })).status).toBe(422);
   });
 
+  it('ack set_volume kem {applied_percent, mode}: web thay am luong THAT + che do (system|player) ngay, khong cho heartbeat ke tiep', async () => {
+    const d = await new Dev().init();
+    await approve(d);
+    const g = (await devops.json('POST', '/admin/v1/device-groups', { name: 'VolAck' })).body.id;
+    await devops.json('PUT', '/admin/v1/device-groups/assign', { device_ids: [d.id], group_id: g });
+    const cmd = await devops.json('POST', `/admin/v1/devices/${d.id}/commands`, { type: 'set_volume', args: { percent: 40 } });
+    expect(cmd.status).toBe(201);
+    await d.heartbeat(); // giao lenh
+    const ack = await d.call('/v1/commands/ack', { acks: [{ id: cmd.body.id, status: 'ok', result: JSON.stringify({ applied_percent: 40, mode: 'player', system: '15/15', fixed: true }) }] });
+    expect(ack.status).toBe(200);
+    await gw.flush();
+    const row = (await devops.json('GET', `/admin/v1/device-groups/devices?group_id=${g}`)).body.items[0];
+    expect(row.volume).toBe(40);
+    expect(row.volume_cmd).toMatchObject({ state: 'acked', percent: 40, applied_percent: 40, mode: 'player' });
+  });
+
   it('dat am luong hang loat cho nhom (kem nhom con): thiet bi chua cap quyen bi bo qua va liet ke; audit nhom + tung lenh', async () => {
     const g = (await devops.json('POST', '/admin/v1/device-groups', { name: 'Bulk' })).body.id;
     const sub = (await devops.json('POST', '/admin/v1/device-groups', { name: 'Con', parent_id: g })).body.id;

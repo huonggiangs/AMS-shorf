@@ -42,7 +42,7 @@ export const treeDeviceSchema = z
     location_address: z.string().nullish(),
     volume: n.nullish(),
     volume_at: z.string().nullish(),
-    volume_cmd: z.object({ id: z.string(), state: z.enum(VOL_STATES), percent: n.nullable(), created_at: z.string() }).nullish(),
+    volume_cmd: z.object({ id: z.string(), state: z.enum(VOL_STATES), percent: n.nullable(), applied_percent: n.nullable().optional(), mode: z.enum(['system', 'player']).nullable().optional(), created_at: z.string() }).nullish(),
   })
   .passthrough();
 export type TreeDevice = z.infer<typeof treeDeviceSchema>;

@@ -160,6 +160,13 @@ async function presentDevices(c: Ctx, rows: DevRow[]) {
     try { percent = k?.args ? (JSON.parse(k.args) as { percent?: number }).percent ?? null : null; } catch { percent = null; }
     const w = num(d.screen_px_w ?? d.px_w, 0);
     const h = num(d.screen_px_h ?? d.px_h, 0);
+    let applied: number | null = null;
+    let mode: string | null = null;
+    try {
+      const rs = k?.result ? (JSON.parse(k.result) as { applied_percent?: unknown; mode?: unknown }) : null;
+      if (rs && Number.isInteger(rs.applied_percent)) applied = rs.applied_percent as number;
+      if (rs && (rs.mode === 'system' || rs.mode === 'player')) mode = rs.mode;
+    } catch { /* result khong phai JSON */ }
     return {
       id: d.id,
       name: d.name ?? d.id,
@@ -183,7 +190,7 @@ async function presentDevices(c: Ctx, rows: DevRow[]) {
       location_address: d.location_address,
       volume: d.volume === null || d.volume === undefined ? null : num(d.volume),
       volume_at: d.volume_at,
-      volume_cmd: k ? { id: k.id, state: volState(k, nowIso), percent, created_at: k.created_at } : null,
+      volume_cmd: k ? { id: k.id, state: volState(k, nowIso), percent, applied_percent: applied, mode, created_at: k.created_at } : null,
     };
   });
 }
