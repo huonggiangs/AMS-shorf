@@ -1500,7 +1500,27 @@ components:
                 type: string
               sha256:
                 type: string
-                description: hex; thiet bi PHAI kiem tra truoc khi phat
+                description: hex; thiet bi PHAI kiem tra truoc khi phat. Chi co o creative tai len; creative delivery=stream KHONG co sha256
+              delivery:
+                type: string
+                const: stream
+                description: vang mat = tai len (tai ve + kiem sha256); 'stream' = phat truc tiep tu url ben ngoai (ExoPlayer/Media3), khong tai ve
+              kind:
+                type: string
+                enum:
+                  - mp4
+                  - webm
+                  - hls
+                  - dash
+                description: "chi voi delivery=stream: dinh dang luong"
+              duration_ms:
+                type: integer
+                description: "chi voi delivery=stream: thoi luong khai bao (ms), dung cho quy tac 0.9 x thoi luong"
+              etag:
+                type:
+                  - string
+                  - "null"
+                description: "chi voi delivery=stream: ETag luc duyet (neu co)"
               duration_s:
                 type:
                   - number
@@ -1592,7 +1612,6 @@ components:
               - id
               - campaign_id
               - url
-              - sha256
               - duration_s
               - px_w
               - px_h
@@ -1800,7 +1819,27 @@ components:
                 type: string
               sha256:
                 type: string
-                description: hex; thiet bi PHAI kiem tra truoc khi phat
+                description: hex; thiet bi PHAI kiem tra truoc khi phat. Chi co o creative tai len; creative delivery=stream KHONG co sha256
+              delivery:
+                type: string
+                const: stream
+                description: vang mat = tai len (tai ve + kiem sha256); 'stream' = phat truc tiep tu url ben ngoai (ExoPlayer/Media3), khong tai ve
+              kind:
+                type: string
+                enum:
+                  - mp4
+                  - webm
+                  - hls
+                  - dash
+                description: "chi voi delivery=stream: dinh dang luong"
+              duration_ms:
+                type: integer
+                description: "chi voi delivery=stream: thoi luong khai bao (ms), dung cho quy tac 0.9 x thoi luong"
+              etag:
+                type:
+                  - string
+                  - "null"
+                description: "chi voi delivery=stream: ETag luc duyet (neu co)"
               duration_s:
                 type:
                   - number
@@ -1892,7 +1931,6 @@ components:
               - id
               - campaign_id
               - url
-              - sha256
               - duration_s
               - px_w
               - px_h

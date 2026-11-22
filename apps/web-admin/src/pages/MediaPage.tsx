@@ -15,6 +15,8 @@ import { fmtBytes, redactUrl, uploadToStore } from '../lib/upload';
 import { UploadDialog, UPLOAD_LIMIT_TEXT } from '../components/UploadDialog';
 export { fmtBytes, redactUrl, uploadToStore, UploadDialog, UPLOAD_LIMIT_TEXT };
 import { captureThumbnail, pickBackfill, resolveThumbUrl, thumbSupported } from '../lib/thumbnail';
+import { StreamLinkDialog } from '../components/StreamLinkDialog';
+import { FullViewConfirm, StreamInfoPanel, StreamPlayer } from '../components/StreamReview';
 
 const PAGE = 9;
 /** Tệp 'Đang xử lý' coi là kẹt: tạo hơn 30 phút trước mà không còn tiến độ chạy, hoặc nhập liên kết đã thất bại. */
@@ -62,6 +64,7 @@ export default function MediaPage() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [up, setUp] = useState(false);
+  const [lk, setLk] = useState(false);
   const [autoPick, setAutoPick] = useState(false);
   const [rej, setRej] = useState<string | null>(null);
   const [rev, setRev] = useState<string | null>(null);
@@ -136,7 +139,7 @@ export default function MediaPage() {
   };
   return (
     <>
-      <PageHead title="Kho tư liệu" sub="Kho tệp quảng cáo và trạng thái kiểm duyệt." actions={can('media', 'write') ? <Btn tone="p" icon="plus" onClick={() => { setAutoPick(false); setUp(true); }}>{t('Tải nội dung mới')}</Btn> : null} />
+      <PageHead title="Kho tư liệu" sub="Kho tệp quảng cáo và trạng thái kiểm duyệt." actions={can('media', 'write') ? <span style={{ display: 'inline-flex', gap: 8 }}><Btn onClick={() => setLk(true)}>Dán link video</Btn><Btn tone="p" icon="plus" onClick={() => { setAutoPick(false); setUp(true); }}>{t('Tải nội dung mới')}</Btn></span> : null} />
       <div className="tb" style={{ marginBottom: 12, background: 'none', padding: 0 }}>
         <label className="sr"><input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder={t('Tìm…')} aria-label={t('Tìm…')} /></label>
         <Tabs value={status} onChange={(v) => { setStatus(v); setPage(1); }} items={[{ id: '', label: 'Tất cả' }, { id: 'processing', label: 'Đang xử lý' }, { id: 'pending', label: 'Chờ duyệt' }, { id: 'approved', label: 'Đã duyệt' }, { id: 'rejected', label: 'Cần chỉnh sửa' }]} />
@@ -160,6 +163,7 @@ export default function MediaPage() {
         <span>{query.data?.total ?? 0} tệp</span>
         <div className="pg">{Array.from({ length: pages }, (_, i) => <button key={i} type="button" className={i + 1 === page ? 'on' : ''} onClick={() => setPage(i + 1)}>{i + 1}</button>)}</div>
       </div>
+      <StreamLinkDialog open={lk} onClose={() => setLk(false)} />
       <UploadDialog open={up} autoPick={autoPick} onClose={() => { setUp(false); setAutoPick(false); }} />
       {delOpen ? <DeleteSelectedDialog items={Object.entries(picked).map(([id, v]) => ({ id, ...v }))} onClose={() => setDelOpen(false)} onDone={(ids) => setPicked((p) => { const n = { ...p }; for (const id of ids) delete n[id]; return n; })} /> : null}
       {rev ? <ReviewDialog id={rev} onClose={() => setRev(null)} /> : null}
@@ -172,11 +176,11 @@ export default function MediaPage() {
 function MediaCard({ m, canApprove, internal, selectable, selected, onToggle, onMakeThumb, onApprove, onReject, onReview, onPreview, onAction, onPickFile }: { m: Media; canApprove: boolean; internal?: boolean; onPickFile?: () => void; selectable?: boolean; selected?: boolean; onToggle?: () => void; onMakeThumb?: (() => void) | undefined; onApprove: () => void; onReject: () => void; onReview: () => void; onPreview?: () => void; onAction: (a: 'confirm' | 'recheck' | 'retry') => void }) {
   const t = useT();
   const fmtLabel = m.format && m.format !== 'fullscreen' ? AD_FORMAT_OPTIONS.find((o) => o.id === m.format)?.label : null;
-  const meta = [m.mime?.split('/')[1]?.toUpperCase(), fmtLabel, m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_sec ? `${m.duration_sec} giây` : null].filter(Boolean).join(' · ');
+  const meta = [m.delivery === 'stream' ? `LINK ${m.stream?.stream_kind?.toUpperCase() ?? ''}`.trim() : m.mime?.split('/')[1]?.toUpperCase(), m.delivery === 'stream' ? m.stream?.stream_host : null, fmtLabel, m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_sec ? `${m.duration_sec} giây` : null].filter(Boolean).join(' · ');
   return (
     <div className="card">
       <div className="scr" style={{ borderRadius: '20px 20px 0 0' }}>
-        {m.thumb_url ? <img src={resolveThumbUrl(m.thumb_url, API_BASE) ?? ''} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div className="ph">{m.kind === 'image' ? 'ẢNH' : 'VIDEO'}<br />{m.width && m.height ? `${m.width}×${m.height}` : ''}{onMakeThumb && m.source === 'upload' && m.status !== 'processing' ? <><br /><button type="button" className="btn sm" onClick={onMakeThumb}>Tạo ảnh đại diện</button></> : null}</div>}
+        {m.thumb_url ? <img src={resolveThumbUrl(m.thumb_url, API_BASE) ?? ''} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div className="ph">{m.kind === 'image' ? 'ẢNH' : m.delivery === 'stream' ? 'LINK VIDEO' : 'VIDEO'}<br />{m.width && m.height ? `${m.width}×${m.height}` : ''}{onMakeThumb && m.source === 'upload' && m.status !== 'processing' ? <><br /><button type="button" className="btn sm" onClick={onMakeThumb}>Tạo ảnh đại diện</button></> : null}</div>}
       </div>
       <div className="cp" style={{ padding: 16 }}>
         {selectable ? <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 6 }}><input type="checkbox" checked={!!selected} onChange={onToggle} aria-label={`Chọn tệp ${m.name}`} />Chọn</label> : null}
@@ -186,7 +190,7 @@ function MediaCard({ m, canApprove, internal, selectable, selected, onToggle, on
         <TransferBar m={m} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <span><StatusTag status={m.status} />{onPreview && m.kind !== 'link' && m.status !== 'processing' ? <> <Btn className="sm" onClick={onPreview} aria-label={`Xem trước ${m.name}`}>Xem trước</Btn></> : null}</span>
-          {m.status === 'pending' && canApprove && !m.blocker ? <span><Btn tone="p" className="sm" onClick={onApprove}>{t('Duyệt')}</Btn> <Btn className="sm" onClick={onReject}>{t('Trả lại')}</Btn></span> : null}
+          {m.status === 'pending' && canApprove && !m.blocker ? <span><Btn tone="p" className="sm" onClick={m.delivery === 'stream' ? onReview : onApprove}>{m.delivery === 'stream' ? 'Xem và duyệt' : t('Duyệt')}</Btn> <Btn className="sm" onClick={onReject}>{t('Trả lại')}</Btn></span> : null}
         </div>
         {m.warnings?.length ? <ul aria-label="Lưu ý về tệp" style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12.5, color: 'var(--warn, #B45309)' }}>{m.warnings.map((w) => <li key={w}>{w}</li>)}</ul> : null}
         {m.status !== 'approved' && m.blocker ? <Blocker m={m} canApprove={canApprove} onReview={onReview} onAction={onAction} onReject={onReject} onPickFile={onPickFile} /> : null}
@@ -330,15 +334,18 @@ function ReviewDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const [mode, setMode] = useState<'approve' | 'reject'>('approve');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [seen, setSeen] = useState(false);
   const m = q.data;
+  const stream = m?.delivery === 'stream' ? m.stream : null;
   const submit = async () => {
     if (!m) return;
     const text = (mode === 'approve' ? note : reason).trim();
     if (text.length < 3) return setErr('Nhập ghi chú/lý do (tối thiểu 3 ký tự).');
+    if (mode === 'approve' && stream && !seen) return setErr('Hãy xem toàn bộ video rồi tick xác nhận "Tôi đã xem toàn bộ nội dung".');
     setErr('');
     setBusy(true);
     try {
-      if (mode === 'approve') await api.post(`${base.media}/${m.id}/approve`, { body: { manual_review_note: text, content_version: m.content_version } });
+      if (mode === 'approve') await api.post(`${base.media}/${m.id}/approve`, { body: { manual_review_note: text, content_version: m.content_version, ...(stream ? { confirm_full_view: true } : {}) } });
       else await api.post(`${base.media}/${m.id}/reject`, { body: { reason: text } });
       await act(async () => undefined, mode === 'approve' ? 'Đã duyệt. Tệp có thể gắn vào chiến dịch.' : 'Đã trả lại.', [base.media, '/admin/v1/media']);
       onClose();
@@ -348,7 +355,7 @@ function ReviewDialog({ id, onClose }: { id: string; onClose: () => void }) {
       setBusy(false);
     }
   };
-  const isVideo = m?.kind === 'video' || m?.mime?.startsWith('video/');
+  const isVideo = m?.kind === 'video' || m?.kind === 'stream' || m?.mime?.startsWith('video/');
   return (
     <Dialog open onClose={onClose} size="xl" label="Xem và duyệt tệp">
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
@@ -356,15 +363,16 @@ function ReviewDialog({ id, onClose }: { id: string; onClose: () => void }) {
         {q.isLoading || !m ? <LoadingBlock /> : (
           <div className="dlg-split">
             <div>
-              {m.preview_url ? (isVideo ? <video src={m.preview_url} controls preload="metadata" aria-label={`Xem trước ${m.name}`} /> : <img src={m.preview_url} alt={`Xem trước ${m.name}`} />) : <div className="ph">Không có bản xem trước</div>}
-              <div style={{ color: 'var(--mut)', fontSize: 13, marginTop: 6 }}>{[m.mime, m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_sec ? `${m.duration_sec} giây` : null, m.size_bytes ? `${(m.size_bytes / 1048576).toFixed(1)} MB` : null].filter(Boolean).join(' · ')}</div>
+              {stream ? <StreamPlayer url={stream.stream_url} kind={stream.stream_kind} label={`Xem trước ${m.name}`} /> : m.preview_url ? (isVideo ? <video src={m.preview_url} controls preload="metadata" aria-label={`Xem trước ${m.name}`} /> : <img src={m.preview_url} alt={`Xem trước ${m.name}`} />) : <div className="ph">Không có bản xem trước</div>}
+              {stream ? <div style={{ marginTop: 8 }}><StreamInfoPanel s={stream} /></div> : null}
+              {!stream ? <div style={{ color: 'var(--mut)', fontSize: 13, marginTop: 6 }}>{[m.mime, m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_sec ? `${m.duration_sec} giây` : null, m.size_bytes ? `${(m.size_bytes / 1048576).toFixed(1)} MB` : null].filter(Boolean).join(' · ')}</div> : null}
             </div>
             <div>
               {m.blocker ? <p style={{ margin: '0 0 8px', fontSize: 13 }}>{m.blocker.message}</p> : null}
               {m.scan_reasons.length ? <ul aria-label="Lý do cần kiểm tra" style={{ margin: '0 0 10px', paddingLeft: 18, fontSize: 13 }}>{m.scan_reasons.map((r) => <li key={r}>{reasonText(r)}</li>)}</ul> : null}
               <Tabs value={mode} onChange={(v) => { setMode(v); setErr(''); }} items={[{ id: 'approve', label: 'Duyệt' }, { id: 'reject', label: 'Trả lại' }]} />
               {mode === 'approve'
-                ? <Field label="Ghi chú kiểm tra (ghi vào nhật ký, tối thiểu 3 ký tự)" hint="Bạn xác nhận đã xem tệp, nội dung an toàn và đúng quy định quảng cáo."><textarea value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></Field>
+                ? <><Field label="Ghi chú kiểm tra (ghi vào nhật ký, tối thiểu 3 ký tự)" hint="Bạn xác nhận đã xem tệp, nội dung an toàn và đúng quy định quảng cáo."><textarea value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></Field>{stream ? <FullViewConfirm checked={seen} onChange={setSeen} /> : null}</>
                 : <Field label="Lý do trả lại (khách hàng nhận email kèm lý do)"><textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} /></Field>}
             </div>
           </div>
@@ -372,7 +380,7 @@ function ReviewDialog({ id, onClose }: { id: string; onClose: () => void }) {
         {err ? <p role="alert" style={{ color: 'var(--bad)', margin: '8px 0 0' }}>{err}</p> : null}
         <div className="da" style={{ marginTop: 14 }}>
           <button type="button" className="btn" onClick={onClose}>Đóng</button>
-          <button type="submit" className={`btn ${mode === 'approve' ? 'p' : 'd'}`} disabled={busy || !m}>{mode === 'approve' ? 'Duyệt tệp' : 'Trả lại'}</button>
+          <button type="submit" className={`btn ${mode === 'approve' ? 'p' : 'd'}`} disabled={busy || !m}>{mode === 'approve' ? (stream ? 'Duyệt video' : 'Duyệt tệp') : 'Trả lại'}</button>
         </div>
       </form>
     </Dialog>

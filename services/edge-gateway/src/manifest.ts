@@ -49,6 +49,10 @@ interface CreativeRow {
   /** creative_kid_review (0015): xac nhan kid_safe cua nguoi duyet va phien ban noi dung luc xac nhan */
   kr_kid?: number | null;
   kr_version?: number | null;
+  /** creative_stream (0023): co gia tri = creative "dan link", phat truc tiep tu stream_url */
+  stream_url?: string | null;
+  stream_kind?: 'mp4' | 'webm' | 'hls' | 'dash' | null;
+  stream_etag?: string | null;
 }
 interface SlotRow {
   campaign_id: string;
@@ -431,6 +435,32 @@ export class ManifestService {
         if (px && !known) continue; // nhom theo do phan giai: creative chua biet kich thuoc thi khong dua vao
         if (px && elevatorTierFor(Number(r.px_w), Number(r.px_h)).w !== elevatorBest.get(r.campaign_id)) continue;
       } else if (px && (r.px_w !== px.w || r.px_h !== px.h)) continue; // LED khong tu co gian: dung do phan giai
+      if (r.stream_url && r.stream_kind) {
+        // creative dan link: KHONG sha256/size, KHONG qua mediaBaseUrl/renditions; thiet bi phat truc tiep (ExoPlayer/Media3) va bao loi qua su kien
+        const sfmt = isAdFormat(r.format) ? r.format : isAdFormat(r.kind) ? r.kind : 'fullscreen';
+        const sov = parseOverlayJson(r.overlay, lockAllowed, Number(r.kr_kid ?? 0) === 1 && r.kr_version != null && Number(r.kr_version) === Number(r.content_version ?? 1));
+        if (sov.drop) continue;
+        const dur = r.duration_s === null ? null : Number(r.duration_s);
+        creatives.push({
+          id: r.id,
+          campaign_id: r.campaign_id,
+          delivery: 'stream',
+          url: r.stream_url,
+          kind: r.stream_kind,
+          ...(dur === null ? {} : { duration_ms: dur * 1000 }),
+          etag: r.stream_etag ?? null,
+          duration_s: dur,
+          px_w: r.px_w === null ? null : Number(r.px_w),
+          px_h: r.px_h === null ? null : Number(r.px_h),
+          format: sfmt,
+          ...(sov.ov ? { overlay: sov.ov } : {}),
+          media_type: 'video',
+          size_bytes: null,
+          ...(signage ? { fit: signage.fit } : {}),
+        });
+        seenCreative.add(r.id);
+        continue;
+      }
       if (!r.storage_key) continue;
       // uu tien ban chuyen ma; tep goc chi duoc phat khi da quet sach (hoac quan tri cho phep tep chua quet)
       const rend = await this.renditionOf(r, ctx);
@@ -654,11 +684,14 @@ export class ManifestService {
   private async queryCreatives(type: string): Promise<CreativeRow[]> {
     return this.rt.db.query<CreativeRow>(
       `SELECT cr.id, cr.campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay, cr.customer_id, cr.scan_state,
-              COALESCE(cs.content_version, 1) AS content_version, kr.kid_safe AS kr_kid, kr.content_version AS kr_version
+              COALESCE(cs.content_version, 1) AS content_version, kr.kid_safe AS kr_kid, kr.content_version AS kr_version,
+              st.stream_url, st.stream_kind, st.etag AS stream_etag
          FROM creatives cr JOIN campaigns c ON c.id = cr.campaign_id LEFT JOIN creative_security cs ON cs.creative_id = cr.id LEFT JOIN creative_kid_review kr ON kr.creative_id = cr.id
+         LEFT JOIN creative_stream st ON st.creative_id = cr.id
         WHERE c.state = 'active' AND cr.target_type = ? AND cr.review_state = 'approved' AND cr.state = 'ready'
           AND NOT (cs.approved_version IS NOT NULL AND cs.approved_version <> cs.content_version)
-          AND cr.scan_state NOT IN ('infected','failed','needs_manual_review','pending')`,
+          AND cr.scan_state NOT IN ('infected','failed','needs_manual_review','pending')
+          AND (st.creative_id IS NULL OR (st.needs_review = 0 AND st.probe_status = 'ok' AND cr.scan_state = 'clean'))`,
       [type],
     );
   }

@@ -1130,7 +1130,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:282
+      x-ams-source: services/api/src/routes/campaigns.ts:289
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1157,7 +1157,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:305
+      x-ams-source: services/api/src/routes/campaigns.ts:312
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1197,7 +1197,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: delete
-      x-ams-source: services/api/src/routes/campaigns.ts:581
+      x-ams-source: services/api/src/routes/campaigns.ts:588
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1232,7 +1232,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:288
+      x-ams-source: services/api/src/routes/campaigns.ts:295
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1264,7 +1264,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:333
+      x-ams-source: services/api/src/routes/campaigns.ts:340
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1304,7 +1304,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:461
+      x-ams-source: services/api/src/routes/campaigns.ts:468
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1338,7 +1338,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:564
+      x-ams-source: services/api/src/routes/campaigns.ts:571
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1374,7 +1374,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:417
+      x-ams-source: services/api/src/routes/campaigns.ts:424
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1410,7 +1410,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:294
+      x-ams-source: services/api/src/routes/campaigns.ts:301
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1443,7 +1443,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:540
+      x-ams-source: services/api/src/routes/campaigns.ts:547
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1485,7 +1485,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:430
+      x-ams-source: services/api/src/routes/campaigns.ts:437
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1521,7 +1521,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:369
+      x-ams-source: services/api/src/routes/campaigns.ts:376
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1563,7 +1563,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:383
+      x-ams-source: services/api/src/routes/campaigns.ts:390
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5266,7 +5266,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:474
+      x-ams-source: services/api/src/routes/media.ts:566
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5294,7 +5294,7 @@ paths:
       x-ams-permission:
         module: media
         action: delete
-      x-ams-source: services/api/src/routes/media.ts:845
+      x-ams-source: services/api/src/routes/media.ts:1002
       description: |-
         Quyền cần có: mô-đun `media`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5329,7 +5329,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:632
+      x-ams-source: services/api/src/routes/media.ts:725
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5356,6 +5356,41 @@ paths:
       security:
         - cookieAuth: []
           csrfToken: []
+  /admin/v1/media/link:
+    post:
+      operationId: adminPostMediaLink
+      tags:
+        - media
+      summary: POST /admin/v1/media/link
+      parameters: []
+      x-ams-permission:
+        module: media
+        action: write
+      x-ams-source: services/api/src/routes/media.ts:794
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPostMediaLinkRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
   /admin/v1/media/scan-review/queue:
     get:
       operationId: adminGetMediaScanReviewQueue
@@ -5366,7 +5401,7 @@ paths:
       x-ams-permission:
         module: media
         action: approve
-      x-ams-source: services/api/src/routes/media-scan-review.ts:26
+      x-ams-source: services/api/src/routes/media-scan-review.ts:28
       description: |-
         Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5396,7 +5431,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:491
+      x-ams-source: services/api/src/routes/media.ts:584
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5436,7 +5471,7 @@ paths:
       x-ams-permission:
         module: media
         action: delete
-      x-ams-source: services/api/src/routes/media.ts:921
+      x-ams-source: services/api/src/routes/media.ts:1079
       description: |-
         Quyền cần có: mô-đun `media`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5471,7 +5506,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:481
+      x-ams-source: services/api/src/routes/media.ts:573
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5504,7 +5539,7 @@ paths:
       x-ams-permission:
         module: media
         action: approve
-      x-ams-source: services/api/src/routes/media.ts:788
+      x-ams-source: services/api/src/routes/media.ts:942
       description: |-
         Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5546,7 +5581,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:610
+      x-ams-source: services/api/src/routes/media.ts:703
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5588,7 +5623,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:562
+      x-ams-source: services/api/src/routes/media.ts:655
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5624,7 +5659,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:675
+      x-ams-source: services/api/src/routes/media.ts:768
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5774,7 +5809,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:758
+      x-ams-source: services/api/src/routes/media.ts:912
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5857,7 +5892,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:701
+      x-ams-source: services/api/src/routes/media.ts:854
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5893,7 +5928,7 @@ paths:
       x-ams-permission:
         module: media
         action: approve
-      x-ams-source: services/api/src/routes/media.ts:826
+      x-ams-source: services/api/src/routes/media.ts:983
       description: |-
         Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5935,7 +5970,7 @@ paths:
       x-ams-permission:
         module: media
         action: approve
-      x-ams-source: services/api/src/routes/media-scan-review.ts:63
+      x-ams-source: services/api/src/routes/media-scan-review.ts:72
       description: |-
         Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5977,7 +6012,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:748
+      x-ams-source: services/api/src/routes/media.ts:902
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6011,7 +6046,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:723
+      x-ams-source: services/api/src/routes/media.ts:877
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6886,7 +6921,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:626
+      x-ams-source: services/payments/src/routes.ts:635
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6924,7 +6959,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:602
+      x-ams-source: services/payments/src/routes.ts:611
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6955,7 +6990,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:609
+      x-ams-source: services/payments/src/routes.ts:618
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6998,7 +7033,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:617
+      x-ams-source: services/payments/src/routes.ts:626
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7036,7 +7071,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:636
+      x-ams-source: services/payments/src/routes.ts:645
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7876,7 +7911,7 @@ paths:
         module: finance
         action: view
         account: internal
-      x-ams-source: services/payments/src/routes.ts:559
+      x-ams-source: services/payments/src/routes.ts:568
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7912,7 +7947,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:572
+      x-ams-source: services/payments/src/routes.ts:581
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7955,7 +7990,7 @@ paths:
         module: finance
         action: approve
         account: internal
-      x-ams-source: services/payments/src/routes.ts:592
+      x-ams-source: services/payments/src/routes.ts:601
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7987,7 +8022,7 @@ paths:
         module: finance
         action: write
         account: internal
-      x-ams-source: services/payments/src/routes.ts:646
+      x-ams-source: services/payments/src/routes.ts:655
       description: |-
         Quyền cần có: mô-đun `finance`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9005,7 +9040,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:282
+      x-ams-source: services/api/src/routes/campaigns.ts:289
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9032,7 +9067,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:305
+      x-ams-source: services/api/src/routes/campaigns.ts:312
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9072,7 +9107,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:288
+      x-ams-source: services/api/src/routes/campaigns.ts:295
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9104,7 +9139,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:333
+      x-ams-source: services/api/src/routes/campaigns.ts:340
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9144,7 +9179,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:417
+      x-ams-source: services/api/src/routes/campaigns.ts:424
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9180,7 +9215,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:294
+      x-ams-source: services/api/src/routes/campaigns.ts:301
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9213,7 +9248,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:430
+      x-ams-source: services/api/src/routes/campaigns.ts:437
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9249,7 +9284,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:383
+      x-ams-source: services/api/src/routes/campaigns.ts:390
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9820,7 +9855,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:474
+      x-ams-source: services/api/src/routes/media.ts:566
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9848,7 +9883,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:632
+      x-ams-source: services/api/src/routes/media.ts:725
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9875,6 +9910,41 @@ paths:
       security:
         - cookieAuth: []
           csrfToken: []
+  /portal/v1/media/link:
+    post:
+      operationId: portalPostMediaLink
+      tags:
+        - media
+      summary: POST /portal/v1/media/link
+      parameters: []
+      x-ams-permission:
+        module: media
+        action: write
+      x-ams-source: services/api/src/routes/media.ts:794
+      description: |-
+        Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPostMediaLinkRequest"
+      responses:
+        "201":
+          description: Đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+          csrfToken: []
   /portal/v1/media/upload-url:
     post:
       operationId: portalPostMediaUploadUrl
@@ -9885,7 +9955,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:491
+      x-ams-source: services/api/src/routes/media.ts:584
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9925,7 +9995,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:481
+      x-ams-source: services/api/src/routes/media.ts:573
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9958,7 +10028,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:610
+      x-ams-source: services/api/src/routes/media.ts:703
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10000,7 +10070,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:562
+      x-ams-source: services/api/src/routes/media.ts:655
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10036,7 +10106,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:675
+      x-ams-source: services/api/src/routes/media.ts:768
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10186,7 +10256,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:758
+      x-ams-source: services/api/src/routes/media.ts:912
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10269,7 +10339,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:701
+      x-ams-source: services/api/src/routes/media.ts:854
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10305,7 +10375,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:748
+      x-ams-source: services/api/src/routes/media.ts:902
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10339,7 +10409,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:723
+      x-ams-source: services/api/src/routes/media.ts:877
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11968,6 +12038,8 @@ components:
           type: string
           minLength: 3
           maxLength: 500
+        confirm_full_view:
+          type: boolean
       additionalProperties: true
     AdminPostMediaByIdConfirmRequest:
       type: object
@@ -12035,6 +12107,8 @@ components:
         content_version:
           type: integer
           minimum: 1
+        confirm_full_view:
+          type: boolean
       required:
         - decision
         - note
@@ -12075,6 +12149,61 @@ components:
       required:
         - source
         - url
+      additionalProperties: true
+    AdminPostMediaLinkRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        name:
+          type: string
+          maxLength: 200
+        duration_sec:
+          type: integer
+          minimum: 1
+          maximum: 36000
+        kind:
+          type: string
+          enum:
+            - mp4
+            - webm
+            - hls
+            - dash
+        target_type:
+          type: string
+          enum:
+            - tv
+            - elevator
+            - led
+        width:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        height:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        format:
+          type: string
+          maxLength: 20
+        overlay:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - {}
+            - type: "null"
+      required:
+        - url
+        - duration_sec
       additionalProperties: true
     AdminPostMediaUploadUrlRequest:
       type: object
@@ -14733,6 +14862,107 @@ components:
                     - "null"
               additionalProperties: true
             - type: "null"
+        delivery:
+          type:
+            - string
+            - "null"
+        stream:
+          anyOf:
+            - type: object
+              properties:
+                delivery:
+                  type: string
+                stream_url:
+                  type: string
+                stream_host:
+                  type: string
+                stream_kind:
+                  type: string
+                declared_duration_s:
+                  type: number
+                probe_status:
+                  type: string
+                  default: ok
+                needs_review:
+                  type: boolean
+                  default: false
+                content_type:
+                  type:
+                    - string
+                    - "null"
+                content_length:
+                  type:
+                    - number
+                    - "null"
+                etag:
+                  type:
+                    - string
+                    - "null"
+                last_modified:
+                  type:
+                    - string
+                    - "null"
+                checked_at:
+                  type:
+                    - string
+                    - "null"
+                info:
+                  anyOf:
+                    - type: object
+                      properties:
+                        codec:
+                          type:
+                            - string
+                            - "null"
+                        audio_codec:
+                          type:
+                            - string
+                            - "null"
+                        width:
+                          type:
+                            - number
+                            - "null"
+                        height:
+                          type:
+                            - number
+                            - "null"
+                        duration_s:
+                          type:
+                            - number
+                            - "null"
+                        fps:
+                          type:
+                            - number
+                            - "null"
+                        resolution_label:
+                          type:
+                            - string
+                            - "null"
+                      additionalProperties: true
+                    - type: "null"
+                warnings:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                    required:
+                      - message
+                    additionalProperties: true
+                  default: []
+                reason:
+                  type:
+                    - string
+                    - "null"
+              required:
+                - stream_url
+                - stream_kind
+                - declared_duration_s
+              additionalProperties: true
+            - type: "null"
       required:
         - id
         - name
@@ -15289,6 +15519,61 @@ components:
       required:
         - source
         - url
+      additionalProperties: true
+    PortalPostMediaLinkRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        name:
+          type: string
+          maxLength: 200
+        duration_sec:
+          type: integer
+          minimum: 1
+          maximum: 36000
+        kind:
+          type: string
+          enum:
+            - mp4
+            - webm
+            - hls
+            - dash
+        target_type:
+          type: string
+          enum:
+            - tv
+            - elevator
+            - led
+        width:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        height:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        customer_id:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - type: string
+                  maxLength: 64
+            - type: "null"
+        format:
+          type: string
+          maxLength: 20
+        overlay:
+          anyOf:
+            - anyOf:
+                - not: {}
+                - {}
+            - type: "null"
+      required:
+        - url
+        - duration_sec
       additionalProperties: true
     PortalPostMediaUploadUrlRequest:
       type: object

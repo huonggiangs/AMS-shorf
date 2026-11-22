@@ -165,7 +165,16 @@ export interface ManifestCreative {
   id: string;
   campaign_id: string;
   url: string;
-  sha256: string;
+  /** CHI co o creative tai len (delivery khac 'stream'): thiet bi PHAI kiem tra truoc khi phat. Creative stream KHONG co sha256 (may chu khong giu tep). */
+  sha256?: string;
+  /** Vang mat = tai len (tep cua AMS, tai ve + kiem sha256). 'stream' = phat truc tiep tu `url` ben ngoai (ExoPlayer/Media3), khong tai ve, khong kiem sha256. */
+  delivery?: 'stream';
+  /** Chi voi delivery 'stream': dinh dang luong de chon nguon (progressive mp4/webm, hls, dash). */
+  kind?: 'mp4' | 'webm' | 'hls' | 'dash';
+  /** Chi voi delivery 'stream': thoi luong khai bao (ms); quy tac hop le 0.9 x thoi luong dung gia tri nay. */
+  duration_ms?: number;
+  /** Chi voi delivery 'stream': ETag cua tep luc duyet (neu may chu nguon tra); de thiet bi/ho tro doi chieu, khong bat buoc. */
+  etag?: string | null;
   duration_s: number | null;
   px_w: number | null;
   px_h: number | null;

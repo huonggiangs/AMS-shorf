@@ -60,3 +60,18 @@ export function checkMediaUrl(source: LinkSource, raw: string): { ok: boolean; m
   if (/^(localhost|127\.|10\.|192\.168\.|0\.)/.test(host) || host.endsWith('.local')) return { ok: false, message: 'Không chấp nhận địa chỉ nội bộ.' };
   return { ok: true, message: source === 'drive' ? 'Tệp Drive phải chia sẻ "Bất kỳ ai có đường liên kết". Hệ thống tải về kho (tối đa 200 MB) rồi kiểm tra như tệp tải lên. Chỉ dùng nội dung bạn có quyền sử dụng.' : 'Hệ thống tải về kho (tối đa 200 MB) rồi kiểm tra như tệp tải lên. Chỉ dùng nội dung bạn có quyền sử dụng.' };
 }
+
+/** Kiểm tra sớm liên kết video "dán link" (server kiểm tra lại đầy đủ, gồm SSRF/DNS). Khớp validateStreamUrl của @ams/shared. */
+const PAGE_HOSTS = ['youtube.com', 'youtu.be', 'vimeo.com', 'facebook.com', 'fb.watch', 'tiktok.com', 'instagram.com', 'twitter.com', 'x.com', 'dailymotion.com', 'twitch.tv', 'drive.google.com', 'docs.google.com'];
+export function checkStreamUrl(raw: string): { ok: boolean; message: string } {
+  let u: URL;
+  try { u = new URL(raw.trim()); } catch { return { ok: false, message: 'Liên kết không hợp lệ. Hãy dán đầy đủ địa chỉ bắt đầu bằng https://' }; }
+  if (u.protocol !== 'https:') return { ok: false, message: 'Chỉ chấp nhận liên kết https:// (không dùng http, ftp, file...).' };
+  if (u.username || u.password) return { ok: false, message: 'Liên kết không được chứa tên đăng nhập/mật khẩu (user:pass@).' };
+  if (u.port && u.port !== '443') return { ok: false, message: 'Chỉ chấp nhận cổng 443 (cổng mặc định của https).' };
+  const host = u.hostname.toLowerCase().replace(/\.$/, '');
+  if (host.startsWith('[') || /^[\d.]+$/.test(host) || !host.includes('.')) return { ok: false, message: 'Không chấp nhận địa chỉ IP hoặc tên máy nội bộ. Hãy dùng tên miền công khai.' };
+  if (PAGE_HOSTS.some((d) => host === d || host.endsWith(`.${d}`))) return { ok: false, message: 'Đây là trang xem video (YouTube/Vimeo/Facebook/Drive...), TV không phát trực tiếp được. Hãy dán liên kết tệp .mp4/.webm hoặc luồng .m3u8/.mpd.' };
+  if (!/\.(mp4|m4v|webm|m3u8|mpd)$/i.test(u.pathname)) return { ok: true, message: 'Liên kết không có đuôi .mp4/.webm/.m3u8/.mpd: hệ thống sẽ nhận diện theo loại nội dung máy chủ trả về.' };
+  return { ok: true, message: 'Liên kết hợp lệ. Hệ thống chỉ kiểm tra đầu liên kết (không tải video).' };
+}

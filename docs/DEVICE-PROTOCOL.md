@@ -248,6 +248,25 @@ Phản hồi đầy đủ `200`:
 | `format` | `fullscreen`, `menu_banner`, `l_banner`, `pause_ad`, `qr_corner`, `reward`. **Hiện server chỉ phát ra `fullscreen`** trừ khi dữ liệu creative ghi định dạng khác (cột riêng chưa có: xem yêu cầu cho f1) |
 | `media_type` | `video` hoặc `image` |
 
+#### 7.0 Creative `delivery: "stream"` (video dán link, v-link)
+
+Creative do khách/nhân viên **dán link** (không tải lên) có dạng khác; creative tải lên ở trên **giữ nguyên** (không có trường `delivery`, vắng mặt = tải lên).
+
+```json
+{"id":"01...","campaign_id":"01...","delivery":"stream","url":"https://cdn.adhost.vn/ads/spot-8k.mp4","kind":"mp4","duration_ms":20000,"etag":"\"abc\"","duration_s":20,"px_w":7680,"px_h":4320,"format":"fullscreen","media_type":"video","size_bytes":null}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `delivery` | `"stream"`: phát **trực tiếp** từ `url` bên ngoài, **không tải về, không có `sha256`, `size_bytes = null`** |
+| `url` | URL https gốc (mp4/webm/m3u8/mpd), không đi qua CDN của AMS; có thể chuyển hướng (tối đa vài lần) |
+| `kind` | `mp4` \| `webm` \| `hls` \| `dash`: chọn nguồn phát (ExoPlayer/Media3 hỗ trợ cả bốn) |
+| `duration_ms` | thời lượng **khai báo** (ms); quy tắc hợp lệ `played_ms >= 0.9 x duration_ms` dùng giá trị này |
+| `etag` | ETag của tệp lúc duyệt (có thể `null`); tham khảo |
+| `px_w`, `px_h` | độ phân giải khai báo/đọc được (có thể `null`); TV có thể 2K-8K, **không bị giới hạn**, AMS không chuyển mã/giảm bitrate/fps |
+
+**Tương thích cho app TV**: client phải hỗ trợ phát stream (ExoPlayer/Media3 xử lý mp4/hls/dash), **bỏ qua creative sang creative kế tiếp khi stream lỗi** (timeout, 4xx/5xx, giải mã lỗi) và ghi log lỗi theo `creative_id`. Giao thức **chưa có loại sự kiện lỗi riêng** (đề xuất bổ sung `type: "playback_error"`); trong lúc chờ, không gửi `impression` cho lượt phát lỗi. Client cũ không hiểu `delivery` sẽ không tìm thấy `sha256` và phải bỏ qua creative đó (không được phát khi thiếu sha256). Server loại creative stream khỏi manifest khi nội dung xa đổi (ETag/độ dài/Last-Modified), URL lỗi 4xx/5xx kéo dài, hoặc chưa được người duyệt xem toàn bộ và xác nhận (xem `docs/VIDEO-LINK.md`). Impression của creative stream dùng cùng sự kiện `impression`: `played_ms` là thời gian hiển thị thực (**rebuffer làm giảm `played_ms`**; dưới 0.9 x `duration_ms` thì bị gắn `short_play`, không tính tiền). Không đổi cách tính tiền.
+
 **Slot** (`schedule[]`): `{slot_id, campaign_id, creative_ids, daypart, start_min, end_min, priority, reward_points}`
 
 - `start_min`/`end_min`: phút từ 00:00 theo múi giờ `tz` (hiện **luôn** `Asia/Ho_Chi_Minh`, UTC+7); `0..1440`, `start_min < end_min`. Slot áp dụng khi giờ địa phương nằm trong `[start_min, end_min)`.

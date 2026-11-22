@@ -8,6 +8,7 @@ import { Dialog } from '../components/Dialog';
 import { fmtDateTime } from '../lib/format';
 import { useUi } from '../state/ui';
 import { TvMetaSection } from '../components/TvMeta';
+import { FullViewConfirm, StreamInfoPanel, StreamPlayer } from '../components/StreamReview';
 
 const PAGE_SIZE = 12;
 const ENDPOINT = '/admin/v1/media/scan-review/queue';
@@ -39,6 +40,11 @@ export const REASON: Record<string, string> = {
   mp4_moov_too_large: 'MP4 có phần mô tả quá lớn để kiểm tra tự động',
   mp4_header_unreadable: 'Không đọc được phần đầu MP4',
   mp4_too_many_boxes: 'MP4 có cấu trúc bất thường (quá nhiều khối)',
+  remote_stream_unscanned: 'Video từ liên kết: không quét được mã độc, bắt buộc xem toàn bộ nội dung trước khi duyệt',
+  remote_stream_changed: 'Nội dung ở liên kết đã thay đổi (ETag/độ dài/ngày sửa) kể từ lần duyệt',
+  unreachable: 'Liên kết video không còn truy cập được',
+  timeout: 'Máy chủ video không phản hồi',
+  not_video: 'Liên kết không trả về video',
 };
 /** Mã lý do có thể kèm tham số sau dấu ':' (mime_mismatch:…, dimensions_mismatch:…, mp4_brand_not_allowed:…). */
 export function reasonText(code: string): string {
@@ -79,14 +85,15 @@ export default function CreativeReview() {
   const total = q.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const refresh = () => qc.invalidateQueries({ queryKey: [ENDPOINT] });
-  const submit = async (item: ScanQueueItem, decision: 'approve' | 'reject', note: string, alsoApprove = false) => {
+  const submit = async (item: ScanQueueItem, decision: 'approve' | 'reject', note: string, alsoApprove = false, seen = false) => {
+    const cfv = item.delivery === 'stream' && decision === 'approve' ? { confirm_full_view: seen } : {};
     try {
       if (decision === 'approve' && alsoApprove) {
         // một bước: xác nhận an toàn (kiểm tra thủ công) + duyệt nội dung => dùng được ngay cho chiến dịch
-        await api.post(`/admin/v1/media/${item.id}/approve`, { body: { manual_review_note: note, content_version: item.content_version } });
+        await api.post(`/admin/v1/media/${item.id}/approve`, { body: { manual_review_note: note, content_version: item.content_version, ...cfv } });
         notify('Đã duyệt creative. Tệp có thể gắn vào chiến dịch.');
       } else {
-        await api.post(`/admin/v1/media/${item.id}/scan-review`, { body: { decision, note, content_version: item.content_version } });
+        await api.post(`/admin/v1/media/${item.id}/scan-review`, { body: { decision, note, content_version: item.content_version, ...cfv } });
         notify(decision === 'approve' ? 'Đã duyệt kiểm tra thủ công. Tệp vẫn cần duyệt nội dung ở trang Nội dung & Media.' : 'Đã từ chối creative.');
       }
       if (page > 1 && (q.data?.items.length ?? 0) <= 1) setPage(page - 1);
@@ -113,7 +120,7 @@ export default function CreativeReview() {
         <div className="pg">{Array.from({ length: pages }, (_, i) => <button key={i} type="button" className={i + 1 === page ? 'on' : ''} aria-label={`Trang ${i + 1}`} aria-current={i + 1 === page ? 'page' : undefined} onClick={() => setPage(i + 1)}>{i + 1}</button>)}</div>
       </div>
       <TvMetaSection />
-      {dlg ? <ReasonDialog key={`${dlg.item.id}-${dlg.decision}`} item={dlg.item} decision={dlg.decision} onClose={() => setDlg(null)} onSubmit={(note, both) => submit(dlg.item, dlg.decision, note, both)} /> : null}
+      {dlg ? <ReasonDialog key={`${dlg.item.id}-${dlg.decision}`} item={dlg.item} decision={dlg.decision} onClose={() => setDlg(null)} onSubmit={(note, both, seen) => submit(dlg.item, dlg.decision, note, both, seen)} /> : null}
     </>
   );
 }
@@ -121,13 +128,14 @@ export default function CreativeReview() {
 function Preview({ m }: { m: ScanQueueItem }) {
   const isVideo = m.kind === 'video' || m.mime?.startsWith('video/');
   const isImage = m.kind === 'image' || m.mime?.startsWith('image/');
+  if (m.delivery === 'stream' && m.stream) return <StreamPlayer url={m.stream.stream_url} kind={m.stream.stream_kind} label={`Xem trước ${m.name ?? ''}`} />;
   if (m.preview_url && isVideo) return <video src={m.preview_url} controls preload="metadata" aria-label={`Xem trước ${m.name ?? ''}`} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />;
   if (m.preview_url && isImage) return <img src={m.preview_url} alt={`Xem trước ${m.name ?? ''}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
   return <div className="ph">{isVideo ? 'VIDEO' : 'TỆP'}<br />Không có bản xem trước</div>;
 }
 
 function ReviewCard({ m, onApprove, onReject, onRecheck }: { m: ScanQueueItem; onApprove: () => void; onReject: () => void; onRecheck: () => void }) {
-  const meta = [m.mime?.split('/')[1]?.toUpperCase(), sizeText(m.size_bytes), m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_s ? `${m.duration_s} giây` : null].filter(Boolean).join(' · ');
+  const meta = [m.delivery === 'stream' ? 'LINK VIDEO' : m.mime?.split('/')[1]?.toUpperCase(), m.delivery === 'stream' ? sizeText(m.stream?.content_length) : sizeText(m.size_bytes), m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_s ? `${m.duration_s} giây` : null].filter(Boolean).join(' · ');
   return (
     <div className="card" role="group" aria-label={m.name ?? m.id}>
       <div className="scr" style={{ borderRadius: '20px 20px 0 0' }}><Preview m={m} /></div>
@@ -138,6 +146,7 @@ function ReviewCard({ m, onApprove, onReject, onRecheck }: { m: ScanQueueItem; o
           <Tag tone="warn">{SCAN[m.scan_state] ?? m.scan_state}</Tag>
           <Tag tone="info">Phiên bản nội dung v{m.content_version}</Tag>
         </div>
+        {m.delivery === 'stream' && m.stream ? <div style={{ marginBottom: 8 }}><StreamInfoPanel s={m.stream} /></div> : null}
         {m.reasons.length ? <ul aria-label="Lý do cần kiểm tra" style={{ margin: '0 0 10px', paddingLeft: 18, fontSize: 13 }}>{m.reasons.map((r) => <li key={r}>{reasonText(r)}</li>)}</ul> : <p className="sub" style={{ margin: '0 0 10px' }}>Không có chi tiết lý do.</p>}
         <div style={{ display: 'flex', gap: 8 }}>
           <Btn tone="p" className="sm" onClick={onApprove}>Duyệt</Btn>
@@ -149,9 +158,11 @@ function ReviewCard({ m, onApprove, onReject, onRecheck }: { m: ScanQueueItem; o
   );
 }
 
-function ReasonDialog({ item, decision, onClose, onSubmit }: { item: ScanQueueItem; decision: 'approve' | 'reject'; onClose: () => void; onSubmit: (note: string, both: boolean) => Promise<boolean> }) {
+function ReasonDialog({ item, decision, onClose, onSubmit }: { item: ScanQueueItem; decision: 'approve' | 'reject'; onClose: () => void; onSubmit: (note: string, both: boolean, seen: boolean) => Promise<boolean> }) {
   const [note, setNote] = useState('');
   const [both, setBoth] = useState(true);
+  const [seen, setSeen] = useState(false);
+  const isStream = item.delivery === 'stream';
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const title = decision === 'approve' ? 'Duyệt creative (xác nhận an toàn)' : 'Từ chối creative';
@@ -160,14 +171,16 @@ function ReasonDialog({ item, decision, onClose, onSubmit }: { item: ScanQueueIt
       <form onSubmit={async (e) => {
         e.preventDefault();
         if (note.trim().length < MIN_NOTE) return setErr(`Nhập lý do (tối thiểu ${MIN_NOTE} ký tự).`);
+        if (decision === 'approve' && isStream && !seen) return setErr('Hãy xem toàn bộ video rồi tick xác nhận "Tôi đã xem toàn bộ nội dung".');
         setErr(''); setBusy(true);
-        const ok = await onSubmit(note.trim(), both);
+        const ok = await onSubmit(note.trim(), both, seen);
         setBusy(false);
         if (ok) onClose();
       }}>
         <h2 style={{ margin: '0 0 6px', fontSize: 18 }}>{title}</h2>
         <p className="sub" style={{ margin: '0 0 10px' }}>{item.name ?? item.id} · phiên bản nội dung v{item.content_version}</p>
         <Field label={decision === 'approve' ? 'Lý do duyệt (ghi vào nhật ký)' : 'Lý do từ chối (ghi vào nhật ký)'}><textarea value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></Field>
+        {decision === 'approve' && isStream ? <FullViewConfirm checked={seen} onChange={setSeen} /> : null}
         {decision === 'approve' ? (
           <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 10, fontSize: 13 }}>
             <input type="checkbox" checked={both} onChange={(e) => setBoth(e.target.checked)} style={{ marginTop: 3 }} />

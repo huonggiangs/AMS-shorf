@@ -8,6 +8,7 @@ import { assertContentVersion } from '../lib/creative-security.js';
 import { conflict, notFound } from '../lib/errors.js';
 import { getRt, parseBody } from '../lib/http.js';
 import { bumpManifest } from '../lib/manifest.js';
+import { assertStreamApprovable, markStreamApproved, presentStream, type StreamRow } from '../lib/video-link.js';
 import type { AppEnv } from '../types.js';
 
 export const NEEDS_MANUAL_REVIEW = 'needs_manual_review';
@@ -15,6 +16,7 @@ export const NEEDS_MANUAL_REVIEW = 'needs_manual_review';
 interface QueueRow {
   id: string; customer_id: string; customer_name: string | null; name: string | null; mime: string | null; kind: string | null; source: string | null; storage_key: string | null;
   size_bytes: number | null; duration_s: number | null; px_w: number | null; px_h: number | null; scan_state: string; created_at: string; engine: string | null; detail: string | null; sha256: string | null; content_version: number | null;
+  st_url: string | null; st_kind: string | null; st_dur: number | null; st_status: string | null; st_review: number | null; st_ct: string | null; st_len: number | null; st_etag: string | null; st_lm: string | null; st_checked: string | null; st_detail: string | null; st_fv: string | null; st_appr: string | null;
 }
 
 const queueQuery = z.object({ page: z.coerce.number().int().min(1).max(100000).catch(1).default(1), page_size: z.coerce.number().int().min(1).max(100).catch(20).default(20) });
@@ -29,8 +31,10 @@ export function mediaScanReviewRoutes(): Hono<AppEnv> {
     const total = Number((await rt.db.query<{ n: unknown }>('SELECT COUNT(*) AS n FROM creatives WHERE scan_state = ?', [NEEDS_MANUAL_REVIEW]))[0]?.n ?? 0);
     const rows = await rt.db.query<QueueRow>(
       `SELECT m.id, m.customer_id, cu.short_name AS customer_name, m.name, m.mime, m.kind, m.source, m.storage_key, m.size_bytes, m.duration_s, m.px_w, m.px_h, m.scan_state, m.created_at,
-              v.engine, v.detail, COALESCE(v.sha256, m.sha256) AS sha256, COALESCE(sec.content_version, 1) AS content_version
-         FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_validation v ON v.creative_id = m.id LEFT JOIN creative_security sec ON sec.creative_id = m.id
+              v.engine, v.detail, COALESCE(v.sha256, m.sha256) AS sha256, COALESCE(sec.content_version, 1) AS content_version,
+              st.stream_url AS st_url, st.stream_kind AS st_kind, st.declared_duration_s AS st_dur, st.probe_status AS st_status, st.needs_review AS st_review, st.content_type AS st_ct, st.content_length AS st_len,
+              st.etag AS st_etag, st.last_modified AS st_lm, st.checked_at AS st_checked, st.probe_detail AS st_detail, st.full_view_at AS st_fv, st.approved_at AS st_appr
+         FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_validation v ON v.creative_id = m.id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_stream st ON st.creative_id = m.id
         WHERE m.scan_state = ? ORDER BY m.created_at, m.id LIMIT ? OFFSET ?`,
       [NEEDS_MANUAL_REVIEW, q.page_size, (q.page - 1) * q.page_size],
     );
@@ -50,7 +54,12 @@ export function mediaScanReviewRoutes(): Hono<AppEnv> {
             preview_url = null;
           }
         }
+        const stream = x.st_url
+          ? presentStream({ stream_url: x.st_url, stream_kind: x.st_kind as StreamRow['stream_kind'], declared_duration_s: Number(x.st_dur), probe_status: (x.st_status ?? 'ok') as StreamRow['probe_status'], needs_review: Number(x.st_review ?? 0), content_type: x.st_ct, content_length: x.st_len == null ? null : Number(x.st_len), etag: x.st_etag, last_modified: x.st_lm, checked_at: x.st_checked ?? '', probe_detail: x.st_detail, full_view_at: x.st_fv, approved_at: x.st_appr })
+          : null;
+        if (x.st_url) preview_url = x.st_url; // video xa: phat truc tiep tu URL
         return {
+          delivery: x.st_url ? 'stream' : 'upload', stream,
           id: x.id, customer_id: x.customer_id, customer_name: x.customer_name, name: x.name, mime: x.mime, kind: x.kind, size_bytes: x.size_bytes === null ? null : Number(x.size_bytes),
           duration_s: x.duration_s === null ? null : Number(x.duration_s), width: x.px_w === null ? null : Number(x.px_w), height: x.px_h === null ? null : Number(x.px_h),
           scan_state: x.scan_state, content_version: Number(x.content_version ?? 1), created_at: x.created_at, engine: x.engine, sha256: x.sha256, reasons: d.reasons ?? [], preview_url,
@@ -62,12 +71,14 @@ export function mediaScanReviewRoutes(): Hono<AppEnv> {
 
   r.post('/:id/scan-review', requirePerm('media', 'approve'), async (c) => {
     const rt = getRt(c);
-    const b = await parseBody(c, z.object({ decision: z.enum(['approve', 'reject']), note: z.string().trim().min(3, 'Nhập ghi chú (tối thiểu 3 ký tự)').max(500), content_version: z.coerce.number().int().min(1).optional() }));
+    const b = await parseBody(c, z.object({ decision: z.enum(['approve', 'reject']), note: z.string().trim().min(3, 'Nhập ghi chú (tối thiểu 3 ký tự)').max(500), content_version: z.coerce.number().int().min(1).optional(), confirm_full_view: z.boolean().optional() }));
     const id = c.req.param('id');
     const m = (await rt.db.query<{ id: string; customer_id: string; scan_state: string; review_state: string }>('SELECT id, customer_id, scan_state, review_state FROM creatives WHERE id = ?', [id]))[0];
     if (!m) throw notFound('Không thấy tệp.');
     if (m.scan_state !== NEEDS_MANUAL_REVIEW) throw conflict('Tệp không ở trạng thái chờ kiểm tra thủ công.', 'invalid_state', { scan_state: m.scan_state });
     await assertContentVersion(rt.db, id, b.content_version); // R1-14: quyet dinh gan voi phien ban noi dung nguoi duyet da xem
+    const approving = b.decision === 'approve';
+    const isStream = approving ? await assertStreamApprovable(rt, id, b.confirm_full_view) : false; // video dan link: bat buoc xac nhan da xem + noi dung xa khong doi
     const prev = (await rt.db.query<{ detail: string | null }>('SELECT detail FROM creative_validation WHERE creative_id = ?', [id]))[0]?.detail ?? null;
     const approve = b.decision === 'approve';
     const now = rt.clock.now().toISOString();
@@ -78,6 +89,7 @@ export function mediaScanReviewRoutes(): Hono<AppEnv> {
         ? await db.run("UPDATE creatives SET scan_state = 'clean' WHERE id = ? AND scan_state = ?", [id, NEEDS_MANUAL_REVIEW])
         : await db.run("UPDATE creatives SET scan_state = 'failed', review_state = 'rejected', review_note = ?, state = 'rejected' WHERE id = ? AND scan_state = ?", [b.note, id, NEEDS_MANUAL_REVIEW]);
       if (res.changes === 0) throw conflict('Tệp vừa được người khác xử lý.', 'invalid_state');
+      if (isStream) await markStreamApproved(db, id, c.get('user')?.id ?? null, now);
       await db.run(
         `INSERT INTO creative_validation (creative_id, engine, verdict, detail, sha256, checked_at) VALUES (?,?,?,?,NULL,?)
          ON CONFLICT (creative_id) DO UPDATE SET engine = excluded.engine, verdict = excluded.verdict, detail = excluded.detail, checked_at = excluded.checked_at`,

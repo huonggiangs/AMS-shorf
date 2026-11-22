@@ -25,15 +25,19 @@ import { parseDiag, saveDiag } from '../lib/creative-diag.js';
 import { requirePerm } from '../auth/middleware.js';
 import { can } from '@ams/config';
 import { autoApprovePrivileged } from '../lib/auto-approve.js';
-import { AD_FORMATS, isAdFormat, parseOverlay, sha256Hex, type CreativeOverlay } from '@ams/shared';
+import { AD_FORMATS, STREAM_KINDS, STREAM_MIME, isAdFormat, parseOverlay, sha256Hex, validateStreamUrl, type CreativeOverlay } from '@ams/shared';
+import { ProbeError, probeStreamUrl, streamBinding, type StreamProbe } from '../lib/stream-probe.js';
+import { REASON_UNSCANNED, adoptProbe, assertStreamApprovable, detailOf, loadStream, markStreamApproved, presentStream, type StreamRow } from '../lib/video-link.js';
 import { writeAudit } from '../lib/audit.js';
 import type { FinancePort } from '../ports.js';
 import type { AppEnv, AuthUser } from '../types.js';
 
 const M_SELECT = `m.id, m.campaign_id, m.customer_id, m.name, m.target_type, m.px_w, m.px_h, m.kind, m.source, m.source_url, m.storage_key, m.mime, m.size_bytes, m.duration_s,
   m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code, COALESCE(sec.content_version, 1) AS content_version, cv.detail AS scan_detail, th.created_at AS thumb_at,
+  st.stream_url AS st_url, st.stream_kind AS st_kind, st.declared_duration_s AS st_dur, st.probe_status AS st_status, st.needs_review AS st_review, st.content_type AS st_ct, st.content_length AS st_len,
+  st.etag AS st_etag, st.last_modified AS st_lm, st.checked_at AS st_checked, st.probe_detail AS st_detail, st.full_view_at AS st_fv, st.approved_at AS st_appr,
   tr.kind AS tr_kind, tr.status AS tr_status, tr.bytes_done AS tr_done, tr.bytes_total AS tr_total, tr.error_code AS tr_error_code, tr.error_message AS tr_error, tr.total_parts AS tr_total_parts, tr.parts AS tr_parts, dg.diag AS diag_json`;
-const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_validation cv ON cv.creative_id = m.id LEFT JOIN creative_thumbnails th ON th.creative_id = m.id LEFT JOIN creative_transfers tr ON tr.creative_id = m.id LEFT JOIN creative_diag dg ON dg.creative_id = m.id';
+const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_validation cv ON cv.creative_id = m.id LEFT JOIN creative_thumbnails th ON th.creative_id = m.id LEFT JOIN creative_transfers tr ON tr.creative_id = m.id LEFT JOIN creative_diag dg ON dg.creative_id = m.id LEFT JOIN creative_stream st ON st.creative_id = m.id';
 
 interface MediaRow {
   id: string;
@@ -74,6 +78,27 @@ interface MediaRow {
   tr_total_parts?: number | null;
   tr_parts?: string | null;
   diag_json?: string | null;
+  st_url?: string | null;
+  st_kind?: string | null;
+  st_dur?: number | null;
+  st_status?: string | null;
+  st_review?: number | null;
+  st_ct?: string | null;
+  st_len?: number | null;
+  st_etag?: string | null;
+  st_lm?: string | null;
+  st_checked?: string | null;
+  st_detail?: string | null;
+  st_fv?: string | null;
+  st_appr?: string | null;
+}
+
+function streamOf(m: MediaRow): Record<string, unknown> | null {
+  if (!m.st_url) return null;
+  return presentStream({
+    stream_url: m.st_url, stream_kind: m.st_kind as StreamRow['stream_kind'], declared_duration_s: num(m.st_dur), probe_status: (m.st_status ?? 'ok') as StreamRow['probe_status'], needs_review: num(m.st_review),
+    content_type: m.st_ct ?? null, content_length: m.st_len == null ? null : num(m.st_len), etag: m.st_etag ?? null, last_modified: m.st_lm ?? null, checked_at: m.st_checked ?? '', probe_detail: m.st_detail ?? null, full_view_at: m.st_fv ?? null, approved_at: m.st_appr ?? null,
+  });
 }
 
 function overlayOf(raw: string | null | undefined): CreativeOverlay | null {
@@ -119,8 +144,13 @@ export interface Blocker {
   /** confirm: xac nhan lai tai len | recheck: kiem tra lai tu dong | manual_review: nguoi co quyen xem va duyet tay | reupload: tai lai tep | wait: cho | none */
   action: 'confirm' | 'recheck' | 'manual_review' | 'reupload' | 'wait' | 'retry' | 'none';
 }
-export function blockerOf(m: Pick<MediaRow, 'state' | 'review_state' | 'scan_state' | 'source'> & { tr_kind?: string | null; tr_status?: string | null; tr_error?: string | null; storage_key?: string | null }): Blocker | null {
+export function blockerOf(m: Pick<MediaRow, 'state' | 'review_state' | 'scan_state' | 'source'> & { tr_kind?: string | null; tr_status?: string | null; tr_error?: string | null; storage_key?: string | null; st_url?: string | null; st_status?: string | null }): Blocker | null {
   if (m.review_state === 'approved') return null;
+  if (m.st_url) {
+    if (m.review_state === 'rejected' || m.review_state === 'returned' || m.state === 'rejected') return { code: 'rejected', message: 'Video đã bị trả lại. Dán liên kết khác.', action: 'reupload' };
+    if (m.st_status && m.st_status !== 'ok') return { code: 'stream_changed', message: m.st_status === 'changed' ? 'Nội dung ở liên kết đã thay đổi so với lúc duyệt. Bấm "Kiểm tra lại", xem lại toàn bộ video rồi duyệt lại.' : 'Liên kết video không truy cập được. Kiểm tra liên kết hoặc dán liên kết khác.', action: 'manual_review' };
+    if (m.scan_state === 'needs_manual_review') return { code: 'creative_needs_manual_review', message: 'Video từ liên kết không được quét mã độc. Người có quyền cần xem trước TOÀN BỘ video và xác nhận "Tôi đã xem toàn bộ nội dung" mới duyệt được.', action: 'manual_review' };
+  }
   if (m.state === 'importing') return { code: 'importing', message: 'Hệ thống đang tải tệp từ liên kết về kho lưu trữ. Vui lòng đợi, trạng thái tự cập nhật.', action: 'wait' };
   if (m.tr_kind === 'import' && m.tr_status === 'failed') return { code: 'import_failed', message: m.tr_error ?? 'Tải tệp từ liên kết thất bại. Bấm "Thử lại" hoặc dùng tệp tải lên.', action: 'retry' };
   if (m.state === 'uploading') return { code: 'upload_incomplete', message: 'Tệp chưa tải xong hoặc chưa được xác nhận. Bấm "Xác nhận lại" sau khi tệp đã tải lên; nếu vẫn lỗi, hãy tải lại tệp.', action: 'confirm' };
@@ -177,12 +207,14 @@ export const present = (m: MediaRow, external = false): Record<string, unknown> 
   ...diagFields(m, external),
   id: m.id,
   name: m.name ?? m.id,
-  kind: m.source !== 'upload' ? 'link' : (m.kind ?? (m.mime?.startsWith('image/') ? 'image' : 'video')),
+  kind: m.st_url ? 'stream' : m.source !== 'upload' ? 'link' : (m.kind ?? (m.mime?.startsWith('image/') ? 'image' : 'video')),
+  delivery: m.st_url ? 'stream' : 'upload',
+  stream: streamOf(m),
   mime: m.mime,
   width: m.px_w,
   height: m.px_h,
   duration_sec: m.duration_s,
-  size_bytes: m.size_bytes === null ? null : num(m.size_bytes),
+  size_bytes: m.st_url ? (m.st_len == null ? null : num(m.st_len)) : m.size_bytes === null ? null : num(m.size_bytes),
   status: statusOf(m),
   owner_name: m.owner_name,
   customer_id: m.customer_id,
@@ -197,7 +229,7 @@ export const present = (m: MediaRow, external = false): Record<string, unknown> 
   scan_state: m.scan_state,
   scan_reasons: reasonsOf(m.scan_detail),
   blocker: blockerOf(m),
-  scan_warning: m.scan_state === 'needs_manual_review' ? 'Chờ kiểm tra thủ công (định dạng bất thường)' : null,
+  scan_warning: m.st_url ? 'Nội dung từ liên kết không được quét mã độc: cần xem thủ công toàn bộ' : m.scan_state === 'needs_manual_review' ? 'Chờ kiểm tra thủ công (định dạng bất thường)' : null,
   format: isAdFormat(m.format) ? m.format : 'fullscreen',
   overlay: overlayOf(m.overlay),
   sha256: m.sha256,
@@ -223,7 +255,8 @@ function mediaSpec(u: AuthUser, nowIso: string): ListSpec {
       },
       customer_id: eq('m.customer_id'),
       campaign_id: eq('m.campaign_id'),
-      kind: (v) => (v === 'link' ? { sql: "m.source <> 'upload'", params: [] } : { sql: "m.source = 'upload' AND m.kind = ?", params: [v] }),
+      delivery: (v) => (v === 'stream' ? { sql: 'st.creative_id IS NOT NULL', params: [] } : v === 'upload' ? { sql: 'st.creative_id IS NULL', params: [] } : null),
+      kind: (v) => (v === 'stream' ? { sql: 'st.creative_id IS NOT NULL', params: [] } : v === 'link' ? { sql: "m.source <> 'upload'", params: [] } : { sql: "m.source = 'upload' AND m.kind = ?", params: [v] }),
     },
   };
 }
@@ -315,6 +348,32 @@ const importBody = z.object({
   format: z.string().max(20).optional(),
   overlay: overlayInput,
 });
+
+const linkBody = z.object({
+  url: z.string().trim().min(1, 'Nhập liên kết video').max(2048),
+  name: z.string().trim().max(200).optional(),
+  duration_sec: z.coerce.number().int('Thời lượng phải là số giây nguyên').min(1, 'Nhập thời lượng video (giây)').max(36000),
+  kind: z.enum(STREAM_KINDS).optional(),
+  target_type: z.enum(['tv', 'elevator', 'led']).optional(),
+  width: z.coerce.number().int().min(1).max(20000).optional(),
+  height: z.coerce.number().int().min(1).max(20000).optional(),
+  customer_id: z.string().max(64).optional().nullable(),
+  format: z.string().max(20).optional(),
+  overlay: overlayInput,
+});
+
+/** Gioi han toc do theo nguoi dung (cua so 60 giay): moi lan kiem tra link la mot yeu cau ra ngoai. */
+async function limitProbe(rt: Runtime, userId: string, what: string, max = 12): Promise<void> {
+  const win = Math.floor(rt.clock.now().getTime() / 60_000);
+  const n = await rt.kv.incr(`rl:media-link:${what}:${userId}:${win}`, 120);
+  if (n > max) throw tooMany('Bạn thao tác quá nhanh, hãy thử lại sau ít phút.', 60, 'rate_limited');
+}
+
+/** Loi tu probe -> 422 tieng Viet voi ma ro rang. */
+function probeToHttp(e: unknown): never {
+  if (e instanceof ProbeError) throw unprocessable(e.message, e.status === 'invalid' ? e.code : e.status === 'unreachable' ? 'stream_unreachable' : 'stream_http_error', { reason: e.code });
+  throw e;
+}
 
 async function emailOwner(rt: Runtime, customerId: string, subject: string, html: string): Promise<void> {
   const to = (await rt.db.query<{ email: string | null }>('SELECT email FROM customers WHERE id = ?', [customerId]))[0]?.email;
@@ -468,6 +527,39 @@ export async function finalizeUpload(o: FinalizeOpts): Promise<{ warnings: strin
   return { warnings };
 }
 
+/** Kiem tra lai video dan link theo yeu cau: nhan binding MOI (neu doi => content_version tang, nguoi duyet phai xem lai), khong tu duyet. */
+async function recheckLink(c: Ctx, m: MediaRow, external: boolean): Promise<Record<string, unknown>> {
+  const rt = getRt(c);
+  if (m.state === 'invalid' || m.review_state === 'approved') throw conflict('Tệp ở trạng thái này không cần kiểm tra lại.', 'invalid_state');
+  await limitProbe(rt, c.get('user').id, 'recheck');
+  const s = await loadStream(rt.db, m.id);
+  if (!s) throw conflict('Không phải video dán link.', 'invalid_state');
+  const nowIso = rt.clock.now().toISOString();
+  let p: StreamProbe;
+  try {
+    p = await probeStreamUrl(s.stream_url, { kind: s.stream_kind });
+  } catch (e) {
+    if (e instanceof ProbeError && e.status !== 'invalid') {
+      await rt.db.run("UPDATE creative_stream SET probe_status = ?, needs_review = 1, checked_at = ?, probe_detail = ? WHERE creative_id = ?", [e.status === 'http_error' ? 'http_error' : 'unreachable', nowIso, JSON.stringify({ warnings: [], reason: e.code }), m.id]);
+      await bumpManifest(rt);
+    }
+    return probeToHttp(e);
+  }
+  if (p.status !== 'ok') {
+    await rt.db.run("UPDATE creative_stream SET probe_status = ?, needs_review = 1, checked_at = ?, probe_detail = ? WHERE creative_id = ?", [p.status, nowIso, JSON.stringify({ warnings: p.warnings, reason: `http_${p.http_status}` }), m.id]);
+    throw unprocessable(`Máy chủ video trả lỗi HTTP ${p.http_status ?? '?'}.`, 'stream_http_error', { http_status: p.http_status });
+  }
+  const binding = await streamBinding(s.stream_url, p);
+  await rt.db.tx(async (db) => {
+    await adoptProbe(db, m.id, s.stream_url, p, nowIso);
+    if (binding !== s.binding) await bumpContentVersion(db, m.id, nowIso);
+    await db.run("UPDATE creative_stream SET needs_review = CASE WHEN ? = 1 THEN 1 ELSE needs_review END WHERE creative_id = ?", [binding !== s.binding ? 1 : 0, m.id]);
+    await auditCtx(c, db, { action: 'media.link_recheck', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { changed: binding !== s.binding, etag: { from: s.etag, to: p.etag }, content_length: { from: s.content_length, to: p.content_length } } });
+  });
+  if (binding !== s.binding) await bumpManifest(rt);
+  return present(await loadMedia(c, m.id), external);
+}
+
 export function mediaRoutes(external: boolean): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
 
@@ -483,7 +575,8 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const m = await loadMedia(c, c.req.param('id'));
     const out = present(m, external);
     // Tep da nam trong kho (tai len HOAC nhap tu Drive/link da tai ve) deu xem truoc duoc; link truc tiep chua tai ve thi dung chinh URL do.
-    if (m.storage_key && m.state !== 'uploading' && m.state !== 'invalid') out['preview_url'] = await rt.objects.getSigned(m.storage_key, 900);
+    if (m.st_url) out['preview_url'] = m.st_url; // video dan link: trinh duyet nguoi duyet phat truc tiep tu URL
+    else if (m.storage_key && m.state !== 'uploading' && m.state !== 'invalid') out['preview_url'] = await rt.objects.getSigned(m.storage_key, 900);
     else if (m.source === 'url' && m.source_url && /^https?:\/\//i.test(m.source_url)) out['preview_url'] = m.source_url;
     return c.json(out);
   });
@@ -696,11 +789,72 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     return c.json(present(await loadMedia(c, m.id), external));
   });
 
+  // Dan link video (stream): TV phat truc tiep tu URL, may chu KHONG tai/chuyen ma/luu video; khong gioi han do phan giai/bitrate/fps.
+  // Chi HEAD + Range <= 64 KB qua chot SSRF (lib/stream-probe.ts). Moi creative nay vao 'needs_manual_review' (remote_stream_unscanned): phai co nguoi XEM THAT roi duyet.
+  r.post('/link', requirePerm('media', 'write'), async (c) => {
+    const rt = getRt(c);
+    const u = c.get('user');
+    const b = await parseBody(c, linkBody);
+    const customerId = await resolveOwner(c, b.customer_id);
+    await limitProbe(rt, u.id, 'create');
+    const chk = validateStreamUrl(b.url);
+    if (!chk.ok) throw unprocessable(chk.message, chk.code);
+    const target: TargetType = b.target_type ? dbTarget(b.target_type) : 'tv';
+    const range = DURATION_RANGE[target];
+    if (range && (b.duration_sec < range[0] || b.duration_sec > range[1])) throw unprocessable(`Thời lượng phải từ ${range[0]} đến ${range[1]} giây cho loại màn này.`, 'duration_out_of_range');
+    if (target !== 'tv') {
+      // thang may/LED khong tu co gian: can do phan giai dung de manifest chon dung nhom (TV thi KHONG kiem tra do phan giai: 2K-8K deu nhan)
+      if (!b.width || !b.height) throw unprocessable('Màn thang máy/LED cần khai báo đúng độ phân giải video (rộng × cao).', 'dimensions_required');
+      const fit = fitsTarget(target, b.width, b.height, { knownLed: await knownLedPx(rt) });
+      if (!fit.ok) throw unprocessable(fit.message, 'creative_size_mismatch');
+    }
+    const fo = checkFormatOverlay(b.format, b.overlay, external);
+    const quota = await quotaOf(rt, customerId);
+    await checkQuotas(rt, customerId, 0, quota);
+
+    let p: StreamProbe;
+    try {
+      p = await probeStreamUrl(chk.url.toString(), { kind: b.kind ?? null });
+    } catch (e) {
+      probeToHttp(e);
+    }
+    if (p!.status !== 'ok') throw unprocessable(`Máy chủ video trả lỗi HTTP ${p!.http_status ?? '?'}. Kiểm tra liên kết có mở công khai (không cần đăng nhập) được không.`, 'stream_http_error', { http_status: p!.http_status });
+    const probe = p!;
+    const d = probe.info.duration_s;
+    if (d && Math.abs(d - b.duration_sec) > Math.max(2, b.duration_sec * 0.1)) probe.warnings.push(`duration_mismatch:khai báo ${b.duration_sec} giây, video ${d} giây`);
+
+    const id = rt.id();
+    const url = chk.url.toString();
+    const nowIso = rt.clock.now().toISOString();
+    const binding = await streamBinding(url, probe);
+    const name = (b.name || decodeURIComponent(chk.url.pathname.split('/').filter(Boolean).pop() ?? '') || chk.host).slice(0, 200);
+    await rt.db.tx(async (db) => {
+      await db.run(
+        `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, uploaded_by, uploader_kind, scan_state, review_state, state, format, overlay, created_at)
+         VALUES (?,NULL,?,?,?,?,?,?,'video','url',?,NULL,?,NULL,?,?,?,'needs_manual_review','pending','pending_review',?,?,?)`,
+        [id, customerId, name, target, b.width ?? probe.info.width ?? null, b.height ?? probe.info.height ?? null, (b.width ?? probe.info.width ?? 0) && (b.height ?? probe.info.height ?? 0) ? ((b.width ?? probe.info.width!) >= (b.height ?? probe.info.height!) ? 'landscape' : 'portrait') : null, url, STREAM_MIME[probe.kind], b.duration_sec, u.id, u.kind, fo.format ?? 'fullscreen', fo.overlay ?? null, nowIso],
+      );
+      await db.run(
+        `INSERT INTO creative_stream (creative_id, delivery, stream_url, stream_kind, declared_duration_s, content_type, content_length, etag, last_modified, body_hash, binding, probe_status, probe_detail, fail_count, needs_review, checked_at, created_at)
+         VALUES (?,'stream',?,?,?,?,?,?,?,?,?,'ok',?,0,0,?,?)`,
+        [id, url, probe.kind, b.duration_sec, probe.content_type, probe.content_length, probe.etag, probe.last_modified, probe.body_hash, binding, JSON.stringify(detailOf(probe)), nowIso, nowIso],
+      );
+      await db.run(
+        `INSERT INTO creative_validation (creative_id, engine, verdict, detail, sha256, checked_at) VALUES (?,?,?,?,NULL,?)`,
+        [id, 'remote_stream', 'needs_manual_review', JSON.stringify({ reasons: [REASON_UNSCANNED] }), nowIso],
+      );
+      await syncKidFlags(db, id, fo.overlay ?? null, nowIso);
+      await auditCtx(c, db, { action: 'media.link_create', objectType: 'creative', objectId: id, customerId, diff: { delivery: 'stream', host: chk.host, kind: probe.kind, duration_sec: b.duration_sec, target_type: target, etag: probe.etag, content_length: probe.content_length } });
+    });
+    return c.json(present(await loadMedia(c, id), external), 201);
+  });
+
   // Kiem tra lai tu dong (tep 'pending' bi ket do mat tin nhan/queue, hoac 'needs_manual_review' muon chay lai kiem tra): dat lai 'pending' + day lai viec quet.
   // Khong bao gio ghi 'clean' o day: chi bo quet (media-worker/ClamAV tren VPS, validator tren Cloudflare) moi quyet dinh.
   r.post('/:id/recheck', requirePerm('media', 'write'), async (c) => {
     const rt = getRt(c);
     const m = await loadMedia(c, c.req.param('id'));
+    if (m.st_url) return c.json(await recheckLink(c, m, external)); // video dan link: kiem tra lai URL (HEAD/Range)
     if (m.source !== 'upload' || !m.storage_key) throw conflict('Tệp lấy từ liên kết không kiểm tra lại được.', 'invalid_state');
     if (m.state === 'uploading') throw conflict('Tệp chưa được xác nhận tải lên. Hãy xác nhận lại trước.', 'invalid_state');
     if (m.state === 'invalid' || m.review_state === 'approved') throw conflict('Tệp ở trạng thái này không cần kiểm tra lại.', 'invalid_state');
@@ -789,13 +943,15 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const rt = getRt(c);
     const u = c.get('user');
     const m = await loadMedia(c, c.req.param('id'));
-    const body = await parseBody(c, z.object({ content_version: z.coerce.number().int().min(1).optional(), manual_review_note: z.string().trim().min(3, 'Nhập ghi chú kiểm tra thủ công (tối thiểu 3 ký tự)').max(500).optional() }));
+    const body = await parseBody(c, z.object({ content_version: z.coerce.number().int().min(1).optional(), manual_review_note: z.string().trim().min(3, 'Nhập ghi chú kiểm tra thủ công (tối thiểu 3 ký tự)').max(500).optional(), confirm_full_view: z.boolean().optional() }));
     if (m.state === 'uploading' || m.state === 'importing' || m.state === 'invalid') throw conflict('Tệp chưa tải xong hoặc không hợp lệ.', 'invalid_state');
     if (m.review_state === 'approved') return c.json(present(m, external));
     // Cloudflare (khong co ClamAV): nguoi co quyen media:approve xem tep roi duyet MOT BUOC; ghi chu bat buoc, ghi audit + creative_validation.engine='manual'.
     const manual = m.scan_state === NEEDS_MANUAL_REVIEW && body.manual_review_note !== undefined;
     assertScanOk(manual ? { ...m, scan_state: 'clean' } : m, await allowUnscannedCreatives(rt), { creative_id: m.id, scan_state: m.scan_state });
     await assertContentVersion(rt.db, m.id, body.content_version); // R1-14: nguoi duyet phai duyet dung phien ban da xem
+    // video dan link: bat buoc xac nhan da xem toan bo + noi dung xa khong doi ke tu luc xem
+    const isStream = await assertStreamApprovable(rt, m.id, body.confirm_full_view);
     await assertLockPolicy(rt.db, m.overlay, { creative_id: m.id }); // chinh sach tre em: man khoa tat thi khong duyet creative co ngu canh 'lock'
     const nowIso = rt.clock.now().toISOString();
     await rt.db.tx(async (db) => {
@@ -816,7 +972,8 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       const res = await db.run("UPDATE creatives SET review_state = 'approved', review_note = NULL, state = 'ready' WHERE id = ? AND state NOT IN ('uploading','importing','invalid') AND scan_state = ?", [m.id, manual ? 'clean' : m.scan_state]);
       if (res.changes === 0) throw conflict('Tệp vừa đổi trạng thái.', 'invalid_state');
       const ap = await recordApproval(db, { id: m.id, ...cur }, nowIso);
-      await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'approved' }, scan_state: m.scan_state, content_version: ap.version, content_hash: ap.hash, version_bound: body.content_version !== undefined } });
+      if (isStream) await markStreamApproved(db, m.id, u.id, nowIso);
+      await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'approved' }, scan_state: m.scan_state, content_version: ap.version, content_hash: ap.hash, version_bound: body.content_version !== undefined, delivery: isStream ? 'stream' : 'upload', full_view_confirmed: isStream ? true : undefined } });
     });
     await bumpManifest(rt);
     await emailOwner(rt, m.customer_id, `Tệp "${m.name ?? ''}" đã được duyệt`, `<p>Tệp <b>${esc(m.name)}</b> đã được duyệt và có thể dùng cho chiến dịch.</p>`);
@@ -877,6 +1034,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
         await db.run('DELETE FROM creative_thumbnails WHERE creative_id = ?', [m.id]);
         await db.run('DELETE FROM creative_transfers WHERE creative_id = ?', [m.id]);
         await db.run('DELETE FROM creative_diag WHERE creative_id = ?', [m.id]);
+        await db.run('DELETE FROM creative_stream WHERE creative_id = ?', [m.id]);
         await auditCtx(c, db, { action: 'media.delete', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { name: m.name, size_bytes: m.size_bytes === null ? null : num(m.size_bytes), bulk: true } });
         return true;
       });
@@ -931,6 +1089,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       await db.run('DELETE FROM creative_thumbnails WHERE creative_id = ?', [m.id]);
       await db.run('DELETE FROM creative_transfers WHERE creative_id = ?', [m.id]);
       await db.run('DELETE FROM creative_diag WHERE creative_id = ?', [m.id]);
+      await db.run('DELETE FROM creative_stream WHERE creative_id = ?', [m.id]);
       await db.run('DELETE FROM creatives WHERE id = ?', [m.id]);
       await auditCtx(c, db, { action: 'media.delete', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { name: m.name } });
     });
