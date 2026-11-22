@@ -267,6 +267,8 @@ Creative do khách/nhân viên **dán link** (không tải lên) có dạng khá
 
 **Tương thích cho app TV**: client phải hỗ trợ phát stream (ExoPlayer/Media3 xử lý mp4/hls/dash), **bỏ qua creative sang creative kế tiếp khi stream lỗi** (timeout, 4xx/5xx, giải mã lỗi) và ghi log lỗi theo `creative_id`. Giao thức **chưa có loại sự kiện lỗi riêng** (đề xuất bổ sung `type: "playback_error"`); trong lúc chờ, không gửi `impression` cho lượt phát lỗi. Client cũ không hiểu `delivery` sẽ không tìm thấy `sha256` và phải bỏ qua creative đó (không được phát khi thiếu sha256). Server loại creative stream khỏi manifest khi nội dung xa đổi (ETag/độ dài/Last-Modified), URL lỗi 4xx/5xx kéo dài, hoặc chưa được người duyệt xem toàn bộ và xác nhận (xem `docs/VIDEO-LINK.md`). Impression của creative stream dùng cùng sự kiện `impression`: `played_ms` là thời gian hiển thị thực (**rebuffer làm giảm `played_ms`**; dưới 0.9 x `duration_ms` thì bị gắn `short_play`, không tính tiền). Không đổi cách tính tiền.
 
+**URL media**: `PUBLIC_MEDIA_BASE_URL` > `MEDIA_PUBLIC_URL` > `S3_PUBLIC_ENDPOINT/S3_BUCKET` > `${PUBLIC_GATEWAY_URL}/media`. Trường hợp cuối (Cloudflare R2 chỉ có binding) gateway tự phục vụ `GET /media/<khóa>` (không ký, có `Range`, chỉ tệp/rendition của creative `approved`+`ready`, khác thì 404). Trước đây thiếu cả bốn biến thì URL là `https://media.ams.invalid` và TV không tải được video.
+
 **Slot** (`schedule[]`): `{slot_id, campaign_id, creative_ids, daypart, start_min, end_min, priority, reward_points}`
 
 - `start_min`/`end_min`: phút từ 00:00 theo múi giờ `tz` (hiện **luôn** `Asia/Ho_Chi_Minh`, UTC+7); `0..1440`, `start_min < end_min`. Slot áp dụng khi giờ địa phương nằm trong `[start_min, end_min)`.

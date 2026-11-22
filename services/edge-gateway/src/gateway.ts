@@ -85,7 +85,8 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   const nonces = opts.nonces ?? new KvNonceStore(rt.kv);
   const deps: AuthDeps = { rt, devices, nonces };
   // PUBLIC_MEDIA_BASE_URL: dia chi TV tai duoc (Caddy phuc vu renditions/* tu volume khi OBJECT_STORE=fs); MEDIA_PUBLIC_URL giu lam ten cu.
-  const mediaBase = env['PUBLIC_MEDIA_BASE_URL'] ?? env['MEDIA_PUBLIC_URL'] ?? (env['S3_PUBLIC_ENDPOINT'] && env['S3_BUCKET'] ? `${env['S3_PUBLIC_ENDPOINT']}/${env['S3_BUCKET']}` : 'https://media.ams.invalid');
+  const mediaBase = env['PUBLIC_MEDIA_BASE_URL'] ?? env['MEDIA_PUBLIC_URL'] ?? (env['S3_PUBLIC_ENDPOINT'] && env['S3_BUCKET'] ? `${env['S3_PUBLIC_ENDPOINT']}/${env['S3_BUCKET']}` : env['PUBLIC_GATEWAY_URL'] ? `${env['PUBLIC_GATEWAY_URL'].replace(/\/+$/, '')}/media` : 'https://media.ams.invalid');
+  // Khong cau hinh URL media rieng (Cloudflare R2 chi co binding): gateway tu phuc vu tep qua GET /media/* (xem duoi), nen URL trong manifest dung duoc.
   const manifestTtl = envInt(env, 'MANIFEST_TTL_S', 900);
   const manifests = new ManifestService(rt, { mediaBaseUrl: mediaBase, ttlS: manifestTtl, buildTtlS: envInt(env, 'MANIFEST_BUILD_TTL_S', 60), memTtlS: envInt(env, 'MANIFEST_MEM_TTL_S', 15) });
   const rps = new RpsLoad(rt, envInt(env, 'GW_CAPACITY_RPS', DEFAULT_GW_CAPACITY_RPS));
@@ -448,6 +449,46 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     }
     return new Response(view.json, { status: 200, headers: { ...headers, 'content-type': 'application/json; charset=utf-8', 'x-manifest-kind': 'full' } });
   }
+
+
+  // Phuc vu tep media da duyet cho TV khi khong co URL cong khai rieng (R2 binding). Chi tep cua creative approved/ready; ho tro Range.
+  const MEDIA_MAX_CHUNK = 8 * 1024 * 1024;
+  app.get('/media/*', async (c) => {
+    let key: string;
+    try {
+      key = decodeURIComponent(new URL(c.req.url).pathname.replace(/^\/media\//, ''));
+    } catch {
+      throw new HttpProblem('not_found', 'Khong co.');
+    }
+    if (!key || key.includes('..') || key.startsWith('/')) throw new HttpProblem('not_found', 'Khong co.');
+    const seg = key.split('/');
+    const ok = seg[0] === 'renditions' && seg.length >= 3
+      ? (await rt.db.query<{ n: number }>("SELECT 1 AS n FROM creatives WHERE id = ? AND review_state = 'approved' AND state = 'ready'", [seg[2]!]))[0]
+      : (await rt.db.query<{ n: number }>("SELECT 1 AS n FROM creatives WHERE storage_key = ? AND review_state = 'approved' AND state = 'ready' LIMIT 1", [key]))[0];
+    if (!ok) throw new HttpProblem('not_found', 'Khong co.');
+    const head = await rt.objects.head(key);
+    if (!head) throw new HttpProblem('not_found', 'Khong co.');
+    const base: Record<string, string> = { 'content-type': head.contentType || 'application/octet-stream', 'accept-ranges': 'bytes', 'cache-control': 'public, max-age=3600', 'access-control-allow-origin': '*' };
+    const m = /^bytes=(\d*)-(\d*)$/.exec((c.req.header('range') ?? '').trim());
+    if (m && (m[1] !== '' || m[2] !== '') && rt.objects.getRange) {
+      let start: number;
+      let end: number;
+      if (m[1] === '') {
+        start = Math.max(0, head.size - Number(m[2]));
+        end = head.size - 1;
+      } else {
+        start = Number(m[1]);
+        end = m[2] === '' ? head.size - 1 : Math.min(Number(m[2]), head.size - 1);
+      }
+      if (!Number.isFinite(start) || start >= head.size || end < start) return new Response(null, { status: 416, headers: { ...base, 'content-range': `bytes */${head.size}` } });
+      const chunk = await rt.objects.getRange(key, start, Math.min(end - start + 1, MEDIA_MAX_CHUNK));
+      if (!chunk) throw new HttpProblem('not_found', 'Khong co.');
+      return new Response(chunk as Uint8Array<ArrayBuffer>, { status: 206, headers: { ...base, 'content-length': String(chunk.length), 'content-range': `bytes ${start}-${start + chunk.length - 1}/${head.size}` } });
+    }
+    const bytes = await rt.objects.get(key);
+    if (!bytes) throw new HttpProblem('not_found', 'Khong co.');
+    return new Response(bytes as Uint8Array<ArrayBuffer>, { status: 200, headers: { ...base, 'content-length': String(bytes.length) } });
+  });
 
   app.get('/v1/manifest', async (c) => {
     await shedCheck('manifest');
