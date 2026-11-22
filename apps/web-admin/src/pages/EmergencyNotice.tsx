@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { listOf, noticeHistorySchema, noticeResultSchema } from '../api/schemas';
+import { listOf, noticeHistorySchema, noticeResultSchema, noticeStatusSchema } from '../api/schemas';
 import { useAct } from '../api/hooks';
 import { useAuth } from '../auth/AuthProvider';
 import { Btn, EmptyBlock, Field, LoadingBlock, Note, PageHead } from '../components/ui';
@@ -21,14 +21,21 @@ export default function EmergencyNotice() {
   const canWrite = can('schedule', 'write');
   const [f, setF] = useState({ text: '', duration_s: '30', target: 'all', regions: '' });
   const hist = useQuery({ queryKey: [BASE], queryFn: () => api.get(BASE, { schema: listOf(noticeHistorySchema) }) });
+  const [batch, setBatch] = useState<string | null>(null);
+  const st = useQuery({
+    queryKey: [BASE, 'status', batch],
+    enabled: !!batch,
+    queryFn: () => api.get(`${BASE}/${batch}/status`, { schema: noticeStatusSchema }),
+    refetchInterval: (q) => (q.state.data && q.state.data.pending + q.state.data.delivered === 0 ? false : 2000),
+  });
   const send = async () => {
     const body = { text: f.text.trim(), duration_s: Number(f.duration_s), target: f.target, regions: f.regions.split(',').map((x) => x.trim()).filter(Boolean) };
     const r = await act(() => api.post(BASE, { body, schema: noticeResultSchema }), (x) => `Đã xếp thông báo cho ${x.queued}/${x.matched} thiết bị${x.skipped ? ` (${x.skipped} thiết bị đang đầy hàng đợi)` : ''}.`, ['/admin/v1/broadcast']);
-    if (r) setF({ ...f, text: '' });
+    if (r) { setF({ ...f, text: '' }); setBatch(r.batch_id ?? null); }
   };
   return (
     <>
-      <PageHead eyebrow="Gửi ngay xuống màn hình" title="Thông báo khẩn" sub="Chữ chạy hiện tạm thời trên thiết bị đã duyệt. Thiết bị nhận ở lần đồng bộ kế tiếp (thường vài phút) và bỏ qua nếu quá 10 phút." />
+      <PageHead eyebrow="Gửi ngay xuống màn hình" title="Thông báo khẩn" sub="Chữ chạy hiện tạm thời trên thiết bị đã duyệt. Thiết bị đang mở app Signage Player (1.1.2 trở lên) nhận trong khoảng 2 giây nhờ kênh thời gian thực; thiết bị cũ nhận ở lần đồng bộ kế tiếp. Bỏ qua nếu quá 10 phút." />
       {canWrite ? (
         <form className="card cp" onSubmit={(e) => { e.preventDefault(); if (window.confirm(`Gửi thông báo này tới ${TARGETS.find((x) => x.id === f.target)?.label}${f.regions.trim() ? ` (khu vực ${f.regions})` : ''}?`)) void send(); }}>
           <Field label="Nội dung (tối đa 200 ký tự)"><textarea required maxLength={200} rows={3} value={f.text} onChange={(e) => setF({ ...f, text: e.target.value })} /></Field>
@@ -57,6 +64,19 @@ export default function EmergencyNotice() {
           </table>
         </div>
       )}
+      {batch && st.data ? (
+        <div className="card cp" style={{ marginBottom: 12 }}>
+          <b>Trạng thái lô vừa gửi</b>
+          <div className="mono" style={{ margin: '6px 0' }}>
+            Đã xác nhận {st.data.acked}/{st.data.total} · Đã giao {st.data.delivered} · Đang chờ {st.data.pending} · Lỗi/hết hạn {st.data.failed}
+            {st.data.avg_delivery_ms !== null ? ` · Độ trễ giao trung bình ${(st.data.avg_delivery_ms / 1000).toFixed(1)} giây` : ''}
+          </div>
+          <table className="tbl"><thead><tr><th>Thiết bị</th><th>Trạng thái</th><th>Giao sau</th><th>Xác nhận sau</th></tr></thead>
+            <tbody>{st.data.items.slice(0, 50).map((x) => (
+              <tr key={x.device_id}><td className="mono">{x.device_id}</td><td>{x.status === 'acked' ? 'Đã hiện' : x.status === 'delivered' ? 'Đã giao, chờ xác nhận' : x.status === 'pending' ? 'Đang chờ thiết bị' : 'Lỗi / hết hạn'}</td><td className="mono">{x.delivery_ms === null ? '—' : `${(x.delivery_ms / 1000).toFixed(1)} s`}</td><td className="mono">{x.ack_ms === null ? '—' : `${(x.ack_ms / 1000).toFixed(1)} s`}</td></tr>
+            ))}</tbody></table>
+        </div>
+      ) : null}
       <Note>Thông báo chỉ gửi tới thiết bị đã được duyệt và không bị chặn. Màn hình cần dùng bản Signage Player/ứng dụng hỗ trợ lệnh “message”.</Note>
     </>
   );

@@ -434,6 +434,32 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     return c.json({ ok: true, stored: stmts.length });
   });
 
+  // ------------------------------------------------- command long-poll (realtime)
+  // GET /v1/commands/wait?timeout=<1..25>: giu ket noi toi da `timeout` giay; tra ngay khi co lenh (kiem co hieu kv moi WAIT_TICK_MS).
+  // Tin khan toi thiet bi dang cho trong <~2 giay thay vi cho nhip heartbeat. Chi chi phi: <= 25/WAIT_TICK truy van kv moi lan goi.
+  const waitLimit = envInt(env, 'CMD_WAIT_LIMIT_PER_HOUR', 600);
+  const waitTickMs = envInt(env, 'CMD_WAIT_TICK_MS', 1500);
+  app.get('/v1/commands/wait', async (c) => {
+    await shedCheck('hb');
+    const dev = await authenticateDevice(c, deps, new Uint8Array());
+    await rateLimit(`cw:${dev.id}`, waitLimit, 3600, 'long-poll lenh theo thiet bi');
+    const tRaw = Number(c.req.query('timeout') ?? 25);
+    const timeoutS = Math.min(25, Math.max(1, Number.isFinite(tRaw) ? Math.floor(tRaw) : 25));
+    const deadline = rt.clock.now().getTime() + timeoutS * 1000;
+    let commands: Delivered[] = [];
+    const maxTicks = Math.ceil((timeoutS * 1000) / waitTickMs) + 1; // phong dong ho gia trong kiem thu
+    for (let tick = 0; tick < maxTicks; tick++) {
+      if (await hasCommandFlag(rt, dev.id)) {
+        commands = await takeDeliverable(rt, dev.id, cmdRedeliverS);
+        if (commands.length) break;
+      }
+      const left = deadline - rt.clock.now().getTime();
+      if (left <= 0) break;
+      await new Promise((r) => setTimeout(r, Math.min(waitTickMs, left)));
+    }
+    return c.json({ commands, waited: true });
+  });
+
   // ------------------------------------------------------------ command ack
   app.post('/v1/commands/ack', async (c) => {
     const body = await readBody(c, MAX_ACK_BODY_BYTES);
@@ -453,7 +479,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   }
   function clientEtag(c: import('hono').Context): string | null {
     const q = c.req.query('etag');
-    if (q) return q;
+    if (q) return q.replace(/^W\//, '').replace(/"/g, '');
     const inm = c.req.header('if-none-match');
     return inm ? inm.replace(/^W\//, '').replace(/"/g, '') : null;
   }

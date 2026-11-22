@@ -105,6 +105,69 @@ paths:
           $ref: "#/components/responses/RetryLater"
         "503": &a8
           $ref: "#/components/responses/RetryLater"
+  /v1/commands/wait:
+    get:
+      operationId: gatewayGetCommandsWait
+      tags:
+        - device
+      security: *a1
+      x-ams-source: services/edge-gateway/src/gateway.ts
+      summary: Long-poll lệnh (tin khẩn thời gian thực)
+      description: Giữ kết nối tối đa `timeout` giây (1–25, mặc định 25) và trả ngay khi có lệnh pending (kiểm cờ hàng đợi mỗi ~1,5 giây). Lệnh giao at-least-once như heartbeat; ack qua /v1/commands/ack. Giới hạn 600 lần/giờ/thiết bị (429 + `Retry-After`). Thiết bị vẫn heartbeat định kỳ.
+      parameters:
+        - name: x-device-id
+          in: header
+          required: true
+          schema:
+            type: string
+          description: device_id từ /v1/register
+        - name: x-timestamp
+          in: header
+          required: true
+          schema:
+            type: integer
+          description: epoch giây; lệch máy chủ tối đa 300s
+        - name: x-nonce
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16,64}$
+          description: dùng một lần (chống phát lại)
+        - name: x-signature
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{86}$
+          description: Ed25519, base64url không padding (64 byte)
+        - name: timeout
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 25
+      responses:
+        "200":
+          description: Danh sách lệnh (rỗng nếu hết thời gian chờ)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commands:
+                    type: array
+                    items:
+                      type: object
+                  waited:
+                    type: boolean
+        "401": *a2
+        "403": *a3
+        "409": *a4
+        "413": *a5
+        "422": *a6
+        "429": *a7
+        "503": *a8
   /v1/events:
     post:
       operationId: gatewayPostEvents

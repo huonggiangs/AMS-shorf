@@ -365,7 +365,8 @@ export type Broadcast = z.infer<typeof broadcastSchema>;
 export const noticeHistorySchema = z
   .object({ id: idStr, at: z.string(), actor: z.string(), text: z.string().nullish(), duration_s: z.coerce.number().nullish(), target: z.string().nullish(), regions: z.array(z.string()).nullish(), matched: z.coerce.number().nullish(), queued: z.coerce.number().nullish(), skipped: z.coerce.number().nullish() })
   .passthrough();
-export const noticeResultSchema = z.object({ matched: z.coerce.number(), queued: z.coerce.number(), skipped: z.coerce.number(), ttl_s: z.coerce.number() }).passthrough();
+export const noticeStatusSchema = z.object({ total: z.coerce.number(), pending: z.coerce.number(), delivered: z.coerce.number(), acked: z.coerce.number(), failed: z.coerce.number(), avg_delivery_ms: z.coerce.number().nullable(), items: z.array(z.object({ device_id: z.string(), status: z.string(), delivery_ms: z.coerce.number().nullable(), ack_ms: z.coerce.number().nullable() })) });
+export const noticeResultSchema = z.object({ batch_id: z.string().optional(), matched: z.coerce.number(), queued: z.coerce.number(), skipped: z.coerce.number(), ttl_s: z.coerce.number() }).passthrough();
 export const usbPackageSchema = z
   .object({
     program_id: z.string(),

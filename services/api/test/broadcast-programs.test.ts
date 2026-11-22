@@ -165,6 +165,10 @@ describe('thong bao khan + goi USB', () => {
     const r = await content.json('POST', '/admin/v1/broadcast/notice', { text: 'Bảo trì thang máy 14h', duration_s: 45, target: 'elevator', regions: ['ZZ'] });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(r.body).toMatchObject({ matched: 1, queued: 1, skipped: 0 });
+    expect(typeof r.body.batch_id).toBe('string');
+    const stt = await content.json('GET', `/admin/v1/broadcast/notice/${r.body.batch_id}/status`);
+    expect(stt.status).toBe(200);
+    expect(stt.body).toMatchObject({ total: 1, pending: 1, acked: 0 });
     const cmds = await rt.db.query<{ device_id: string; type: string; args: string }>("SELECT device_id, type, args FROM device_commands WHERE type = 'message'");
     expect(cmds.filter((x) => x.device_id === ok.id).map((x) => JSON.parse(x.args))).toEqual([{ text: 'Bảo trì thang máy 14h', duration_s: 45 }]);
     expect(cmds.some((x) => x.device_id === pending.id || x.device_id === other.id)).toBe(false);

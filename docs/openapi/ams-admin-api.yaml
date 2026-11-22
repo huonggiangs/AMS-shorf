@@ -505,7 +505,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:418
+      x-ams-source: services/api/src/routes/broadcast.ts:431
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -778,7 +778,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:387
+      x-ams-source: services/api/src/routes/broadcast.ts:400
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -864,6 +864,41 @@ paths:
       security:
         - cookieAuth: []
           csrfToken: []
+  /admin/v1/broadcast/notice/{batch}/status:
+    get:
+      operationId: adminGetBroadcastNoticeByBatchStatus
+      tags:
+        - broadcast
+      summary: GET /admin/v1/broadcast/notice/{batch}/status
+      parameters:
+        - name: batch
+          in: path
+          required: true
+          schema:
+            type: string
+      x-ams-permission:
+        module: schedule
+        action: view
+      x-ams-source: services/api/src/routes/broadcast.ts:362
+      description: |-
+        Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
   /admin/v1/broadcast/{id}:
     delete:
       operationId: adminDeleteBroadcastById
@@ -879,7 +914,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: delete
-      x-ams-source: services/api/src/routes/broadcast.ts:518
+      x-ams-source: services/api/src/routes/broadcast.ts:531
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -914,7 +949,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:416
+      x-ams-source: services/api/src/routes/broadcast.ts:429
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -948,7 +983,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:445
+      x-ams-source: services/api/src/routes/broadcast.ts:458
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -990,7 +1025,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:401
+      x-ams-source: services/api/src/routes/broadcast.ts:414
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1025,7 +1060,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:485
+      x-ams-source: services/api/src/routes/broadcast.ts:498
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1061,7 +1096,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:504
+      x-ams-source: services/api/src/routes/broadcast.ts:517
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1097,7 +1132,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:361
+      x-ams-source: services/api/src/routes/broadcast.ts:374
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 

@@ -214,6 +214,14 @@ App bỏ qua `type` lạ và **vẫn ack**.
 
 Chữ ký thiết bị. Thân: `{"acks":[{"id":"<command id>","status":"ok"|"failed","result":{...}?}]}` (tối đa 20 mục, thân bị giới hạn kích thước). Phản hồi `200`: `{"ok":true,"acked":N,"known":N,"unknown":["<command id>", ...]}` (`acked`/`known` là số; `unknown` là MẢNG id không thuộc thiết bị này, rỗng nếu không có). `ok` -> `acked`, `failed` -> `failed` (không giao lại). Id lạ hoặc đã ack được liệt kê trong `unknown`/bỏ qua, không lỗi (idempotent). Có thể ack ngay sau khi thực thi, không cần chờ heartbeat.
 
+## 6b. `GET /v1/commands/wait?timeout=1..25` (realtime, từ app 1.1.2)
+
+Long-poll có chữ ký như mọi request thiết bị (body rỗng). Gateway giữ kết nối tối đa `timeout` giây (mặc định/trần 25), kiểm tra cờ lệnh mỗi ~1,5 s (`CMD_WAIT_TICK_MS`); có lệnh pending thì trả ngay `{"commands":[...],"waited":true}` (cùng định dạng và ngữ nghĩa at-least-once như heartbeat; ack qua `POST /v1/commands/ack`). Hết thời gian trả `commands: []`. Giới hạn `CMD_WAIT_LIMIT_PER_HOUR` (600/giờ/thiết bị). App phải gọi lại ngay sau mỗi phản hồi, backoff 5→60 s khi lỗi; heartbeat vẫn chạy làm dự phòng. Độ trễ gửi→nhận thường ≤ ~2 s.
+
+Ack có thể kèm `result` (≤500 ký tự). `set_volume` trả `{"applied_percent":N,"mode":"system|player"}`; `mode=player` nghĩa là hệ điều hành cố định âm lượng và app hạ gain ExoPlayer.
+
+Chuẩn hóa ETag: `?etag=` của manifest được bỏ tiền tố `W/` và dấu `"` ở cả hai phía; chữ ký tính trên path+query đã mã hóa đúng như gửi đi.
+
 ## 7. Manifest
 
 ### 7.1 `GET /v1/manifest?etag=<etag đang giữ>` (có ký, thân rỗng)

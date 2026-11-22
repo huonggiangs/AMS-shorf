@@ -353,6 +353,12 @@ export function buildGatewayDoc(routes: RouteKey[]): Json {
       requestBody: { required: true, content: { 'application/json': { schema: c.add('CommandAckRequest', commandAckBody) } } },
       responses: { '200': json('CommandAckResponse', G.commandAckResponse, 'OK'), ...common429 },
     },
+    'GET /v1/commands/wait': {
+      summary: 'Long-poll lệnh (tin khẩn thời gian thực)',
+      description: 'Giữ kết nối tối đa `timeout` giây (1–25, mặc định 25) và trả ngay khi có lệnh pending (kiểm cờ hàng đợi mỗi ~1,5 giây). Lệnh giao at-least-once như heartbeat; ack qua /v1/commands/ack. Giới hạn 600 lần/giờ/thiết bị (429 + `Retry-After`). Thiết bị vẫn heartbeat định kỳ.',
+      parameters: [...sigHeaders(true), { name: 'timeout', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 25 } }],
+      responses: { '200': { description: 'Danh sách lệnh (rỗng nếu hết thời gian chờ)', content: { 'application/json': { schema: { type: 'object', properties: { commands: { type: 'array', items: { type: 'object' } }, waited: { type: 'boolean' } } } } } }, ...common429 },
+    },
     'GET /v1/manifest': {
       summary: 'Manifest của thiết bị (đầy đủ hoặc delta)',
       description: 'Điều kiện: `If-None-Match`/`?etag=` trùng => 304. `?delta=1&etag=<base>` => bản delta nếu còn. Header `X-Manifest-Kind: full|delta`. Thiết bị PHẢI kiểm `sha256` từng creative trước khi phát.',

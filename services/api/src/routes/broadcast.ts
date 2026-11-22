@@ -343,18 +343,31 @@ export function broadcastRoutes(): Hono<AppEnv> {
     if (devices.length > NOTICE_MAX_DEVICES) throw unprocessable(`Có hơn ${NOTICE_MAX_DEVICES} thiết bị khớp. Hãy chọn thêm khu vực hoặc loại màn để gửi theo đợt.`, 'too_many_devices', { max: NOTICE_MAX_DEVICES });
     let queued = 0;
     let skipped = 0;
+    const batchId = rt.id();
     for (const d of devices) {
       const args = SIGNAGE_KINDS.includes(d.kind) ? { text: b.text, duration_s: b.duration_s } : { text: b.text, seconds: Math.max(5, b.duration_s) };
       try {
-        await enqueueCommand(rt, d.id, { type: 'message', args }, { ttlS: NOTICE_TTL_S, createdBy: u.id, ip: c.get('ip') ?? null });
+        await enqueueCommand(rt, d.id, { type: 'message', args }, { ttlS: NOTICE_TTL_S, createdBy: u.id, ip: c.get('ip') ?? null, idempotencyKey: `notice-${batchId}` });
         queued++;
       } catch (e) {
         if (e instanceof CommandError) skipped++;
         else throw e;
       }
     }
-    await auditCtx(c, rt.db, { action: 'broadcast.notice', objectType: 'broadcast_notice', objectId: null, diff: { text: b.text, duration_s: b.duration_s, target: b.target, regions: b.regions, matched: devices.length, queued, skipped } });
-    return c.json({ matched: devices.length, queued, skipped, ttl_s: NOTICE_TTL_S }, 201);
+    await auditCtx(c, rt.db, { action: 'broadcast.notice', objectType: 'broadcast_notice', objectId: null, diff: { batch_id: batchId, text: b.text, duration_s: b.duration_s, target: b.target, regions: b.regions, matched: devices.length, queued, skipped } });
+    return c.json({ batch_id: batchId, matched: devices.length, queued, skipped, ttl_s: NOTICE_TTL_S }, 201);
+  });
+
+  // Trang thai nhan tin khan theo lo: thiet bi nao da nhan/xac nhan, do tre (xac nhan - luc tao). Thiet bi dang long-poll nhan trong ~2 giay.
+  r.get('/notice/:batch/status', requirePerm('schedule', 'view'), async (c) => {
+    const key = `notice-${c.req.param('batch')}`;
+    const rows = await getRt(c).db.query<{ device_id: string; status: string; created_at: string; delivered_at: string | null; acked_at: string | null }>(
+      'SELECT device_id, status, created_at, delivered_at, acked_at FROM device_commands WHERE idempotency_key = ? ORDER BY device_id LIMIT 501', [key]);
+    const ms = (a: string | null, b: string) => (a ? Math.max(0, Date.parse(a) - Date.parse(b)) : null);
+    const items = rows.slice(0, NOTICE_MAX_DEVICES).map((x) => ({ device_id: x.device_id, status: x.status, delivery_ms: ms(x.delivered_at, x.created_at), ack_ms: ms(x.acked_at, x.created_at) }));
+    const count = (st: string[]) => items.filter((x) => st.includes(x.status)).length;
+    const lat = items.flatMap((x) => (x.delivery_ms === null ? [] : [x.delivery_ms]));
+    return c.json({ total: items.length, pending: count(['pending']), delivered: count(['delivered']), acked: count(['acked']), failed: count(['failed', 'expired']), avg_delivery_ms: lat.length ? Math.round(lat.reduce((a, b) => a + b, 0) / lat.length) : null, items });
   });
 
   // Goi USB cho Signage Player (thu muc ANIO tren o USB): chi chuong trinh co tep san sang.
