@@ -1,5 +1,5 @@
 import type { Db, Runtime } from '@ams/runtime';
-import { decryptField, encryptField } from '@ams/shared';
+import { decryptField, encryptField, fieldKeyRingFromEnv, type KeyRing } from '@ams/shared';
 import { iso } from './util.js';
 
 export const BANKS = ['Vietcombank', 'VietinBank', 'BIDV', 'Agribank', 'MBBank', 'Techcombank', 'ACB', 'VPBank', 'TPBank', 'Sacombank', 'HDBank', 'OCB', 'MSB', 'SHB', 'VIB', 'SeABank'] as const;
@@ -62,8 +62,13 @@ export async function loadStored(db: Db): Promise<StoredSepay> {
   }
 }
 
-function fieldKey(rt: Runtime): string | null {
-  return rt.config.env['FIELD_ENC_KEY'] ?? null;
+/** Vong khoa (FIELD_ENC_KEY / FIELD_ENC_KEYS); null neu chua cau hinh. */
+export function fieldKey(rt: Runtime): KeyRing | null {
+  try {
+    return fieldKeyRingFromEnv(rt.config.env);
+  } catch {
+    return null;
+  }
 }
 
 export async function loadSepayConfig(rt: Runtime, db: Db = rt.db): Promise<SepayConfig> {

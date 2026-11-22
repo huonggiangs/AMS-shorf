@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { ZodError } from 'zod';
 import { bumpOpsCounter, kvIncrMany, type Runtime } from '@ams/runtime';
-import { PLACEHOLDER_PRICE_MICRO_VND, explicitEnvPrice, placeholderAllowed, randomBytes, shardOf, toBase64Url } from '@ams/shared';
+import { PLACEHOLDER_PRICE_MICRO_VND, explicitEnvPrice, placeholderAllowed, randomBytes, shardOf, toBase64Url, safeErr } from '@ams/shared';
 import { KvNonceStore, authenticateDevice, readEnvelope, verifyEnvelope, type AuthDeps, type NonceStore } from './auth.js';
 import { DeviceDirectory, type DeviceRec } from './devices.js';
 import { DEFAULT_POLICY, INGEST_TOPIC, processEvents, type EventPolicy } from './events.js';
@@ -131,7 +131,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     profDirty = new Map();
     if (prof.size > 0) {
       const stmts = [...prof].map(([id, v]) => ({ sql: PROFILE_UPSERT, params: [id, null, null, null, v.source, v.cacheMb, v.ts] }));
-      for (let i = 0; i < stmts.length; i += 100) await rt.db.batch(stmts.slice(i, i + 100)).catch((e) => console.error('[gateway] ghi device_profiles loi:', (e as Error).message));
+      for (let i = 0; i < stmts.length; i += 100) await rt.db.batch(stmts.slice(i, i + 100)).catch((e) => console.error('[gateway] ghi device_profiles loi:', safeErr(e)));
     }
     if (rows.length > 0) await rt.events.append('heartbeat', rows as unknown as Record<string, unknown>[]);
     if (dirty.size > 0) {
@@ -164,11 +164,13 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     if (err instanceof ZodError) return problem(c, 'validation_failed', 'Du lieu khong hop le.', err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
     if (err instanceof SyntaxError) return problem(c, 'bad_request', 'Than yeu cau khong phai JSON hop le.');
     void bumpOpsCounter(rt, 'gateway_5xx'); // p3-ops: kiem tra canh bao gateway:5xx
-    console.error('[gateway] loi noi bo:', err instanceof Error ? err.message : err);
+    console.error('[gateway] loi noi bo:', safeErr(err));
     return problem(c, 'internal', 'Loi may chu.');
   });
 
+  const trustProxy = env['TRUST_PROXY'] !== '0';
   app.use('*', async (c, next) => {
+    (c as unknown as { set(k: string, v: unknown): void }).set('trustProxy', trustProxy);
     rps.hit();
     await next();
   });
@@ -458,6 +460,8 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   app.get('/v1/manifest/g/:group', async (c) => {
     if (!publicManifest) throw new HttpProblem('not_found', 'Khong co.');
     await shedCheck('manifest');
+    // P2: duong cong khai khong xac thuc: gioi han theo IP (mac dinh 300/phut) de khong bi quet/doan nhom manifest
+    await rateLimit(`mg:${clientIp(c)}`, envInt(env, 'MANIFEST_PUBLIC_LIMIT_PER_MIN', 300), 60, 'manifest cong khai theo IP');
     let raw: string;
     try {
       raw = decodeURIComponent(c.req.param('group'));

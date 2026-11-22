@@ -1,16 +1,15 @@
 import type { MiddlewareHandler } from 'hono';
-import { getCookie } from 'hono/cookie';
 import { can } from '@ams/config';
 import { timingSafeEqualStr } from '@ams/shared';
 import { forbidden, unauthorized } from '../lib/errors.js';
 import type { Action, Module } from '@ams/config';
-import { SESSION_COOKIE, loadSession } from './session.js';
+import { readSessionToken, loadSession } from './session.js';
 import { mustChangePassword } from './password-policy.js';
 import type { AppEnv } from '../types.js';
 
 /** Nap phien tu cookie `ams_session`; nem 401 neu thieu/het han. KHONG chan tai khoan bi buoc doi mat khau (chi /auth/me, /auth/change-password dung). */
 export const authenticateAllowPasswordChange: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const token = getCookie(c, SESSION_COOKIE);
+  const token = readSessionToken(c);
   if (!token) throw unauthorized();
   c.set('user', await loadSession(c.get('rt'), token));
   await next();
@@ -21,7 +20,7 @@ export const authenticateAllowPasswordChange: MiddlewareHandler<AppEnv> = async 
  * cho toi khi POST /auth/change-password thanh cong (dang nhap van thanh cong de nguoi dung doi mat khau).
  */
 export const authenticate: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const token = getCookie(c, SESSION_COOKIE);
+  const token = readSessionToken(c);
   if (!token) throw unauthorized();
   const rt = c.get('rt');
   const u = await loadSession(rt, token);

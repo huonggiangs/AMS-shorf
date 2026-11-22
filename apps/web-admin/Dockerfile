@@ -32,6 +32,7 @@ RUN pnpm --filter "@ams/web-admin..." build \
 FROM ${NGINX_IMAGE} AS runtime
 # Mẫu cấu hình: entrypoint của image thay biến ${API_UPSTREAM} rồi ghi vào /etc/nginx/conf.d
 COPY --chown=101:101 apps/web-admin/nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --chown=101:101 apps/web-admin/nginx-security-headers.conf /etc/nginx/snippets/ams-security-headers.conf
 COPY --from=build --chown=101:101 /repo/apps/web-admin/dist /usr/share/nginx/html
 ENV API_UPSTREAM=http://api:8787 \
     NGINX_ENVSUBST_FILTER=API_UPSTREAM

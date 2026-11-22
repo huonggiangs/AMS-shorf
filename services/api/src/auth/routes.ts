@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { effectivePermissions } from '@ams/config';
 import { generateTotpSecret, hashPassword, otpauthUri, passwordNeedsRehash, sha256Hex, timingSafeEqualStr, verifyPassword, verifyTotp } from '@ams/shared';
@@ -12,7 +11,7 @@ import { writeAudit } from '../lib/audit.js';
 import { authenticateAllowPasswordChange, csrfGuard } from './middleware.js';
 import { mustChangePassword, forcePasswordChangeKey, passwordPolicyError } from './password-policy.js';
 import {
-  MFA_COOKIE, MFA_TTL_SEC, SESSION_COOKIE, clearSessionCookies, createSession, isHttps, loadSession, revokeSession, setSessionCookies,
+  MFA_TTL_SEC, clearMfaCookie, clearSessionCookies, createSession, loadSession, readMfaCookie, readSessionToken, revokeSession, setMfaCookie, setSessionCookies,
 } from './session.js';
 import type { AppEnv } from '../types.js';
 
@@ -51,7 +50,7 @@ async function rateLimit(rt: Runtime, key: string, limit: number, windowSec: num
   if (n > limit) throw tooMany('Quá nhiều lần thử. Vui lòng thử lại sau ít phút.', windowSec);
 }
 
-const mfaTokenFrom = (c: Ctx, body: { mfa_token?: string | undefined }): string | undefined => body.mfa_token || getCookie(c, MFA_COOKIE) || undefined;
+const mfaTokenFrom = (c: Ctx, body: { mfa_token?: string | undefined }): string | undefined => body.mfa_token || readMfaCookie(c) || undefined;
 
 async function issueMfa(c: Ctx, rt: Runtime, adminId: string, kind: 'challenge' | 'enroll'): Promise<string> {
   const { token, hash } = await newToken(32);
@@ -59,7 +58,7 @@ async function issueMfa(c: Ctx, rt: Runtime, adminId: string, kind: 'challenge' 
   await rt.db.run('INSERT INTO mfa (id, admin_id, kind, token_hash, attempts, expires_at, created_at) VALUES (?,?,?,?,0,?,?)', [
     rt.id(), adminId, kind, hash, new Date(now.getTime() + MFA_TTL_SEC * 1000).toISOString(), now.toISOString(),
   ]);
-  setCookie(c, MFA_COOKIE, token, { httpOnly: true, sameSite: 'Strict', path: '/', secure: isHttps(rt), maxAge: MFA_TTL_SEC });
+  setMfaCookie(c, rt, token);
   return token;
 }
 
@@ -170,6 +169,7 @@ export function authRoutes(): Hono<AppEnv> {
 
   r.post('/mfa/enroll', async (c) => {
     const rt = c.get('rt');
+    await rateLimit(rt, `rl:mfa-enroll:ip:${c.get('ip')}`, 30, 900);
     const raw = await parseBody(c, z.object({ mfa_token: z.string().max(200).optional() }));
     let rowId: string;
     let adminId: string;
@@ -181,7 +181,7 @@ export function authRoutes(): Hono<AppEnv> {
       adminId = m.admin_id;
     } else {
       // da dang nhap (noi bo chua bat 2FA) muon bat TOTP
-      const st = getCookie(c, SESSION_COOKIE);
+      const st = readSessionToken(c);
       if (!st) throw unauthorized();
       const u = await loadSession(rt, st);
       assertCsrf(c, u.csrf);
@@ -238,14 +238,14 @@ export function authRoutes(): Hono<AppEnv> {
     }
     const s = await createSession(rt, a.id, ip, c.req.header('user-agent'), true);
     setSessionCookies(c, rt, s.token, s.csrf);
-    setCookie(c, MFA_COOKIE, '', { path: '/', maxAge: 0 });
+    clearMfaCookie(c, rt);
     await writeAudit(rt.db, { rt, ip, actorId: a.id }, { action: 'auth.login', objectType: 'admin', objectId: a.id, customerId: a.customer_id, diff: { mfa: true } });
     return c.json({ ok: true, csrf_token: s.csrf, must_change_password: await mustChangePassword(rt, a.id) });
   });
 
   r.post('/logout', async (c) => {
     const rt = c.get('rt');
-    const token = getCookie(c, SESSION_COOKIE);
+    const token = readSessionToken(c);
     if (token) {
       let u;
       try {

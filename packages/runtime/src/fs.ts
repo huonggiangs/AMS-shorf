@@ -10,6 +10,8 @@ export interface FsObjectStoreConfig {
   signedBaseUrl?: string;
   /** Khoa HMAC ky URL tai len/tai xuong (mac dinh nen la SESSION_SECRET). */
   signingSecret: string;
+  /** Khoa ky cu (xoay SESSION_SECRET khong ngung): chi dung de XAC MINH URL da cap, khong bao gio de ky. */
+  previousSecrets?: string[];
   clock?: Clock;
 }
 
@@ -276,8 +278,8 @@ export class FsObjectStore implements ObjectStore {
   }
 
   // ------------------------------------------------------------------ URL ky (HMAC) cho API /storage/*
-  private sign(op: SignedOp, key: string, exp: number, ct: string, max: number): string {
-    return createHmac('sha256', this.cfg.signingSecret).update(`${op}\n${key}\n${exp}\n${ct}\n${max}`).digest('hex');
+  private sign(op: SignedOp, key: string, exp: number, ct: string, max: number, secret = this.cfg.signingSecret): string {
+    return createHmac('sha256', secret).update(`${op}\n${key}\n${exp}\n${ct}\n${max}`).digest('hex');
   }
   async putSigned(key: string, contentType: string, ttlSec: number, opts: { maxBytes?: number } = {}) {
     assertSafeKey(key);
@@ -301,9 +303,13 @@ export class FsObjectStore implements ObjectStore {
     if (exp * 1000 < this.clock.now().getTime()) return { ok: false, reason: 'expired' };
     const ct = op === 'put' ? q.get('ct') ?? '' : '';
     const max = op === 'put' ? Number(q.get('max') ?? 0) || 0 : 0;
-    const want = Buffer.from(this.sign(op, key, exp, ct, max));
     const got = Buffer.from(sig);
-    if (want.length !== got.length || !timingSafeEqual(want, got)) return { ok: false, reason: 'bad_signature' };
+    let match = false;
+    for (const secret of [this.cfg.signingSecret, ...(this.cfg.previousSecrets ?? [])]) {
+      const want = Buffer.from(this.sign(op, key, exp, ct, max, secret));
+      if (want.length === got.length && timingSafeEqual(want, got)) match = true;
+    }
+    if (!match) return { ok: false, reason: 'bad_signature' };
     return { ok: true, contentType: ct, maxBytes: max };
   }
 }

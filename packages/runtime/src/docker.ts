@@ -46,6 +46,7 @@ export async function createDockerRuntime(
           dir: need(env, 'OBJECT_STORE_DIR'),
           signedBaseUrl: env['OBJECT_STORE_SIGNED_BASE_URL'] || '/api/storage',
           signingSecret: env['OBJECT_STORE_SIGNING_SECRET'] || need(env, 'SESSION_SECRET'),
+          previousSecrets: (env['SESSION_SECRET_PREV'] ?? '').split(',').map((x) => x.trim()).filter(Boolean),
         })
       : new S3ObjectStore({
           endpoint: need(env, 'S3_ENDPOINT'),

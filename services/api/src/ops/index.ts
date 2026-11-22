@@ -1,3 +1,4 @@
+import { safeErr } from '@ams/shared';
 import type { Runtime } from '@ams/runtime';
 import { pruneOps, runOpsChecks, withJobRun } from './checks.js';
 
@@ -11,6 +12,6 @@ export async function opsTick(rt: Runtime, opts: { prune?: boolean } = {}): Prom
     await withJobRun(rt, 'ops_checks', () => runOpsChecks(rt));
     if (opts.prune) await pruneOps(rt);
   } catch (e) {
-    console.error('[ops] kiem tra van hanh loi:', (e as Error).message);
+    console.error('[ops] kiem tra van hanh loi:', safeErr(e));
   }
 }

@@ -1,5 +1,5 @@
 STATUS: done
-UPDATED: 2026-11-14T13:10Z
+UPDATED: 2026-11-22T00:00Z
 
 # p2-security
 
@@ -17,3 +17,8 @@ Checklist
 - [x] cổng tuân thủ nội dung: campaign_gate, submit bắt buộc xác nhận quyền, hàng chờ hiển thị
 - [x] pnpm audit: 130 -> 36, phần còn lại ghi trong docs/reviews/R6-SECURITY-FIXES.md
 - [x] test: api 263, payments 147, shared 51, db 4, web-admin 59 (+build), edge-gateway 61 (hono bump); openapi drift cần chạy lại generate sau khi mọi agent xong (do route p5 + dòng nguồn)
+
+## p2-rest (2026-11-22)
+- [x] Xoay khóa FIELD_ENC_KEY (key id v2, vòng khóa, FIELD_INDEX_KEY), job/CLI/route reencrypt, SESSION_SECRET_PREV (docs/ops/KEY-ROTATION.md)
+- [x] `__Host-` cookie theo env; tiêu đề bảo mật API + web-admin (_headers, nginx snippet); rate limit mfa/enroll, manifest công khai, viewer; TRUST_PROXY gateway; CORS viewer; log redaction; quét bí mật; audit 27 -> 9
+- [ ] Mở: chuỗi băm audit, R1-18/22/23/25/29, R1-17 còn lại, zod4/react-router7 (xem docs/reviews/R7-SECURITY-CLOSEOUT.md)

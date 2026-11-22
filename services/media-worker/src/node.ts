@@ -1,3 +1,4 @@
+import { safeErr } from '@ams/shared';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createDockerRuntime, createTestRuntime, type Runtime } from '@ams/runtime';
@@ -10,7 +11,7 @@ export async function startMediaWorker(env: Record<string, string | undefined> =
   const haveFf = await opts.media!.available();
   console.log(`[media-worker] ffmpeg=${haveFf ? 'co' : 'khong'} transcode=${opts.transcode}`);
   worker.subscribe();
-  const timer = setInterval(() => void worker.sweep().catch((e) => console.error('[media-worker] sweep', e)), Number(env['MEDIA_SWEEP_S'] ?? 60) * 1000);
+  const timer = setInterval(() => void worker.sweep().catch((e) => console.error('[media-worker] sweep', safeErr(e))), Number(env['MEDIA_SWEEP_S'] ?? 60) * 1000);
   const server = createServer((req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json' });

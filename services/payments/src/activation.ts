@@ -1,5 +1,5 @@
 import { enqueueOutbox, processOutbox, type Db, type OutboxHandlers, type Runtime } from '@ams/runtime';
-import { sha256Hex, toBase64Url, randomBytes, transitionCampaign } from '@ams/shared';
+import { sha256Hex, toBase64Url, randomBytes, transitionCampaign, safeErr } from '@ams/shared';
 import { loadSepayConfig } from './config.js';
 import { runAwaitingFunds } from './ledger.js';
 import { audit, bumpManifest, iso, n, notify, withTx } from './util.js';
@@ -66,7 +66,7 @@ export async function sweepActivations(rt: Runtime): Promise<{ checked: number; 
       if (res.actions.length) activated++;
     } catch (e) {
       failed++;
-      console.error(`[activation-sweep] ${r.customer_id}: ${(e as Error).message}`);
+      console.error(`[activation-sweep] ${r.customer_id}: ${safeErr(e)}`);
     }
   }
   await drainMailOutbox(rt);
@@ -104,7 +104,7 @@ export async function drainMailOutbox(rt: Runtime): Promise<void> {
   try {
     await processOutbox(rt, mailOutboxHandlers(), { limit: 10, rounds: 1 });
   } catch (e) {
-    console.error('[activation] mail outbox:', (e as Error).message);
+    console.error('[activation] mail outbox:', safeErr(e));
   }
 }
 

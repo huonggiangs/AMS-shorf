@@ -1,11 +1,10 @@
 // Diem noi duy nhat voi tai chinh (a2). a1 chi goi mountFinanceRoutes(app, rt); neu can thay the (vd. bo a2), chi sua file nay.
 import type { Hono } from 'hono';
 import type { Runtime } from '@ams/runtime';
-import { loadSession, SESSION_COOKIE } from './auth/session.js';
+import { loadSession, readSessionToken } from './auth/session.js';
 import { mountFinance } from './finance/index.js';
 import type { FinanceActor } from './finance/index.js';
 import { timingSafeEqualStr } from '@ams/shared';
-import { getCookie } from 'hono/cookie';
 import type { FinancePort } from './ports.js';
 import type { AppEnv } from './types.js';
 
@@ -19,7 +18,7 @@ export function mountFinanceRoutes(app: Hono<AppEnv>, rt: Runtime): FinancePort 
       const pre = (c as unknown as { get(k: string): unknown }).get('user') as import('./types.js').AuthUser | undefined;
       let u = pre;
       if (!u) {
-        const token = getCookie(c, SESSION_COOKIE);
+        const token = readSessionToken(c);
         if (!token) return null;
         try {
           u = await loadSession(rt, token);

@@ -1,3 +1,4 @@
+import { safeErr } from '@ams/shared';
 import { startNode } from './node.js';
 
 export { createApp } from './app.js';
@@ -9,7 +10,7 @@ const entry = process.argv[1] ?? '';
 // Docker: image chay `node index.mjs` (tep da bundle), nen khop them index.mjs; Dockerfile con dat AMS_API_START=1.
 if (/[\\/]services[\\/]api[\\/](src[\\/]index\.ts|dist[\\/]index\.js)$/.test(entry) || /(^|[\\/])index\.mjs$/.test(entry) || process.env['AMS_API_START'] === '1') {
   startNode().catch((e) => {
-    console.error('[api] khoi dong that bai:', (e as Error).message);
+    console.error('[api] khoi dong that bai:', safeErr(e));
     process.exit(1);
   });
 }

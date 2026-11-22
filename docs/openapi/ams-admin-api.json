@@ -9370,7 +9370,7 @@
           "module": "admin",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/ops.ts:79",
+        "x-ams-source": "services/api/src/routes/ops.ts:80",
         "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -9378,6 +9378,56 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AdminPostOpsIncidentsByIdAckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/ops/reencrypt-fields": {
+      "post": {
+        "operationId": "adminPostOpsReencryptFields",
+        "tags": [
+          "ops"
+        ],
+        "summary": "POST /admin/v1/ops/reencrypt-fields",
+        "parameters": [],
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "approve"
+        },
+        "x-ams-source": "services/api/src/routes/ops.ts:101",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostOpsReencryptFieldsRequest"
               }
             }
           }
@@ -9420,7 +9470,7 @@
           "module": "admin",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/ops.ts:93",
+        "x-ams-source": "services/api/src/routes/ops.ts:94",
         "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -9460,7 +9510,7 @@
           "module": "admin",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/ops.ts:107",
+        "x-ams-source": "services/api/src/routes/ops.ts:118",
         "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -9510,7 +9560,7 @@
           "module": "admin",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/ops.ts:52",
+        "x-ams-source": "services/api/src/routes/ops.ts:53",
         "description": "Quyền cần có: mô-đun `admin`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -9549,7 +9599,7 @@
           "module": "admin",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/ops.ts:99",
+        "x-ams-source": "services/api/src/routes/ops.ts:110",
         "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -13419,7 +13469,7 @@
         ],
         "summary": "POST /auth/login",
         "parameters": [],
-        "x-ams-source": "services/api/src/auth/routes.ts:106",
+        "x-ams-source": "services/api/src/auth/routes.ts:105",
         "requestBody": {
           "required": true,
           "content": {
@@ -13529,7 +13579,7 @@
         ],
         "summary": "POST /auth/mfa/enroll",
         "parameters": [],
-        "x-ams-source": "services/api/src/auth/routes.ts:171",
+        "x-ams-source": "services/api/src/auth/routes.ts:170",
         "requestBody": {
           "required": true,
           "content": {
@@ -13760,7 +13810,7 @@
         ],
         "summary": "POST /ops/backup-report",
         "parameters": [],
-        "x-ams-source": "services/api/src/routes/ops.ts:34",
+        "x-ams-source": "services/api/src/routes/ops.ts:35",
         "description": "Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -16334,7 +16384,7 @@
         ],
         "summary": "GET /status",
         "parameters": [],
-        "x-ams-source": "services/api/src/routes/ops.ts:16",
+        "x-ams-source": "services/api/src/routes/ops.ts:17",
         "description": "Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -18841,6 +18891,20 @@
           "note": {
             "type": "string",
             "maxLength": 300
+          }
+        },
+        "additionalProperties": true
+      },
+      "AdminPostOpsReencryptFieldsRequest": {
+        "type": "object",
+        "properties": {
+          "dry_run": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
           }
         },
         "additionalProperties": true
