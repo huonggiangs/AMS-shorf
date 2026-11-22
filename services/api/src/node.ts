@@ -51,7 +51,7 @@ function startScheduler(rt: Runtime, port: () => FinancePort | undefined): () =>
       if ((await rt.kv.incr(lockKey, 900)) !== 1) return;
       await streamRecheckTick(rt);
     } catch (e) {
-      console.error('[api] job stream loi:', (e as Error).message);
+      console.error('[api] job stream loi:', safeErr(e));
     }
   };
   const tick = () => {

@@ -22,13 +22,13 @@ describe('web-admin security headers', () => {
     for (const csp of [cfCsp, nginxCsp]) {
       const d = directives(csp);
       expect(d['default-src']).toEqual(["'none'"]);
-      expect(d['script-src']).toEqual(["'self'"]);
+      expect(d['script-src']).toEqual(["'self'", 'https://cdnjs.cloudflare.com']); // hls.js xem trước link video
       expect(d['frame-ancestors']).toEqual(["'none'"]);
       expect(d['object-src']).toEqual(["'none'"]);
       expect(d['base-uri']).toEqual(["'none'"]);
       expect(d['form-action']).toEqual(["'self'"]);
       expect(csp).not.toMatch(/unsafe-eval/);
-      expect(d['script-src']!.join(' ')).not.toMatch(/unsafe-inline|\*|https:/);
+      expect(d['script-src']!.join(' ')).not.toMatch(/unsafe-inline|\*|https:(?!\/\/cdnjs\.cloudflare\.com)/);
     }
   });
   it('Cloudflare _headers co du HSTS, nosniff, DENY, referrer, permissions-policy, COOP', () => {
