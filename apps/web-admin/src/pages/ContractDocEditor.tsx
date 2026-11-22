@@ -6,6 +6,7 @@ import { useAct } from '../api/hooks';
 import { useAuth } from '../auth/AuthProvider';
 import { Btn, ErrorBlock, Field, LoadingBlock, Note, PageHead, Tabs, Tag } from '../components/ui';
 import { Dialog } from '../components/Dialog';
+import { ImportTemplateDialog, exportTemplateFile } from '../components/TemplateImport';
 import { fmtDateTime } from '../lib/format';
 import { DOC_STATUS, TPL_STATUS, VAR_GROUP, previewText, type DocArticle } from '../lib/ContractDocRender';
 import { s, type Row } from '../lib/p4';
@@ -265,11 +266,15 @@ function Templates() {
   const q = useQuery({ queryKey: [BASE, 'templates'], queryFn: () => api.get(`${BASE}/templates`) as Promise<{ items: Row[] }> });
   const [view, setView] = useState('');
   const [ap, setAp] = useState<Row | null>(null);
+  const [imp, setImp] = useState(false);
+  const act = useAct();
+  const canImport = can('admin', 'write');
   if (q.isLoading) return <LoadingBlock />;
   if (q.error) return <ErrorBlock error={q.error} onRetry={() => void q.refetch()} />;
   return (
     <div style={{ marginTop: 8 }}>
       <Note warn>Mẫu nạp sẵn là BẢN NHÁP do kỹ thuật soạn, chưa có giá trị pháp lý. Luật sư rà soát, điền các chỗ trống dạng [...], rồi người có quyền duyệt xác nhận. Chỉ mẫu đã duyệt mới chốt được bản ký.</Note>
+      {canImport ? <div style={{ margin: '8px 0' }}><Btn tone="p" onClick={() => setImp(true)}>Nhập mẫu từ máy tính</Btn></div> : null}
       <div className="card cp">
         <table className="tb">
           <thead><tr><th>Mẫu</th><th>Phiên bản</th><th>Trạng thái</th><th>Điều khoản</th><th /></tr></thead>
@@ -281,6 +286,7 @@ function Templates() {
                 <td>{s(t.article_count)}</td>
                 <td style={{ display: 'flex', gap: 6 }}>
                   <Btn onClick={() => setView(view === s(t.id) ? '' : s(t.id))}>{view === s(t.id) ? 'Ẩn' : 'Xem'}</Btn>
+                  <Btn onClick={() => void act(() => exportTemplateFile(s(t.id), `${s(t.name)}-v${s(t.version)}`), 'Đã xuất mẫu ra tệp .json.', [])}>Xuất mẫu ra file</Btn>
                   {t.status === 'draft' && canApprove ? <Btn tone="p" onClick={() => setAp(t)}>Xác nhận luật sư đã duyệt</Btn> : null}
                 </td>
               </tr>
@@ -290,6 +296,7 @@ function Templates() {
         {view ? <TemplateBody id={view} /> : null}
       </div>
       {ap ? <ApproveDialog tpl={ap} onClose={() => setAp(null)} /> : null}
+      {imp ? <ImportTemplateDialog onClose={() => setImp(false)} /> : null}
     </div>
   );
 }

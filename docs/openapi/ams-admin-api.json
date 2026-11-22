@@ -3876,7 +3876,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:239",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:263",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -3922,7 +3922,7 @@
           "module": "customers",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:250",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:274",
         "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -3972,7 +3972,7 @@
           "module": "admin",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:229",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:253",
         "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4010,7 +4010,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:175",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:199",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4047,7 +4047,7 @@
           "module": "admin",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:188",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:212",
         "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -4097,7 +4097,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:180",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:204",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4136,7 +4136,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:103",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:104",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4173,7 +4173,7 @@
           "module": "admin",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:115",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:139",
         "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -4188,6 +4188,46 @@
         "responses": {
           "201": {
             "description": "Đã tạo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/contract-docs/templates/import-preview": {
+      "post": {
+        "operationId": "adminPostContractDocsTemplatesImportPreview",
+        "tags": [
+          "contract-docs"
+        ],
+        "summary": "POST /admin/v1/contract-docs/templates/import-preview",
+        "parameters": [],
+        "x-ams-permission": {
+          "module": "admin",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:113",
+        "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
             "content": {
               "application/json": {
                 "schema": {
@@ -4232,7 +4272,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:110",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:134",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4278,7 +4318,7 @@
           "module": "admin",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:136",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:160",
         "description": "Quyền cần có: mô-đun `admin`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -4337,7 +4377,7 @@
           "module": "admin",
           "action": "approve"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:153",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:177",
         "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -4375,6 +4415,54 @@
         ]
       }
     },
+    "/admin/v1/contract-docs/templates/{id}/export": {
+      "get": {
+        "operationId": "adminGetContractDocsTemplatesByIdExport",
+        "tags": [
+          "contract-docs"
+        ],
+        "summary": "GET /admin/v1/contract-docs/templates/{id}/export",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "view"
+        },
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:127",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/admin/v1/contract-docs/variables": {
       "get": {
         "operationId": "adminGetContractDocsVariables",
@@ -4387,7 +4475,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:100",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:101",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4435,7 +4523,7 @@
           "module": "customers",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:321",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:345",
         "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4482,7 +4570,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:292",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:316",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4528,7 +4616,7 @@
           "module": "customers",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:295",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:319",
         "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -4587,7 +4675,7 @@
           "module": "admin",
           "action": "approve"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:333",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:357",
         "description": "Quyền cần có: mô-đun `admin`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -4646,7 +4734,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:355",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:379",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -4694,7 +4782,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/contracts-doc/routes.ts:293",
+        "x-ams-source": "services/api/src/contracts-doc/routes.ts:317",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -5299,7 +5387,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/customers.ts:149",
+        "x-ams-source": "services/api/src/routes/customers.ts:194",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -5336,7 +5424,7 @@
           "module": "customers",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/customers.ts:162",
+        "x-ams-source": "services/api/src/routes/customers.ts:210",
         "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "requestBody": {
           "required": true,
@@ -5375,6 +5463,53 @@
       }
     },
     "/admin/v1/customers/{id}": {
+      "delete": {
+        "operationId": "adminDeleteCustomersById",
+        "tags": [
+          "customers"
+        ],
+        "summary": "DELETE /admin/v1/customers/{id}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "delete"
+        },
+        "x-ams-source": "services/api/src/routes/customers.ts:342",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Đã xóa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      },
       "get": {
         "operationId": "adminGetCustomersById",
         "tags": [
@@ -5395,7 +5530,7 @@
           "module": "customers",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/customers.ts:155",
+        "x-ams-source": "services/api/src/routes/customers.ts:203",
         "description": "Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -5421,6 +5556,53 @@
           }
         ]
       },
+      "patch": {
+        "operationId": "adminPatchCustomersById",
+        "tags": [
+          "customers"
+        ],
+        "summary": "PATCH /admin/v1/customers/{id}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "customers",
+          "action": "write"
+        },
+        "x-ams-source": "services/api/src/routes/customers.ts:338",
+        "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Customer"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      },
       "put": {
         "operationId": "adminPutCustomersById",
         "tags": [
@@ -5441,18 +5623,8 @@
           "module": "customers",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/customers.ts:202",
+        "x-ams-source": "services/api/src/routes/customers.ts:337",
         "description": "Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AdminPutCustomersByIdRequest"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Thành công",
@@ -5574,7 +5746,7 @@
           "module": "devices",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:151",
+        "x-ams-source": "services/api/src/routes/devices.ts:202",
         "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -5613,7 +5785,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:157",
+        "x-ams-source": "services/api/src/routes/devices.ts:211",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -5621,6 +5793,56 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AdminPostDevicesBulkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/devices/bulk-delete": {
+      "post": {
+        "operationId": "adminPostDevicesBulkDelete",
+        "tags": [
+          "devices"
+        ],
+        "summary": "POST /admin/v1/devices/bulk-delete",
+        "parameters": [],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "delete"
+        },
+        "x-ams-source": "services/api/src/routes/devices.ts:379",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPostDevicesBulkDeleteRequest"
               }
             }
           }
@@ -5663,7 +5885,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:185",
+        "x-ams-source": "services/api/src/routes/devices.ts:239",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -5702,6 +5924,53 @@
       }
     },
     "/admin/v1/devices/{id}": {
+      "delete": {
+        "operationId": "adminDeleteDevicesById",
+        "tags": [
+          "devices"
+        ],
+        "summary": "DELETE /admin/v1/devices/{id}",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-ams-permission": {
+          "module": "devices",
+          "action": "delete"
+        },
+        "x-ams-source": "services/api/src/routes/devices.ts:383",
+        "description": "Quyền cần có: mô-đun `devices`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Đã xóa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ]
+      },
       "get": {
         "operationId": "adminGetDevicesById",
         "tags": [
@@ -5722,7 +5991,7 @@
           "module": "devices",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:346",
+        "x-ams-source": "services/api/src/routes/devices.ts:413",
         "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -5770,7 +6039,7 @@
           "module": "devices",
           "action": "approve"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:258",
+        "x-ams-source": "services/api/src/routes/devices.ts:312",
         "description": "Quyền cần có: mô-đun `devices`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -6090,7 +6359,7 @@
           "module": "devices",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:323",
+        "x-ams-source": "services/api/src/routes/devices.ts:390",
         "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -6138,7 +6407,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:236",
+        "x-ams-source": "services/api/src/routes/devices.ts:290",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -6197,7 +6466,7 @@
           "module": "devices",
           "action": "approve"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:303",
+        "x-ams-source": "services/api/src/routes/devices.ts:357",
         "description": "Quyền cần có: mô-đun `devices`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -17541,6 +17810,16 @@
           "change_note": {
             "type": "string",
             "maxLength": 500
+          },
+          "import_source": {
+            "type": "string",
+            "enum": [
+              "docx",
+              "txt",
+              "md",
+              "html",
+              "json"
+            ]
           }
         },
         "required": [
@@ -17876,6 +18155,17 @@
               }
             ]
           },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "representative": {
             "anyOf": [
               {
@@ -17983,6 +18273,25 @@
           "legal_name"
         ],
         "additionalProperties": true
+      },
+      "AdminPostDevicesBulkDeleteRequest": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "minItems": 1,
+            "maxItems": 200
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "additionalProperties": false
       },
       "AdminPostDevicesBulkRequest": {
         "type": "object",
@@ -20512,151 +20821,6 @@
         },
         "additionalProperties": true
       },
-      "AdminPutCustomersByIdRequest": {
-        "type": "object",
-        "properties": {
-          "legal_name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 300
-          },
-          "short_name": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 120
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "tax_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "address": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 500
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "representative": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 120
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "rep_title": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 120
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "phone": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 40
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 200
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "contact": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 120
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "industry": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 120
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "payment_terms": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 200
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "credit_limit_vnd": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 10000000000000
-          },
-          "owner_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 64
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "cooperating",
-              "suspended",
-              "pending_payment",
-              "terminated"
-            ]
-          }
-        },
-        "additionalProperties": true
-      },
       "AdminPutDevicesByIdOwnerRequest": {
         "type": "object",
         "properties": {
@@ -22143,6 +22307,18 @@
             "type": "string"
           },
           "since": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
             "type": [
               "string",
               "null"

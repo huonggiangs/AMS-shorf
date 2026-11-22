@@ -9,7 +9,7 @@ const MAP: Record<string, [string, Tone]> = {
   approved: ['Đã duyệt', 'ok'], processing: ['Đang xử lý', 'info'], returned: ['Cần chỉnh sửa', 'bad'],
   // devices
   online: ['Hoạt động', 'ok'], paired: ['Đã ghép đôi', 'ok'], verified: ['Hợp lệ', 'ok'], needs_update: ['Cần cập nhật', 'warn'],
-  checking: ['Đang kiểm tra', 'warn'], blocked: ['Bị loại trừ', 'bad'], offline: ['Ngoại tuyến', 'bad'], unverified: ['Đang kiểm tra', 'warn'],
+  deleted: ['Đã xóa', 'bad'], checking: ['Đang kiểm tra', 'warn'], blocked: ['Bị loại trừ', 'bad'], offline: ['Ngoại tuyến', 'bad'], unverified: ['Đang kiểm tra', 'warn'],
   // customers / contracts / users
   cooperating: ['Đang hợp tác', 'ok'], pending_payment: ['Chờ thanh toán', 'warn'], suspended: ['Tạm dừng', 'mut'],
   effective: ['Hiệu lực', 'ok'], pending_sign: ['Chờ ký', 'warn'], expired: ['Hết hạn', 'bad'],

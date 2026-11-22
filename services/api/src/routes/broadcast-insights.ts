@@ -211,7 +211,7 @@ export function broadcastInsightsRoutes(): Hono<AppEnv> {
     };
     const media = (await rt.db.query<{ review_state: string; n: number }>("SELECT review_state, COUNT(*) AS n FROM creatives WHERE campaign_id IS NULL GROUP BY review_state"));
     const mediaBy = Object.fromEntries(media.map((m) => [m.review_state, num(m.n)]));
-    const devs = await rt.db.query<{ region_id: string | null; kind: string; last_seen_at: string | null; trust_level: number; blocked: number }>('SELECT region_id, kind, last_seen_at, trust_level, blocked FROM devices');
+    const devs = await rt.db.query<{ region_id: string | null; kind: string; last_seen_at: string | null; trust_level: number; blocked: number }>('SELECT region_id, kind, last_seen_at, trust_level, blocked FROM devices WHERE deleted_at IS NULL');
     const nowMs = now.getTime();
     const regions = new Map<string, { region: string; online: number; offline: number }>();
     let pendingApproval = 0;
@@ -259,7 +259,7 @@ export function broadcastInsightsRoutes(): Hono<AppEnv> {
        FROM broadcast_programs p WHERE p.status IN ('draft','published') AND (p.end_date IS NULL OR p.end_date >= ?)`,
       [today],
     );
-    const devs = await rt.db.query<DevAgg>('SELECT region_id, kind, last_seen_at FROM devices WHERE trust_level >= 1 AND blocked = 0');
+    const devs = await rt.db.query<DevAgg>('SELECT region_id, kind, last_seen_at FROM devices WHERE trust_level >= 1 AND blocked = 0 AND deleted_at IS NULL');
     const nowMs = now.getTime();
     const items = progs
       .map((p) => scoreProgram({ ...p, item_count: num(p.item_count), not_ready: num(p.not_ready), not_kid: num(p.not_kid), start_min: num(p.start_min), end_min: num(p.end_min), priority: num(p.priority, 3) }, ctx, devs, nowMs, today))

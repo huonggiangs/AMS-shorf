@@ -160,7 +160,7 @@ const presentDevice = (c: Ctx, d: DevRow) => ({
 
 async function loadDevices(c: Ctx, id: string) {
   const rows = await getRt(c).db.query<DevRow>(
-    'SELECT d.id, d.name, d.kind, d.region_id, d.last_seen_at FROM broadcast_program_devices bd JOIN devices d ON d.id = bd.device_id WHERE bd.program_id = ? ORDER BY d.name, d.id',
+    'SELECT d.id, d.name, d.kind, d.region_id, d.last_seen_at FROM broadcast_program_devices bd JOIN devices d ON d.id = bd.device_id AND d.deleted_at IS NULL WHERE bd.program_id = ? ORDER BY d.name, d.id',
     [id],
   );
   return rows.map((d) => presentDevice(c, d));

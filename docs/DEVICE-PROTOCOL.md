@@ -131,6 +131,7 @@ Phản hồi `201` (mới) hoặc `200` (đã đăng ký cùng `pubkey`, trả l
 ```
 
 - `attestation_nonce`: nonce để nối với chứng thực thiết bị thật (Play Integrity/Widevine L1). **Server chưa kiểm chứng chứng thực** (chưa có endpoint nộp token); trust_level tăng lên 1 khi ghép đôi, bậc 2 dành cho chứng thực (chưa làm).
+- **Xóa thiết bị trên AMS** (trang Thiết bị, quyền `devices:delete`; `DELETE /admin/v1/devices/:id`, `POST /admin/v1/devices/bulk-delete`): thiết bị bị xóa mềm (`deleted_at`), khóa công khai bị gỡ, cấp quyền bị thu hồi, gỡ khỏi màn hình/mã ghép chờ/lệnh chờ; mọi yêu cầu có `X-Device-Id` đó trả `410 device_deleted` (hiệu lực ngay ở kv, tối đa 30 giây ở bộ nhớ đệm từng instance gateway). Lượt xem, doanh thu, nhật ký cũ giữ nguyên. Đăng ký lại cùng khóa tạo thiết bị mới (chưa tin cậy, phải ghép/cấp quyền lại). Chương trình phát chỉ có đúng thiết bị bị xóa giữ nguyên dòng để không tự mở rộng sang cả khu vực.
 - Giới hạn: 20 lần/giờ/IP (`429 rate_limited` + `Retry-After`). Trùng khóa cho thiết bị đã bị khóa: `403 device_blocked`.
 - App lưu `device_id` bền vững. Mất `device_id` nhưng còn khóa: gọi lại `register` với cùng khóa để lấy lại. **Cùng `pubkey` luôn nhận lại cùng `device_id`** (khóa duy nhất trong CSDL; có kiểm thử). Đăng ký lại cập nhật `model/os/app_version/px/orientation`; `region` chỉ đổi khi thiết bị chưa gắn vị trí.
 - **Thang máy/LED (`kind` = `elevator`/`led_p5`) không dùng mã 6 số.** Sau `register` thiết bị ở `trust_level` 0 (trạng thái "Chờ cấp quyền" trên admin). Vận hành bấm **Cấp quyền** (`POST /admin/v1/devices/{id}/approve`, cần quyền `devices:approve`) và chọn địa điểm/màn hình; thiết bị lên `trust_level` 1 và nhận manifest đúng độ phân giải. App chỉ cần hiển thị `device_id` rút gọn (mã thiết bị) trong lúc chờ và tiếp tục heartbeat. Xem `docs/SIGNAGE-PLAYER-AMS.md`.
@@ -397,6 +398,7 @@ Phản hồi `200 {"ok":true,"stored":N}`. Giới hạn theo `device_id`: **60 l
 | 401 | `stale_timestamp` | lệch đồng hồ >300 giây (`details.server_time`) | đồng bộ độ lệch rồi thử lại 1 lần |
 | 401 | `unknown_device` | `X-Device-Id` lạ hoặc thiếu | gọi `register` lại với cùng khóa |
 | 403 | `device_blocked` | thiết bị bị khóa | dừng gọi, chỉ thử lại sau 1 giờ |
+| 410 | `device_deleted` | thiết bị đã bị xóa khỏi AMS (xóa mềm) | dừng gọi, xóa `device_id` đã lưu, hiện "cần ghép lại" và gọi `register` lại với cùng khóa (sẽ nhận `device_id` MỚI, `created: true`) |
 | 404 | `not_found` | đường dẫn/nhóm không tồn tại | kiểm đường dẫn |
 | 409 | `replay` | nonce đã dùng | tạo nonce mới và ký lại (lỗi của app nếu gặp ở lần gửi đầu) |
 | 413 | `payload_too_large` | thân quá giới hạn | rút gọn |

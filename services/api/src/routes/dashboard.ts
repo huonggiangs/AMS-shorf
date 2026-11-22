@@ -19,7 +19,7 @@ export function dashboardRoutes(): Hono<AppEnv> {
     const sinceOnline = new Date(now.getTime() - 10 * 60_000).toISOString();
 
     const dev = (await rt.db.query<{ total: number; online: number }>(
-      `SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'active' AND blocked = 0 AND last_seen_at >= ? THEN 1 ELSE 0 END) AS online FROM devices WHERE kind = 'tv'`,
+      `SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'active' AND blocked = 0 AND last_seen_at >= ? THEN 1 ELSE 0 END) AS online FROM devices WHERE kind = 'tv' AND deleted_at IS NULL`,
       [sinceOnline],
     ))[0];
     const tot = (await rt.db.query<{ imps: number; rev: number; reward: number }>(

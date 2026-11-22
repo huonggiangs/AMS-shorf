@@ -14,7 +14,7 @@ import type { AppEnv } from '../types.js';
 
 // Signage Player: device_profiles (1-1 theo khoa chinh) + man hinh/dia diem da gan (subquery co ORDER BY ... LIMIT 1 de khong nhan doi dong khi du lieu cu co 2 man cung device_id)
 const SCR_ID = '(SELECT sc.id FROM screens sc WHERE sc.device_id = d.id ORDER BY sc.id LIMIT 1)';
-const D_SELECT = `d.id, d.name, d.kind, d.model, d.os, d.app_version, d.region_id, d.status, d.last_seen_at, d.views_30d, d.blocked, d.trust_level, d.paired_at, d.created_at, eu.display_name AS owner_name,
+const D_SELECT = `d.id, d.name, d.kind, d.model, d.os, d.app_version, d.region_id, d.status, d.last_seen_at, d.views_30d, d.blocked, d.trust_level, d.paired_at, d.created_at, d.deleted_at, eu.display_name AS owner_name,
   p.px_w AS prof_px_w, p.px_h AS prof_px_h, p.orientation AS prof_orientation, p.source AS play_source, p.cache_mb, p.reported_at, p.approved_at, p.approved_by,
   ${SCR_ID} AS screen_id,
   (SELECT sc.venue_id FROM screens sc WHERE sc.device_id = d.id ORDER BY sc.id LIMIT 1) AS venue_id,
@@ -40,6 +40,7 @@ interface DevRow {
   trust_level: number;
   paired_at: string | null;
   created_at: string;
+  deleted_at: string | null;
   owner_name: string | null;
   prof_px_w: number | null;
   prof_px_h: number | null;
@@ -59,7 +60,7 @@ interface DevRow {
 const REGION_BY_NAME = Object.fromEntries(Object.entries(REGIONS).map(([k, v]) => [v.toLowerCase(), k]));
 export const regionCode = (v: string): string => REGION_BY_NAME[v.toLowerCase()] ?? v.toUpperCase();
 
-const apiStatus = (d: Pick<DevRow, 'status' | 'blocked'>) => (d.blocked ? 'blocked' : d.status === 'active' ? 'online' : d.status);
+const apiStatus = (d: Pick<DevRow, 'status' | 'blocked'> & { deleted_at?: string | null }) => (d.deleted_at ? 'deleted' : d.blocked ? 'blocked' : d.status === 'active' ? 'online' : d.status);
 
 const spec: ListSpec = {
   from: D_FROM,
@@ -140,16 +141,69 @@ async function present(c: Ctx, rows: DevRow[]): Promise<Record<string, unknown>[
     screen: d.screen_id ? { id: d.screen_id, venue_id: d.venue_id, venue_name: d.venue_name } : null,
     last_seen_at: d.last_seen_at,
     paired_at: d.paired_at,
+    deleted_at: d.deleted_at ?? null,
     views: num(d.views_30d),
     recent_ads: recent.get(d.id) ?? [],
   }));
+}
+
+export interface DecommissionResult { deleted: number; requested: number; skipped: string[]; ids: string[] }
+
+/**
+ * Xoa mem thiet bi: danh dau deleted_at, go khoa cong khai (gateway tra 410 device_deleted va cho phep dang ky lai thanh thiet bi MOI),
+ * thu hoi cap quyen, go khoi man hinh/chuong trinh phat/ma ghep dang cho, huy lenh dang cho. KHONG xoa su kien, doanh thu, so cai.
+ * Mot giao dich nguyen tu; D1 toi da 100 tham so/cau lenh nen chia cum bang chunkForIn.
+ */
+async function decommission(c: Ctx, ids: string[]): Promise<DecommissionResult> {
+  const rt = getRt(c);
+  const u = c.get('user');
+  const live: { id: string; name: string | null; kind: string }[] = [];
+  for (const part of chunkForIn(ids)) {
+    live.push(...(await rt.db.query<{ id: string; name: string | null; kind: string }>(`SELECT id, name, kind FROM devices WHERE deleted_at IS NULL AND id IN (${placeholders(part.length)})`, part)));
+  }
+  const liveIds = live.map((d) => d.id);
+  const skipped = ids.filter((id) => !liveIds.includes(id));
+  if (!liveIds.length) return { deleted: 0, requested: ids.length, skipped, ids: [] };
+  const nowIso = rt.clock.now().toISOString();
+  // Chuong trinh phat chon thiet bi: khong con dong = phat theo loai man + khu vuc (RONG HON). Nen chi go thiet bi khoi chuong trinh khi van con thiet bi khac;
+  // chuong trinh chi con thiet bi bi xoa thi GIU dong (thiet bi da xoa khong lay duoc manifest nen khong phat; admin tu sua/ket thuc chuong trinh).
+  const progRows: { program_id: string; device_id: string }[] = [];
+  for (const part of chunkForIn(liveIds)) progRows.push(...(await rt.db.query<{ program_id: string; device_id: string }>(`SELECT program_id, device_id FROM broadcast_program_devices WHERE device_id IN (${placeholders(part.length)})`, part)));
+  const dropFrom = new Set<string>();
+  const progIds = [...new Set(progRows.map((x) => x.program_id))];
+  for (const part of chunkForIn(progIds)) {
+    const all = await rt.db.query<{ program_id: string; device_id: string }>(`SELECT program_id, device_id FROM broadcast_program_devices WHERE program_id IN (${placeholders(part.length)})`, part);
+    const liveSet = new Set(liveIds);
+    for (const pid of part) if (all.some((x) => x.program_id === pid && !liveSet.has(x.device_id))) dropFrom.add(pid);
+  }
+  const progDeletes = progRows.filter((x) => dropFrom.has(x.program_id));
+  await rt.db.tx(async (db) => {
+    const parts = chunkForIn(liveIds);
+    for (const x of progDeletes) await db.run('DELETE FROM broadcast_program_devices WHERE program_id = ? AND device_id = ?', [x.program_id, x.device_id]);
+    const ph = (n: number) => placeholders(n);
+    await db.batch(parts.flatMap((part) => [
+      { sql: `UPDATE devices SET deleted_at = ?, deleted_by = ?, blocked = 1, trust_level = 0, pubkey_ed25519 = NULL WHERE deleted_at IS NULL AND id IN (${ph(part.length)})`, params: [nowIso, u.id, ...part] },
+      { sql: `UPDATE screens SET device_id = NULL WHERE device_id IN (${ph(part.length)})`, params: part },
+      { sql: `DELETE FROM pairing_codes WHERE used_at IS NULL AND device_id IN (${ph(part.length)})`, params: part },
+      { sql: `UPDATE device_profiles SET approved_at = NULL, approved_by = NULL WHERE device_id IN (${ph(part.length)})`, params: part },
+      { sql: `UPDATE device_commands SET status = 'failed', result = 'device_deleted' WHERE status IN ('pending','delivered') AND device_id IN (${ph(part.length)})`, params: part },
+    ]));
+    for (const d of live) await auditCtx(c, db, { action: 'device.delete', objectType: 'device', objectId: d.id, diff: { name: d.name, kind: d.kind, soft: true, by: u.id } });
+    if (live.length > 1) await auditCtx(c, db, { action: 'device.bulk_delete', objectType: 'device', objectId: null, diff: { requested: ids.length, deleted: live.length, ids: liveIds.slice(0, 50) } });
+  });
+  await dropDeviceCache(rt, liveIds); // gateway: kv `dev:<id>` bi xoa nen lan goi sau doc DB va thay deleted_at
+  await bumpManifest(rt);
+  return { deleted: liveIds.length, requested: ids.length, skipped, ids: liveIds };
 }
 
 export function deviceRoutes(): Hono<AppEnv> {
   const r = new Hono<AppEnv>();
 
   r.get('/', requirePerm('devices', 'view'), async (c) => {
-    const res = await runList<DevRow>(c, spec);
+    // thiet bi da xoa mem an khoi danh sach; chi super_admin xem duoc bang ?deleted=1 (loc 'đã xóa')
+    const onlyDeleted = c.req.query('deleted') === '1';
+    if (onlyDeleted && c.get('user').role !== 'super_admin') throw forbidden('Chỉ quản trị cấp cao xem được thiết bị đã xóa.', 'forbidden', { module: 'devices', action: 'view_deleted' });
+    const res = await runList<DevRow>(c, { ...spec, where: [{ sql: onlyDeleted ? 'd.deleted_at IS NOT NULL' : 'd.deleted_at IS NULL', params: [] }] });
     return c.json({ ...res, items: await present(c, res.items) });
   });
 
@@ -162,11 +216,11 @@ export function deviceRoutes(): Hono<AppEnv> {
     const ids = [...new Set(b.ids)];
     const sqlFor = (n: number): string =>
       b.action === 'verify'
-        ? `UPDATE devices SET trust_level = 2, blocked = 0, status = CASE WHEN status = 'checking' THEN 'active' ELSE status END WHERE id IN (${placeholders(n)})`
+        ? `UPDATE devices SET trust_level = 2, blocked = 0, status = CASE WHEN status = 'checking' THEN 'active' ELSE status END WHERE id IN (${placeholders(n)}) AND deleted_at IS NULL`
         : b.action === 'block'
-          ? `UPDATE devices SET blocked = 1, trust_level = 0 WHERE id IN (${placeholders(n)})`
+          ? `UPDATE devices SET blocked = 1, trust_level = 0 WHERE id IN (${placeholders(n)}) AND deleted_at IS NULL`
           // mo chan: TV 0 -> 1 nhu cu; thang may/LED KHONG tu len muc 1 (phai qua "Cap quyen" co quyen devices:approve)
-          : `UPDATE devices SET blocked = 0, trust_level = CASE WHEN trust_level = 0 AND kind NOT IN ${SIGNAGE_KINDS_SQL} THEN 1 ELSE trust_level END WHERE id IN (${placeholders(n)})`;
+          : `UPDATE devices SET blocked = 0, trust_level = CASE WHEN trust_level = 0 AND kind NOT IN ${SIGNAGE_KINDS_SQL} THEN 1 ELSE trust_level END WHERE id IN (${placeholders(n)}) AND deleted_at IS NULL`;
     let updated = 0;
     await rt.db.tx(async (db) => {
       // D1: toi da 100 tham so/cau lenh -> chia cum, chay trong MOT batch (nguyen tu)
@@ -238,7 +292,7 @@ export function deviceRoutes(): Hono<AppEnv> {
     const u = c.get('user');
     const id = c.req.param('id');
     const b = await parseBody(c, z.object({ owner_name: z.string().trim().min(1, 'Nhập tên chủ sở hữu / khách hàng').max(100) }).strict());
-    const d = (await rt.db.query<{ id: string; user_id: string | null; paired_at: string | null; blocked: number }>('SELECT id, user_id, paired_at, blocked FROM devices WHERE id = ?', [id]))[0];
+    const d = (await rt.db.query<{ id: string; user_id: string | null; paired_at: string | null; blocked: number }>('SELECT id, user_id, paired_at, blocked FROM devices WHERE id = ? AND deleted_at IS NULL', [id]))[0];
     if (!d) throw notFound('Không tìm thấy thiết bị.');
     if (!d.paired_at) throw conflict('Thiết bị chưa ghép mã nên chưa gán chủ sở hữu được. Hãy ghép mã hiển thị trên TV trước.', 'device_not_paired');
     const nowIso = rt.clock.now().toISOString();
@@ -260,7 +314,7 @@ export function deviceRoutes(): Hono<AppEnv> {
     const u = c.get('user');
     const id = c.req.param('id');
     const b = await parseBody(c, z.object({ screen_id: z.string().trim().min(1).max(64).optional(), venue_id: z.string().trim().min(1).max(64).optional(), name: z.string().trim().min(1).max(100).optional() }).strict());
-    const d = (await rt.db.query<{ id: string; kind: string; blocked: number; trust_level: number; region_id: string | null }>('SELECT id, kind, blocked, trust_level, region_id FROM devices WHERE id = ?', [id]))[0];
+    const d = (await rt.db.query<{ id: string; kind: string; blocked: number; trust_level: number; region_id: string | null }>('SELECT id, kind, blocked, trust_level, region_id FROM devices WHERE id = ? AND deleted_at IS NULL', [id]))[0];
     if (!d) throw notFound('Không tìm thấy thiết bị.');
     if (!isSignage(d.kind)) throw conflict('Chỉ cấp quyền cho thiết bị thang máy / LED. TV được ghép bằng mã 6 số hiện trên màn hình.', 'use_pairing_code');
     if (Number(d.blocked) === 1) throw conflict('Thiết bị đang bị chặn. Bỏ chặn trước khi cấp quyền.', 'device_blocked');
@@ -303,7 +357,7 @@ export function deviceRoutes(): Hono<AppEnv> {
   r.post('/:id/revoke-approval', requirePerm('devices', 'approve'), async (c) => {
     const rt = getRt(c);
     const id = c.req.param('id');
-    const d = (await rt.db.query<{ id: string; kind: string; trust_level: number }>('SELECT id, kind, trust_level FROM devices WHERE id = ?', [id]))[0];
+    const d = (await rt.db.query<{ id: string; kind: string; trust_level: number }>('SELECT id, kind, trust_level FROM devices WHERE id = ? AND deleted_at IS NULL', [id]))[0];
     if (!d) throw notFound('Không tìm thấy thiết bị.');
     if (!isSignage(d.kind)) throw conflict('Chỉ thu hồi quyền của thiết bị thang máy / LED.', 'use_pairing_code');
     let unassigned = 0;
@@ -317,6 +371,19 @@ export function deviceRoutes(): Hono<AppEnv> {
     await bumpManifest(rt);
     const row = (await rt.db.query<DevRow>(`SELECT ${D_SELECT} ${D_FROM} WHERE d.id = ?`, [d.id]))[0]!;
     return c.json((await present(c, [row]))[0]);
+  });
+
+  // ---------------------------------------------------------------- Xoa thiet bi (xoa mem / go khoi van hanh)
+  const DEVICE_DELETE_MAX = 200;
+  // khai bao truoc :id de 'bulk-delete' khong bi hieu la id
+  r.post('/bulk-delete', requirePerm('devices', 'delete'), async (c) => {
+    const b = await parseBody(c, z.object({ ids: z.array(z.string().min(1).max(64)).min(1, 'Chọn ít nhất một thiết bị').max(DEVICE_DELETE_MAX, `Tối đa ${DEVICE_DELETE_MAX} thiết bị mỗi lần`) }).strict());
+    return c.json(await decommission(c, [...new Set(b.ids)]));
+  });
+  r.delete('/:id', requirePerm('devices', 'delete'), async (c) => {
+    const res = await decommission(c, [c.req.param('id')]);
+    if (!res.deleted) throw notFound('Không tìm thấy thiết bị (hoặc đã được xóa trước đó).', 'device_not_found');
+    return c.json(res);
   });
 
   // Nhat ky thiet bi (POST /v1/logs cua gateway), giu 7 ngay. Chi doc: devices:view.
@@ -347,7 +414,7 @@ export function deviceRoutes(): Hono<AppEnv> {
     const rt = getRt(c);
     const id = c.req.param('id');
     const row = (await rt.db.query<DevRow>(`SELECT ${D_SELECT} ${D_FROM} WHERE d.id = ?`, [id]))[0];
-    if (!row) throw notFound('Không tìm thấy thiết bị.');
+    if (!row || (row.deleted_at && c.get('user').role !== 'super_admin')) throw notFound('Không tìm thấy thiết bị.');
     const base = (await present(c, [row]))[0]!;
     const seen = await rt.db.query<{ name: string; brand: string | null; views: number }>(
       `SELECT c.name, adv.name AS brand, COUNT(*) AS views FROM ev_ad_impression e JOIN campaigns c ON c.id = e.campaign_id LEFT JOIN advertisers adv ON adv.id = c.advertiser_id

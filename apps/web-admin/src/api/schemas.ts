@@ -150,6 +150,8 @@ export const customerSchema = z
     debt_vnd: money,
     status: z.string(),
     since: z.string().nullish(),
+    notes: z.string().nullish(),
+    updated_at: z.string().nullish(),
   })
   .passthrough();
 export type Customer = z.infer<typeof customerSchema>;

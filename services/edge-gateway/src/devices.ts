@@ -7,6 +7,8 @@ export interface DeviceRec {
   pubkey: string;
   trust: number;
   blocked: boolean;
+  /** true: thiet bi da bi xoa (deleted_at) — gateway tra 410 device_deleted */
+  deleted?: boolean;
   region: string | null;
   kind: string;
   model: string | null;
@@ -33,6 +35,7 @@ interface Row {
   pubkey_ed25519: string | null;
   trust_level: number;
   blocked: number;
+  deleted_at: string | null;
   region_id: string | null;
   kind: string;
   model: string | null;
@@ -88,14 +91,17 @@ export class DeviceDirectory {
 
   private async load(id: string): Promise<DeviceRec | null> {
     const rows = await this.rt.db.query<Row>(
-      `SELECT d.id, d.pubkey_ed25519, d.trust_level, d.blocked, d.region_id, d.kind, d.model, d.user_id,
+      `SELECT d.id, d.pubkey_ed25519, d.trust_level, d.blocked, d.deleted_at, d.region_id, d.kind, d.model, d.user_id,
               s.id AS screen_id, s.type AS screen_type, s.px_w, s.px_h,
               p.px_w AS prof_px_w, p.px_h AS prof_px_h, p.orientation AS prof_orientation
          FROM devices d LEFT JOIN screens s ON s.device_id = d.id LEFT JOIN device_profiles p ON p.device_id = d.id WHERE d.id = ? ORDER BY s.id LIMIT 1`,
       [id],
     );
     const r = rows[0];
-    if (!r || !r.pubkey_ed25519) return null;
+    if (!r) return null;
+    // xoa mem: khoa cong khai da go; tra ban ghi danh dau de gateway bao 410 device_deleted (ro nghia hon 401 unknown_device)
+    if (r.deleted_at) return { id: r.id, pubkey: '', trust: 0, blocked: true, deleted: true, region: null, kind: r.kind, model: r.model, userId: null, screenId: null, screenType: 'tv', pxW: null, pxH: null, modelClass: 'tv' };
+    if (!r.pubkey_ed25519) return null;
     const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
     // man hinh da gan (do van hanh) uu tien; chua gan thi dung do phan giai thiet bi tu khai (Signage Player)
     const px = r.px_w && r.px_h ? { w: Number(r.px_w), h: Number(r.px_h) } : r.prof_px_w && r.prof_px_h ? { w: Number(r.prof_px_w), h: Number(r.prof_px_h) } : null;

@@ -152,7 +152,7 @@ export function deviceCommandRoutes(): Hono<AppEnv> {
   /** Thiet bi phai ton tai (404 neu khong); moi lenh/lenh-theo-id deu bi rang buoc voi device_id tren duong dan (chong IDOR giua cac thiet bi). */
   async function loadDevice(c: Ctx): Promise<{ id: string; kind: string; blocked: number; trust_level: number; last_seen_at: string | null; status: string }> {
     const rt = getRt(c);
-    const d = (await rt.db.query<{ id: string; kind: string; blocked: number; trust_level: number; last_seen_at: string | null; status: string }>('SELECT id, kind, blocked, trust_level, last_seen_at, status FROM devices WHERE id = ?', [c.req.param('id') ?? '']))[0];
+    const d = (await rt.db.query<{ id: string; kind: string; blocked: number; trust_level: number; last_seen_at: string | null; status: string }>('SELECT id, kind, blocked, trust_level, last_seen_at, status FROM devices WHERE id = ? AND deleted_at IS NULL', [c.req.param('id') ?? '']))[0];
     if (!d) throw notFound('Không tìm thấy thiết bị.');
     return d;
   }

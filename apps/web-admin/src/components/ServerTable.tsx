@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { api, errMsg, type Query } from '../api/client';
@@ -36,6 +36,8 @@ export interface ServerTableProps<S extends z.ZodTypeAny> {
   bulk?: BulkDef[];
   onBulk?: (key: string, ids: string[], done: () => void) => void;
   onOpen?: (r: z.infer<S>) => void;
+  /** nhan cac dong dang hien (vd de tra ten khi xac nhan thao tac hang loat) */
+  onRows?: (rows: z.infer<S>[]) => void;
   extra?: Query;
   exportName?: string;
   emptyText?: string;
@@ -60,6 +62,9 @@ export function ServerTable<S extends z.ZodTypeAny>(p: ServerTableProps<S>) {
     placeholderData: keepPreviousData,
     enabled: p.enabled ?? true,
   });
+  const rowsData = q.data?.items;
+  const onRows = p.onRows;
+  useEffect(() => { if (rowsData && onRows) onRows(rowsData); }, [rowsData, onRows]);
   const rowKey = p.rowKey ?? ((r: R) => String((r as { id: unknown }).id));
 
   const exportCsv = useCallback(async () => {
