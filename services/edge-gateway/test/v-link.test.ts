@@ -40,7 +40,7 @@ describe('manifest: creative delivery=stream', () => {
       expect(up.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect('delivery' in up).toBe(false);
       expect(up.url.startsWith('https://media.test/')).toBe(true);
-      expect(m.schedule[0].creative_ids).toContain(sid);
+      expect(m.schedule.flatMap((x: any) => x.creative_ids)).toContain(sid);
     } finally {
       await h.close();
     }
@@ -100,6 +100,42 @@ describe('manifest: creative delivery=stream', () => {
       await h.rt.queue.drain();
       const rows = await h.rt.db.query<{ reject_reason: string | null; played_ms: number }>('SELECT reject_reason, vcr_pct FROM ev_ad_impression WHERE creative_id = ? ORDER BY reject_reason DESC', [sid]);
       expect(rows.map((x) => x.reject_reason)).toEqual(['short_play', null]);
+    } finally {
+      await h.close();
+    }
+  });
+});
+
+describe('Signage Player (thang may) + creative stream', () => {
+  async function addElevatorStream(h: Harness, campId: string, customerId: string, w: number, hgt: number): Promise<string> {
+    const id = h.rt.id();
+    const now = h.rt.clock.now().toISOString();
+    await h.rt.db.run(
+      `INSERT INTO creatives (id, campaign_id, customer_id, name, target_type, px_w, px_h, orientation, kind, source, source_url, storage_key, mime, size_bytes, duration_s, scan_state, review_state, state, created_at)
+       VALUES (?, ?, ?, 'st.mp4', 'elevator', ?, ?, 'portrait', 'video', 'url', ?, NULL, 'video/mp4', NULL, 15, 'clean', 'approved', 'ready', ?)`,
+      [id, campId, customerId, w, hgt, STREAM_URL, now],
+    );
+    await h.rt.db.run(
+      `INSERT INTO creative_stream (creative_id, delivery, stream_url, stream_kind, declared_duration_s, binding, probe_status, fail_count, needs_review, checked_at, created_at) VALUES (?, 'stream', ?, 'hls', 15, 'b', 'ok', 0, 0, ?, ?)`,
+      [id, STREAM_URL, now, now],
+    );
+    return id;
+  }
+
+  it('thang may 1080x1920: entry stream di cung entry tai len, co fit, khong sha256; man 768 khong nhan ban 1080; giu nguyen rule bac', async () => {
+    const h = await harness({ env: { HB_MIN_GAP_S: '0' }, fixture: { campaigns: 1, targetType: 'elevator', px: { w: 768, h: 1366 }, regions: null } });
+    try {
+      const camp = h.fixture.campaigns[0]!;
+      const sid = await addElevatorStream(h, camp.id, h.fixture.customerId, 1080, 1920);
+      const d1080 = await TestDevice.create(h, { kind: 'elevator', model: 'RK3568', os: 'android-11', app_version: '1.0.0', px_w: 1080, px_h: 1920 });
+      const m = await J(await d1080.call('GET', '/v1/manifest'));
+      const s = m.creatives.find((x: any) => x.id === sid);
+      expect(s).toMatchObject({ delivery: 'stream', kind: 'hls', duration_ms: 15000, px_w: 1080, px_h: 1920, fit: expect.any(String) });
+      expect('sha256' in s).toBe(false);
+      expect(m.schedule.flatMap((x: any) => x.creative_ids)).toContain(sid);
+      // man 768x1366: bac cao hon khong day xuong (ca stream lan tai len)
+      const d768 = await TestDevice.create(h, { kind: 'elevator', model: 'RK3568', os: 'android-11', app_version: '1.0.0', px_w: 768, px_h: 1366 });
+      expect((await J(await d768.call('GET', '/v1/manifest'))).creatives.map((x: any) => x.id)).not.toContain(sid);
     } finally {
       await h.close();
     }
