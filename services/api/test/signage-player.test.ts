@@ -295,7 +295,7 @@ describe('2 + 9. lenh reset_pin / set_volume / set_orientation / message', () =>
   });
 
   it('loai lenh theo loai thiet bi: TV khong nhan reset_pin/set_volume; thang may khong nhan lock/pause; danh muc theo thiet bi', async () => {
-    for (const t of ['reset_pin', 'set_volume', 'set_orientation']) expect((await admin.json('POST', url(tv.id), { type: t, args: t === 'set_volume' ? { percent: 5 } : t === 'set_orientation' ? { orientation: 'portrait' } : {} })).body.error.code, t).toBe('command_not_for_kind');
+    for (const t of ['reset_pin', 'set_orientation']) expect((await admin.json('POST', url(tv.id), { type: t, args: t === 'set_volume' ? { percent: 5 } : t === 'set_orientation' ? { orientation: 'portrait' } : {} })).body.error.code, t).toBe('command_not_for_kind');
     expect((await admin.json('POST', url(a.id), { type: 'lock' })).body.error.code).toBe('command_not_for_kind');
     const typesA = (await admin.json('GET', url(a.id))).body.types.map((t: any) => t.type);
     const typesTv = (await admin.json('GET', url(tv.id))).body.types.map((t: any) => t.type);

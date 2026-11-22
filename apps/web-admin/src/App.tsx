@@ -14,6 +14,8 @@ const Status = lazy(() => import('./pages/Status'));
 const pages = {
   overview: lazy(() => import('./pages/Overview')),
   devices: lazy(() => import('./pages/Devices')),
+  deviceGroups: lazy(() => import('./pages/DeviceGroups')),
+  locations: lazy(() => import('./pages/Locations')),
   tvexp: lazy(() => import('./pages/TvExperience')),
   ads: lazy(() => import('./pages/Campaigns')),
   customers: lazy(() => import('./pages/Customers')),

@@ -123,7 +123,18 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
        ON CONFLICT (device_id) DO UPDATE SET px_w = COALESCE(excluded.px_w, device_profiles.px_w), px_h = COALESCE(excluded.px_h, device_profiles.px_h),
          orientation = COALESCE(excluded.orientation, device_profiles.orientation), source = COALESCE(excluded.source, device_profiles.source),
          cache_mb = COALESCE(excluded.cache_mb, device_profiles.cache_mb), reported_at = excluded.reported_at`;
+  // am luong thiet bi bao cao (heartbeat.volume): ghi khi doi gia tri hoac moi 30 phut; upsert vi TV co the chua co dong device_profiles
+  let volDirty = new Map<string, { volume: number; ts: string }>();
+  const volSeen = new Map<string, { v: number; at: number }>();
+  const VOLUME_UPSERT = `INSERT INTO device_profiles (device_id, volume, volume_at) VALUES (?,?,?)
+       ON CONFLICT (device_id) DO UPDATE SET volume = excluded.volume, volume_at = excluded.volume_at`;
   async function flush(): Promise<void> {
+    const vols = volDirty;
+    volDirty = new Map();
+    if (vols.size > 0) {
+      const stmts = [...vols].map(([id, v]) => ({ sql: VOLUME_UPSERT, params: [id, v.volume, v.ts] }));
+      for (let i = 0; i < stmts.length; i += 100) await rt.db.batch(stmts.slice(i, i + 100)).catch((e) => console.error('[gateway] ghi am luong loi:', safeErr(e)));
+    }
     const rows = hbRows;
     const dirty = seenDirty;
     const prof = profDirty;
@@ -348,6 +359,14 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
         dl_mbps: hb.dl_mbps ?? null, cache_used_mb: cacheMb, cache_slots: hb.cache_slots ?? null, state: hb.state,
       });
     }
+    if (hb.volume !== undefined) {
+      const vs = volSeen.get(dev.id);
+      if (!vs || vs.v !== hb.volume || nowS - vs.at >= PROFILE_REFRESH_S) {
+        volDirty.set(dev.id, { volume: hb.volume, ts: now.toISOString() });
+        if (volSeen.size >= 100_000) volSeen.clear();
+        volSeen.set(dev.id, { v: hb.volume, at: nowS });
+      }
+    }
     const ps = profSeen.get(dev.id);
     const appVerChanged = appVer !== null && (!ps || ps.appVer !== appVer);
     if (prevTs === null || nowS - prevTs > 600 || appVerChanged) seenDirty.set(dev.id, { ts: now.toISOString(), appVer });
@@ -362,7 +381,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
       if (profSeen.size >= 100_000) profSeen.clear();
       profSeen.set(dev.id, { source: ps?.source ?? null, appVer, at: ps?.at ?? 0 });
     }
-    if (hbRows.length >= flushSize || profDirty.size >= flushSize) defer(c, flush());
+    if (hbRows.length >= flushSize || profDirty.size >= flushSize || volDirty.size >= flushSize) defer(c, flush());
 
     // lenh thiet bi (bang device_commands): ack cu (cmd_ack trong heartbeat) -> acked; giao pending/delivered-qua-han, danh dau delivered
     let commands: Delivered[] = [];

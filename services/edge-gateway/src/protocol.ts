@@ -108,6 +108,8 @@ export const heartbeatBody = z.object({
   px_h: pxField.optional(),
   orientation: z.enum(SCREEN_ORIENTATIONS).optional(),
   region: z.string().regex(REGION_RE).optional(),
+  /** am luong hien tai 0-100 (AudioManager STREAM_MUSIC quy ve %). Tuy chon, tuong thich nguoc: app cu khong gui. */
+  volume: z.number().int().min(0).max(100).optional(),
 });
 export type HeartbeatBody = z.infer<typeof heartbeatBody>;
 

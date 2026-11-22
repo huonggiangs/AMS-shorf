@@ -51,6 +51,19 @@ Vùng vẽ theo ADS.png (tỷ lệ theo chiều cao/1080): hàng trên (chip tà
 
 Cột `creatives.overlay`/`format` và các route `PUT /:id/overlay`, manifest có `overlay` đã được a1/a3 làm. Lược đồ TV khớp phần giao nhau; phần còn thiếu nằm ở mục 3 của tệp yêu cầu.
 
+### 3c. Âm lượng từ xa (d-tree): việc app TV phải làm
+
+Trang **Thiết bị > Nhóm thiết bị** có thanh trượt âm lượng cho từng thiết bị và nút "Đặt âm lượng cả nhóm". Giao thức: lệnh `set_volume`, TV nhận ở heartbeat kế tiếp (polling, không tức thời), ack, và báo âm lượng thật. App cần:
+
+1. **Nhận lệnh** `{"id","type":"set_volume","args":{"percent":0..100}}` trong `commands[]` của heartbeat. Kiểm `percent` là số nguyên 0..100, ngoài khoảng thì ack `failed`.
+2. **Đặt âm lượng** bằng `AudioManager`: `val am = getSystemService(AUDIO_SERVICE) as AudioManager; val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC); am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(percent / 100f * max), 0)` (cờ `0`: không hiện thanh âm lượng hệ thống). Nếu thiết bị có âm lượng cố định (`isVolumeFixed`) thì ack `failed` với `result:"volume_fixed"`.
+3. **Ack** qua `POST /v1/commands/ack` `{"acks":[{"id":"<id lệnh>","status":"ok"}]}` sau khi đặt xong. `id` không đổi khi giao lại: app nhớ id đã xử lý, bỏ qua lần giao lại nhưng vẫn ack (idempotent).
+4. **Báo âm lượng thật** trong mọi heartbeat: `"volume": round(100 * am.getStreamVolume(STREAM_MUSIC) / am.getStreamMaxVolume(STREAM_MUSIC))`. Người dùng bấm phím âm lượng trên remote cũng làm số này đổi; admin luôn thấy số thật, không phải số đã yêu cầu. Trường tùy chọn: app cũ không gửi thì admin hiện "Chưa nhận báo cáo âm lượng".
+5. **`refresh_manifest`** (nút "Đồng bộ lại ngay"): app đã xử lý theo mục 6 của giao thức; không cần làm thêm.
+6. **`screenshot`** ("Xem màn hình") chưa làm; đặc tả trong `DEVICE-PROTOCOL.md` mục 6.2.
+
+Thiết bị phải ở `trust_level >= 1` (TV đã ghép mã, thang máy/LED đã cấp quyền) mới nhận được lệnh. Hạn lệnh 1 giờ: TV tắt lâu hơn thì lệnh hết hạn (`expired`), UI hiện "Lệnh hết hạn, thiết bị không phản hồi".
+
 ### 3b. Creative dán link (`delivery: "stream"`)
 
 Manifest có thể chứa creative `delivery: "stream"` (`url`, `kind` mp4/webm/hls/dash, `duration_ms`, `etag`; không `sha256`, không `size_bytes`). App phải: phát trực tiếp bằng ExoPlayer/Media3 (không tải vào bộ nhớ đệm bắt buộc, không kiểm sha256), **bỏ qua và chuyển creative kế tiếp khi stream lỗi**, ghi log lỗi theo `creative_id` (chưa có loại sự kiện lỗi riêng trong giao thức; không gửi `impression` cho lượt lỗi), và gửi `impression` với `played_ms` thực (rebuffer làm `played_ms` ngắn đi; dưới 0.9 x `duration_ms` thì không hợp lệ). Không giảm bitrate/fps/độ phân giải khi phát. Chi tiết: `DEVICE-PROTOCOL.md` mục 7.0, `VIDEO-LINK.md`. Trang YouTube/Vimeo không phải stream trực tiếp: nằm ngoài phạm vi (AMS từ chối khi dán).

@@ -58,6 +58,7 @@ const SRC: { file: string; prefixes: string[] }[] = [
   { file: 'services/api/src/auth/routes.ts', prefixes: ['/auth'] },
   { file: 'services/api/src/routes/devices.ts', prefixes: ['/admin/v1/devices'] },
   { file: 'services/api/src/routes/device-commands.ts', prefixes: ['/admin/v1/devices/:id/commands'] },
+  { file: 'services/api/src/routes/device-groups.ts', prefixes: ['/admin/v1/device-groups', '/admin/v1/locations'] },
   { file: 'services/api/src/routes/campaigns.ts', prefixes: ['/admin/v1/campaigns', '/portal/v1/campaigns'] },
   { file: 'services/api/src/routes/customers.ts', prefixes: ['/admin/v1/customers'] },
   { file: 'services/api/src/routes/contracts.ts', prefixes: ['/admin/v1/contracts'] },

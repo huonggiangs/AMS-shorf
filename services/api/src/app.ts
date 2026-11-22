@@ -23,6 +23,7 @@ import { contractDocRoutes } from './contracts-doc/routes.js';
 import { customerRoutes } from './routes/customers.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { deviceRoutes } from './routes/devices.js';
+import { deviceGroupRoutes, locationRoutes } from './routes/device-groups.js';
 import { historyRoutes, portalHistoryRoutes } from './routes/history.js';
 import { invoiceRoutes, payoutRoutes, portalInvoiceRoutes } from './routes/invoices.js';
 import { mediaRoutes } from './routes/media.js';
@@ -106,6 +107,8 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
 
   const admin = new Hono<AppEnv>();
   admin.route('/devices', deviceRoutes());
+  admin.route('/device-groups', deviceGroupRoutes());
+  admin.route('/locations', locationRoutes());
   admin.route('/campaigns', campaignRoutes(false));
   admin.route('/customers', customerRoutes());
   admin.route('/contracts', contractRoutes());

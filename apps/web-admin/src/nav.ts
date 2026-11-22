@@ -3,7 +3,9 @@ import type { Module } from './api/schemas';
 export interface PageDef { id: string; path: string; label: string; module: Module | null }
 export const PAGE_DEFS: PageDef[] = [
   { id: 'overview', path: '/overview', label: 'Tổng quan', module: 'overview' },
-  { id: 'devices', path: '/devices', label: 'Mạng lưới thiết bị', module: 'devices' },
+  { id: 'devices', path: '/devices', label: 'Danh sách thiết bị', module: 'devices' },
+  { id: 'deviceGroups', path: '/device-groups', label: 'Nhóm thiết bị', module: 'devices' },
+  { id: 'locations', path: '/locations', label: 'Địa điểm', module: 'devices' },
   { id: 'tvexp', path: '/tv-experience', label: 'Trải nghiệm trên TV', module: 'tv_experience' },
   { id: 'ads', path: '/ads', label: 'Quảng cáo', module: 'campaigns' },
   { id: 'customers', path: '/customers', label: 'Khách hàng & Hợp đồng', module: 'customers' },
@@ -40,7 +42,8 @@ export interface GroupDef { id: string; label: string; icon: string; pages: stri
 export const GROUPS: GroupDef[] = [
   { id: 'g1', label: 'Tổng quan', icon: 'home', pages: ['overview', 'tvexp'] },
   { id: 'g2', label: 'Quảng cáo', icon: 'ads', pages: ['ads', 'customers', 'contractDoc', 'approvals', 'creativeReview', 'screens', 'formats', 'schedule', 'kyc'] },
-  { id: 'g6', label: 'Phát sóng nội bộ', icon: 'ads', pages: ['workbench', 'media', 'broadcast', 'templates', 'notice', 'devices', 'smart', 'queue'] },
+  { id: 'g6', label: 'Phát sóng nội bộ', icon: 'ads', pages: ['workbench', 'media', 'broadcast', 'templates', 'notice', 'smart', 'queue'] },
+  { id: 'g7', label: 'Thiết bị', icon: 'tv', pages: ['devices', 'deviceGroups', 'locations'] },
   { id: 'g3', label: 'Doanh thu', icon: 'coin', pages: ['finance', 'billing', 'integrity', 'history'] },
   { id: 'g4', label: 'Đối tác', icon: 'link', pages: ['partners', 'integrations'] },
   { id: 'g5', label: 'Quản trị', icon: 'users', pages: ['access', 'audit', 'alerts', 'legal', 'compliance', 'profile'] },
