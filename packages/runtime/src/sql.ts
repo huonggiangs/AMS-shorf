@@ -45,3 +45,12 @@ export function normalizeParams(params: unknown[] | undefined): unknown[] {
     return p;
   });
 }
+
+/** D1 gioi han 100 tham so rang buoc moi cau lenh (SQLite cuc bo khong gioi han: loi chi lo ra tren D1). Chia danh sach cho `IN (...)`. */
+export const D1_MAX_BOUND_PARAMS = 100;
+export function chunkForIn<T>(items: readonly T[], reserved = 0, max = D1_MAX_BOUND_PARAMS): T[][] {
+  const n = Math.max(1, max - reserved);
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += n) out.push(items.slice(i, i + n) as T[]);
+  return out;
+}

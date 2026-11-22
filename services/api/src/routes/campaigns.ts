@@ -10,7 +10,7 @@ import { campaignScope, mediaScope } from '../lib/scope.js';
 import { apiTarget, dbTarget, fitsTarget, parsePx, type TargetType } from '../lib/creative.js';
 import { dayEnd, dayStart, isDate, todayVn } from '../lib/dates.js';
 import { ensureDefaultSlot } from '../lib/manifest.js';
-import { enqueueOutbox, type Db, type Runtime } from '@ams/runtime';
+import { chunkForIn, enqueueOutbox, type Db, type Runtime } from '@ams/runtime';
 import { CAMPAIGN_DELETABLE_STATES, CAMPAIGN_EDITABLE_STATES, InvalidTransitionError, assertTransition, transitionCampaign, type CampaignState } from '@ams/shared';
 import { TOPIC_CAMPAIGN_APPROVED, approvedKey, enqueueCampaignRelease, enqueueManifestBump, runOutbox } from '../outbox.js';
 import { allowUnscannedCreatives, assertScanOk } from './creatives-scan.js';
@@ -90,14 +90,18 @@ export function campaignSpec(u: AuthUser, nowIso: string, forceState?: string): 
 export async function presentCampaigns(rt: Runtime, rows: CampRow[], external: boolean): Promise<Record<string, unknown>[]> {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
-  const imp = await rt.db.query<{ campaign_id: string; n: number }>(`SELECT campaign_id, SUM(valid) AS n FROM impression_hourly WHERE campaign_id IN (${placeholders(ids.length)}) GROUP BY campaign_id`, ids);
+  const imp: { campaign_id: string; n: number }[] = [];
+  for (const part of chunkForIn(ids)) imp.push(...(await rt.db.query<{ campaign_id: string; n: number }>(`SELECT campaign_id, SUM(valid) AS n FROM impression_hourly WHERE campaign_id IN (${placeholders(part.length)}) GROUP BY campaign_id`, part))); // D1: <=100 tham so
   const impMap = new Map(imp.map((x) => [x.campaign_id, num(x.n)]));
   let srcMap = new Map<string, string>();
   if (!external) {
-    const src = await rt.db.query<{ campaign_id: string; name: string }>(
-      `SELECT s.campaign_id, p.name FROM schedule_slots s JOIN partners p ON p.id = s.partner_id WHERE s.campaign_id IN (${placeholders(ids.length)}) ORDER BY s.id`,
-      ids,
-    );
+    const src: { campaign_id: string; name: string }[] = [];
+    for (const part of chunkForIn(ids)) {
+      src.push(...(await rt.db.query<{ campaign_id: string; name: string }>(
+        `SELECT s.campaign_id, p.name FROM schedule_slots s JOIN partners p ON p.id = s.partner_id WHERE s.campaign_id IN (${placeholders(part.length)}) ORDER BY s.id`,
+        part,
+      )));
+    }
     srcMap = new Map(src.map((x) => [x.campaign_id, x.name]));
   }
   return rows.map((r) => {

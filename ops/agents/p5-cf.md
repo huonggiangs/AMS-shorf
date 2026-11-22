@@ -1,5 +1,5 @@
 STATUS: done
-UPDATED: 2026-11-14 12:20 UTC
+UPDATED: 2026-11-22 UTC
 
 # p5-cf: Cloudflare an toàn cho tiền + media trên Cloudflare
 
@@ -13,7 +13,11 @@ UPDATED: 2026-11-14 12:20 UTC
 - [x] Docs: DECISIONS-CF-COUNTERS.md, CLOUDFLARE-MEDIA-LIMITS.md, DEPLOY-CLOUDFLARE.md ghi chú
 - [x] Test: runtime (cf-counters, pop-dedupe), gateway (cap-idempotent), api (cf-media)
 - [x] `node scripts/deploy-cloudflare.mjs --env staging --fake-ids --dry-run --no-crons` pass
-- [ ] Chạy thật trên Cloudflare staging (chưa có tài khoản): xác nhận D1 batch RETURNING và độ trễ/rows-written
+- [x] Chạy trên D1 THẬT của workerd/Miniflare (local simulator, migration 0001-0015 bằng `wrangler d1 migrations apply --local`): `pnpm test:cf` (tests/cf-runtime), xem docs/CLOUDFLARE-D1-VERIFICATION.md
+- [x] D1 batch + RETURNING (trần giờ, chiếm khóa, chi tiêu, rút tiền) chạy đúng dưới Promise.all trên workerd
+- [x] Đo rows-written/rows-read mỗi yêu cầu và độ trễ (số local simulator, không phải production)
+- [x] Sửa lỗi giới hạn 100 tham số D1 (devices list/bulk, campaigns, dsr, consumer existingIds)
+- [ ] Chạy thật trên Cloudflare staging (chưa có tài khoản): độ trễ/rows-written thật, Queues/DLQ thật, DO production, PUT presign tới R2 S3, custom domain
 
 ## Lưu ý phối hợp
 - `services/api/src/auth/routes.ts` (checkTotp) và `services/api/src/routes/media.ts` (mount `mediaScanReviewRoutes`, scan_warning) lẫn thay đổi chưa commit của p2: p5 chỉ sửa vài dòng, p2 commit cùng các tệp đó.

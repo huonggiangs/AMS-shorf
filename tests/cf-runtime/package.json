@@ -1,0 +1,26 @@
+{
+  "name": "@ams/cf-runtime-tests",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test:cf": "vitest run",
+    "test": "echo \"tests/cf-runtime chay rieng: pnpm test:cf (can workerd, ~3 phut)\""
+  },
+  "devDependencies": {
+    "miniflare": "4.20260730.0",
+    "wrangler": "4.161.0",
+    "@cloudflare/workers-types": "4.20260101.0",
+    "vitest": "3.2.6",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@ams/edge-gateway": "workspace:*",
+    "@ams/ingest-consumer": "workspace:*",
+    "@ams/payments": "workspace:*",
+    "@ams/runtime": "workspace:*",
+    "@ams/shared": "workspace:*",
+    "@ams/api": "workspace:*",
+    "@ams/db": "workspace:*"
+  }
+}

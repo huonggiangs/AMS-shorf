@@ -111,7 +111,7 @@ export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): Ing
   /** Tang 2: event_id da co trong bang (kv het han / mat) */
   async function existingIds(ids: string[]): Promise<Set<string>> {
     const out = new Set<string>();
-    for (const part of chunk(ids, 200)) {
+    for (const part of chunk(ids, 100)) { // D1: toi da 100 tham so/cau lenh
       const rows = await rt.db.query<{ event_id: string }>(`SELECT event_id FROM ev_ad_impression WHERE event_id IN (${part.map(() => '?').join(',')})`, part);
       for (const r of rows) out.add(r.event_id);
     }

@@ -1,6 +1,6 @@
 // Quyen cua chu the du lieu (Nghi dinh 13/2023/ND-CP): xuat du lieu ca nhan (JSON) + an danh theo yeu cau, GIU so cai bat bien
 // (wallet_entries, wallet_ledger, payouts, audit_log) vi nghia vu ke toan/chung minh. Bang luu giu su kien ev_* xoa theo chinh sach luu giu (retention).
-import type { Db, Runtime } from '@ams/runtime';
+import { chunkForIn, type Db, type Runtime } from '@ams/runtime';
 import { ANONYMIZED_NAME, anonymizedEmail, maskValue } from '@ams/shared';
 import { writeAudit } from '../lib/audit.js';
 import { AAD, decField } from '../lib/crypto.js';
@@ -81,8 +81,12 @@ export async function exportSubject(rt: Runtime, type: SubjectType, id: string):
     put('devices', devices);
     const ids = devices.map((d) => d.id);
     if (ids.length) {
-      const ph = ids.map(() => '?').join(',');
-      put('ad_impressions', await db.query(`SELECT ts, event_id, device_id, campaign_id, creative_id, valid, reward_vnd FROM ev_ad_impression WHERE device_id IN (${ph}) ORDER BY ts DESC LIMIT ?`, [...ids, LIMIT]));
+      const all: Record<string, unknown>[] = [];
+      for (const part of chunkForIn(ids, 1)) { // D1: <=100 tham so/cau lenh (gom ca LIMIT)
+        all.push(...(await db.query<Record<string, unknown>>(`SELECT ts, event_id, device_id, campaign_id, creative_id, valid, reward_vnd FROM ev_ad_impression WHERE device_id IN (${part.map(() => '?').join(',')}) ORDER BY ts DESC LIMIT ?`, [...part, LIMIT])));
+      }
+      all.sort((a, b) => (String(a['ts']) < String(b['ts']) ? 1 : String(a['ts']) > String(b['ts']) ? -1 : 0));
+      put('ad_impressions', all.slice(0, LIMIT));
     } else counts['ad_impressions'] = 0;
     put('reward_wallet_ledger', await db.query('SELECT id, kind, amount_vnd, ref_type, ref_id, status, created_at FROM wallet_ledger WHERE user_id = ? ORDER BY created_at', [id]));
     put('payouts', await db.query('SELECT id, amount_vnd, channel, status, requested_at, paid_at FROM payouts WHERE user_id = ? ORDER BY requested_at', [id]));

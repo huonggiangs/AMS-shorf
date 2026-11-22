@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { DEVICE_LOG_RETENTION_DAYS, REGIONS, signageModelClass } from '@ams/shared';
+import { chunkForIn } from '@ams/runtime';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { conflict, forbidden, notFound, tooMany, unprocessable } from '../lib/errors.js';
 import { redeemPairingCode } from '@ams/edge-gateway/pairing';
@@ -96,11 +97,15 @@ async function present(c: Ctx, rows: DevRow[]): Promise<Record<string, unknown>[
   const recent = new Map<string, string[]>();
   if (rows.length) {
     const ids = rows.map((r) => r.id);
-    const imp = await rt.db.query<{ device_id: string; name: string; last: string }>(
-      `SELECT e.device_id, c.name, MAX(e.ts) AS last FROM ev_ad_impression e JOIN campaigns c ON c.id = e.campaign_id
-        WHERE e.device_id IN (${placeholders(ids.length)}) AND e.valid = 1 GROUP BY e.device_id, c.name ORDER BY last DESC`,
-      ids,
-    );
+    const imp: { device_id: string; name: string; last: string }[] = [];
+    for (const part of chunkForIn(ids)) { // D1: toi da 100 tham so/cau lenh; nhom theo device_id nen chia theo thiet bi la an toan
+      imp.push(...(await rt.db.query<{ device_id: string; name: string; last: string }>(
+        `SELECT e.device_id, c.name, MAX(e.ts) AS last FROM ev_ad_impression e JOIN campaigns c ON c.id = e.campaign_id
+          WHERE e.device_id IN (${placeholders(part.length)}) AND e.valid = 1 GROUP BY e.device_id, c.name ORDER BY last DESC`,
+        part,
+      )));
+    }
+    imp.sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));
     for (const x of imp) {
       const a = recent.get(x.device_id) ?? [];
       if (a.length < 5) a.push(x.name);
@@ -155,17 +160,20 @@ export function deviceRoutes(): Hono<AppEnv> {
     // R1-26: dat trust_level=2 lam thiet bi tinh tien => can quyen devices:approve (tach nhiem vu voi device_ops), khong chi devices:write
     if (b.action === 'verify' && !hasPerm(c, 'devices', 'approve')) throw forbidden('Xác minh thiết bị (cho phép tính tiền) cần quyền duyệt thiết bị.', 'forbidden', { module: 'devices', action: 'approve' });
     const ids = [...new Set(b.ids)];
-    const sql =
+    const sqlFor = (n: number): string =>
       b.action === 'verify'
-        ? `UPDATE devices SET trust_level = 2, blocked = 0, status = CASE WHEN status = 'checking' THEN 'active' ELSE status END WHERE id IN (${placeholders(ids.length)})`
+        ? `UPDATE devices SET trust_level = 2, blocked = 0, status = CASE WHEN status = 'checking' THEN 'active' ELSE status END WHERE id IN (${placeholders(n)})`
         : b.action === 'block'
-          ? `UPDATE devices SET blocked = 1, trust_level = 0 WHERE id IN (${placeholders(ids.length)})`
+          ? `UPDATE devices SET blocked = 1, trust_level = 0 WHERE id IN (${placeholders(n)})`
           // mo chan: TV 0 -> 1 nhu cu; thang may/LED KHONG tu len muc 1 (phai qua "Cap quyen" co quyen devices:approve)
-          : `UPDATE devices SET blocked = 0, trust_level = CASE WHEN trust_level = 0 AND kind NOT IN ${SIGNAGE_KINDS_SQL} THEN 1 ELSE trust_level END WHERE id IN (${placeholders(ids.length)})`;
+          : `UPDATE devices SET blocked = 0, trust_level = CASE WHEN trust_level = 0 AND kind NOT IN ${SIGNAGE_KINDS_SQL} THEN 1 ELSE trust_level END WHERE id IN (${placeholders(n)})`;
     let updated = 0;
     await rt.db.tx(async (db) => {
-      updated = (await db.run(sql, ids)).changes;
-      if (b.action === 'block') await db.run(`UPDATE device_profiles SET approved_at = NULL, approved_by = NULL WHERE device_id IN (${placeholders(ids.length)})`, ids); // chan = thu hoi cap quyen
+      // D1: toi da 100 tham so/cau lenh -> chia cum, chay trong MOT batch (nguyen tu)
+      const parts = chunkForIn(ids);
+      const res = await db.batch(parts.map((part) => ({ sql: sqlFor(part.length), params: part })));
+      updated = res.reduce((a, x) => a + x.changes, 0);
+      if (b.action === 'block') await db.batch(parts.map((part) => ({ sql: `UPDATE device_profiles SET approved_at = NULL, approved_by = NULL WHERE device_id IN (${placeholders(part.length)})`, params: part }))); // chan = thu hoi cap quyen
       await auditCtx(c, db, { action: `device.bulk_${b.action}`, objectType: 'device', objectId: ids.length === 1 ? ids[0]! : null, diff: { requested: ids.length, updated, ids: ids.slice(0, 50) } });
     });
     // gateway cache thiet bi o kv `dev:<id>` (5 phut): xoa de khoa/mo/xac minh co hieu luc ngay
