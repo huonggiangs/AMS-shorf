@@ -248,6 +248,8 @@ Phản hồi đầy đủ `200`:
 | `format` | `fullscreen`, `menu_banner`, `l_banner`, `pause_ad`, `qr_corner`, `reward`. **Hiện server chỉ phát ra `fullscreen`** trừ khi dữ liệu creative ghi định dạng khác (cột riêng chưa có: xem yêu cầu cho f1) |
 | `media_type` | `video` hoặc `image` |
 
+**URL media**: `PUBLIC_MEDIA_BASE_URL` > `MEDIA_PUBLIC_URL` > `S3_PUBLIC_ENDPOINT/S3_BUCKET` > `${PUBLIC_GATEWAY_URL}/media`. Trường hợp cuối (Cloudflare R2 chỉ có binding) gateway tự phục vụ `GET /media/<khóa>` (không ký, có `Range`, chỉ tệp/rendition của creative `approved`+`ready`, khác thì 404). Trước đây thiếu cả bốn biến thì URL là `https://media.ams.invalid` và TV không tải được video.
+
 **Slot** (`schedule[]`): `{slot_id, campaign_id, creative_ids, daypart, start_min, end_min, priority, reward_points}`
 
 - `start_min`/`end_min`: phút từ 00:00 theo múi giờ `tz` (hiện **luôn** `Asia/Ho_Chi_Minh`, UTC+7); `0..1440`, `start_min < end_min`. Slot áp dụng khi giờ địa phương nằm trong `[start_min, end_min)`.
