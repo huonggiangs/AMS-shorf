@@ -66,6 +66,8 @@ export async function authenticateDevice(c: Context, deps: AuthDeps, body: Uint8
   if (!env.deviceId) throw new HttpProblem('unknown_device', 'Thieu tieu de X-Device-Id.');
   const dev = await deps.devices.get(env.deviceId);
   if (!dev) throw new HttpProblem('unknown_device', 'Thiet bi chua dang ky.');
+  // thiet bi da bi xoa: khong con khoa de xac thuc -> bao ro de app hien "can ghep lai" (trang thai khong bi lo gi them ngoai viec id tung ton tai)
+  if (dev.deleted) throw new HttpProblem('device_deleted', 'Thiet bi da bi xoa khoi he thong. Hay dang ky va ghep lai thiet bi.');
   await verifyEnvelope(c, deps, env, body, dev.pubkey, dev.id);
   if (dev.blocked) throw new HttpProblem('device_blocked', 'Thiet bi bi khoa.');
   return dev;

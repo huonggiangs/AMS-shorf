@@ -11,6 +11,7 @@ import { Btn, Field, Kpi, LoadingBlock, NameCell, Note, PageHead, StatusTag, Tab
 import { Drawer } from '../components/Drawer';
 import { Dialog } from '../components/Dialog';
 import { ContractLinesPanel } from '../components/ContractLines';
+import { DeleteCustomerDialog, EditCustomerDialog } from '../components/CustomerEdit';
 import { useT } from '../i18n';
 import { fmtDate, vnd, vndInWords } from '../lib/format';
 
@@ -86,6 +87,8 @@ export default function Customers() {
 }
 
 function CustomerDrawer({ id, onClose, onTemplate }: { id: string | null; onClose: () => void; onTemplate: (id: string) => void }) {
+  const { can } = useAuth();
+  const [mode, setMode] = useState<'' | 'edit' | 'del'>('');
   const c = useQuery({ queryKey: ['/admin/v1/customers', 'one', id], enabled: !!id, queryFn: () => api.get(`/admin/v1/customers/${id}`, { schema: customerSchema }) });
   const cts = useQuery({ queryKey: ['/admin/v1/contracts', 'of', id], enabled: !!id, queryFn: () => api.get('/admin/v1/contracts', { query: { page_size: 50, filter: `customer_id:${id}` }, schema: listOf(contractSchema) }) });
   const cps = useQuery({ queryKey: ['/admin/v1/campaigns', 'of', id], enabled: !!id, queryFn: () => api.get('/admin/v1/campaigns', { query: { page_size: 50, filter: `customer_id:${id}` }, schema: listOf(campaignSchema) }) });
@@ -120,8 +123,12 @@ function CustomerDrawer({ id, onClose, onTemplate }: { id: string | null; onClos
           {!cps.data?.items.length ? <p className="sub">Chưa có chiến dịch.</p> : null}
           <div className="acts" style={{ marginTop: 20 }}>
             <Btn tone="p" onClick={() => onTemplate(d.id)}>Tạo hợp đồng từ mẫu</Btn>
+            {can('customers', 'write') ? <Btn onClick={() => setMode('edit')}>Sửa hồ sơ</Btn> : null}
+            {can('customers', 'delete') ? <Btn tone="d" onClick={() => setMode('del')}>Xóa khách hàng</Btn> : null}
             <Btn onClick={onClose}>Đóng</Btn>
           </div>
+          {mode === 'edit' ? <EditCustomerDialog customer={d} onClose={() => setMode('')} /> : null}
+          {mode === 'del' ? <DeleteCustomerDialog customer={d} onClose={() => setMode('')} onDone={onClose} /> : null}
         </>
       ) : null}
     </Drawer>

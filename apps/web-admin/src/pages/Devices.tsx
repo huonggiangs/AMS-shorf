@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, errMsg } from '../api/client';
@@ -13,8 +13,9 @@ import { LineChart } from '../components/charts';
 import { fmtDateTime, num } from '../lib/format';
 import { DeviceCommands, OwnerForm, PairDialog } from '../components/DeviceOps';
 import { ApproveDevice, DeviceLogs, isSignage, kindLabel } from '../components/SignageOps';
+import { DeleteDevicesDialog } from '../components/DeleteDevices';
 
-type DevEx = Device & { pairing_state?: string; trust_level?: number; paired_at?: string | null };
+type DevEx = Device & { pairing_state?: string; trust_level?: number; paired_at?: string | null; deleted_at?: string | null };
 const SRC_LABEL: Record<string, string> = { ams: 'AMS (mạng)', usb: 'USB', lan: 'LAN' };
 /** TV: đã ghép mã; thang máy/LED: đã được cấp quyền (không dùng mã 6 số). */
 export const isPaired = (d: DevEx): boolean => !!d.paired_at || (isSignage(d.kind) && (d.trust_level ?? 0) >= 1);
@@ -49,7 +50,14 @@ export default function Devices() {
   const pend = count('pend', 'status:unpaired'), all = count('all'), tvs = count('tv', 'kind:tv'), phones = count('ph', 'kind:phone'), chk = count('chk', 'status:checking'), blk = count('blk', 'status:blocked');
   const canWrite = can('devices', 'write');
   const canApprove = can('devices', 'approve');
+  const canDelete = can('devices', 'delete');
+  const { me } = useAuth();
   const [pairOpen, setPairOpen] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [del, setDel] = useState<{ items: { id: string; name: string }[]; done: () => void } | null>(null);
+  const names = useRef(new Map<string, string>());
+  const onRows = useCallback((rows: Device[]) => { for (const r of rows) names.current.set(r.id, r.name); }, []);
+  const extra = useMemo(() => (showDeleted ? { deleted: 1 } : undefined), [showDeleted]);
   return (
     <>
       <PageHead title="Quản lý thiết bị" sub="Danh sách TV, smartphone, trạng thái ghép đôi và telemetry." actions={canWrite ? <Btn tone="p" icon="plus" onClick={() => setPairOpen(true)}>Ghép mã</Btn> : undefined} />
@@ -61,14 +69,16 @@ export default function Devices() {
         <Kpi label="Cần rà soát" icon="warn" value={chk != null ? num(chk) : '—'} foot="Đang kiểm tra / chờ xác minh" />
         <Kpi label="Đã chặn" icon="shield" value={blk != null ? num(blk) : '—'} foot="Bị loại khỏi tính hoa hồng" />
       </div>
-      <ServerTable id="dv" endpoint="/admin/v1/devices" itemSchema={deviceSchema} cols={deviceCols(true)} title="Danh sách thiết bị" exportName="thiet-bi" onOpen={(r) => setSp({ open: r.id })}
+      <ServerTable id="dv" endpoint="/admin/v1/devices" itemSchema={deviceSchema} cols={deviceCols(true)} title="Danh sách thiết bị" exportName="thiet-bi" onOpen={(r) => setSp({ open: r.id })} onRows={onRows} extra={extra}
         filters={[
           { key: 'kind', label: 'Loại', options: [{ value: 'tv', label: 'TV' }, { value: 'phone', label: 'Điện thoại' }, { value: 'elevator', label: 'Thang máy' }, { value: 'led_p5', label: 'LED P5' }] },
           { key: 'source', label: 'Nguồn phát', options: [{ value: 'ams', label: 'AMS (mạng)' }, { value: 'usb', label: 'USB' }, { value: 'lan', label: 'LAN' }] },
           { key: 'status', label: 'Trạng thái', options: ['online', 'paired', 'needs_update', 'checking', 'blocked', 'unpaired', 'awaiting_approval'].map((v) => ({ value: v, label: ({ online: 'Hoạt động', paired: 'Đã ghép đôi', needs_update: 'Cần cập nhật', checking: 'Đang kiểm tra', blocked: 'Bị loại trừ', unpaired: 'Chờ ghép mã', awaiting_approval: 'Chờ cấp quyền' } as Record<string, string>)[v]! })) },
         ]}
-        bulk={canWrite ? [{ key: 'verify', label: 'Xác minh' }, { key: 'block', label: 'Chặn', tone: 'd' }] : []}
-        onBulk={(k, ids, done) => void act(() => api.post('/admin/v1/devices/bulk', { body: { action: k, ids } }), k === 'verify' ? `Đã xác minh ${ids.length} thiết bị.` : `Đã chặn ${ids.length} thiết bị.`).then(done)} />
+        bulk={showDeleted ? [] : [...(canWrite ? [{ key: 'verify', label: 'Xác minh' }, { key: 'block', label: 'Chặn', tone: 'd' as const }] : []), ...(canDelete ? [{ key: 'delete', label: 'Xóa', tone: 'd' as const }] : [])]}
+        onBulk={(k, ids, done) => k === 'delete' ? setDel({ items: ids.map((id) => ({ id, name: names.current.get(id) ?? id })), done }) : void act(() => api.post('/admin/v1/devices/bulk', { body: { action: k, ids } }), k === 'verify' ? `Đã xác minh ${ids.length} thiết bị.` : `Đã chặn ${ids.length} thiết bị.`).then(done)} />
+      {me?.user.role === 'super_admin' ? <label style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}><input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} /> Hiện thiết bị đã xóa</label> : null}
+      {del ? <DeleteDevicesDialog items={del.items} onClose={() => setDel(null)} onDone={() => del.done()} /> : null}
       <PairDialog open={pairOpen} onClose={() => setPairOpen(false)} onDone={(id) => setSp({ open: id })} />
       <DeviceDrawer id={sp.get('open')} onClose={() => setSp({})} canWrite={canWrite} canApprove={canApprove} />
     </>
@@ -81,6 +91,7 @@ export function DeviceDrawer({ id, onClose, canWrite, canApprove }: { id: string
   const mayApprove = canApprove ?? can('devices', 'approve');
   const q = useQuery({ queryKey: ['/admin/v1/devices', 'one', id], enabled: !!id, queryFn: () => api.get(`/admin/v1/devices/${id}`, { schema: deviceSchema }) });
   const d = q.data as (DevEx & { delivery?: unknown; views_7d?: number[]; seen_ads?: { name: string; brand?: string; views: number }[] }) | undefined;
+  const [delOpen, setDelOpen] = useState(false);
   const bulk = (a: string) => act(() => api.post('/admin/v1/devices/bulk', { body: { action: a, ids: [id] } }), a === 'verify' ? 'Đã xác minh.' : 'Đã chặn hoa hồng.');
   return (
     <Drawer open={!!id} onClose={onClose}>
@@ -104,7 +115,10 @@ export function DeviceDrawer({ id, onClose, canWrite, canApprove }: { id: string
           {(d.seen_ads ?? []).map((a) => <div key={a.name} className="mono" style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 8, marginBottom: 6, fontSize: 12.5 }}><span>{a.name}{a.brand ? ` · ${a.brand}` : ''}</span><b>{num(a.views)} lượt</b></div>)}
           {!d.seen_ads?.length ? <p className="sub">Chưa có dữ liệu lượt xem.</p> : null}
           {d.views_7d?.length ? <LineChart series={[{ n: 'Lượt xem', c: '#005BBF', d: d.views_7d }]} labels={d.views_7d.map((_, i) => `N-${d.views_7d!.length - 1 - i}`)} h={150} /> : null}
-          {canWrite ? <div className="acts" style={{ marginTop: 20 }}><Btn tone="p" onClick={() => void bulk('verify')}>Xác minh (tin cậy 2)</Btn><Btn tone="d" onClick={() => void bulk('block')}>Chặn hoa hồng</Btn></div> : null}
+          {canWrite && !d.deleted_at ? <div className="acts" style={{ marginTop: 20 }}><Btn tone="p" onClick={() => void bulk('verify')}>Xác minh (tin cậy 2)</Btn><Btn tone="d" onClick={() => void bulk('block')}>Chặn hoa hồng</Btn></div> : null}
+          {d.deleted_at ? <p className="sub" style={{ marginTop: 16 }}>Thiết bị đã bị xóa lúc {fmtDateTime(d.deleted_at)}.</p> : null}
+          {can('devices', 'delete') && !d.deleted_at ? <div className="acts" style={{ marginTop: 12 }}><Btn tone="d" onClick={() => setDelOpen(true)}>Xóa thiết bị</Btn></div> : null}
+          {delOpen ? <DeleteDevicesDialog items={[{ id: d.id, name: d.name }]} onClose={() => setDelOpen(false)} onDone={onClose} /> : null}
         </>
       ) : null}
     </Drawer>

@@ -28,6 +28,8 @@ export const ERROR_CODES = {
   stale_timestamp: 401,
   unknown_device: 401,
   device_blocked: 403,
+  // thiet bi da bi xoa khoi AMS (xoa mem): app dung gui, xoa khoa/khoa ghep va yeu cau ghep lai (dang ky moi)
+  device_deleted: 410,
   replay: 409,
   payload_too_large: 413,
   validation_failed: 422,

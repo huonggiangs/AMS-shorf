@@ -31,6 +31,7 @@ import {
   unknownVariablesIn,
 } from './service.js';
 import type { DocModel, DocRow, LogoMeta, TemplateRow } from './service.js';
+import { EXPORT_FORMAT, IMPORT_MAX_BYTES, ImportError, parseTemplateFile } from './import.js';
 
 const articleSchema = z.object({
   key: z.string().regex(/^[a-z][a-z0-9_]{0,40}$/),
@@ -107,6 +108,29 @@ export function contractDocRoutes(): Hono<AppEnv> {
     return c.json({ items: rows.map((t) => presentTemplate(t)) });
   });
 
+  // Nhap mau tu tep may tinh: CHI xem truoc (khong ghi DB). Than yeu cau = byte tho cua tep (<= 2 MB), ten tep o ?filename=.
+  // Luu bang POST /templates (co `import_source`), nen mau nhap luon la phien ban NHAP moi, can luat su duyet nhu moi mau khac.
+  r.post('/templates/import-preview', requirePerm('admin', 'write'), async (c) => {
+    const declared = Number(c.req.header('content-length') ?? 0);
+    if (declared > IMPORT_MAX_BYTES + 1024) throw unprocessable('Tệp quá lớn (tối đa 2 MB).', 'file_too_large');
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    const filename = (c.req.query('filename') ?? '').slice(0, 200);
+    try {
+      return c.json(await parseTemplateFile(filename, bytes));
+    } catch (e) {
+      if (e instanceof ImportError) throw unprocessable(e.message, e.code);
+      throw e;
+    }
+  });
+
+  // Xuat mau ra .json (khung giong tep nhap): vong tron xuat -> nhap
+  r.get('/templates/:id/export', requirePerm('customers', 'view'), async (c) => {
+    const rt = getRt(c);
+    const t = await loadTemplate(rt.db, c.req.param('id'));
+    await auditCtx(c, rt.db, { action: 'contract_template.export', objectType: 'contract_doc_template', objectId: t.id, diff: { code: t.code, version: t.version } });
+    return c.json({ format: EXPORT_FORMAT, version: 1, code: t.code, template_version: t.version, name: t.name, status: t.status, exported_at: rt.clock.now().toISOString(), articles: parseArticles(t.articles) });
+  });
+
   r.get('/templates/:id', requirePerm('customers', 'view'), async (c) => {
     const rt = getRt(c);
     return c.json(presentTemplate(await loadTemplate(rt.db, c.req.param('id')), true));
@@ -114,7 +138,7 @@ export function contractDocRoutes(): Hono<AppEnv> {
 
   r.post('/templates', requirePerm('admin', 'write'), async (c) => {
     const rt = getRt(c);
-    const b = await parseBody(c, z.object({ code: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/).default('ads-service'), name: z.string().trim().min(3).max(200), articles: articlesSchema, change_note: z.string().trim().max(500).optional() }));
+    const b = await parseBody(c, z.object({ code: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/).default('ads-service'), name: z.string().trim().min(3).max(200), articles: articlesSchema, change_note: z.string().trim().max(500).optional(), import_source: z.enum(['docx', 'txt', 'md', 'html', 'json']).optional() }));
     const issues = validateArticles(b.articles as ContractArticle[]);
     if (issues.length) throw unprocessable('Mẫu hợp đồng chưa hợp lệ.', 'invalid_template', { issues });
     await ensureDefaultTemplate(rt);
@@ -127,7 +151,7 @@ export function contractDocRoutes(): Hono<AppEnv> {
         [id, b.code, mx + 1, b.name, JSON.stringify(b.articles), b.change_note ?? null, c.get('user').id, rt.clock.now().toISOString(), b.code, mx + 1],
       );
       if (ins.changes !== 1) throw conflict('Phiên bản mẫu vừa được tạo bởi người khác. Hãy thử lại.', 'duplicate_version');
-      await auditCtx(c, db, { action: 'contract_template.create', objectType: 'contract_doc_template', objectId: id, diff: { code: b.code, version: mx + 1 } });
+      await auditCtx(c, db, { action: 'contract_template.create', objectType: 'contract_doc_template', objectId: id, diff: { code: b.code, version: mx + 1, ...(b.import_source ? { import_source: b.import_source, articles: b.articles.length } : {}) } });
     });
     return c.json(presentTemplate(await loadTemplate(rt.db, id), true), 201);
   });

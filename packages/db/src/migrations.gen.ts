@@ -125,5 +125,10 @@ export const MIGRATIONS: MigrationFile[] = [
     "name": "0024_media_manage",
     "dialect": "all",
     "sql": "-- 0023 (m-list): sua metadata media - mo ta + the (JSON). Xoa dung lai co che xoa that + don R2 co san.\n-- Chay duoc tren PostgreSQL 16 va SQLite/D1. Khong doi y nghia cac cot cu.\nALTER TABLE creatives ADD COLUMN description TEXT;\nALTER TABLE creatives ADD COLUMN tags TEXT;\n"
+  },
+  {
+    "name": "0025_soft_delete",
+    "dialect": "all",
+    "sql": "-- d-cust: xoa mem thiet bi, luu tru khach hang. Chay duoc tren Postgres, SQLite va D1 (chi ALTER ... ADD COLUMN, kieu TEXT).\n-- Thiet bi: deleted_at != NULL = da xoa (khoa cong khai bi go de gateway tu choi 410 device_deleted va cho phep dang ky lai thanh thiet bi MOI);\n-- dong thiet bi va su kien/doanh thu cu GIU NGUYEN (khong xoa day chuyen).\nALTER TABLE devices ADD COLUMN deleted_at TEXT;\nALTER TABLE devices ADD COLUMN deleted_by TEXT;\n-- Khach hang: ghi chu noi bo, thoi diem luu tru (archived_at != NULL = da xoa mem, state chuyen 'terminated'), updated_at de kiem soat sua dong thoi.\nALTER TABLE customers ADD COLUMN notes TEXT;\nALTER TABLE customers ADD COLUMN archived_at TEXT;\nALTER TABLE customers ADD COLUMN archived_by TEXT;\nALTER TABLE customers ADD COLUMN updated_at TEXT;\n"
   }
 ];

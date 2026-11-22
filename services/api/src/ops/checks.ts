@@ -165,7 +165,7 @@ export function defaultRules(t: OpsThresholds): Rule[] {
     {
       group: 'devices',
       async run(rt) {
-        const r = await one(rt, "SELECT COUNT(*) AS total, SUM(CASE WHEN last_seen_at IS NULL OR last_seen_at < ? THEN 1 ELSE 0 END) AS off FROM devices WHERE kind = 'tv' AND status = 'active' AND blocked = 0", [iso(rt, t.deviceOfflineMin * MIN)]);
+        const r = await one(rt, "SELECT COUNT(*) AS total, SUM(CASE WHEN last_seen_at IS NULL OR last_seen_at < ? THEN 1 ELSE 0 END) AS off FROM devices WHERE kind = 'tv' AND status = 'active' AND blocked = 0 AND deleted_at IS NULL", [iso(rt, t.deviceOfflineMin * MIN)]);
         const total = num(r['total']);
         const off = num(r['off']);
         if (total < t.deviceMin) return [];

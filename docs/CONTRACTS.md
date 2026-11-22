@@ -1,7 +1,7 @@
 # Soạn hợp đồng và xuất PDF
 
 Mã: `packages/shared/src/contract-doc.ts` (hàm thuần: thay biến, dựng điều khoản, dấu vân tay), `services/api/src/contracts-doc/` (`routes.ts`, `service.ts`, `pdf.ts`, `default-template.ts`, `fonts.gen.ts`), migration `packages/db/migrations/0012_contract_docs.sql`, giao diện `apps/web-admin/src/pages/ContractDocEditor.tsx` (menu "Quảng cáo > Soạn hợp đồng & PDF", mở nhanh bằng `/contract-docs?contract=<mã hợp đồng>`).
-Test: `packages/shared/test/contract-doc.test.ts`, `services/api/test/u2-contract-docs.test.ts`, `apps/web-admin/src/test/ContractDocEditor.test.tsx`.
+Test: `services/api/test/d-cust.test.ts`, `apps/web-admin/src/test/d-cust.test.tsx` (nhập/xuất mẫu, sửa/xóa khách hàng, xóa thiết bị), `packages/shared/test/contract-doc.test.ts`, `services/api/test/u2-contract-docs.test.ts`, `apps/web-admin/src/test/ContractDocEditor.test.tsx`.
 
 Đây là công cụ dựng văn bản. Nội dung mẫu là BẢN NHÁP do kỹ thuật soạn, chưa có giá trị pháp lý cho tới khi luật sư duyệt (mục 3).
 
@@ -38,6 +38,13 @@ Bảng giá: mỗi dòng `contract_lines` (loại màn hình, khu vực, khung g
 
 Bảo mật: mọi đường dẫn nằm sau `authenticate` + `requireInternal` + CSRF; tài khoản khách bị 403. Bản soạn luôn được nạp theo `id` rồi đối chiếu hợp đồng tồn tại; id lạ hoặc sai hợp đồng trả 404. Bản chốt bất biến trước đổi hồ sơ sau đó (đọc từ snapshot); cập nhật dùng `WHERE status = 'draft'` nên hai người chạy đua không ghi đè bản đã chốt. Logo được kiểm tra magic bytes và phân tích bằng pdf-lib (tệp không phải ảnh bị từ chối, không có SVG), lưu ở kho đối tượng với khóa `branding/contract-logo-<sha>` và đường dẫn tải chỉ có cho người đã đăng nhập.
 
+### Nhập / xuất mẫu từ máy tính (`Soạn hợp đồng > Mẫu hợp đồng > Nhập mẫu từ máy tính`)
+- Nhận `.docx`, `.txt`, `.md`, `.html` và `.json` (xuất từ chính hệ thống), tối đa 2 MB. Máy chủ phân tích bằng `services/api/src/contracts-doc/import.ts` (không thêm thư viện: `.docx` được giải nén bằng `DecompressionStream('deflate-raw')`, chạy được trên Node và Cloudflare Worker; chặn "bom nén" 12 MB sau giải nén).
+- `POST /admin/v1/contract-docs/templates/import-preview?filename=...` (thân = byte của tệp, quyền `admin:write`) chỉ **xem trước**, không ghi CSDL. Trả `articles`, `issues` (cùng bộ kiểm tra `validateArticles`: biến lạ, quá dài...), `warnings`, `mapped`. Lưu bằng `POST /templates` (thêm `import_source`), luôn tạo **phiên bản NHÁP mới** và ghi audit `contract_template.create` (kèm nguồn nhập); luật sư vẫn phải duyệt như mọi mẫu.
+- Ánh xạ: dòng tiêu đề (kiểu Heading/Title, dòng in đậm ngắn, hoặc "Điều N. ...") mở điều khoản mới; nội dung trước điều đầu tiên thành phần mở đầu không đánh số; danh sách gạch đầu dòng giữ thành `- ...`; bảng giá (có cột "Đơn giá"/"Loại màn hình") thành `{{price_table}}`, bảng khác thành các dòng gạch đầu dòng. `{{bien}}` được giữ; tên lệch chuẩn đổi sang biến trong danh mục (ví dụ `{{customer.name}}` -> `{{customer.legal_name}}`, `{{contract.number}}` -> `{{contract.no}}`), trường `[Tên khách hàng]`, `[Mã số thuế bên B]`... đổi sang biến tương ứng; chỗ trống `[...]`/`……` giữ nguyên để luật sư điền (có cảnh báo).
+- An toàn: đầu ra chỉ là văn bản thuần (loại thẻ HTML/script/sự kiện, ký tự điều khiển, ký tự zero-width). `.docx` hỏng hoặc không phải Word, quá 2 MB, sai đuôi tệp đều bị từ chối bằng thông báo tiếng Việt (`422`, mã `file_too_large`, `unsupported_type`, `bad_docx`, `docx_too_large`...).
+- Xuất: `GET /templates/:id/export` (quyền `customers:view`, ghi audit `contract_template.export`) trả `.json` (`format: "ams-contract-template"`) nhập lại được.
+
 ## 3. Việc luật sư và người duyệt phải làm
 
 1. Rà soát mẫu `ads-service` v1: điền các chỗ `[...]` (căn cứ pháp lý, lãi chậm trả, trần bồi thường và phạt vi phạm, danh mục ngành cấm và hạn chế, văn bản pháp luật dữ liệu cá nhân đang có hiệu lực, cơ quan giải quyết tranh chấp). Sửa trực tiếp mẫu nháp bằng `PUT /templates/:id` hoặc tạo phiên bản mới.
@@ -62,3 +69,7 @@ Mã băm: `SHA-256(JSON[số hợp đồng, phiên bản, mã mẫu, phiên bả
 ## 5. Kiểm thử
 
 `pnpm --filter @ams/api exec vitest run test/u2-contract-docs.test.ts` kiểm tra RBAC, IDOR, chốt, audit, bất biến, PDF (đầu `%PDF-`, A4, số trang, font Be Vietnam Pro nhúng, watermark `/ca 0.09` trên mọi trang, ANIO trích được ở từng trang, dấu BẢN NHÁP, "Trang x/y", mã băm đầy đủ trên bản chốt, logo ảnh thay chữ). Đặt `AMS_TEST_PDF_OUT=/đường/dẫn` để test lưu PDF ra ổ đĩa, sau đó xem trang 1 bằng `pdftoppm -r 110 -png -f 1 -l 1 draft.pdf out`. Các kiểm tra dùng `pdftotext` tự bỏ qua nếu máy không có poppler.
+
+## 6. Sửa và xóa khách hàng (`/customers`)
+- `PATCH /admin/v1/customers/:id` (cũng nhận `PUT`; quyền `customers:write`): tên pháp lý, tên ngắn, MST (10 số hoặc 10 số-3 số), địa chỉ, người đại diện, điện thoại, email, ghi chú nội bộ, trạng thái và danh sách người liên hệ (`contacts`, thêm/sửa/xóa theo `id`). **Mã khách hàng (mã thanh toán) bất biến** (`422 immutable_field`). Gửi `if_updated_at` (giá trị `updated_at` đã đọc) để chặn ghi đè khi người khác vừa sửa (`409 stale_update`). Đổi trạng thái sang/từ "Chấm dứt" hoặc rời "Chờ thanh toán" vẫn cần `customers:approve`.
+- `DELETE /admin/v1/customers/:id` (quyền `customers:delete`) = **lưu trữ**: đặt `archived_at`, trạng thái "Chấm dứt", khóa mọi tài khoản cổng khách hàng và thu hồi phiên; không xóa hợp đồng/hóa đơn/ví/lịch sử. Bị chặn (`409 customer_has_blockers`, `details.blockers[]` kèm thông báo tiếng Việt) khi còn chiến dịch đang hoạt động/chờ duyệt, ví còn số dư, hoặc công nợ/hóa đơn chưa thanh toán. Danh sách mặc định ẩn khách đã lưu trữ; `?archived=1` (cần `customers:delete`) để xem lại.
