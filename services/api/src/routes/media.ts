@@ -8,7 +8,7 @@ import { eq, getRt, num, parseBody, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { mediaScope } from '../lib/scope.js';
 import {
-  ALLOWED_MIME, DURATION_RANGE, MULTIPART_SESSION_MS, MULTIPART_THRESHOLD_BYTES, PROXY_UPLOAD_MAX_BYTES, multipartPartSize, videoSpecProblem, videoSpecWarnings, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
+  ALLOWED_MIME, DURATION_RANGE, LIBRARY_IMAGE_MAX_BYTES, LIBRARY_VIDEO_MAX_BYTES, libraryMime, libraryNeedsTranscode, MULTIPART_SESSION_MS, MULTIPART_THRESHOLD_BYTES, PROXY_UPLOAD_MAX_BYTES, multipartPartSize, videoSpecProblem, videoSpecWarnings, GB, MB, apiTarget, checkImportUrl, dbTarget, fitsTarget, inferTarget, isVideoMime, probeImage, sizeLimitBytes, type LinkSource, type Px, type TargetType,
 } from '../lib/creative.js';
 import { todayVn } from '../lib/dates.js';
 import { bumpManifest } from '../lib/manifest.js';
@@ -258,10 +258,23 @@ async function knownLedPx(rt: Runtime): Promise<Px[]> {
   return rows.map((r) => ({ w: num(r.px_w), h: num(r.px_h) }));
 }
 
+/** Kho chung: khach hang he thong 'Kho chung' (khong thanh toan, an khoi danh sach khach) de tep noi bo khong gan khach hang van thoa rang buoc DB. */
+export const SHARED_POOL_ID = 'cu_shared_pool';
+export async function ensureSharedPool(rt: Runtime): Promise<string> {
+  if ((await rt.db.query('SELECT id FROM customers WHERE id = ?', [SHARED_POOL_ID]))[0]) return SHARED_POOL_ID;
+  const tenant = (await rt.db.query<{ id: string }>('SELECT id FROM tenants ORDER BY created_at LIMIT 1'))[0];
+  if (!tenant) throw unprocessable('Chưa có tenant để tạo kho chung.', 'customer_required');
+  await rt.db.run(
+    "INSERT INTO customers (id, tenant_id, legal_name, short_name, payment_code, state, credit_limit_vnd, created_at) VALUES (?,?,?,?,?,'active',0,?) ON CONFLICT (id) DO NOTHING",
+    [SHARED_POOL_ID, tenant.id, 'Kho chung (nội bộ)', 'Kho chung', 'KHOCHUNG', rt.clock.now().toISOString()],
+  );
+  return SHARED_POOL_ID;
+}
+
 async function resolveOwner(c: Ctx, bodyCustomerId: string | null | undefined): Promise<string> {
   const rt = getRt(c);
   const u = c.get('user');
-  const customerId = u.kind === 'internal' ? bodyCustomerId : u.customerId;
+  const customerId = u.kind === 'internal' ? (bodyCustomerId || (await ensureSharedPool(rt))) : u.customerId;
   if (!customerId) throw unprocessable('Chọn khách hàng sở hữu tệp.', 'customer_required');
   const cu = (await rt.db.query<{ state: string }>('SELECT state FROM customers WHERE id = ?', [customerId]))[0];
   if (!cu) throw u.kind === 'internal' ? unprocessable('Khách hàng không tồn tại.', 'customer_not_found') : notFound();
@@ -342,13 +355,14 @@ export async function finalizeUpload(o: FinalizeOpts): Promise<{ warnings: strin
     throw unprocessable(message, code);
   };
 
+  const library = m.uploader_kind === 'internal'; // kho chung: khong rang buoc loai man/codec/thoi luong; may chu/worker chuyen ma
   const declared = (m.mime ?? '').toLowerCase();
   const got = head.contentType.toLowerCase().split(';')[0]!.trim();
   if (declared && got && got !== declared && got !== 'application/octet-stream') await reject('content_type_mismatch', `Loại tệp tải lên (${got}) khác loại đã khai báo (${declared}).`);
 
   let w = hints.width ?? (m.px_w ? num(m.px_w) : undefined);
   let h = hints.height ?? (m.px_h ? num(m.px_h) : undefined);
-  if (declared.startsWith('image/')) {
+  if (declared.startsWith('image/') && (!library || declared === 'image/png' || declared === 'image/jpeg')) {
     if (head.size <= 25 * MB) {
       const bytes = await rt.objects.get(m.storage_key);
       const px = bytes ? probeImage(bytes) : null;
@@ -388,25 +402,35 @@ export async function finalizeUpload(o: FinalizeOpts): Promise<{ warnings: strin
     }
   }
   const led = await knownLedPx(rt);
-  const target: TargetType | null = m.target_type ? dbTarget(m.target_type) : w && h ? inferTarget(w, h, led) : null;
-  if (declared.startsWith('video/')) {
-    // codec/độ phân giải màn không phát được: từ chối ngay, xóa tệp (thang máy được H.265 và tới 4K, loại khác H.264 <= Full HD)
-    const specProblem = videoSpecProblem({ w, h, codec: probedCodec }, target);
-    if (specProblem) await reject(specProblem.code, specProblem.message);
-  }
-  const warnings = declared.startsWith('video/') ? videoSpecWarnings({ codec: probedCodec }, target) : [];
-  if (!w || !h) throw unprocessable('Chưa đọc được kích thước video. Hãy dùng tệp MP4 (H.264) chuẩn hoặc gửi width/height khi xác nhận.', 'dimensions_required');
+  const target: TargetType | null = m.target_type ? dbTarget(m.target_type) : !library && w && h ? inferTarget(w, h, led) : null;
+  let warnings: string[] = [];
+  let durationSec = probedDuration ?? hints.duration_sec ?? (m.duration_s === null ? undefined : num(m.duration_s));
+  if (library) {
+    // Kho chung: nhan moi dinh dang/codec. Khong doc duoc kich thuoc (AVI/FLV/MKV/HEVC...) thi de NULL: media-worker (ffprobe) bo sung khi chuyen ma.
+    if (declared.startsWith('video/') && libraryNeedsTranscode(declared, probedCodec)) {
+      warnings = [`Video ${probedCodec ? `codec ${probedCodec}` : 'định dạng này'} sẽ được tự động chuyển sang MP4 H.264/AAC để thiết bị phát được (cần media-worker; hệ thống không có ffmpeg thì tệp chờ duyệt thủ công).`];
+    }
+    const limitLib = declared.startsWith('video/') ? LIBRARY_VIDEO_MAX_BYTES : LIBRARY_IMAGE_MAX_BYTES;
+    if (head.size > limitLib) await reject('file_too_large', `Tệp ${(head.size / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limitLib / MB)} MB.`);
+  } else {
+    if (declared.startsWith('video/')) {
+      // codec/độ phân giải màn không phát được: từ chối ngay, xóa tệp (thang máy được H.265 và tới 4K, loại khác H.264 <= Full HD)
+      const specProblem = videoSpecProblem({ w, h, codec: probedCodec }, target);
+      if (specProblem) await reject(specProblem.code, specProblem.message);
+    }
+    warnings = declared.startsWith('video/') ? videoSpecWarnings({ codec: probedCodec }, target) : [];
+    if (!w || !h) throw unprocessable('Chưa đọc được kích thước video. Hãy dùng tệp MP4 (H.264) chuẩn hoặc gửi width/height khi xác nhận.', 'dimensions_required');
 
-  if (!target) await reject('unsupported_resolution', `Độ phân giải ${w}×${h} không khớp loại màn hình nào.`);
-  const fit = fitsTarget(target!, w, h, { knownLed: led });
-  if (!fit.ok) await reject('creative_size_mismatch', fit.message);
-  const quota = await quotaOf(rt, m.customer_id);
-  const limit = sizeLimitBytes(target!, m.uploader_kind === 'internal' ? null : quota.max_mb_per_file, w, declared.startsWith('video/'));
-  if (head.size > limit) await reject('file_too_large', `Tệp ${(head.size / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB cho loại màn này.`);
-  const dur = DURATION_RANGE[target!];
-  const durationSec = probedDuration ?? hints.duration_sec ?? (m.duration_s === null ? undefined : num(m.duration_s));
-  if (dur && durationSec !== undefined && declared.startsWith('video/') && (durationSec < dur[0] || durationSec > dur[1])) {
-    await reject('duration_out_of_range', `Thời lượng phải từ ${dur[0]} đến ${dur[1]} giây cho loại màn này.`);
+    if (!target) await reject('unsupported_resolution', `Độ phân giải ${w}×${h} không khớp loại màn hình nào.`);
+    const fit = fitsTarget(target!, w, h, { knownLed: led });
+    if (!fit.ok) await reject('creative_size_mismatch', fit.message);
+    const quota = await quotaOf(rt, m.customer_id);
+    const limit = sizeLimitBytes(target!, m.uploader_kind === 'internal' ? null : quota.max_mb_per_file, w, declared.startsWith('video/'));
+    if (head.size > limit) await reject('file_too_large', `Tệp ${(head.size / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB cho loại màn này.`);
+    const dur = DURATION_RANGE[target!];
+    if (dur && durationSec !== undefined && declared.startsWith('video/') && (durationSec < dur[0] || durationSec > dur[1])) {
+      await reject('duration_out_of_range', `Thời lượng phải từ ${dur[0]} đến ${dur[1]} giây cho loại màn này.`);
+    }
   }
 
   let sha: string | null = null;
@@ -427,7 +451,7 @@ export async function finalizeUpload(o: FinalizeOpts): Promise<{ warnings: strin
   await rt.db.tx(async (db) => {
     const res = await db.run(
       `UPDATE creatives SET px_w = ?, px_h = ?, orientation = ?, target_type = ?, size_bytes = ?, duration_s = ?, sha256 = ?, storage_key = ?, state = 'pending_review', source = 'upload' WHERE id = ? AND state = ?`,
-      [w, h, w >= h ? 'landscape' : 'portrait', target, head.size, durationSec === undefined ? null : Math.round(durationSec), sha, finalKey, m.id, o.fromState],
+      [w ?? null, h ?? null, w && h ? (w >= h ? 'landscape' : 'portrait') : null, target, head.size, durationSec === undefined ? null : Math.round(durationSec), sha, finalKey, m.id, o.fromState],
     );
     if (res.changes === 0) throw conflict('Tệp vừa được xác nhận ở nơi khác.', 'invalid_state');
     await enqueueMediaUploaded(db, rt, m.id); // cung giao dich: xac nhan xong thi chac chan co viec quet (media-worker)
@@ -458,7 +482,9 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const rt = getRt(c);
     const m = await loadMedia(c, c.req.param('id'));
     const out = present(m, external);
-    if (m.source === 'upload' && m.storage_key && m.state !== 'uploading' && m.state !== 'invalid') out['preview_url'] = await rt.objects.getSigned(m.storage_key, 300);
+    // Tep da nam trong kho (tai len HOAC nhap tu Drive/link da tai ve) deu xem truoc duoc; link truc tiep chua tai ve thi dung chinh URL do.
+    if (m.storage_key && m.state !== 'uploading' && m.state !== 'invalid') out['preview_url'] = await rt.objects.getSigned(m.storage_key, 900);
+    else if (m.source === 'url' && m.source_url && /^https?:\/\//i.test(m.source_url)) out['preview_url'] = m.source_url;
     return c.json(out);
   });
 
@@ -467,20 +493,27 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const u = c.get('user');
     const b = await parseBody(c, uploadBody);
     const customerId = await resolveOwner(c, b.customer_id);
-    const mime = b.content_type.toLowerCase().split(';')[0]!.trim();
-    if (!(ALLOWED_MIME as readonly string[]).includes(mime)) throw unprocessable('Chỉ nhận MP4, MOV, WebM, PNG hoặc JPG.', 'unsupported_type');
+    const library = u.kind === 'internal'; // kho chung: nguoi noi bo, nhan moi dinh dang/codec, chuyen ma sau
+    let mime = b.content_type.toLowerCase().split(';')[0]!.trim();
+    if (library) {
+      const lm = libraryMime(b.name, mime);
+      if (!lm) throw unprocessable('Chỉ nhận tệp video hoặc ảnh (MP4, MOV, AVI, FLV, RMVB, MKV, WebM, PNG, JPG, GIF, WebP…).', 'unsupported_type');
+      mime = lm.mime;
+    } else if (!(ALLOWED_MIME as readonly string[]).includes(mime)) throw unprocessable('Chỉ nhận MP4, MOV, WebM, PNG hoặc JPG.', 'unsupported_type');
     const quota = await quotaOf(rt, customerId);
     const extQuotaMb = u.kind === 'internal' ? null : quota.max_mb_per_file;
 
     let target: TargetType | null = b.target_type ? dbTarget(b.target_type) : null;
-    if (b.width && b.height) {
+    if (library) {
+      // kho chung: KHONG ep loai man (target_type chi co khi nguoi dung chon): tep dung duoc cho moi chuong trinh, kiem khop khi xuat ban
+    } else if (b.width && b.height) {
       const led = await knownLedPx(rt);
       target ??= inferTarget(b.width, b.height, led);
       if (!target) throw unprocessable(`Độ phân giải ${b.width}×${b.height} không khớp loại màn hình nào (TV 16:9, thang máy dọc 9:16 từ 720×1280 đến 2160×3840, LED P5 đúng kích thước bảng).`, 'unsupported_resolution');
       const fit = fitsTarget(target, b.width, b.height, { knownLed: led });
       if (!fit.ok) throw unprocessable(fit.message, 'creative_size_mismatch');
     }
-    if (isVideoMime(mime)) {
+    if (!library && isVideoMime(mime)) {
       const vp = videoSpecProblem({ w: b.width, h: b.height }, target);
       if (vp) throw unprocessable(vp.message, vp.code);
     }
@@ -490,13 +523,13 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const canMultipart = typeof rt.objects.multipartCreate === 'function' && typeof rt.objects.multipartUploadPart === 'function' && typeof rt.objects.multipartComplete === 'function';
     const viaMultipart = viaProxy && canMultipart && b.size_bytes > MULTIPART_THRESHOLD_BYTES;
     if (viaProxy && !viaMultipart && b.size_bytes > PROXY_UPLOAD_MAX_BYTES) throw unprocessable(`Tệp ${(b.size_bytes / MB).toFixed(1)} MB vượt 95 MB: nén lại (H.264) rồi tải lại.`, 'file_too_large', { limit_bytes: PROXY_UPLOAD_MAX_BYTES });
-    const limit = sizeLimitBytes(target ?? 'tv', extQuotaMb, b.width, isVideoMime(mime));
-    if (b.size_bytes > limit) throw unprocessable(`Tệp ${(b.size_bytes / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB${target ? ` cho loại màn này` : ''}.`, 'file_too_large', { limit_bytes: limit });
-    const dur = target ? DURATION_RANGE[target] : undefined;
+    const limit = library ? (isVideoMime(mime) ? LIBRARY_VIDEO_MAX_BYTES : LIBRARY_IMAGE_MAX_BYTES) : sizeLimitBytes(target ?? 'tv', extQuotaMb, b.width, isVideoMime(mime));
+    if (b.size_bytes > limit) throw unprocessable(`Tệp ${(b.size_bytes / MB).toFixed(1)} MB vượt giới hạn ${Math.floor(limit / MB)} MB${target && !library ? ` cho loại màn này` : ''}.`, 'file_too_large', { limit_bytes: limit });
+    const dur = target && !library ? DURATION_RANGE[target] : undefined;
     if (dur && b.duration_sec !== undefined && isVideoMime(mime) && (b.duration_sec < dur[0] || b.duration_sec > dur[1])) {
       throw unprocessable(`Thời lượng phải từ ${dur[0]} đến ${dur[1]} giây cho loại màn này, tệp dài ${Math.round(b.duration_sec)} giây.`, 'duration_out_of_range');
     }
-    await checkQuotas(rt, customerId, b.size_bytes, quota);
+    if (!library) await checkQuotas(rt, customerId, b.size_bytes, quota);
     const fo = checkFormatOverlay(b.format, b.overlay, external);
 
     const id = rt.id();

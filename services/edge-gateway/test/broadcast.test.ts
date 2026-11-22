@@ -126,6 +126,28 @@ describe('chuong trinh phat song noi bo -> manifest', () => {
     expect(slot.creative_ids).toEqual([a.id, b.id, c2.id]); // thiet bi cu van phat tuan tu nhu truoc
     expect(m.schedule.find((s: any) => s.slot_id === `bp_${plain}`).layout).toBeUndefined();
   });
+  it('vung QR trong manifest mang qr_kind + url san sang (VietQR -> URL anh, URL -> noi dung, anh -> data URL); vung thoi tiet mang toa do', async () => {
+    const a = await libraryCreative();
+    const pid = await program({ creatives: [a.id] });
+    const zones = [
+      { id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 60 },
+      { id: 'q1', type: 'qr', x: 0, y: 60, w: 30, h: 30, qr: { mode: 'vietqr', vietqr: { bin: '970436', account: '0123456789', name: 'ANIO', amount: 50000, memo: 'Thanh toan' } } },
+      { id: 'q2', type: 'qr', x: 30, y: 60, w: 30, h: 30, qr: { mode: 'url', value: 'https://anio.vn' } },
+      { id: 'q3', type: 'qr', x: 60, y: 60, w: 20, h: 20, qr: { mode: 'image', value: 'data:image/png;base64,AAAA' } },
+      { id: 'w', type: 'weather', x: 80, y: 60, w: 20, h: 20, weather: { mode: 'gps', lat: 21.0285, lon: 105.8542, label: 'Ha Noi' } },
+    ];
+    await h.rt.db.run('INSERT INTO broadcast_program_layouts (program_id, template_id, orientation, zones, updated_at) VALUES (?,?,?,?,?)', [pid, null, 'portrait', JSON.stringify(zones), h.rt.clock.now().toISOString()]);
+    await bump();
+    const d = await el({ px_w: 1080, px_h: 1920, region: 'HN' });
+    const m = await J(await d.call('GET', '/v1/manifest'));
+    const zs = m.schedule.find((s: any) => s.slot_id === `bp_${pid}`).layout.zones;
+    const q1 = zs.find((z: any) => z.id === 'q1');
+    expect(q1.qr_kind).toBe('image_url');
+    expect(q1.url).toBe('https://img.vietqr.io/image/970436-0123456789-qr_only.png?amount=50000&addInfo=Thanh+toan&accountName=ANIO');
+    expect(zs.find((z: any) => z.id === 'q2')).toMatchObject({ qr_kind: 'text', url: 'https://anio.vn' });
+    expect(zs.find((z: any) => z.id === 'q3')).toMatchObject({ qr_kind: 'data_url', url: 'data:image/png;base64,AAAA' });
+    expect(zs.find((z: any) => z.id === 'w').weather).toMatchObject({ mode: 'gps', lat: 21.0285, lon: 105.8542 });
+  });
 });
 
 describe('nhom manifest rieng cua thiet bi (chuong trinh gan thiet bi, migration 0022)', () => {

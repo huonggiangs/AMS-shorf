@@ -82,7 +82,7 @@ export const manifestCreative = z.object({
 });
 const manifestZone = z.object({
   id: z.string(),
-  type: z.enum(['video', 'image', 'marquee', 'clock', 'weather', 'qr']),
+  type: z.enum(['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr']),
   x: z.number().describe('% khung, 0..100'),
   y: z.number(),
   w: z.number(),
@@ -95,6 +95,9 @@ const manifestZone = z.object({
   font_size: z.number().int().optional(),
   scroll_speed: z.number().int().optional(),
   url: z.string().optional(),
+  qr_kind: z.enum(['text', 'image_url', 'data_url']).optional().describe('CHI vung qr: text = ve QR tu url; image_url = tai anh tu url (VietQR); data_url = anh nhung'),
+  qr: z.record(z.unknown()).optional().describe('CHI vung qr: cau hinh goc (mode image|url|vietqr)'),
+  weather: z.object({ mode: z.enum(['gps', 'fixed']), lat: z.number().optional(), lon: z.number().optional(), label: z.string().optional() }).optional().describe('CHI vung weather: thiet bi tu lay Open-Meteo (api.open-meteo.com) theo lat/lon'),
   creative_ids: z.array(z.string()).optional().describe('CHI vung video/image: tep phat o vung nay, theo thu tu'),
 });
 export const manifestSlot = z.object({

@@ -1,4 +1,5 @@
 import type { R2Bucket } from '@cloudflare/workers-types';
+import { hmacRaw, toHex, utf8 } from '@ams/shared';
 import { presignS3 } from '../sigv4.js';
 import type { ObjectStore } from '../types.js';
 
@@ -7,6 +8,10 @@ export interface R2PresignConfig {
   accessKeyId: string;
   secretAccessKey: string;
   bucketName: string;
+  /** Khoa HMAC ky URL xem tep qua Worker (mac dinh SESSION_SECRET). Rong = khong ky duoc. */
+  signingSecret?: string;
+  /** Tien to URL cong khai cua /storage tren Worker (vd /api/storage). */
+  signedBaseUrl?: string;
 }
 
 /** R2 qua binding; URL ky bang SigV4 tren endpoint S3 cua R2 (binding khong co presign). */
@@ -75,7 +80,19 @@ export class R2ObjectStore implements ObjectStore {
     });
     return { url, headers: { 'Content-Type': contentType } };
   }
+  /**
+   * Thieu khoa S3 thi URL presign la URL gia (403) => video/anh xem truoc den. Khi do ky HMAC URL do chinh Worker phuc vu
+   * (`GET /storage/object/<key>?exp&sig`, ho tro Range), cung kieu voi adapter fs.
+   */
+  private async hmacHex(key: string, exp: number): Promise<string> {
+    return toHex(await hmacRaw('SHA-256', utf8(this.cfg.signingSecret ?? ''), utf8(`get\n${key}\n${exp}\n\n0`)));
+  }
   async getSigned(key: string, ttlSec: number) {
+    if (!this.signedPut && this.cfg.signingSecret) {
+      const exp = Math.floor(this.clock.now().getTime() / 1000) + ttlSec;
+      const base = (this.cfg.signedBaseUrl || '/api/storage').replace(/\/$/, '');
+      return `${base}/object/${key.split('/').map(encodeURIComponent).join('/')}?exp=${exp}&sig=${await this.hmacHex(key, exp)}`;
+    }
     return presignS3({
       method: 'GET', endpoint: this.base(), bucket: this.cfg.bucketName, key, region: 'auto',
       accessKeyId: this.cfg.accessKeyId, secretAccessKey: this.cfg.secretAccessKey, expiresSec: ttlSec, now: this.clock.now(),
@@ -87,6 +104,19 @@ export class R2ObjectStore implements ObjectStore {
   async get(key: string) {
     const o = await this.bucket.get(key);
     return o ? new Uint8Array(await o.arrayBuffer()) : null;
+  }
+  /** Kiem tra URL ky do `getSigned` tao khi khong co khoa S3 (chi thao tac 'get'). */
+  async verifySigned(op: 'put' | 'get', key: string, q: URLSearchParams): Promise<{ ok: boolean; reason?: string; contentType?: string; maxBytes?: number }> {
+    if (op !== 'get' || !this.cfg.signingSecret || this.signedPut) return { ok: false, reason: 'unsupported' };
+    const exp = Number(q.get('exp'));
+    const sig = q.get('sig') ?? '';
+    if (!Number.isFinite(exp) || !sig) return { ok: false, reason: 'missing' };
+    if (exp * 1000 < this.clock.now().getTime()) return { ok: false, reason: 'expired' };
+    const want = await this.hmacHex(key, exp);
+    if (want.length !== sig.length) return { ok: false, reason: 'bad_signature' };
+    let diff = 0;
+    for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ sig.charCodeAt(i);
+    return diff === 0 ? { ok: true, contentType: '', maxBytes: 0 } : { ok: false, reason: 'bad_signature' };
   }
   async getRange(key: string, offset: number, length: number) {
     if (length <= 0) return new Uint8Array(0);

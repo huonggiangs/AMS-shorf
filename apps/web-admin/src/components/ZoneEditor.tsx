@@ -1,5 +1,6 @@
 import { useRef, useState, type PointerEvent } from 'react';
 import { Field } from './ui';
+import { QrEditor, WeatherEditor } from './ZoneExtras';
 import { ASPECT, MAX_ZONES, TRANSITIONS, ZONE_LABEL, ZONE_TYPES, clampZone, isMediaZone, newZone, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
 
 const COLORS: Record<string, string> = { video: '#2563EB', image: '#059669', marquee: '#DC2626', text: '#475569', clock: '#7C3AED', weather: '#0891B2', qr: '#B45309' };
@@ -99,7 +100,8 @@ export function ZoneEditor({ orientation, zones, onChange, selected, onSelect }:
                 </div>
               </>
             ) : null}
-            {sel.type === 'qr' ? <Field label="Liên kết mã QR"><input maxLength={500} value={sel.url ?? ''} onChange={(e) => set(sel.id, { url: e.target.value })} /></Field> : null}
+            {sel.type === 'qr' ? <QrEditor zone={sel} set={(p) => set(sel.id, p)} /> : null}
+            {sel.type === 'weather' ? <WeatherEditor zone={sel} set={(p) => set(sel.id, p)} /> : null}
             <button type="button" className="btn sm d" onClick={() => { onChange(zones.filter((z) => z.id !== sel.id)); onSelect(null); }}>Xóa vùng này</button>
           </div>
         ) : <p style={{ color: 'var(--mut)' }}>Chọn một vùng trên khung để sửa thuộc tính, hoặc thêm vùng mới bên dưới khung.</p>}

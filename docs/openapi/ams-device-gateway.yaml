@@ -1650,6 +1650,7 @@ components:
                             - video
                             - image
                             - marquee
+                            - text
                             - clock
                             - weather
                             - qr
@@ -1684,6 +1685,35 @@ components:
                           type: integer
                         url:
                           type: string
+                        qr_kind:
+                          type: string
+                          enum:
+                            - text
+                            - image_url
+                            - data_url
+                          description: "CHI vung qr: text = ve QR tu url; image_url = tai anh tu url (VietQR); data_url = anh nhung"
+                        qr:
+                          type: object
+                          additionalProperties: {}
+                          description: "CHI vung qr: cau hinh goc (mode image|url|vietqr)"
+                        weather:
+                          type: object
+                          properties:
+                            mode:
+                              type: string
+                              enum:
+                                - gps
+                                - fixed
+                            lat:
+                              type: number
+                            lon:
+                              type: number
+                            label:
+                              type: string
+                          required:
+                            - mode
+                          additionalProperties: true
+                          description: "CHI vung weather: thiet bi tu lay Open-Meteo (api.open-meteo.com) theo lat/lon"
                         creative_ids:
                           type: array
                           items:
@@ -1925,6 +1955,7 @@ components:
                             - video
                             - image
                             - marquee
+                            - text
                             - clock
                             - weather
                             - qr
@@ -1959,6 +1990,35 @@ components:
                           type: integer
                         url:
                           type: string
+                        qr_kind:
+                          type: string
+                          enum:
+                            - text
+                            - image_url
+                            - data_url
+                          description: "CHI vung qr: text = ve QR tu url; image_url = tai anh tu url (VietQR); data_url = anh nhung"
+                        qr:
+                          type: object
+                          additionalProperties: {}
+                          description: "CHI vung qr: cau hinh goc (mode image|url|vietqr)"
+                        weather:
+                          type: object
+                          properties:
+                            mode:
+                              type: string
+                              enum:
+                                - gps
+                                - fixed
+                            lat:
+                              type: number
+                            lon:
+                              type: number
+                            label:
+                              type: string
+                          required:
+                            - mode
+                          additionalProperties: true
+                          description: "CHI vung weather: thiet bi tu lay Open-Meteo (api.open-meteo.com) theo lat/lon"
                         creative_ids:
                           type: array
                           items:

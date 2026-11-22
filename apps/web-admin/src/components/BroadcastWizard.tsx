@@ -6,6 +6,7 @@ import { useAct } from '../api/hooks';
 import { Dialog } from './Dialog';
 import { Btn, Field, LoadingBlock, Note, Tag } from './ui';
 import { LivePreview } from './LivePreview';
+import { QrEditor, WeatherEditor } from './ZoneExtras';
 import { usePreviewItems } from './PreviewDialogs';
 import { ZoneCanvas } from './ZoneCanvas';
 import { MAX_ZONES, PRESETS, TRANSITIONS, ZONE_LABEL, clampZone, isMediaZone, layoutError, newZone, templateSchema, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
@@ -309,7 +310,8 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
           </div>
         </>
       ) : null}
-      {sel.type === 'qr' ? <Field label="Liên kết mã QR"><input maxLength={500} value={sel.url ?? ''} onChange={(e) => setZ(sel.id, { url: e.target.value })} /></Field> : null}
+      {sel.type === 'qr' ? <QrEditor zone={sel} set={(p) => setZ(sel.id, p)} /> : null}
+      {sel.type === 'weather' ? <WeatherEditor zone={sel} set={(p) => setZ(sel.id, p)} /> : null}
       {sel.type === 'clock' || sel.type === 'weather' ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <Field label="Màu nền"><input type="color" value={sel.bg_color ?? '#111827'} onChange={(e) => setZ(sel.id, { bg_color: e.target.value.toUpperCase() })} /></Field>
@@ -334,7 +336,7 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
           <Btn tone={previewing ? '' : 'p'} aria-pressed={previewing} onClick={() => setPreviewing((v) => !v)}>{previewing ? '✎ Quay lại chỉnh sửa' : '👁 Xem trước'}</Btn>
         </div>
         {previewing ? (
-          prev.loading ? <LoadingBlock /> : <LivePreview orientation={orientation} zones={visibleZones} items={prev.items} header={signage ? f.header : null} footer={signage ? f.footer : null} maxHeight={480} />
+          prev.loading ? <LoadingBlock /> : <LivePreview orientation={orientation} zones={visibleZones} items={prev.items} header={signage ? f.header : null} footer={signage ? f.footer : null} maxHeight={480} onRetry={prev.refresh} />
         ) : (
           <>
             <ZoneCanvas orientation={orientation} zones={zones} selected={selected} onSelect={setSelected} onChange={(z) => setZones(z)} itemsOf={itemsOfZone} hidden={hidden} maxHeight={480} />
@@ -434,7 +436,7 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
       </div>
       <div>
         <h3 style={{ margin: '0 0 8px', fontSize: 15, textAlign: 'center' }}>Xem thử ngay trước khi phát</h3>
-        {prev.loading ? <LoadingBlock /> : ids.length === 0 ? <p style={{ color: 'var(--mut)', textAlign: 'center' }}>Chưa có tệp để xem thử. Thêm tư liệu ở bước 02.</p> : <LivePreview orientation={orientation} zones={visibleZones.length ? visibleZones : zones} items={prev.items} header={signage ? f.header : null} footer={signage ? f.footer : null} maxHeight={440} />}
+        {prev.loading ? <LoadingBlock /> : ids.length === 0 ? <p style={{ color: 'var(--mut)', textAlign: 'center' }}>Chưa có tệp để xem thử. Thêm tư liệu ở bước 02.</p> : <LivePreview orientation={orientation} zones={visibleZones.length ? visibleZones : zones} items={prev.items} header={signage ? f.header : null} footer={signage ? f.footer : null} maxHeight={440} onRetry={prev.refresh} />}
       </div>
     </div>
   );

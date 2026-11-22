@@ -3456,7 +3456,7 @@ paths:
       x-ams-permission:
         module: customers
         action: view
-      x-ams-source: services/api/src/routes/customers.ts:148
+      x-ams-source: services/api/src/routes/customers.ts:149
       description: |-
         Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3483,7 +3483,7 @@ paths:
       x-ams-permission:
         module: customers
         action: write
-      x-ams-source: services/api/src/routes/customers.ts:161
+      x-ams-source: services/api/src/routes/customers.ts:162
       description: |-
         Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3523,7 +3523,7 @@ paths:
       x-ams-permission:
         module: customers
         action: view
-      x-ams-source: services/api/src/routes/customers.ts:154
+      x-ams-source: services/api/src/routes/customers.ts:155
       description: |-
         Quyền cần có: mô-đun `customers`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -3555,7 +3555,7 @@ paths:
       x-ams-permission:
         module: customers
         action: write
-      x-ams-source: services/api/src/routes/customers.ts:201
+      x-ams-source: services/api/src/routes/customers.ts:202
       description: |-
         Quyền cần có: mô-đun `customers`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5266,7 +5266,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:450
+      x-ams-source: services/api/src/routes/media.ts:474
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5294,7 +5294,7 @@ paths:
       x-ams-permission:
         module: media
         action: delete
-      x-ams-source: services/api/src/routes/media.ts:812
+      x-ams-source: services/api/src/routes/media.ts:845
       description: |-
         Quyền cần có: mô-đun `media`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5329,7 +5329,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:599
+      x-ams-source: services/api/src/routes/media.ts:632
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5396,7 +5396,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:465
+      x-ams-source: services/api/src/routes/media.ts:491
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5436,7 +5436,7 @@ paths:
       x-ams-permission:
         module: media
         action: delete
-      x-ams-source: services/api/src/routes/media.ts:888
+      x-ams-source: services/api/src/routes/media.ts:921
       description: |-
         Quyền cần có: mô-đun `media`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5471,7 +5471,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:457
+      x-ams-source: services/api/src/routes/media.ts:481
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5504,7 +5504,7 @@ paths:
       x-ams-permission:
         module: media
         action: approve
-      x-ams-source: services/api/src/routes/media.ts:755
+      x-ams-source: services/api/src/routes/media.ts:788
       description: |-
         Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5546,7 +5546,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:577
+      x-ams-source: services/api/src/routes/media.ts:610
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5588,7 +5588,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:529
+      x-ams-source: services/api/src/routes/media.ts:562
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5624,7 +5624,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:642
+      x-ams-source: services/api/src/routes/media.ts:675
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5774,7 +5774,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:725
+      x-ams-source: services/api/src/routes/media.ts:758
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5857,7 +5857,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:668
+      x-ams-source: services/api/src/routes/media.ts:701
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5893,7 +5893,7 @@ paths:
       x-ams-permission:
         module: media
         action: approve
-      x-ams-source: services/api/src/routes/media.ts:793
+      x-ams-source: services/api/src/routes/media.ts:826
       description: |-
         Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -5977,7 +5977,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:715
+      x-ams-source: services/api/src/routes/media.ts:748
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6011,7 +6011,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:690
+      x-ams-source: services/api/src/routes/media.ts:723
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9820,7 +9820,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:450
+      x-ams-source: services/api/src/routes/media.ts:474
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9848,7 +9848,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:599
+      x-ams-source: services/api/src/routes/media.ts:632
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9885,7 +9885,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:465
+      x-ams-source: services/api/src/routes/media.ts:491
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9925,7 +9925,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:457
+      x-ams-source: services/api/src/routes/media.ts:481
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -9958,7 +9958,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:577
+      x-ams-source: services/api/src/routes/media.ts:610
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10000,7 +10000,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:529
+      x-ams-source: services/api/src/routes/media.ts:562
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10036,7 +10036,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:642
+      x-ams-source: services/api/src/routes/media.ts:675
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10186,7 +10186,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:725
+      x-ams-source: services/api/src/routes/media.ts:758
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10269,7 +10269,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:668
+      x-ams-source: services/api/src/routes/media.ts:701
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10305,7 +10305,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:715
+      x-ams-source: services/api/src/routes/media.ts:748
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10339,7 +10339,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:690
+      x-ams-source: services/api/src/routes/media.ts:723
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10853,6 +10853,73 @@ components:
                       url:
                         type: string
                         maxLength: 500
+                      qr:
+                        type: object
+                        properties:
+                          mode:
+                            type: string
+                            enum:
+                              - image
+                              - url
+                              - vietqr
+                          value:
+                            type: string
+                            maxLength: 270000
+                          vietqr:
+                            type: object
+                            properties:
+                              bin:
+                                type: string
+                                pattern: ^\d{6}$
+                              account:
+                                type: string
+                                pattern: ^[0-9A-Za-z]{4,24}$
+                              name:
+                                type: string
+                                maxLength: 60
+                              amount:
+                                type: integer
+                                minimum: 0
+                                maximum: 100000000000
+                              memo:
+                                type: string
+                                maxLength: 50
+                              template:
+                                type: string
+                                enum:
+                                  - compact
+                                  - compact2
+                                  - qr_only
+                                  - print
+                            required:
+                              - bin
+                              - account
+                            additionalProperties: true
+                        required:
+                          - mode
+                        additionalProperties: true
+                      weather:
+                        type: object
+                        properties:
+                          mode:
+                            type: string
+                            enum:
+                              - gps
+                              - fixed
+                          lat:
+                            type: number
+                            minimum: -90
+                            maximum: 90
+                          lon:
+                            type: number
+                            minimum: -180
+                            maximum: 180
+                          label:
+                            type: string
+                            maxLength: 60
+                        required:
+                          - mode
+                        additionalProperties: true
                     required:
                       - id
                       - type
@@ -11750,6 +11817,73 @@ components:
               url:
                 type: string
                 maxLength: 500
+              qr:
+                type: object
+                properties:
+                  mode:
+                    type: string
+                    enum:
+                      - image
+                      - url
+                      - vietqr
+                  value:
+                    type: string
+                    maxLength: 270000
+                  vietqr:
+                    type: object
+                    properties:
+                      bin:
+                        type: string
+                        pattern: ^\d{6}$
+                      account:
+                        type: string
+                        pattern: ^[0-9A-Za-z]{4,24}$
+                      name:
+                        type: string
+                        maxLength: 60
+                      amount:
+                        type: integer
+                        minimum: 0
+                        maximum: 100000000000
+                      memo:
+                        type: string
+                        maxLength: 50
+                      template:
+                        type: string
+                        enum:
+                          - compact
+                          - compact2
+                          - qr_only
+                          - print
+                    required:
+                      - bin
+                      - account
+                    additionalProperties: true
+                required:
+                  - mode
+                additionalProperties: true
+              weather:
+                type: object
+                properties:
+                  mode:
+                    type: string
+                    enum:
+                      - gps
+                      - fixed
+                  lat:
+                    type: number
+                    minimum: -90
+                    maximum: 90
+                  lon:
+                    type: number
+                    minimum: -180
+                    maximum: 180
+                  label:
+                    type: string
+                    maxLength: 60
+                required:
+                  - mode
+                additionalProperties: true
             required:
               - id
               - type
@@ -12546,6 +12680,73 @@ components:
                       url:
                         type: string
                         maxLength: 500
+                      qr:
+                        type: object
+                        properties:
+                          mode:
+                            type: string
+                            enum:
+                              - image
+                              - url
+                              - vietqr
+                          value:
+                            type: string
+                            maxLength: 270000
+                          vietqr:
+                            type: object
+                            properties:
+                              bin:
+                                type: string
+                                pattern: ^\d{6}$
+                              account:
+                                type: string
+                                pattern: ^[0-9A-Za-z]{4,24}$
+                              name:
+                                type: string
+                                maxLength: 60
+                              amount:
+                                type: integer
+                                minimum: 0
+                                maximum: 100000000000
+                              memo:
+                                type: string
+                                maxLength: 50
+                              template:
+                                type: string
+                                enum:
+                                  - compact
+                                  - compact2
+                                  - qr_only
+                                  - print
+                            required:
+                              - bin
+                              - account
+                            additionalProperties: true
+                        required:
+                          - mode
+                        additionalProperties: true
+                      weather:
+                        type: object
+                        properties:
+                          mode:
+                            type: string
+                            enum:
+                              - gps
+                              - fixed
+                          lat:
+                            type: number
+                            minimum: -90
+                            maximum: 90
+                          lon:
+                            type: number
+                            minimum: -180
+                            maximum: 180
+                          label:
+                            type: string
+                            maxLength: 60
+                        required:
+                          - mode
+                        additionalProperties: true
                     required:
                       - id
                       - type
@@ -13174,6 +13375,73 @@ components:
               url:
                 type: string
                 maxLength: 500
+              qr:
+                type: object
+                properties:
+                  mode:
+                    type: string
+                    enum:
+                      - image
+                      - url
+                      - vietqr
+                  value:
+                    type: string
+                    maxLength: 270000
+                  vietqr:
+                    type: object
+                    properties:
+                      bin:
+                        type: string
+                        pattern: ^\d{6}$
+                      account:
+                        type: string
+                        pattern: ^[0-9A-Za-z]{4,24}$
+                      name:
+                        type: string
+                        maxLength: 60
+                      amount:
+                        type: integer
+                        minimum: 0
+                        maximum: 100000000000
+                      memo:
+                        type: string
+                        maxLength: 50
+                      template:
+                        type: string
+                        enum:
+                          - compact
+                          - compact2
+                          - qr_only
+                          - print
+                    required:
+                      - bin
+                      - account
+                    additionalProperties: true
+                required:
+                  - mode
+                additionalProperties: true
+              weather:
+                type: object
+                properties:
+                  mode:
+                    type: string
+                    enum:
+                      - gps
+                      - fixed
+                  lat:
+                    type: number
+                    minimum: -90
+                    maximum: 90
+                  lon:
+                    type: number
+                    minimum: -180
+                    maximum: 180
+                  label:
+                    type: string
+                    maxLength: 60
+                required:
+                  - mode
+                additionalProperties: true
             required:
               - id
               - type

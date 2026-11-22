@@ -207,6 +207,12 @@ export interface ManifestZone {
   font_size?: number;
   scroll_speed?: number;
   url?: string;
+  /** vung qr: 'text' (thiet bi tu ve QR tu `url`) | 'image_url' (tai anh tu `url`, vd VietQR) | 'data_url' (anh nhung trong `url`) */
+  qr_kind?: 'text' | 'image_url' | 'data_url';
+  /** vung qr: cau hinh goc (mode image|url|vietqr) */
+  qr?: Record<string, unknown>;
+  /** vung weather: thiet bi tu lay Open-Meteo theo toa do (gps = dung vi tri thiet bi neu co, khong thi lat/lon) */
+  weather?: { mode: 'gps' | 'fixed'; lat?: number; lon?: number; label?: string };
   creative_ids?: string[];
 }
 export interface ManifestLayout {

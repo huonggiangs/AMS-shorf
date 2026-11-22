@@ -43,3 +43,26 @@ describe('R2ObjectStore multipart (binding)', () => {
     await expect(s.multipartUploadPart('k/a.mp4', 'U1', 3, new Uint8Array([1]), 5)).rejects.toThrow('part_size_mismatch');
   });
 });
+
+describe('R2ObjectStore.getSigned khi thieu khoa S3 (URL xem do Worker phuc vu)', () => {
+  const clock = { now: () => new Date('2026-11-12T03:00:00Z') };
+  const noKeys = { ...full, accessKeyId: '', secretAccessKey: '', signingSecret: 'sess', signedBaseUrl: '/api/storage' };
+  it('tra URL /api/storage/object/<key>?exp&sig, verifySigned chap nhan, tu choi sai chu ky / het han / khoa khac', async () => {
+    const s = new R2ObjectStore({} as never, noKeys, clock);
+    const url = await s.getSigned('media/c1/m1/v1-a b.mp4', 900);
+    expect(url).toMatch(/^\/api\/storage\/object\/media\/c1\/m1\/v1-a%20b\.mp4\?exp=\d+&sig=[0-9a-f]{64}$/);
+    const q = new URL(url, 'http://x').searchParams;
+    expect((await s.verifySigned('get', 'media/c1/m1/v1-a b.mp4', q)).ok).toBe(true);
+    expect((await s.verifySigned('get', 'media/c1/m1/khac.mp4', q)).ok).toBe(false);
+    const bad = new URLSearchParams(q);
+    bad.set('sig', '0'.repeat(64));
+    expect((await s.verifySigned('get', 'media/c1/m1/v1-a b.mp4', bad)).reason).toBe('bad_signature');
+    const later = new R2ObjectStore({} as never, noKeys, { now: () => new Date('2026-11-12T04:00:00Z') });
+    expect((await later.verifySigned('get', 'media/c1/m1/v1-a b.mp4', q)).reason).toBe('expired');
+    expect((await s.verifySigned('put', 'k', q)).ok).toBe(false);
+  });
+  it('du khoa S3 thi van presign S3 nhu cu (khong doi hanh vi)', async () => {
+    const s = new R2ObjectStore({} as never, { ...full, signingSecret: 'sess' }, clock);
+    expect(await s.getSigned('media/a.mp4', 300)).toContain('r2.cloudflarestorage.com');
+  });
+});

@@ -66,6 +66,25 @@ interface SlotRow {
   slot_footer: string | null;
 }
 
+/** URL anh VietQR cong khai (img.vietqr.io, khong can khoa API). */
+export function vietqrUrl(v: { bin: string; account: string; name?: string; amount?: number; memo?: string; template?: string }): string {
+  const q = new URLSearchParams();
+  if (v.amount) q.set('amount', String(v.amount));
+  if (v.memo) q.set('addInfo', v.memo);
+  if (v.name) q.set('accountName', v.name);
+  const qs = q.toString();
+  return `https://img.vietqr.io/image/${v.bin}-${v.account}-${v.template ?? 'qr_only'}.png${qs ? `?${qs}` : ''}`;
+}
+
+/** Vung QR: thiet bi chi can `qr_kind` + `url` (khong phai hieu tung che do). */
+function qrDevice(z: ManifestZone): ManifestZone {
+  const qr = z.qr as { mode?: string; value?: string; vietqr?: { bin: string; account: string; name?: string; amount?: number; memo?: string; template?: string } } | undefined;
+  if (!qr) return z.url ? { ...z, qr_kind: 'text' } : z;
+  if (qr.mode === 'vietqr' && qr.vietqr) return { ...z, qr_kind: 'image_url', url: vietqrUrl(qr.vietqr) };
+  if (qr.mode === 'image' && qr.value) return { ...z, qr_kind: 'data_url', url: qr.value };
+  return { ...z, qr_kind: 'text', url: qr.value ?? z.url ?? '' };
+}
+
 /** Gan tep (da loc hop le, giu thu tu) vao vung media; tep chua gan vung roi vao vung media dau tien. */
 function programLayout(layout: { orientation: 'landscape' | 'portrait'; zones: ManifestZone[] }, itemZones: Record<string, string>, ids: string[]): ManifestLayout {
   const media = layout.zones.filter((z) => z.type === 'video' || z.type === 'image');
@@ -74,6 +93,7 @@ function programLayout(layout: { orientation: 'landscape' | 'portrait'; zones: M
   return {
     orientation: layout.orientation,
     zones: layout.zones.map((z) => {
+      if (z.type === 'qr') return qrDevice(z);
       if (z.type !== 'video' && z.type !== 'image') return z;
       const creative_ids = ids.filter((id) => (known.has(itemZones[id] ?? '') ? itemZones[id] : first) === z.id);
       return { ...z, creative_ids };

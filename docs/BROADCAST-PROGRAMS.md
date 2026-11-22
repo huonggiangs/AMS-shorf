@@ -60,3 +60,10 @@ Nhóm menu **Phát sóng nội bộ** (tham khảo QuangBáo Cloud). API đều 
 - **Manifest theo thiết bị**: chương trình có thiết bị riêng chỉ xuất hiện trong manifest nhóm `region.daypart.modelClass.d-<deviceId>` của đúng các thiết bị đó (nhóm này chỉ phục vụ qua `/v1/manifest` có xác thực, route công khai `/v1/manifest/g/...` từ chối); thiết bị khác không thấy.
 - **Đẩy ngay**: xuất bản, sửa chương trình đang phát (hợp thiết bị cũ + mới) và dừng phát/xóa đều xếp lệnh `refresh_manifest` (idempotency theo chương trình + phiên bản) và trả `push: {matched, pushed, skipped}`. `GET /:id/delivery` trả từng thiết bị kèm trạng thái lệnh (`pending|delivered|acked|failed|expired`) và trực tuyến/ngoại tuyến; giao diện tự làm mới 4 giây.
 - **Hạn chế**: thời lượng từng tệp chưa lưu trong chương trình; nút ẩn lớp chỉ áp dụng cho trình soạn/xem trước; Signage Player chưa vẽ đa vùng.
+
+
+## QR, thời tiết và xem trước video
+
+- **Vùng QR** (bước 02 trình hướng dẫn / Mẫu bố cục): 3 chế độ — nhập URL/văn bản (QR tạo ngay trong trình duyệt, thư viện `qrcode-generator`), VietQR (chọn ngân hàng + số tài khoản + số tiền + nội dung → URL ảnh công khai `img.vietqr.io`, không dùng khóa API), hoặc tải ảnh QR (≤ 200 KB, lưu dạng data URL trong bố cục).
+- **Vùng thời tiết**: chế độ cố định (chọn thành phố hoặc nhập toạ độ) hoặc GPS (`navigator.geolocation`); dữ liệu từ Open-Meteo, làm mới 10 phút.
+- **Xem trước video**: `GET /storage/object/*` hỗ trợ `Range` (206/416, `Accept-Ranges`). Khi R2 không có khóa S3, Worker tự ký URL xem (HMAC bằng `OBJECT_STORE_SIGNING_SECRET` hoặc `SESSION_SECRET`) thay vì URL presign giả (trước đây gây 403/khung đen). `preview_url` có cho mọi media đã có `storage_key`; trình xem hiện lỗi cụ thể, nút "Tải lại", bật tiếng và thanh tua.

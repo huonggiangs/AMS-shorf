@@ -30,6 +30,8 @@ export const zoneSchema = z
     font_size: z.coerce.number().nullish(),
     scroll_speed: z.coerce.number().nullish(),
     url: z.string().nullish(),
+    qr: z.object({ mode: z.enum(['image', 'url', 'vietqr']), value: z.string().optional(), vietqr: z.object({ bin: z.string(), account: z.string(), name: z.string().optional(), amount: z.coerce.number().optional(), memo: z.string().optional(), template: z.string().optional() }).optional() }).nullish(),
+    weather: z.object({ mode: z.enum(['gps', 'fixed']), lat: z.coerce.number().optional(), lon: z.coerce.number().optional(), label: z.string().optional() }).nullish(),
   })
   .passthrough();
 export type Zone = z.infer<typeof zoneSchema>;
@@ -63,8 +65,8 @@ export function newZone(type: ZoneType, existing: Zone[]): Zone {
   if (type === 'marquee') return { ...base, x: 0, y: 88, w: 100, h: 12, text: 'Nhập nội dung chữ chạy', bg_color: '#DC2626', text_color: '#FFFFFF', font_size: 18, scroll_speed: 60 };
   if (type === 'text') return { ...base, w: 40, h: 20, text: 'Nhập nội dung văn bản', bg_color: '#111827', text_color: '#FFFFFF', font_size: 24 };
   if (type === 'clock') return { ...base, w: 30, h: 15, bg_color: '#111827', text_color: '#FFFFFF', font_size: 28 };
-  if (type === 'weather') return { ...base, w: 30, h: 15, bg_color: '#1D4ED8', text_color: '#FFFFFF' };
-  if (type === 'qr') return { ...base, w: 20, h: 20, url: 'https://anio.vn' };
+  if (type === 'weather') return { ...base, w: 30, h: 15, bg_color: '#1D4ED8', text_color: '#FFFFFF', weather: { mode: 'fixed', lat: 21.0285, lon: 105.8542, label: 'Hà Nội' } };
+  if (type === 'qr') return { ...base, w: 20, h: 20, url: 'https://anio.vn', qr: { mode: 'url', value: 'https://anio.vn' } };
   return base;
 }
 

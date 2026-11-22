@@ -198,6 +198,26 @@ describe('thong bao khan + goi USB', () => {
     expect((await content.json('GET', `/admin/v1/broadcast/${empty.id}/usb-package`)).body.error.code).toBe('no_items');
   });
 
+  it('vung QR (anh/URL/VietQR) va thoi tiet (GPS/co dinh) duoc luu day du; du lieu sai bi tu choi', async () => {
+    const zones = [
+      { id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 60 },
+      { id: 'q1', type: 'qr', x: 0, y: 60, w: 30, h: 30, qr: { mode: 'vietqr', vietqr: { bin: '970436', account: '0123456789', name: 'ANIO', amount: 50000, memo: 'Thanh toan' } } },
+      { id: 'q2', type: 'qr', x: 30, y: 60, w: 30, h: 30, qr: { mode: 'url', value: 'https://anio.vn' } },
+      { id: 'q3', type: 'qr', x: 60, y: 60, w: 20, h: 20, qr: { mode: 'image', value: 'data:image/png;base64,iVBORw0KGgo=' } },
+      { id: 'w', type: 'weather', x: 80, y: 60, w: 20, h: 20, weather: { mode: 'gps', lat: 21.0285, lon: 105.8542, label: 'Ha Noi' } },
+    ];
+    const ok = await content.json('POST', '/admin/v1/layout-templates', { name: 'QR + thoi tiet', orientation: 'portrait', zones });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    expect(ok.body.zones.find((z: any) => z.id === 'q1').qr.vietqr.bin).toBe('970436');
+    expect(ok.body.zones.find((z: any) => z.id === 'w').weather).toMatchObject({ mode: 'gps', lat: 21.0285 });
+    const bad = (qr: unknown, extra: Record<string, unknown> = {}) => content.json('POST', '/admin/v1/layout-templates', { name: 'Hong', zones: [{ id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 50 }, { id: 'q', type: 'qr', x: 0, y: 50, w: 20, h: 20, qr, ...extra }] });
+    expect((await bad({ mode: 'vietqr', vietqr: { bin: '12', account: '0123456789' } })).status).toBe(422);
+    expect((await bad({ mode: 'vietqr' })).status).toBe(422);
+    expect((await bad({ mode: 'image', value: 'https://x/qr.png' })).status).toBe(422);
+    expect((await bad({ mode: 'url' })).status).toBe(422);
+    expect((await content.json('POST', '/admin/v1/layout-templates', { name: 'Hong', zones: [{ id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 50 }, { id: 'w', type: 'weather', x: 0, y: 50, w: 20, h: 20, weather: { mode: 'fixed', lat: 123, lon: 5 } }] })).status).toBe(422);
+  });
+
   it('mau bo cuc: CRUD + kiem tra vung (vuot khung, trung ma, qua 8 vung); quyen xem/ghi', async () => {
     const zones = [
       { id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 80, z: 0, transition: 'fade' },

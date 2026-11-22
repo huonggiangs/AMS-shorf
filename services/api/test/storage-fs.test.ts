@@ -91,4 +91,22 @@ describe('storage fs: upload-url -> PUT -> confirm -> preview', () => {
     const c = await admin.json('POST', `/admin/v1/media/${m.body.id}/confirm`, {});
     expect(c.status).toBe(422);
   });
+  it('video xem truoc: ho tro Range (206/416) de trinh duyet phat va tua duoc; khong Range van tra 200 day du', async () => {
+    const m = await start(33, 'r.png');
+    await putS(m.body.url, png(1920, 1080));
+    await admin.json('POST', `/admin/v1/media/${m.body.id}/confirm`, {});
+    const g = await admin.json('GET', `/admin/v1/media/${m.body.id}`);
+    const u = path(g.body.preview_url);
+    const full = await env.app.request(u);
+    expect(full.status).toBe(200);
+    expect(full.headers.get('accept-ranges')).toBe('bytes');
+    const part = await env.app.request(u, { headers: { range: 'bytes=4-7' } });
+    expect(part.status).toBe(206);
+    expect(part.headers.get('content-range')).toBe('bytes 4-7/33');
+    expect(new Uint8Array(await part.arrayBuffer())).toEqual(new Uint8Array((await (await env.app.request(u)).arrayBuffer())).slice(4, 8));
+    const tail = await env.app.request(u, { headers: { range: 'bytes=-5' } });
+    expect(tail.headers.get('content-range')).toBe('bytes 28-32/33');
+    expect((await env.app.request(u, { headers: { range: 'bytes=999-' } })).status).toBe(416);
+    expect((await env.app.request(u, { headers: { range: 'bytes=0-' } })).headers.get('content-range')).toBe('bytes 0-32/33');
+  });
 });

@@ -53,6 +53,8 @@ export function createCloudflareRuntime(env: CloudflareEnv): CloudflareRuntime {
         accessKeyId: vars['R2_ACCESS_KEY_ID'] ?? '',
         secretAccessKey: vars['R2_SECRET_ACCESS_KEY'] ?? '',
         bucketName: vars['R2_BUCKET_NAME'] ?? '',
+        signingSecret: vars['OBJECT_STORE_SIGNING_SECRET'] || vars['SESSION_SECRET'] || '',
+        signedBaseUrl: vars['OBJECT_STORE_SIGNED_BASE_URL'] || '/api/storage',
       },
       clock,
     ),

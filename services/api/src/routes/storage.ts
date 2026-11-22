@@ -7,12 +7,35 @@ import type { AppEnv } from '../types.js';
 import { HttpError, notFound } from '../lib/errors.js';
 
 interface SignedStore {
-  verifySigned(op: 'put' | 'get', key: string, q: URLSearchParams): { ok: boolean; reason?: string; contentType?: string; maxBytes?: number };
+  verifySigned(op: 'put' | 'get', key: string, q: URLSearchParams): { ok: boolean; reason?: string; contentType?: string; maxBytes?: number } | Promise<{ ok: boolean; reason?: string; contentType?: string; maxBytes?: number }>;
+  getRange?(key: string, offset: number, length: number): Promise<Uint8Array | null>;
   put(key: string, body: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<Uint8Array | null>;
   head(key: string): Promise<{ size: number; contentType: string } | null>;
 }
 const isSigned = (o: unknown): o is SignedStore => typeof (o as SignedStore)?.verifySigned === 'function';
+
+const MAX_CHUNK = 8 * 1024 * 1024;
+
+/** `Range: bytes=a-b | a- | -n` (mot khoang). null = khong co header; 'bad' = khong thoa man (416). */
+export function parseRange(h: string | undefined, size: number): { start: number; end: number } | 'bad' | null {
+  if (!h) return null;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(h.trim());
+  if (!m || (m[1] === '' && m[2] === '')) return null;
+  let start: number;
+  let end: number;
+  if (m[1] === '') {
+    const n = Number(m[2]);
+    if (n <= 0) return 'bad';
+    start = Math.max(0, size - n);
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
+  }
+  if (!Number.isFinite(start) || start >= size || end < start) return 'bad';
+  return { start, end };
+}
 
 export const STORAGE_UPLOAD_PATH = '/storage/upload/';
 
@@ -53,7 +76,7 @@ export function storageRoutes(): Hono<AppEnv> {
     if (!isSigned(rt.objects)) throw notFound();
     const key = keyOf(new URL(c.req.url).pathname, STORAGE_UPLOAD_PATH);
     if (!key.startsWith('media/')) throw new HttpError(403, 'forbidden', 'Chỉ được tải lên thư mục media/.');
-    const chk = rt.objects.verifySigned('put', key, new URL(c.req.url).searchParams);
+    const chk = await rt.objects.verifySigned('put', key, new URL(c.req.url).searchParams);
     if (!chk.ok) throw new HttpError(403, chk.reason === 'expired' ? 'upload_expired' : 'bad_signature', 'Đường dẫn tải lên không hợp lệ hoặc đã hết hạn. Hãy yêu cầu đường dẫn mới.');
     const ct = (c.req.header('content-type') ?? '').trim();
     if (ct !== chk.contentType) throw new HttpError(422, 'content_type_mismatch', 'Loại tệp gửi lên khác loại đã khai báo.');
@@ -72,16 +95,28 @@ export function storageRoutes(): Hono<AppEnv> {
     const rt = c.get('rt');
     if (!isSigned(rt.objects)) throw notFound();
     const key = keyOf(new URL(c.req.url).pathname, '/storage/object/');
-    const chk = rt.objects.verifySigned('get', key, new URL(c.req.url).searchParams);
+    const chk = await rt.objects.verifySigned('get', key, new URL(c.req.url).searchParams);
     if (!chk.ok) throw new HttpError(403, 'bad_signature', 'Đường dẫn không hợp lệ hoặc đã hết hạn.');
-    const [head, bytes] = [await rt.objects.head(key), await rt.objects.get(key)];
-    if (!head || !bytes) throw notFound();
-    return c.body(bytes as Uint8Array<ArrayBuffer>, 200, {
+    const head = await rt.objects.head(key);
+    if (!head) throw notFound();
+    const base = {
       'Content-Type': head.contentType,
-      'Content-Length': String(bytes.length),
+      'Accept-Ranges': 'bytes',
       'Content-Security-Policy': "sandbox; default-src 'none'", // tep nguoi dung tai len: khong chay script neu mo truc tiep
       'Cache-Control': 'private, max-age=60',
-    });
+    };
+    // Trinh duyet can Range de phat/tua video (Safari/iOS bat buoc 206): tra tung doan, khong doc ca tep vao bo nho Worker.
+    const range = parseRange(c.req.header('range'), head.size);
+    if (range === 'bad') return c.body(null, 416, { ...base, 'Content-Range': `bytes */${head.size}` });
+    if (range && rt.objects.getRange) {
+      const len = Math.min(range.end - range.start + 1, MAX_CHUNK);
+      const chunk = await rt.objects.getRange(key, range.start, len);
+      if (!chunk) throw notFound();
+      return c.body(chunk as Uint8Array<ArrayBuffer>, 206, { ...base, 'Content-Length': String(chunk.length), 'Content-Range': `bytes ${range.start}-${range.start + chunk.length - 1}/${head.size}` });
+    }
+    const bytes = await rt.objects.get(key);
+    if (!bytes) throw notFound();
+    return c.body(bytes as Uint8Array<ArrayBuffer>, 200, { ...base, 'Content-Length': String(bytes.length) });
   });
 
   return r;
