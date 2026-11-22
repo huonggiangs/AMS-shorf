@@ -27,5 +27,9 @@ export const ICON_PATHS: Record<string, string> = {
  "doc": "M6 3h9l4 4v14H6z M9 12h7 M9 16h5",
  "gear": "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z M19 12l2-1-2-4-2 1-2-1V5h-4v2l-2 1-2-1-2 4 2 1v2l-2 1 2 4 2-1 2 1v2h4v-2l2-1 2 1 2-4-2-1z",
  "user": "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 21a8 8 0 0 1 16 0",
- "log": "M4 6h16 M4 12h16 M4 18h10"
+ "log": "M4 6h16 M4 12h16 M4 18h10",
+ "edit": "M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4",
+ "trash": "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v5 M14 11v5",
+ "grid": "M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z",
+ "film": "M3 5h18v14H3z M7 5v14 M17 5v14 M3 9h4 M3 15h4 M17 9h4 M17 15h4"
 };

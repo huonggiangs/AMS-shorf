@@ -83,6 +83,7 @@ const SRC: { file: string; prefixes: string[] }[] = [
   { file: 'services/api/src/routes/tv-experience.ts', prefixes: ['/admin/v1/tv-experience'] },
   { file: 'services/api/src/routes/ops.ts', prefixes: ['/admin/v1/ops', ''] },
   { file: 'services/api/src/routes/media-scan-review.ts', prefixes: ['/admin/v1/media'] },
+  { file: 'services/api/src/routes/media-manage.ts', prefixes: ['/admin/v1/media', '/portal/v1/media'] },
   { file: 'services/api/src/contracts-doc/routes.ts', prefixes: ['/admin/v1/contract-docs'] },
   { file: 'services/api/src/legal/routes.ts', prefixes: ['/admin/v1/legal', '/portal/v1/legal', '/legal'] },
   { file: 'services/api/src/compliance/routes.ts', prefixes: ['/admin/v1/compliance', '/portal/v1/kyc'] },

@@ -36,7 +36,7 @@ dlg.showModal ??= function (this: HTMLElement) { this.setAttribute('open', ''); 
 const media = (i: number) => ({ id: `m${i}`, name: `thu-${i}.mp4`, kind: 'video', mime: 'video/mp4', width: 1080, height: 1920, duration_sec: 15, size_bytes: 10 * 1048576, status: 'approved', owner_name: 'Vinamilk', scan_state: 'clean', scan_reasons: [], content_version: 1, blocker: null, thumb_url: null });
 const page = (n: number, total = n) => ({ items: Array.from({ length: n }, (_, i) => media(i + 1)), total, page: 1, page_size: 9 });
 
-beforeEach(() => { handlers = []; calls.length = 0; localStorage.clear(); });
+beforeEach(() => { handlers = []; calls.length = 0; localStorage.clear(); localStorage.setItem('ams.media.view', 'grid'); });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('helpers xoa hang loat', () => {

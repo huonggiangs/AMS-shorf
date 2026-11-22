@@ -30,10 +30,11 @@ import { ProbeError, probeStreamUrl, streamBinding, type StreamProbe } from '../
 import { REASON_UNSCANNED, adoptProbe, assertStreamApprovable, detailOf, loadStream, markStreamApproved, presentStream, type StreamRow } from '../lib/video-link.js';
 import { writeAudit } from '../lib/audit.js';
 import type { FinancePort } from '../ports.js';
+import { mediaManageRoutes, tagsOf } from './media-manage.js';
 import type { AppEnv, AuthUser } from '../types.js';
 
 const M_SELECT = `m.id, m.campaign_id, m.customer_id, m.name, m.target_type, m.px_w, m.px_h, m.kind, m.source, m.source_url, m.storage_key, m.mime, m.size_bytes, m.duration_s,
-  m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code, COALESCE(sec.content_version, 1) AS content_version, cv.detail AS scan_detail, th.created_at AS thumb_at,
+  m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code, COALESCE(sec.content_version, 1) AS content_version, cv.detail AS scan_detail, th.created_at AS thumb_at, m.description, m.tags,
   st.stream_url AS st_url, st.stream_kind AS st_kind, st.declared_duration_s AS st_dur, st.probe_status AS st_status, st.needs_review AS st_review, st.content_type AS st_ct, st.content_length AS st_len,
   st.etag AS st_etag, st.last_modified AS st_lm, st.checked_at AS st_checked, st.probe_detail AS st_detail, st.full_view_at AS st_fv, st.approved_at AS st_appr,
   tr.kind AS tr_kind, tr.status AS tr_status, tr.bytes_done AS tr_done, tr.bytes_total AS tr_total, tr.error_code AS tr_error_code, tr.error_message AS tr_error, tr.total_parts AS tr_total_parts, tr.parts AS tr_parts, dg.diag AS diag_json`;
@@ -68,6 +69,8 @@ interface MediaRow {
   customer_code: string;
   content_version: number;
   scan_detail: string | null;
+  description?: string | null;
+  tags?: string | null;
   thumb_at?: string | null;
   tr_kind?: string | null;
   tr_status?: string | null;
@@ -222,6 +225,8 @@ export const present = (m: MediaRow, external = false): Record<string, unknown> 
   source: m.source,
   source_url: m.source_url,
   thumb_url: thumbUrlOf(m, external),
+  description: m.description ?? null,
+  tags: tagsOf(m.tags),
   reject_reason: m.review_note,
   campaign_id: m.campaign_id,
   target_type: apiTarget(m.target_type),
@@ -244,7 +249,7 @@ function mediaSpec(u: AuthUser, nowIso: string): ListSpec {
     select: M_SELECT,
     where: scope ? [scope] : [],
     search: ['m.name', 'cu.short_name', 'm.source_url'],
-    sorts: { name: 'm.name', created_at: 'm.created_at', size_bytes: 'm.size_bytes', status: 'm.review_state', owner_name: 'cu.short_name' },
+    sorts: { name: 'm.name', created_at: 'm.created_at', size_bytes: 'm.size_bytes', duration_sec: 'm.duration_s', status: 'm.review_state', owner_name: 'cu.short_name' },
     defaultSort: 'created_at:desc',
     tiebreak: 'm.id',
     filters: {
@@ -261,7 +266,7 @@ function mediaSpec(u: AuthUser, nowIso: string): ListSpec {
   };
 }
 
-async function loadMedia(c: Ctx, id: string): Promise<MediaRow> {
+export async function loadMedia(c: Ctx, id: string): Promise<MediaRow> {
   const rt = getRt(c);
   const scope = mediaScope(c.get('user'), 'm', rt.clock.now().toISOString());
   const r = (await rt.db.query<MediaRow>(`SELECT ${M_SELECT} ${M_FROM} WHERE m.id = ?${scope ? ` AND (${scope.sql})` : ''}`, [id, ...(scope?.params ?? [])]))[0];
@@ -936,6 +941,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     return c.json(present(await loadMedia(c, m.id), external));
   });
 
+  r.route('/', mediaManageRoutes()); // m-list: sua metadata (PATCH) + tham chieu su dung
   if (external) return r;
   r.route('/', mediaScanReviewRoutes()); // creative 'needs_manual_review' (duong Cloudflare)
 

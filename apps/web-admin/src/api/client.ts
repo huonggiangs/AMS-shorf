@@ -160,6 +160,7 @@ export async function putBlob(path: string, blob: Blob): Promise<void> {
 export const api = {
   get: <S extends z.ZodTypeAny | undefined = undefined>(p: string, o?: ReqOpts<S>) => request('GET', p, o),
   post: <S extends z.ZodTypeAny | undefined = undefined>(p: string, o?: ReqOpts<S>) => request('POST', p, o),
+  patch: <S extends z.ZodTypeAny | undefined = undefined>(p: string, o?: ReqOpts<S>) => request('PATCH', p, o),
   put: <S extends z.ZodTypeAny | undefined = undefined>(p: string, o?: ReqOpts<S>) => request('PUT', p, o),
   del: <S extends z.ZodTypeAny | undefined = undefined>(p: string, o?: ReqOpts<S>) => request('DELETE', p, o),
 };
