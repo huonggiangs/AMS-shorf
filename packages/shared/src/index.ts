@@ -17,3 +17,4 @@ export * from './stream-url.js';
 export * from './cookies.js';
 export * from './logging.js';
 export * from './richtext.js';
+export * from './zone-duration.js';

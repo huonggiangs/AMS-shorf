@@ -246,6 +246,23 @@ describe('thong bao khan + goi USB', () => {
     expect(old.body.zones.find((z: any) => z.id === 'old').rich).toBeUndefined();
   });
 
+  it('thoi luong tung tu lieu (zone.durations): luu, loai tu lieu da bo, tu choi gia tri sai; vung khac khong giu', async () => {
+    const a = await libraryMedia();
+    const b = await libraryMedia();
+    const layout = (durations: unknown) => ({ orientation: 'portrait', zones: [
+      { id: 'main', type: 'image', x: 0, y: 0, w: 100, h: 80, durations },
+      { id: 'bar', type: 'marquee', x: 0, y: 80, w: 100, h: 20, text: 'x', durations: { [a]: 9 } },
+    ] });
+    const bad = await content.json('POST', '/admin/v1/broadcast', { name: 'Sai gio', target_type: 'elevator', creative_ids: [a], layout: layout({ [a]: 0 }) });
+    expect(bad.status).toBe(422);
+    expect((await content.json('POST', '/admin/v1/broadcast', { name: 'Sai gio 2', target_type: 'elevator', creative_ids: [a], layout: layout({ [a]: 4000 }) })).status).toBe(422);
+    const ok = await content.json('POST', '/admin/v1/broadcast', { name: 'Co gio', target_type: 'elevator', creative_ids: [a], layout: layout({ [a]: 12, [b]: 7 }) });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    const main = ok.body.layout.zones.find((z: any) => z.id === 'main');
+    expect(main.durations).toEqual({ [a]: 12 }); // b khong thuoc chuong trinh
+    expect(ok.body.layout.zones.find((z: any) => z.id === 'bar').durations).toBeUndefined();
+  });
+
   it('mau bo cuc: CRUD + kiem tra vung (vuot khung, trung ma, qua 8 vung); quyen xem/ghi', async () => {
     const zones = [
       { id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 80, z: 0, transition: 'fade' },

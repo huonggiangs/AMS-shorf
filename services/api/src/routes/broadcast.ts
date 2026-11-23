@@ -234,7 +234,9 @@ function checkItemZones(layout: Layout | null, itemZones: Record<string, string>
 async function saveLayout(db: { run: (sql: string, p: unknown[]) => Promise<unknown> }, id: string, layout: Layout | null, replaceLayout: boolean, itemZones: Record<string, string>, ids: string[], now: string): Promise<void> {
   if (replaceLayout) {
     await db.run('DELETE FROM broadcast_program_layouts WHERE program_id = ?', [id]);
-    if (layout) await db.run('INSERT INTO broadcast_program_layouts (program_id, template_id, orientation, zones, updated_at) VALUES (?,?,?,?,?)', [id, layout.template_id ?? null, layout.orientation, JSON.stringify(layout.zones), now]);
+    // bo thoi luong cua tu lieu khong con trong chuong trinh
+    const zones = layout?.zones.map((z) => { const d = (z as { durations?: Record<string, number> }).durations; return d ? { ...z, durations: Object.fromEntries(Object.entries(d).filter(([cid]) => ids.includes(cid))) } : z; });
+    if (layout) await db.run('INSERT INTO broadcast_program_layouts (program_id, template_id, orientation, zones, updated_at) VALUES (?,?,?,?,?)', [id, layout.template_id ?? null, layout.orientation, JSON.stringify(zones), now]);
   }
   await db.run('DELETE FROM broadcast_item_zones WHERE program_id = ?', [id]);
   const zoneIds = new Set((layout?.zones ?? []).map((z) => z.id));

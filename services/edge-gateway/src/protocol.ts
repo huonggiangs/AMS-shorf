@@ -240,6 +240,8 @@ export interface ManifestZone {
   /** vung weather: thiet bi tu lay Open-Meteo theo toa do (gps = dung vi tri thiet bi neu co, khong thi lat/lon) */
   weather?: { mode: 'gps' | 'fixed'; lat?: number; lon?: number; label?: string };
   creative_ids?: string[];
+  /** vung video/anh: giay hien thi theo ma tu lieu (1..3600); anh thieu = 5 s, video thieu = phat het */
+  durations?: Record<string, number>;
 }
 export interface ManifestLayout {
   orientation: 'landscape' | 'portrait';

@@ -61,13 +61,17 @@ export const zoneSchema = z
     url: z.string().max(500).optional(),
     qr: qrSchema.optional(),
     weather: weatherSchema.optional(),
+    /** vung video/anh: thoi gian hien thi (giay, 1..3600) theo ma tu lieu. Anh thieu = 5 s; video thieu = phat het. */
+    durations: z.record(z.string().min(1).max(64), z.number().int().min(1).max(3600)).refine((r) => Object.keys(r).length <= 100, 'Tối đa 100 tệp').optional(),
   })
   .refine((v) => v.x + v.w <= 100.01 && v.y + v.h <= 100.01, { message: 'Vùng vượt ra ngoài khung (x+w và y+h tối đa 100%)' })
   .transform((v, ctx) => {
     if (v.type !== 'text' && v.type !== 'marquee') {
       const { rich: _r, ...rest } = v;
+      if (v.type !== 'video' && v.type !== 'image') { const { durations: _d, ...r2 } = rest; return r2; }
       return rest;
     }
+    if (v.durations) { const { durations: _d, ...r3 } = v; v = r3 as typeof v; }
     if (v.rich !== undefined) {
       const clean = sanitizeRich(v.rich, { singleLine: v.type === 'marquee' });
       const { rich: _r, ...rest } = v;
