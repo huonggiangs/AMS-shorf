@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from './Icon';
 import { Palette } from './Palette';
 import { loadRead, saveRead, useNotifications } from './Notifications';
@@ -8,6 +8,19 @@ import { useT } from '../i18n';
 import { useUi } from '../state/ui';
 import { GROUPS, PAGE_BY_ID, PAGE_DEFS, groupOf, visiblePages } from '../nav';
 import { ROLE_LABEL } from '../lib/status';
+
+const OPEN_KEY = 'ams-nav-open';
+const loadOpen = (): string[] => {
+  try {
+    const v = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+const saveOpen = (ids: string[]) => {
+  try { localStorage.setItem(OPEN_KEY, JSON.stringify(ids)); } catch { /* storage unavailable */ }
+};
 
 const initials = (s: string) => s.split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase() || 'U';
 
@@ -19,6 +32,7 @@ export function Shell() {
   const { me, can, isExternal, logout } = useAuth();
   const [pal, setPal] = useState(false);
   const [notif, setNotif] = useState(false);
+  const [open, setOpen] = useState<string[]>(loadOpen);
   const [read, setRead] = useState<Record<string, number>>(loadRead);
   const pages = useMemo(() => visiblePages(can, isExternal), [can, isExternal]);
   const { items } = useNotifications();
@@ -41,7 +55,20 @@ export function Shell() {
     return () => document.removeEventListener('keydown', h);
   }, []);
 
-  const tabs = grp.pages.filter((p) => pages.includes(p) && !(p === 'profile' && grp.pages.every((x) => x === 'profile' || !pages.includes(x))));
+  // The group holding the current page is expanded on arrival; the user may still collapse it. Other groups follow the remembered toggles.
+  const [shut, setShut] = useState<string | null>(null);
+  useEffect(() => { setShut(null); }, [grp.id]);
+  const isOpen = (id: string) => (id === grp.id ? shut !== id : open.includes(id));
+  const toggle = (id: string) => {
+    if (id === grp.id) { setShut(shut === id ? null : id); return; }
+    const next = open.includes(id) ? open.filter((x) => x !== id) : [...open, id];
+    setOpen(next);
+    saveOpen(next);
+  };
+  const flyAt = (e: { currentTarget: HTMLElement }) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty('--fly-top', `${Math.max(8, Math.round(r.top))}px`);
+  };
   return (
     <div className={`tvn ${ui.dark ? 'dark' : ''} ${ui.col ? 'col' : ''}`}>
       <a href="#page" className="sr-skip" style={{ position: 'absolute', left: -9999 }}>{t('Bỏ qua tới nội dung')}</a>
@@ -51,13 +78,41 @@ export function Shell() {
           <i><Icon n="tv" /></i>
           <b>AMS<small>Bảng điều hành</small></b>
         </div>
-        {groups.map(({ g, pages: gp }) => (
-          <button key={g.id} type="button" className={`nv ${grp.id === g.id ? 'on' : ''}`} title={t(g.label)} onClick={() => nav(PAGE_BY_ID[gp[0]!]!.path)}>
-            <Icon n={g.icon} />
-            <span>{t(g.label)}</span>
-            {g.id === 'g2' && pendingBadge ? <em>{pendingBadge}</em> : null}
-          </button>
-        ))}
+        <nav className="ngs" aria-label={t('Điều hướng chính')}>
+          {groups.map(({ g, pages: gp }) => {
+            const badge = g.id === 'g2' && pendingBadge ? <em>{pendingBadge}</em> : null;
+            if (gp.length === 1) {
+              const only = PAGE_BY_ID[gp[0]!]!;
+              return (
+                <Link key={g.id} to={only.path} className={`nv ${grp.id === g.id ? 'on' : ''}`} title={t(g.label)} aria-current={cur === only.id ? 'page' : undefined}>
+                  <Icon n={g.icon} /><span>{t(g.label)}</span>{badge}
+                </Link>
+              );
+            }
+            const expanded = isOpen(g.id);
+            return (
+              <div key={g.id} className={`ng ${expanded ? 'open' : ''}`} onMouseEnter={flyAt} onFocus={flyAt}>
+                <button type="button" id={`nvh-${g.id}`} className={`nv ${grp.id === g.id ? 'on' : ''}`} title={t(g.label)} aria-expanded={expanded} aria-controls={`nvs-${g.id}`} onClick={() => toggle(g.id)}>
+                  <Icon n={g.icon} />
+                  <span>{t(g.label)}</span>
+                  {badge}
+                  <Icon n="chev" className="cv" />
+                </button>
+                <ul id={`nvs-${g.id}`} className="sub" hidden={!expanded} aria-labelledby={`nvh-${g.id}`}>
+                  <li className="fh" aria-hidden="true">{t(g.label)}</li>
+                  {gp.map((p) => (
+                    <li key={p}>
+                      <Link to={PAGE_BY_ID[p]!.path} className={`sl ${cur === p ? 'on' : ''}`} aria-current={cur === p ? 'page' : undefined}>
+                        <span>{t(PAGE_BY_ID[p]!.label)}</span>
+                        {p === 'approvals' && pendingBadge ? <em>{pendingBadge}</em> : null}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </nav>
         <div className="sp" />
         <button type="button" className="nv" onClick={ui.toggleCol}>
           <Icon n="menu" />
@@ -105,15 +160,6 @@ export function Shell() {
           ) : null}
         </header>
         <div className="cnt" id="page">
-          {tabs.length > 1 && loc.pathname !== '/profile' ? (
-            <nav className="tabs">
-              {tabs.map((p) => (
-                <button key={p} type="button" className={cur === p ? 'on' : ''} onClick={() => nav(PAGE_BY_ID[p]!.path)}>
-                  {t(PAGE_BY_ID[p]!.label)}
-                </button>
-              ))}
-            </nav>
-          ) : null}
           <Outlet />
         </div>
       </div>

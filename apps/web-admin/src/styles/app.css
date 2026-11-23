@@ -161,3 +161,33 @@ img,video,svg{max-width:100%}
 
 dialog.dlg{max-height:calc(100dvh - 24px);overflow:auto}
 @media(max-width:700px){.tp-grid{grid-template-columns:minmax(0,1fr)!important}#qrbox{grid-template-columns:110px minmax(0,1fr)!important}#qrimg{width:110px!important;height:110px!important}}
+
+/* sidebar sub-menus (replace the old tab pills) */
+.ngs{display:flex;flex-direction:column;gap:4px}
+.ng{position:relative}.ng>.nv{width:100%}
+.nv .cv{margin-left:auto;width:15px;height:15px;transition:transform .15s}.nv em+.cv{margin-left:6px}
+.nv[aria-expanded="true"] .cv{transform:rotate(90deg)}
+.sub{list-style:none;margin:2px 0 4px;padding:0 0 0 22px;display:flex;flex-direction:column;gap:2px;position:relative}
+.sub[hidden]{display:none}
+.sub:before{content:"";position:absolute;left:21px;top:4px;bottom:4px;width:1px;background:var(--line)}
+.sub .fh{display:none}
+.sl{display:flex;align-items:center;gap:8px;padding:8px 12px;margin-left:8px;border-radius:8px;color:var(--mut);font-size:13.5px;font-weight:600;text-decoration:none;position:relative}
+.sl:hover{background:var(--hov);color:var(--ink)}.sl.on{background:var(--pri-t);color:var(--pri)}
+.sl em{margin-left:auto;font-style:normal;background:var(--warn);color:#fff;border-radius:20px;font-size:11.5px;font-weight:700;padding:0 7px;font-family:var(--mono)}
+a.nv{text-decoration:none}
+.nv:focus-visible,.sl:focus-visible{outline:2px solid var(--pri);outline-offset:-2px}
+@media(min-width:901px){
+ .col .ng>.sub{display:none;position:fixed;left:72px;top:var(--fly-top,80px);min-width:230px;margin:0;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--sh2);z-index:40}
+ .col .ng>.sub:before{left:-14px;top:0;bottom:0;width:14px;background:transparent}
+ .col .ng:hover>.sub,.col .ng:focus-within>.sub{display:flex}
+ .col .sub .fh{display:block;padding:6px 12px 8px;font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+ .col .sl{margin-left:0}.col .nv .cv{display:none}
+}
+@media(min-width:901px) and (max-width:1200px){
+ .ng>.sub{display:none;position:fixed;left:72px;top:var(--fly-top,80px);min-width:230px;margin:0;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--sh2);z-index:40}
+ .ng>.sub:before{left:-14px;top:0;bottom:0;width:14px;background:transparent}
+ .ng:hover>.sub,.ng:focus-within>.sub{display:flex}
+ .sub .fh{display:block;padding:6px 12px 8px;font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+ .sl{margin-left:0}.nv .cv{display:none}
+}
+@media(max-width:900px){.col .nv .cv{display:revert}.nv .cv{display:block}}

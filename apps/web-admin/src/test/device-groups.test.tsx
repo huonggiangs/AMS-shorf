@@ -48,14 +48,14 @@ const locs = [{ id: 'l1', name: 'Vincom Bà Triệu', address: '191 Bà Triệu'
 const all = { devices: ['view', 'write'] };
 
 describe('d-tree: menu Thiết bị', () => {
-  it('nhóm menu Thiết bị có 3 tab, /devices vẫn chạy, quyền devices bao cả ba', async () => {
+  it('nhóm menu Thiết bị có 3 mục con, /devices vẫn chạy, quyền devices bao cả ba', async () => {
     handlers.push(me(mk(all)), treeH, devsH([dev()]));
     vi.stubGlobal('fetch', mockFetch());
     mount('/device-groups');
     expect(await screen.findByRole('button', { name: 'Thiết bị' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Danh sách thiết bị' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Nhóm thiết bị' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Địa điểm' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Danh sách thiết bị' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Nhóm thiết bị' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Địa điểm' })).toBeInTheDocument();
   });
   it('/devices vẫn mở được trang danh sách cũ', async () => {
     handlers.push(me(mk(all)));

@@ -38,4 +38,5 @@ export const EXTRA: Record<string, string> = {
   'Xuất CSV': 'Export CSV',
   'Thiết bị mới hoạt động': 'Recently active devices',
   'Bỏ qua tới nội dung': 'Skip to content',
+  'Điều hướng chính': 'Main navigation',
 };
