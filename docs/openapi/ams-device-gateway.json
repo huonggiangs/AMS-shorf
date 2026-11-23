@@ -2848,6 +2848,15 @@
                             "additionalProperties": true,
                             "description": "CHI vung weather: thiet bi tu lay Open-Meteo (api.open-meteo.com) theo lat/lon"
                           },
+                          "durations": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 3600
+                            },
+                            "description": "CHI vung video/image: giay hien thi theo creative_id; anh thieu = 5 s, video thieu = phat het"
+                          },
                           "creative_ids": {
                             "type": "array",
                             "items": {
@@ -3319,6 +3328,15 @@
                             ],
                             "additionalProperties": true,
                             "description": "CHI vung weather: thiet bi tu lay Open-Meteo (api.open-meteo.com) theo lat/lon"
+                          },
+                          "durations": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 3600
+                            },
+                            "description": "CHI vung video/image: giay hien thi theo creative_id; anh thieu = 5 s, video thieu = phat het"
                           },
                           "creative_ids": {
                             "type": "array",

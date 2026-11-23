@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import { ASPECT, clampZone, isMediaZone, zoneName, type Orientation, type Zone } from '../lib/layout';
+import { ASPECT, stagePx, clampZone, isMediaZone, zoneName, type Orientation, type Resolution, type Zone } from '../lib/layout';
 import type { PreviewItem } from './LivePreview';
 import { RichView } from './RichText';
 
@@ -13,7 +13,7 @@ const HANDLES: { d: Dir; st: React.CSSProperties; cur: string }[] = [
 ];
 const MIN = 5;
 /** Kich thuoc diem anh o che do xem (khung 1080p thu nho mot nua). */
-export const STAGE_PX: Record<Orientation, [number, number]> = { portrait: [540, 960], landscape: [960, 540] };
+
 
 /** Noi dung that (anh/khung hinh dau cua video) hien trong vung de nguoi dung thay ngay dang dat tep nao o dau. */
 function Thumb({ item }: { item: PreviewItem | undefined }) {
@@ -23,8 +23,9 @@ function Thumb({ item }: { item: PreviewItem | undefined }) {
 }
 
 /** Khung thiet ke vung (keo di chuyen, keo goc vang doi kich thuoc theo %). Hien noi dung that cua tep dau tien trong vung; vung bi an thi mo di. */
-export function ZoneCanvas({ orientation, zones, selected, onSelect, onChange, itemsOf, hidden, maxHeight = 600 }: {
+export function ZoneCanvas({ orientation, resolution = 'view', zones, selected, onSelect, onChange, itemsOf, hidden, maxHeight = 600 }: {
   orientation: Orientation;
+  resolution?: Resolution;
   zones: Zone[];
   selected: string | null;
   onSelect: (id: string | null) => void;
@@ -71,7 +72,7 @@ export function ZoneCanvas({ orientation, zones, selected, onSelect, onChange, i
     set(z.id, e.altKey ? { w: z.w + d[0] * n, h: z.h + d[1] * n } : { x: z.x + d[0] * n, y: z.y + d[1] * n });
   };
   const width = orientation === 'portrait' ? `min(100%, ${Math.round((maxHeight * 9) / 16)}px)` : `min(100%, ${Math.round((maxHeight * 16) / 9)}px)`;
-  const [pw, ph] = STAGE_PX[orientation];
+  const [pw, ph] = stagePx(orientation, resolution);
   return (
     <div className="zc-stage">
     <div className="zc-label" aria-label="Kích thước khung">{pw} × {ph} · CHUẨN HIỂN THỊ DOOH</div>

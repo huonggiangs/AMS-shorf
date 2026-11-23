@@ -9,7 +9,7 @@ export interface PreviewItem {
   zoneId: string | null;
   kind: 'video' | 'image';
   url: string | null;
-  /** thoi luong (giay); video that tu chuyen khi ket thuc, anh dung gia tri nay (mac dinh 10) */
+  /** thoi luong (giay); video that tu chuyen khi ket thuc, anh dung gia tri nay (mac dinh 5) */
   duration_s?: number | null;
   name?: string | null;
   /** ly do chua xem truoc duoc (vd nguon YouTube/Drive chua tai ve kho) */
@@ -64,7 +64,7 @@ function MediaZone({ z, items, playing, runKey, ctl, primary }: { z: Zone; items
     if (!cur || !playing) return;
     if (cur.kind === 'video' && cur.url && !err) return; // chuyen khi video ket thuc (onEnded)
     if (items.length <= 1 && cur.kind === 'image') return; // mot anh: giu nguyen
-    const wait = err ? 3000 : Math.max(2, cur.duration_s ?? 10) * 1000;
+    const wait = err ? 3000 : Math.max(cur.duration_s ? 1 : 2, cur.duration_s ?? (cur.kind === 'image' ? 5 : 10)) * 1000;
     if (err && items.length <= 1) return; // loi + chi mot tep: giu thong bao loi
     const t = setTimeout(next, wait);
     return () => clearTimeout(t);

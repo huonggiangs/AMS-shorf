@@ -35,6 +35,7 @@ export const zoneSchema = z
     clock: z.object({ hour12: z.boolean().optional(), tz: z.string().optional(), date: z.boolean().optional() }).nullish(),
     url: z.string().nullish(),
     qr: z.object({ mode: z.enum(['image', 'url', 'vietqr']), value: z.string().optional(), vietqr: z.object({ bin: z.string(), account: z.string(), name: z.string().optional(), amount: z.coerce.number().optional(), memo: z.string().optional(), template: z.string().optional() }).optional() }).nullish(),
+    durations: z.record(z.coerce.number()).nullish(),
     weather: z.object({ mode: z.enum(['gps', 'fixed']), lat: z.coerce.number().optional(), lon: z.coerce.number().optional(), label: z.string().optional() }).nullish(),
   })
   .passthrough();
@@ -99,3 +100,12 @@ export function layoutError(zones: Zone[]): string {
 
 /** Phan giai (px) mac dinh de hien thi ti le khung. */
 export const ASPECT: Record<Orientation, string> = { landscape: '16 / 9', portrait: '9 / 16' };
+
+/** Do phan giai thiet ke (chi dung de ghi nhan khung o trinh soan). */
+export type Resolution = 'view' | 'fhd' | '4k';
+export const RES_LABEL: Record<Resolution, string> = { view: 'Khung xem (mặc định)', fhd: 'Full HD', '4k': '4K (UHD)' };
+export const stagePx = (o: Orientation, r: Resolution): [number, number] => {
+  const [w, h] = r === '4k' ? [3840, 2160] : r === 'fhd' ? [1920, 1080] : [960, 540];
+  return o === 'portrait' ? [h, w] : [w, h];
+};
+export const IMAGE_DEFAULT_S = 5;

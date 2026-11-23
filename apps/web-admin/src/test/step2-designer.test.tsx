@@ -11,7 +11,7 @@ import { UiProvider } from '../state/ui';
 const reply = (u: URL): unknown => {
   const p = u.pathname.replace('/api', '');
   if (p === '/auth/me') return { user: { id: 'u', email: 'a@b', name: 'A', role: 'admin' }, permissions: { overview: ['view'], schedule: ['view', 'write'], media: ['view'] } };
-  if (p === '/admin/v1/media') return { items: [{ id: 'm1', name: 'Video A', kind: 'video', status: 'approved', mime: 'video/mp4' }, { id: 'm2', name: 'Video B', kind: 'video', status: 'approved', mime: 'video/mp4' }], total: 2 };
+  if (p === '/admin/v1/media') return { items: [{ id: 'm1', name: 'Video A', kind: 'video', status: 'approved', mime: 'video/mp4' }, { id: 'm2', name: 'Video B', kind: 'video', status: 'approved', mime: 'video/mp4' }, { id: 'm3', name: 'Clip YouTube', kind: 'video', status: 'approved', mime: 'video/mp4', delivery: 'stream' }], total: 3 };
   return { items: [], total: 0 };
 };
 // jsdom: PointerEvent + kich thuoc khung (400 x 400 px => 1px = 0,25%)
@@ -145,5 +145,24 @@ describe('Bước 2: thiết kế phân vùng', () => {
     await user.click(screen.getByRole('button', { name: '+ Chữ chạy' }));
     await user.selectOptions(await screen.findByLabelText('Hướng chạy'), 'right');
     expect((screen.getByLabelText('Hướng chạy') as HTMLSelectElement).value).toBe('right');
+  });
+
+  it('thời lượng từng tư liệu (giây) lưu vào vùng, link dán được gán nhãn [Link], nhãn khung 4K theo bước 1', async () => {
+    const user = await openStep2();
+    await user.click(await screen.findByText('Video 1', { selector: '.nm' }));
+    const picker = await screen.findByRole('combobox', { name: /Thêm tư liệu/ });
+    expect(within(picker).getByRole('option', { name: '[Link] Clip YouTube' })).toBeInTheDocument();
+    await user.selectOptions(picker, 'm1');
+    const sec = screen.getByLabelText('Số giây hiển thị Video A') as HTMLInputElement;
+    expect(sec.placeholder).toBe('Hết');
+    fireEvent.change(sec, { target: { value: '30' } });
+    expect((screen.getByLabelText('Số giây hiển thị Video A') as HTMLInputElement).value).toBe('30');
+    fireEvent.change(screen.getByLabelText('Số giây hiển thị Video A'), { target: { value: '' } });
+    expect((screen.getByLabelText('Số giây hiển thị Video A') as HTMLInputElement).value).toBe('');
+    // 4K: về bước 1 chọn độ phân giải
+    await user.click(screen.getByRole('button', { name: /Quay lại/ }));
+    await user.selectOptions(await screen.findByLabelText('Độ phân giải màn hình'), '4k');
+    await user.click(screen.getByRole('button', { name: /Bước tiếp theo/ }));
+    expect(await screen.findByText('2160 × 3840 · CHUẨN HIỂN THỊ DOOH')).toBeInTheDocument();
   });
 });

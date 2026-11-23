@@ -6679,6 +6679,9 @@ export interface components {
                     } & {
                         [key: string]: unknown;
                     };
+                    durations?: {
+                        [key: string]: number;
+                    };
                 } & {
                     [key: string]: unknown;
                 })[];
@@ -7073,6 +7076,9 @@ export interface components {
                 } & {
                     [key: string]: unknown;
                 };
+                durations?: {
+                    [key: string]: number;
+                };
             } & {
                 [key: string]: unknown;
             })[];
@@ -7464,6 +7470,9 @@ export interface components {
                     } & {
                         [key: string]: unknown;
                     };
+                    durations?: {
+                        [key: string]: number;
+                    };
                 } & {
                     [key: string]: unknown;
                 })[];
@@ -7705,6 +7714,9 @@ export interface components {
                     label?: string;
                 } & {
                     [key: string]: unknown;
+                };
+                durations?: {
+                    [key: string]: number;
                 };
             } & {
                 [key: string]: unknown;

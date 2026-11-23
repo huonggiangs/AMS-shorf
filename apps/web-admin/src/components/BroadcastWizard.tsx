@@ -9,7 +9,7 @@ import { LivePreview } from './LivePreview';
 import { QrEditor, WeatherEditor } from './ZoneExtras';
 import { usePreviewItems } from './PreviewDialogs';
 import { ZoneCanvas } from './ZoneCanvas';
-import { MAX_ZONES, PRESETS, TRANSITIONS, ZONE_LABEL, clampZone, isMediaZone, layoutError, newZone, templateSchema, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
+import { IMAGE_DEFAULT_S, RES_LABEL, type Resolution, MAX_ZONES, PRESETS, TRANSITIONS, ZONE_LABEL, clampZone, isMediaZone, layoutError, newZone, templateSchema, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
 import { RichEditor } from './RichText';
 
 const BASE = '/admin/v1/broadcast';
@@ -61,6 +61,8 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
   const [templateId, setTemplateId] = useState<string | null>(program?.layout?.template_id ?? null);
   const [ids, setIds] = useState<string[]>(program?.items.map((i) => i.creative_id) ?? []);
   const [itemZones, setItemZones] = useState<Record<string, string>>(Object.fromEntries((program?.items ?? []).flatMap((i) => (i.zone_id ? [[i.creative_id, i.zone_id] as [string, string]] : []))));
+  const [resolution, setResolutionS] = useState<Resolution>(() => { try { const v = localStorage.getItem('ams-bw-res'); return v === 'fhd' || v === '4k' ? v : 'view'; } catch { return 'view'; } });
+  const setResolution = (r: Resolution) => { setResolutionS(r); try { localStorage.setItem('ams-bw-res', r); } catch { /* ignore */ } };
   const [selected, setSelected] = useState<string | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [previewing, setPreviewing] = useState(false);
@@ -84,7 +86,8 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
   };
   const itemsIn = (z: Zone): string[] => ids.filter((id) => zoneOfItem(id) === z.id);
   const effZoneOf = useMemo(() => Object.fromEntries(ids.map((id) => [id, zoneOfItem(id)])), [ids, itemZones, zones]); // eslint-disable-line react-hooks/exhaustive-deps
-  const prev = usePreviewItems(ids, effZoneOf);
+  const allDur = useMemo(() => Object.assign({}, ...zones.map((z) => z.durations ?? {})) as Record<string, number>, [zones]);
+  const prev = usePreviewItems(ids, effZoneOf, allDur);
   const itemsOfZone = (z: Zone) => prev.items.filter((i) => i.zoneId === z.id);
   const visibleZones = zones.filter((z) => !hidden.has(z.id));
   const layoutErr = layoutError(zones);
@@ -112,7 +115,8 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
     setIds([...ids, id]);
     setItemZones((c) => ({ ...c, [id]: zone.id }));
   };
-  const removeMedia = (id: string) => { setIds(ids.filter((x) => x !== id)); setItemZones((c) => { const n = { ...c }; delete n[id]; return n; }); };
+  const setDur = (zid: string, cid: string, v: string) => setZones((cur) => cur.map((z) => { if (z.id !== zid) return z; const d = { ...(z.durations ?? {}) }; const n = Math.round(Number(v)); if (!v || !(n >= 1)) delete d[cid]; else d[cid] = Math.min(3600, n); return { ...z, durations: Object.keys(d).length ? d : null }; }));
+  const removeMedia = (id: string) => { setZones((cur) => cur.map((z) => (z.durations && id in z.durations ? { ...z, durations: Object.fromEntries(Object.entries(z.durations).filter(([k]) => k !== id)) } : z))); setIds(ids.filter((x) => x !== id)); setItemZones((c) => { const n = { ...c }; delete n[id]; return n; }); };
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const dropMedia = (to: string) => {
@@ -240,6 +244,7 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
           ))}
         </div>
       </Field>
+      <Field label="Độ phân giải màn hình" hint="Chỉ để hiển thị nhãn kích thước điểm ảnh ở khung thiết kế bước 02."><select value={resolution} onChange={(e) => setResolution(e.target.value as Resolution)}>{(Object.keys(RES_LABEL) as Resolution[]).map((r) => <option key={r} value={r}>{RES_LABEL[r]}</option>)}</select></Field>
       <h3 style={{ margin: '18px 0 8px', fontSize: 15 }}>Mẫu bố cục có sẵn</h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
         {[...PRESETS.filter((p) => p.orientation === orientation), ...(tpls.data?.items ?? []).filter((t) => t.orientation === orientation)].map((p) => (
@@ -295,6 +300,8 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
                   {it?.url ? (it.kind === 'image' ? <img src={it.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <video src={`${it.url}#t=0.5`} muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : null}
                 </div>
                 <div className="nm">{nameOf(id)}</div>
+                <input type="number" min={1} max={3600} aria-label={`Số giây hiển thị ${nameOf(id)}`} title={it?.kind === 'image' ? 'Giây hiển thị (mặc định 5)' : 'Giây phát tối đa (trống = phát hết video)'} placeholder={it?.kind === 'image' ? String(IMAGE_DEFAULT_S) : 'Hết'} value={sel.durations?.[id] ?? ''} onChange={(e) => setDur(sel.id, id, e.target.value)} style={{ width: 52, height: 28, padding: '0 4px' }} />
+                <span aria-hidden style={{ fontSize: 11, color: 'var(--mut)' }}>s</span>
                 <button type="button" aria-label={`Lên ${nameOf(id)}`} onClick={() => moveMedia(id, -1)}>↑</button>
                 <button type="button" aria-label={`Xuống ${nameOf(id)}`} onClick={() => moveMedia(id, 1)}>↓</button>
                 <button type="button" aria-label={`Bỏ ${nameOf(id)}`} style={{ color: '#DC2626' }} onClick={() => removeMedia(id)}>🗑</button>
@@ -304,7 +311,7 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
           <Field label="+ Thêm tư liệu (kho đã duyệt, chưa gắn chiến dịch)">
             <select value={pickMedia} onChange={(e) => { addMedia(sel, e.target.value); setPickMedia(''); }}>
               <option value="">{media.isLoading ? 'Đang tải…' : '— chọn tệp —'}</option>
-              {pool.filter((m) => !ids.includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}{m.width && m.height ? ` · ${m.width}×${m.height}` : ''}</option>)}
+              {pool.filter((m) => !ids.includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.delivery === 'stream' ? '[Link] ' : ''}{m.name}{m.width && m.height ? ` · ${m.width}×${m.height}` : ''}</option>)}
             </select>
           </Field>
           <Field label="Hiệu ứng chuyển cảnh"><select value={sel.transition} onChange={(e) => setZ(sel.id, { transition: e.target.value })}>{TRANSITIONS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></Field>
@@ -351,7 +358,7 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
           prev.loading ? <LoadingBlock /> : <LivePreview orientation={orientation} zones={visibleZones} items={prev.items} header={signage ? f.header : null} footer={signage ? f.footer : null} maxHeight={560} onRetry={prev.refresh} />
         ) : (
           <>
-            <ZoneCanvas orientation={orientation} zones={zones} selected={selected} onSelect={setSelected} onChange={(z) => setZones(z)} itemsOf={itemsOfZone} hidden={hidden} maxHeight={560} />
+            <ZoneCanvas orientation={orientation} resolution={resolution} zones={zones} selected={selected} onSelect={setSelected} onChange={(z) => setZones(z)} itemsOf={itemsOfZone} hidden={hidden} maxHeight={560} />
             <div style={{ color: 'var(--mut)', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{zones.length}/{MAX_ZONES} vùng · Kéo vùng để di chuyển, kéo tay nắm xanh để đổi kích thước · Phím mũi tên nhích 1% (Shift 5%, Alt đổi kích thước) · {orientation === 'portrait' ? 'Khung dọc 9:16' : 'Khung ngang 16:9'}</div>
           </>
         )}

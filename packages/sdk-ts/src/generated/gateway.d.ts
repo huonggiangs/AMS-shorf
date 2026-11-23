@@ -708,6 +708,10 @@ export interface components {
                         } & {
                             [key: string]: unknown;
                         };
+                        /** @description CHI vung video/image: giay hien thi theo creative_id; anh thieu = 5 s, video thieu = phat het */
+                        durations?: {
+                            [key: string]: number;
+                        };
                         /** @description CHI vung video/image: tep phat o vung nay, theo thu tu */
                         creative_ids?: string[];
                     } & {
@@ -873,6 +877,10 @@ export interface components {
                             label?: string;
                         } & {
                             [key: string]: unknown;
+                        };
+                        /** @description CHI vung video/image: giay hien thi theo creative_id; anh thieu = 5 s, video thieu = phat het */
+                        durations?: {
+                            [key: string]: number;
                         };
                         /** @description CHI vung video/image: tep phat o vung nay, theo thu tu */
                         creative_ids?: string[];

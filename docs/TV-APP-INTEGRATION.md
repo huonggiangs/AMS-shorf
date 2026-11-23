@@ -106,6 +106,10 @@ Thiết bị phải ở `trust_level >= 1` mới nhận được lệnh. Triển
 
 Manifest có thể chứa creative `delivery: "stream"` (`url`, `kind` mp4/webm/hls/dash, `duration_ms`, `etag`; không `sha256`, không `size_bytes`). App phải: phát trực tiếp bằng ExoPlayer/Media3 (không tải vào bộ nhớ đệm bắt buộc, không kiểm sha256), **bỏ qua và chuyển creative kế tiếp khi stream lỗi**, ghi log lỗi theo `creative_id` (chưa có loại sự kiện lỗi riêng trong giao thức; không gửi `impression` cho lượt lỗi), và gửi `impression` với `played_ms` thực (rebuffer làm `played_ms` ngắn đi; dưới 0.9 x `duration_ms` thì không hợp lệ). Không giảm bitrate/fps/độ phân giải khi phát. Chi tiết: `DEVICE-PROTOCOL.md` mục 7.0, `VIDEO-LINK.md`. Trang YouTube/Vimeo không phải stream trực tiếp: nằm ngoài phạm vi (AMS từ chối khi dán).
 
+### 3e. Thời lượng tư liệu trong vùng (`zones[].durations`)
+
+Mỗi vùng `video`/`image` của `layout` có thể có `durations: {creative_id: giây}` (1..3600). App TV: ảnh hiển thị `durations[id]` giây rồi sang tệp kế (thiếu trường hoặc thiếu khóa → dùng mặc định cũ, khuyến nghị 5 giây); video phát hết tệp, còn nếu có `durations[id]` thì cắt ở số giây đó (đặt hẹn giờ chuyển tệp). Tệp dán link (`delivery: stream`) áp dụng giống video/ảnh theo `kind`. Vùng chỉ có một ảnh thì giữ nguyên, không xoay vòng.
+
 ### 3d. Văn bản định dạng trong bố cục đa vùng (`zones[].rich`)
 
 Vùng `text`/`marquee` của `layout` có thể kèm `rich` (định dạng đậm/nghiêng/màu/cỡ/căn lề…) bên cạnh `text` thuần; đặc tả trường ở DEVICE-PROTOCOL.md. App TV **không cần WebView**: `rich` chỉ gồm `p`, `b`, `i`, `u`, `s`, `br`, `span` nên tự tách chuỗi rồi dựng `SpannableStringBuilder`:

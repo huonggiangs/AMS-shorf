@@ -852,7 +852,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:321",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:323",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -889,7 +889,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:431",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:433",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -1397,7 +1397,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:400",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:402",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1436,7 +1436,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:328",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:330",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1473,7 +1473,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:335",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:337",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -1532,7 +1532,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:362",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:364",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1580,7 +1580,7 @@
           "module": "schedule",
           "action": "delete"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:531",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:533",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1627,7 +1627,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:429",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:431",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1673,7 +1673,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:458",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:460",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -1732,7 +1732,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:414",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:416",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1780,7 +1780,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:498",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:500",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1829,7 +1829,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:517",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:519",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1878,7 +1878,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:374",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:376",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -18179,6 +18179,18 @@
                             "mode"
                           ],
                           "additionalProperties": true
+                        },
+                        "durations": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 3600
+                          },
+                          "propertyNames": {
+                            "minLength": 1,
+                            "maxLength": 64
+                          }
                         }
                       },
                       "required": [
@@ -19878,6 +19890,18 @@
                     "mode"
                   ],
                   "additionalProperties": true
+                },
+                "durations": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3600
+                  },
+                  "propertyNames": {
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
                 }
               },
               "required": [
@@ -21415,6 +21439,18 @@
                             "mode"
                           ],
                           "additionalProperties": true
+                        },
+                        "durations": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 3600
+                          },
+                          "propertyNames": {
+                            "minLength": 1,
+                            "maxLength": 64
+                          }
                         }
                       },
                       "required": [
@@ -22440,6 +22476,18 @@
                     "mode"
                   ],
                   "additionalProperties": true
+                },
+                "durations": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3600
+                  },
+                  "propertyNames": {
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
                 }
               },
               "required": [
