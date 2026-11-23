@@ -196,6 +196,9 @@ importers:
       '@ams/edge-gateway':
         specifier: workspace:*
         version: link:../edge-gateway
+      '@ams/ingest-consumer':
+        specifier: workspace:*
+        version: link:../ingest-consumer
       '@ams/payments':
         specifier: workspace:*
         version: link:../payments

@@ -10,6 +10,7 @@ import { eq, getRt, num, parseBody, placeholders, runList } from '../lib/http.js
 import type { Ctx, ListSpec } from '../lib/http.js';
 import { hasPerm, requirePerm } from '../auth/middleware.js';
 import { deviceCommandRoutes, deliveryInfo } from './device-commands.js';
+import { deviceViewCounts } from './views-report.js';
 import type { AppEnv } from '../types.js';
 
 // Signage Player: device_profiles (1-1 theo khoa chinh) + man hinh/dia diem da gan (subquery co ORDER BY ... LIMIT 1 de khong nhan doi dong khi du lieu cu co 2 man cung device_id)
@@ -113,6 +114,7 @@ async function present(c: Ctx, rows: DevRow[]): Promise<Record<string, unknown>[
       recent.set(x.device_id, a);
     }
   }
+  const viewsBy = await deviceViewCounts(rt, rows.map((r) => r.id)).catch(() => new Map<string, number>());
   return rows.map((d) => ({
     id: d.id,
     name: d.name ?? d.id,
@@ -142,7 +144,7 @@ async function present(c: Ctx, rows: DevRow[]): Promise<Record<string, unknown>[
     last_seen_at: d.last_seen_at,
     paired_at: d.paired_at,
     deleted_at: d.deleted_at ?? null,
-    views: num(d.views_30d),
+    views: viewsBy.get(d.id) ?? 0,
     recent_ads: recent.get(d.id) ?? [],
   }));
 }
@@ -423,6 +425,8 @@ export function deviceRoutes(): Hono<AppEnv> {
     );
     const since = new Date(rt.clock.now().getTime() - 6 * 86400_000).toISOString().slice(0, 10);
     const days = await rt.db.query<{ d: string; n: number }>('SELECT substr(ts, 1, 10) AS d, COUNT(*) AS n FROM ev_ad_impression WHERE device_id = ? AND valid = 1 AND ts >= ? GROUP BY substr(ts, 1, 10)', [id, since]);
+    const popDays = await rt.db.query<{ d: string; n: number }>('SELECT substr(ts, 1, 10) AS d, COUNT(*) AS n FROM ev_proof_of_play WHERE device_id = ? AND ts >= ? GROUP BY substr(ts, 1, 10)', [id, since]).catch(() => []);
+    for (const x of popDays) { const e = days.find((y) => y.d === x.d); if (e) e.n = num(e.n) + num(x.n); else days.push(x); }
     const dm = new Map(days.map((x) => [x.d, num(x.n)]));
     const views7 = Array.from({ length: 7 }, (_, i) => dm.get(new Date(rt.clock.now().getTime() - (6 - i) * 86400_000).toISOString().slice(0, 10)) ?? 0);
     return c.json({ ...base, delivery: deliveryInfo(rt.config.env), seen_ads: seen.map((s) => ({ name: s.name, brand: s.brand, views: num(s.views) })), views_7d: views7 });

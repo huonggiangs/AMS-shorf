@@ -140,5 +140,10 @@ export const MIGRATIONS: MigrationFile[] = [
     "name": "0027_device_caps",
     "dialect": "all",
     "sql": "-- 0027: tinh nang app tren thiet bi bao cao (heartbeat/register `caps`), luu JSON mang chuoi, vd [\"set_volume\",\"reboot\"].\n-- NULL = app chua bao cao (khong biet); web hien \"chua ro\" thay vi doan.\nALTER TABLE device_profiles ADD COLUMN caps TEXT;\n"
+  },
+  {
+    "name": "0028_report_views",
+    "dialect": "all",
+    "sql": "-- 0028: bao cao luot xem (proof-of-play) + chan doan dong bo.\n--  * ev_proof_of_play them device_id, campaign_id: gateway ghi san de bao cao khong phai doan thiet bi/chien dich tu screen_id/creative\n--    (dong cu de NULL, bao cao tu suy ra qua screens/creatives).\n--  * device_event_stats: dem su kien theo thiet bi/gio (UTC, dang YYYY-MM-DDTHH)/ly do ('accepted', 'valid', 'flagged', 'rej:<ly do>', 'alias:<ten>'), de web hien \"Chan doan dong bo\".\n--    Ghi boi gateway (khong lam hong request neu loi). Giu 14 ngay (don trong cron).\nALTER TABLE ev_proof_of_play ADD COLUMN device_id TEXT;\nALTER TABLE ev_proof_of_play ADD COLUMN campaign_id TEXT;\nCREATE INDEX IF NOT EXISTS idx_ev_pop_campaign ON ev_proof_of_play(campaign_id, ts);\nCREATE INDEX IF NOT EXISTS idx_ev_pop_device ON ev_proof_of_play(device_id, ts);\n\nCREATE TABLE IF NOT EXISTS device_event_stats (\n  device_id TEXT NOT NULL,\n  hour TEXT NOT NULL,\n  reason TEXT NOT NULL,\n  n INTEGER NOT NULL DEFAULT 0,\n  last_at TEXT NOT NULL,\n  PRIMARY KEY (device_id, hour, reason)\n);\nCREATE INDEX IF NOT EXISTS idx_device_event_stats_hour ON device_event_stats(hour);\n"
   }
 ];

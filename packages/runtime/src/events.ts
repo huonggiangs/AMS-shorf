@@ -11,7 +11,7 @@ const TABLES: Record<EventTable, { table: string; cols: string[] }> = {
   },
   proof_of_play: {
     table: 'ev_proof_of_play',
-    cols: ['ts', 'screen_id', 'creative_id', 'duration_ms', 'source'],
+    cols: ['ts', 'screen_id', 'creative_id', 'duration_ms', 'source', 'device_id', 'campaign_id'],
   },
 };
 

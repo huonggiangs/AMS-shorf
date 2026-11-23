@@ -13,6 +13,7 @@ const Status = lazy(() => import('./pages/Status'));
 
 const pages = {
   overview: lazy(() => import('./pages/Overview')),
+  views: lazy(() => import('./pages/Views')),
   devices: lazy(() => import('./pages/Devices')),
   deviceGroups: lazy(() => import('./pages/DeviceGroups')),
   locations: lazy(() => import('./pages/Locations')),

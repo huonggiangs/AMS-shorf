@@ -5,6 +5,8 @@ import { PLACEHOLDER_PRICE_MICRO_VND, explicitEnvPrice, placeholderAllowed, rand
 import { KvNonceStore, authenticateDevice, readEnvelope, verifyEnvelope, type AuthDeps, type NonceStore } from './auth.js';
 import { DeviceDirectory, type DeviceRec } from './devices.js';
 import { DEFAULT_POLICY, INGEST_TOPIC, processEvents, type EventPolicy } from './events.js';
+import { extractEvents } from './events-compat.js';
+import { recordEventStats, sweepEventStats } from './event-stats.js';
 import { CtlCache, DEFAULT_INTERVALS, RpsLoad, computeInterval, retryAfter, type IntervalCfg, type LoadFn } from './load.js';
 import { ManifestService, groupOfDevice, groupString, parseGroup } from './manifest.js';
 import { issuePairingCode } from './pairing.js';
@@ -594,13 +596,21 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     const body = await readBody(c, MAX_BODY_BYTES);
     const dev = await authenticateDevice(c, deps, body);
     await rateLimit(`ev:${dev.id}`, evLimit, 60, 'lo su kien theo thiet bi');
-    const parsed = parseJson<{ events?: unknown }>(body) as { events?: unknown };
-    if (!Array.isArray(parsed?.events) || parsed.events.length < 1) throw new HttpProblem('validation_failed', 'Can mang events (1..50 su kien).');
-    if (parsed.events.length > 50) throw new HttpProblem('validation_failed', 'Toi da 50 su kien moi lo.', { max: 50, got: parsed.events.length });
+    const parsed = parseJson<unknown>(body);
+    const { events: evs, alias: bodyAlias } = extractEvents(parsed);
+    if (!evs || evs.length < 1) throw new HttpProblem('validation_failed', 'Can mang events (1..50 su kien).');
+    if (evs.length > 50) throw new HttpProblem('validation_failed', 'Toi da 50 su kien moi lo.', { max: 50, got: evs.length });
     const view = await manifests.get(await manifests.groupFor(dev));
-    const campIds = parsed.events.flatMap((e) => (typeof (e as { campaign_id?: unknown })?.campaign_id === 'string' ? [(e as { campaign_id: string }).campaign_id] : []));
+    const campIds = evs.flatMap((e) => {
+      const o = e as { campaign_id?: unknown; campaignId?: unknown } | null;
+      const v = o?.campaign_id ?? o?.campaignId;
+      return typeof v === 'string' ? [v] : [];
+    });
     const rewardModels = await rewardCfg.get(campIds);
-    const { result, msg } = await processEvents(rt, dev, parsed.events, view, policy, rewardModels);
+    const { result, msg, extras } = await processEvents(rt, dev, evs, view, policy, rewardModels);
+    if (bodyAlias) extras.aliases[bodyAlias] = 1;
+    // thong ke theo thiet bi cho "Chan doan dong bo" (loi thong ke KHONG duoc lam hong viec nhan su kien)
+    await recordEventStats(rt, dev.id, result, extras).catch(() => undefined);
     if (msg) {
       await postViewRewards({ rt, policy: viewerPolicy }, dev, msg.impressions); // so cai truoc, hang doi sau: gui lai se khu trung theo event_id
       await rt.queue.send(INGEST_TOPIC, msg);
@@ -629,6 +639,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     flush,
     sweep: async () => {
       const r = await sweepCommands(rt);
+      await sweepEventStats(rt).catch(() => undefined);
       return { ...r, logs_deleted: await sweepDeviceLogs(rt) };
     },
     manifests,

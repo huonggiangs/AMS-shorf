@@ -87,14 +87,14 @@ describe('auth flow', () => {
 });
 
 describe('external (customer) account', () => {
-  it('hides every menu except ads, media and wallet regardless of granted modules', async () => {
+  it('hides every menu except views report, ads, media and wallet regardless of granted modules', async () => {
     handlers.push((u) => (u.pathname === '/api/auth/me' ? json(ext) : undefined));
     vi.stubGlobal('fetch', mockFetch());
     mount('/');
     const menu = await screen.findByRole('complementary', { name: 'menu' });
     await waitFor(() => expect(menu).toHaveTextContent('Quảng cáo'));
     expect(menu).toHaveTextContent('Doanh thu');
-    expect(menu).not.toHaveTextContent('Tổng quan');
+    expect(menu).toHaveTextContent('Tổng quan'); // nhóm chứa Báo cáo lượt xem
     expect(menu).not.toHaveTextContent('Quản trị');
     expect(menu).not.toHaveTextContent('Đối tác');
     // customer home resolves to the portal campaigns endpoint

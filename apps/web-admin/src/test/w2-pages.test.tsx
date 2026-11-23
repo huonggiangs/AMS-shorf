@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from '../App';
@@ -39,6 +39,7 @@ describe('trang truoc day NotConnected nay goi API that', () => {
     handlers.push(meFor(fin), (u) => (u.pathname === '/api/admin/v1/history' ? { items: [{ event_id: 'e1', ts: '2026-11-10T01:30:00.000Z', campaign: { id: 'c1', name: 'Tet Vinamilk' }, creative: { id: 'm1', name: 'Clip 15s' }, device: { id: 'd1', name: 'TV-001' }, vcr_pct: 100, valid: true, revenue_vnd: 2 }], total: 1, page: 1, page_size: 20 } : undefined));
     vi.stubGlobal('fetch', mockFetch());
     mount('/history');
+    fireEvent.click(await screen.findByRole('button', { name: 'Lượt xem (TV)' }));
     expect(await screen.findByText('Tet Vinamilk')).toBeInTheDocument();
     expect(screen.getByText('TV-001')).toBeInTheDocument();
     expect(screen.queryByText(/chưa có điểm cuối API/)).toBeNull();
@@ -49,7 +50,7 @@ describe('trang truoc day NotConnected nay goi API that', () => {
     vi.stubGlobal('fetch', mockFetch());
     mount('/finance');
     await screen.findByRole('heading', { name: 'Lịch sử xem quảng cáo' });
-    expect(calls).toContain('/api/portal/v1/history');
+    expect(calls).toContain('/api/portal/v1/reports/views');
     expect(calls).not.toContain('/api/admin/v1/history');
   });
 

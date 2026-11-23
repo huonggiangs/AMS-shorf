@@ -3,6 +3,7 @@ import type { Module } from './api/schemas';
 export interface PageDef { id: string; path: string; label: string; module: Module | null }
 export const PAGE_DEFS: PageDef[] = [
   { id: 'overview', path: '/overview', label: 'Tổng quan', module: 'overview' },
+  { id: 'views', path: '/views', label: 'Báo cáo lượt xem', module: 'campaigns' },
   { id: 'devices', path: '/devices', label: 'Danh sách thiết bị', module: 'devices' },
   { id: 'deviceGroups', path: '/device-groups', label: 'Nhóm thiết bị', module: 'devices' },
   { id: 'locations', path: '/locations', label: 'Địa điểm', module: 'devices' },
@@ -40,7 +41,7 @@ export const PAGE_BY_ID = Object.fromEntries(PAGE_DEFS.map((p) => [p.id, p])) as
 
 export interface GroupDef { id: string; label: string; icon: string; pages: string[] }
 export const GROUPS: GroupDef[] = [
-  { id: 'g1', label: 'Tổng quan', icon: 'home', pages: ['overview', 'tvexp'] },
+  { id: 'g1', label: 'Tổng quan', icon: 'home', pages: ['overview', 'views', 'tvexp'] },
   { id: 'g2', label: 'Quảng cáo', icon: 'ads', pages: ['ads', 'customers', 'contractDoc', 'approvals', 'creativeReview', 'screens', 'formats', 'schedule', 'kyc'] },
   { id: 'g6', label: 'Phát sóng nội bộ', icon: 'ads', pages: ['workbench', 'media', 'broadcast', 'templates', 'notice', 'smart', 'queue'] },
   { id: 'g7', label: 'Thiết bị', icon: 'tv', pages: ['devices', 'deviceGroups', 'locations'] },
@@ -48,14 +49,15 @@ export const GROUPS: GroupDef[] = [
   { id: 'g4', label: 'Đối tác', icon: 'link', pages: ['partners', 'integrations'] },
   { id: 'g5', label: 'Quản trị', icon: 'users', pages: ['access', 'audit', 'alerts', 'legal', 'compliance', 'profile'] },
 ];
-/** Pages an external (customer/partner) account may ever see: ads, media, wallet. */
-export const EXTERNAL_PAGES = ['ads', 'media', 'finance'];
+/** Pages an external (customer/partner) account may ever see: views report (landing), ads, media, wallet. */
+export const EXTERNAL_PAGES = ['views', 'ads', 'media', 'finance'];
 
 export const groupOf = (pageId: string): GroupDef => GROUPS.find((g) => g.pages.includes(pageId)) ?? GROUPS[0]!;
 
 export function visiblePages(can: (m: Module) => boolean, external: boolean): string[] {
   return PAGE_DEFS.filter((p) => {
     if (external) return EXTERNAL_PAGES.includes(p.id) && (p.module ? can(p.module) : false);
+    if (p.id === 'views') return false; // noi bo xem bao cao o Lich su xem (tab Bao cao luot xem)
     return p.module === null || can(p.module);
   }).map((p) => p.id);
 }

@@ -8,6 +8,7 @@ import type { Ctx, FilterDef, ListSpec, SqlFrag } from '../lib/http.js';
 import { isDate } from '../lib/dates.js';
 import { campaignScope, mediaScope } from '../lib/scope.js';
 import { hasPerm, requireAnyPerm, requirePerm } from '../auth/middleware.js';
+import { syncDiagnostics } from './sync-diagnostics.js';
 import type { AppEnv } from '../types.js';
 
 
@@ -96,7 +97,7 @@ function presentImp(r: ImpRow, internal: boolean, finance: boolean) {
 
 // Hieu luc proof_of_play (DEVICE-PROTOCOL 8.2): gateway danh dau `source='pending_trust'` khi thiet bi CHUA duoc cap quyen luc gui. Bao cao tinh lai theo
 // quyen HIEN TAI: neu thiet bi (screen_id cua dong = device_id, hoac man hinh da gan thiet bi) nay co trust_level >= 1 va khong bi chan thi dong do HOP LE.
-const POP_PENDING = `(COALESCE(p.source, '') = 'pending_trust' AND NOT EXISTS (SELECT 1 FROM devices dv WHERE dv.trust_level >= 1 AND dv.blocked = 0 AND (dv.id = p.screen_id OR dv.id IN (SELECT sc.device_id FROM screens sc WHERE sc.id = p.screen_id))))`;
+export const POP_PENDING = `(COALESCE(p.source, '') = 'pending_trust' AND NOT EXISTS (SELECT 1 FROM devices dv WHERE dv.trust_level >= 1 AND dv.blocked = 0 AND (dv.id = p.screen_id OR dv.id IN (SELECT sc.device_id FROM screens sc WHERE sc.id = p.screen_id))))`;
 const POP_FROM = `FROM ev_proof_of_play p JOIN creatives cr ON cr.id = p.creative_id LEFT JOIN campaigns c ON c.id = cr.campaign_id`;
 interface PopRow {
   ts: string;
@@ -155,6 +156,8 @@ function build(external: boolean): Hono<AppEnv> {
       })),
     });
   });
+
+  if (!external) r.get('/diagnostics', async (c) => c.json(await syncDiagnostics(c))); // Chan doan dong bo (truoc /:eventId)
 
   r.get('/:eventId', async (c) => {
     const u = c.get('user');

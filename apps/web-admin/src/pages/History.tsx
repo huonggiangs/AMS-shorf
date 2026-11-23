@@ -5,6 +5,8 @@ import { ServerTable } from '../components/ServerTable';
 import type { Col } from '../components/DataTable';
 import { Field, PageHead, Tabs, Tag } from '../components/ui';
 import { fmtDateTime, vnd } from '../lib/format';
+import { SyncDiagnostics } from '../components/SyncDiagnostics';
+import { ViewsReport } from '../components/ViewsReport';
 
 const ref = z.object({ id: z.string(), name: z.string().nullable().optional() }).passthrough();
 const impSchema = z
@@ -40,7 +42,7 @@ type Pop = z.infer<typeof popSchema>;
 export default function History() {
   const { isExternal, can } = useAuth();
   const base = isExternal ? '/portal/v1/history' : '/admin/v1/history';
-  const [tab, setTab] = useState<'imp' | 'pop'>('imp');
+  const [tab, setTab] = useState<'rep' | 'imp' | 'pop'>('rep');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const extra = useMemo(() => ({ from: from || undefined, to: to || undefined }), [from, to]);
@@ -66,12 +68,13 @@ export default function History() {
   return (
     <>
       <PageHead title="Lịch sử xem quảng cáo" sub="Đối soát lượt phát theo thiết bị, chiến dịch và trạng thái." />
-      <Tabs value={tab} onChange={setTab} items={[{ id: 'imp', label: 'Lượt xem' }, { id: 'pop', label: 'Proof-of-play' }]} />
-      <div className="card cp" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <Tabs value={tab} onChange={setTab} items={[{ id: 'rep', label: 'Báo cáo lượt xem' }, { id: 'imp', label: 'Lượt xem (TV)' }, { id: 'pop', label: 'Proof-of-play' }]} />
+      {!isExternal ? <SyncDiagnostics /> : null}
+      {tab === 'rep' ? <ViewsReport external={isExternal} /> : <div className="card cp" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <Field label="Từ ngày"><input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} /></Field>
         <Field label="Đến ngày"><input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} /></Field>
-      </div>
-      {tab === 'imp' ? (
+      </div>}
+      {tab === 'rep' ? null : tab === 'imp' ? (
         <ServerTable
           id="history-imp"
           endpoint={base}

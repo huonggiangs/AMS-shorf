@@ -180,7 +180,7 @@ export function createIngestConsumer(rt: Runtime, opts: IngestOptions = {}): Ing
     try {
       const fresh = pops.filter((p) => won.has(p.row.event_id));
       if (fresh.length === 0) return;
-      await sink.append('proof_of_play', fresh.map(({ row: p, source }) => ({ event_id: p.event_id, ts: p.ts, screen_id: p.screen_id, creative_id: p.creative_id, duration_ms: p.duration_ms, source: p.source ?? source })));
+      await sink.append('proof_of_play', fresh.map(({ row: p, source }) => ({ event_id: p.event_id, ts: p.ts, screen_id: p.screen_id, creative_id: p.creative_id, duration_ms: p.duration_ms, source: p.source ?? source, device_id: p.device_id ?? null, campaign_id: p.campaign_id ?? null })));
       stats.pops += fresh.length;
     } catch (e) {
       await release('ingest:pop:', won);

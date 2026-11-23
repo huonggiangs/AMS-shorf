@@ -88,9 +88,9 @@ describe('menu filtering by permission', () => {
     expect(p).not.toContain('finance');
     expect(p).not.toContain('access');
   });
-  it('external accounts only get ads, media and wallet even if granted more', () => {
+  it('external accounts only get views report, ads, media and wallet even if granted more', () => {
     const p = visiblePages(mk([...MODULES]), true);
-    expect(p.sort()).toEqual(['ads', 'finance', 'media']);
+    expect(p.sort()).toEqual(['ads', 'finance', 'media', 'views']);
   });
 });
 

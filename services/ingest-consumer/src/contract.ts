@@ -22,6 +22,9 @@ export interface PopRow {
   creative_id: string;
   duration_ms: number;
   source: string;
+  /** gateway moi ghi san; tin nhan cu (dang trong hang doi luc nang cap) khong co => NULL, bao cao tu suy ra */
+  device_id?: string | null;
+  campaign_id?: string | null;
 }
 /** Thong diep gateway -> queue `ingest.events` -> ingest-consumer */
 export interface IngestMessage {
