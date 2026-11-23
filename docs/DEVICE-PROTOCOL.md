@@ -318,6 +318,27 @@ Thang máy/LED: delta cũng mang `header`, `footer`, `hotline`, `rotation` (giá
 
 Có trong manifest dưới dạng `"rotation":{"mode":"sequential"}`. App phát **tuần tự theo `priority` tăng dần** (số nhỏ = phát trước), rồi lặp lại từ đầu, **vô hạn**; cùng `priority` thì theo `slot_id` tăng dần (thứ tự ổn định, cùng kết quả trên mọi màn). Chỉ tính các slot có giờ địa phương trong `[start_min, end_min)`; trong một slot có nhiều `creative_ids` thì phát lần lượt theo thứ tự mảng. Không có tần suất/trọng số. Gặp `mode` lạ thì dùng `sequential`.
 
+### 7.6 TV stream-only: URL stream ngắn hạn theo thiết bị (23/11/2026)
+
+**Quy tắc cho app TV (Mindo): KHÔNG tải tệp về bộ nhớ/đĩa của TV, chỉ phát trực tiếp từ URL** (ExoPlayer/Media3 hoặc WebView). Không lưu tệp video/ảnh, không `SimpleCache`, không chuyển mã trên TV. Nguồn không giải mã được (không phải H.264, thiếu codec) thì TV bỏ qua creative và báo lên AMS qua `POST /v1/logs` (tag `play_error`, `msg` có `creative_id`), không tải về.
+
+Hai cách TV lấy URL phát:
+1. `creatives[].url` trong manifest (công khai, ổn định, hỗ trợ `Range`; mục 7.1). Chạy được mọi lúc, kể cả khi gateway chưa cấu hình bí mật ký.
+2. **URL có chữ ký ngắn hạn** (khuyến nghị, tránh lộ tệp cho người ngoài):
+
+```
+POST /v1/media/tokens           (thiết bị ký như mọi yêu cầu)   {"creative_ids":["<id>", ... <=24]}
+ -> 200 {"ttl_s":21600,"expires_at":"<ISO>","streams":{"<id>":{"path":"/v1/media/<id>/stream?d=<device_id>&exp=<epoch s>&k=<khóa tệp>&t=<hmac>","exp":<epoch s>}},"skipped":["<id>"]}
+GET  <gateway><path>             (KHÔNG ký: WebView/ExoPlayer không ký được từng Range; quyền nằm trong URL)
+```
+
+- Chỉ cấp cho creative **tải lên** có trong manifest của **chính thiết bị đó** và nằm dưới kho media của AMS; creative `delivery: "stream"` (link ngoài) và URL ngoài kho nằm trong `skipped` (TV phát thẳng `url` của manifest).
+- Token = HMAC-SHA256 trên `media-stream|device|creative|key|exp` bằng `MEDIA_TOKEN_SECRET` (nếu thiếu thì `GATEWAY_SECRET`, `FIELD_ENC_KEY`, `FIELD_INDEX_KEY`); hạn `MEDIA_STREAM_TTL_S` (mặc định 21600 = 6 giờ, 300..86400). Chưa có bí mật nào: `POST /v1/media/tokens` trả `503 not_configured`, TV dùng cách 1. Cần cả **R2 binding** (đọc tệp qua Worker), KHÔNG cần khóa S3.
+- `GET .../stream`: `Accept-Ranges: bytes`; `Range: bytes=a-b|a-|-n` trả `206` + `Content-Range` (tối đa 8 MiB mỗi phản hồi); không Range thì tệp nhỏ `200`, tệp lớn `206` mảnh đầu (không nạp cả tệp vào bộ nhớ Worker); `416` khi Range ngoài tệp; `Content-Type` đúng (từ R2, dự phòng theo đuôi tệp); `Cache-Control: private, no-store` (đúng tinh thần không để TV giữ tệp). `403` token sai/hết hạn/sửa tham số; `404` khi creative hết duyệt hoặc tệp mất (thu hồi hiệu lực ngay dù token còn hạn).
+- Giới hạn: `MEDIA_STREAM_LIMIT_PER_MIN` (1200/phút/thiết bị), `MEDIA_TOKEN_LIMIT_PER_HOUR` (240/giờ/thiết bị) trả `429` + `Retry-After`. Mỗi lần cấp token ghi `audit_log` (`device.media_token`: số lượng, không ghi token).
+- TV làm mới token khi còn dưới 1/3 hạn; mất mạng/token lỗi 403 thì xin lại, vẫn lỗi thì rơi về `url` của manifest.
+- Mã: `services/edge-gateway/src/gateway.ts`, test `test/media-stream.test.ts`.
+
 ### 7.3 Đường công khai cho CDN: `GET /v1/manifest/g/{group}`
 
 Không ký, nội dung giống bản có ký, `Cache-Control: public, max-age=60, s-maxage=900, stale-while-revalidate=60`, `ETag`, `304` khi `?etag=` hoặc `If-None-Match` trùng. `{group}` là `manifest_group` từ heartbeat (`HN.all.tv`; dấu chấm giữ nguyên). Chỉ phục vụ nhóm đã từng được thiết bị thật hỏi (nhóm lạ: `404 not_found`). Tắt bằng `MANIFEST_PUBLIC=0`. Nội dung không bí mật (URL media công khai + sha256). Dùng đường này khi có nhiều thiết bị cùng nhóm sau CDN; đường có ký dành cho thiết bị cần xác thực hoặc nhóm riêng.

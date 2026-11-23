@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { ZodError } from 'zod';
 import { bumpOpsCounter, kvIncrMany, type Runtime } from '@ams/runtime';
-import { PLACEHOLDER_PRICE_MICRO_VND, explicitEnvPrice, placeholderAllowed, randomBytes, shardOf, toBase64Url, safeErr } from '@ams/shared';
+import { PLACEHOLDER_PRICE_MICRO_VND, explicitEnvPrice, placeholderAllowed, randomBytes, shardOf, toBase64Url, safeErr, hmacSha256Hex, timingSafeEqualStr } from '@ams/shared';
 import { KvNonceStore, authenticateDevice, readEnvelope, verifyEnvelope, type AuthDeps, type NonceStore } from './auth.js';
 import { DeviceDirectory, type DeviceRec } from './devices.js';
 import { DEFAULT_POLICY, INGEST_TOPIC, processEvents, type EventPolicy } from './events.js';
@@ -564,6 +564,95 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     const bytes = await rt.objects.get(key);
     if (!bytes) throw new HttpProblem('not_found', 'Khong co.');
     return new Response(bytes as Uint8Array<ArrayBuffer>, { status: 200, headers: { ...base, 'content-length': String(bytes.length) } });
+  });
+
+
+  // ------------------------------------------------------------------ stream cho TV (stream-only)
+  // TV KHONG tai tep ve: phat truc tiep tu URL. Thiet bi ky yeu cau POST /v1/media/tokens de nhan URL co chu ky HMAC ngan han (gan thiet bi + tep),
+  // phat bang GET /v1/media/:id/stream?... (Range/206, khong luu cache, gioi han theo thiet bi). Khong can dang nhap nguoi dung, khong can khoa S3.
+  const streamSecret = env['MEDIA_TOKEN_SECRET'] ?? env['GATEWAY_SECRET'] ?? env['FIELD_ENC_KEY'] ?? env['FIELD_INDEX_KEY'];
+  const streamTtlS = Math.min(86_400, Math.max(300, envInt(env, 'MEDIA_STREAM_TTL_S', 6 * 3600)));
+  const streamLimit = envInt(env, 'MEDIA_STREAM_LIMIT_PER_MIN', 1200);
+  const tokenLimit = envInt(env, 'MEDIA_TOKEN_LIMIT_PER_HOUR', 240);
+  const streamMac = (dev: string, cid: string, key: string, exp: number): Promise<string> => hmacSha256Hex(streamSecret!, `media-stream|${dev}|${cid}|${key}|${exp}`);
+  const mediaPrefix = `${mediaBase.replace(/\/+$/, '')}/`;
+  const MIME_BY_EXT: Record<string, string> = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
+
+  app.post('/v1/media/tokens', async (c) => {
+    const body = await readBody(c, 2048);
+    const dev = await authenticateDevice(c, deps, body);
+    await rateLimit(`mt:${dev.id}`, tokenLimit, 3600, 'cap token stream theo thiet bi');
+    if (!streamSecret) throw new HttpProblem('not_configured', 'May chu chua cau hinh bi mat ky URL stream (MEDIA_TOKEN_SECRET).');
+    const input = parseJson(body) as { creative_ids?: unknown } | null;
+    const ids = Array.isArray(input?.creative_ids) ? (input!.creative_ids as unknown[]).filter((x): x is string => typeof x === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(x)) : [];
+    if (ids.length < 1 || ids.length > 24) throw new HttpProblem('validation_failed', 'Can creative_ids (1..24 id hop le).');
+    const view = await manifests.get(await manifests.groupFor(dev));
+    const mf = JSON.parse(view.json) as { creatives?: { id: string; url?: string; delivery?: string }[] };
+    const byId = new Map((mf.creatives ?? []).map((x) => [x.id, x]));
+    const exp = Math.floor(rt.clock.now().getTime() / 1000) + streamTtlS;
+    const streams: Record<string, { path: string; exp: number }> = {};
+    const skipped: string[] = [];
+    for (const id of new Set(ids)) {
+      const cr = byId.get(id);
+      // chi creative TAI LEN co trong manifest cua CHINH thiet bi nay va URL nam duoi kho media cua AMS (link ngoai thi TV phat thang URL ngoai)
+      if (!cr || cr.delivery === 'stream' || !cr.url || !cr.url.startsWith(mediaPrefix)) { skipped.push(id); continue; }
+      let key: string;
+      try { key = decodeURIComponent(cr.url.slice(mediaPrefix.length).split(/[?#]/)[0]!); } catch { skipped.push(id); continue; }
+      if (!key || key.includes('..') || key.startsWith('/')) { skipped.push(id); continue; }
+      const t = await streamMac(dev.id, id, key, exp);
+      streams[id] = { path: `/v1/media/${encodeURIComponent(id)}/stream?d=${encodeURIComponent(dev.id)}&exp=${exp}&k=${encodeURIComponent(key)}&t=${t}`, exp };
+    }
+    try {
+      await rt.db.run('INSERT INTO audit_log (id, ts, actor_id, action, object_type, object_id, customer_id, ip, diff) VALUES (?,?,?,?,?,?,?,?,?)', [rt.id(), rt.clock.now().toISOString(), null, 'device.media_token', 'device', dev.id, null, clientIp(c), JSON.stringify({ n: Object.keys(streams).length, skipped: skipped.length, ttl_s: streamTtlS })]);
+    } catch { /* nhat ky khong duoc lam hong viec cap token */ }
+    return c.json({ ttl_s: streamTtlS, expires_at: new Date(exp * 1000).toISOString(), streams, skipped });
+  });
+
+  app.get('/v1/media/:id/stream', async (c) => {
+    if (!streamSecret) throw new HttpProblem('not_configured', 'May chu chua cau hinh bi mat ky URL stream.');
+    const id = c.req.param('id');
+    const q = c.req.query();
+    const exp = Number(q['exp']);
+    const key = q['k'] ?? '';
+    const d = q['d'] ?? '';
+    const t = q['t'] ?? '';
+    const bad = (why: string): never => { throw new HttpProblem('forbidden', 'URL stream khong hop le hoac het han.', { why }); };
+    if (!id || !d || !key || !t || !Number.isInteger(exp)) bad('malformed');
+    if (key.includes('..') || key.startsWith('/')) bad('key');
+    if (exp < Math.floor(rt.clock.now().getTime() / 1000)) bad('expired');
+    if (!timingSafeEqualStr(await streamMac(d, id, key, exp), t)) bad('signature');
+    await rateLimit(`ms:${d}`, streamLimit, 60, 'stream media theo thiet bi');
+    // thu hoi ngay khi creative het duyet / thiet bi bi xoa: khong cho phat tiep du token con han
+    const live = (await rt.db.query<{ n: number }>("SELECT 1 AS n FROM creatives WHERE id = ? AND review_state = 'approved' AND state = 'ready'", [id]))[0];
+    if (!live) throw new HttpProblem('not_found', 'Khong co.');
+    const head = await rt.objects.head(key);
+    if (!head) throw new HttpProblem('not_found', 'Khong co.');
+    const ext = (key.split('.').pop() ?? '').toLowerCase();
+    const ctype = head.contentType && head.contentType !== 'application/octet-stream' ? head.contentType : (MIME_BY_EXT[ext] ?? 'application/octet-stream');
+    const base: Record<string, string> = { 'content-type': ctype, 'accept-ranges': 'bytes', 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' };
+    const rangeHdr = (c.req.header('range') ?? '').trim();
+    const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHdr);
+    if (rangeHdr && !(m && (m[1] !== '' || m[2] !== ''))) return new Response(null, { status: 416, headers: { ...base, 'content-range': `bytes */${head.size}` } });
+    let start = 0;
+    let end = head.size - 1;
+    if (m) {
+      if (m[1] === '') { start = Math.max(0, head.size - Number(m[2])); }
+      else { start = Number(m[1]); end = m[2] === '' ? head.size - 1 : Math.min(Number(m[2]), head.size - 1); }
+      if (!Number.isFinite(start) || start >= head.size || end < start) return new Response(null, { status: 416, headers: { ...base, 'content-range': `bytes */${head.size}` } });
+    }
+    if (c.req.method === 'HEAD') return new Response(null, { status: 200, headers: { ...base, 'content-length': String(head.size) } });
+    // khong Range: tep nho tra 200; tep lon tra manh dau 206 (khong nap ca tep vao bo nho Worker)
+    const wantAll = !m && head.size <= MEDIA_MAX_CHUNK;
+    if (wantAll || !rt.objects.getRange) {
+      const bytes = await rt.objects.get(key);
+      if (!bytes) throw new HttpProblem('not_found', 'Khong co.');
+      if (!m) return new Response(bytes as Uint8Array<ArrayBuffer>, { status: 200, headers: { ...base, 'content-length': String(bytes.length) } });
+      const part = bytes.subarray(start, end + 1);
+      return new Response(part as Uint8Array<ArrayBuffer>, { status: 206, headers: { ...base, 'content-length': String(part.length), 'content-range': `bytes ${start}-${start + part.length - 1}/${head.size}` } });
+    }
+    const chunk = await rt.objects.getRange(key, start, Math.min(end - start + 1, MEDIA_MAX_CHUNK));
+    if (!chunk) throw new HttpProblem('not_found', 'Khong co.');
+    return new Response(chunk as Uint8Array<ArrayBuffer>, { status: 206, headers: { ...base, 'content-length': String(chunk.length), 'content-range': `bytes ${start}-${start + chunk.length - 1}/${head.size}` } });
   });
 
   app.get('/v1/manifest', async (c) => {

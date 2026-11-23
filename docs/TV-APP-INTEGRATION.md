@@ -102,6 +102,10 @@ Nghiệm thu: (a) web hiện "Đang áp dụng: 40%" sau ack; (b) `adb ... --get
 
 Thiết bị phải ở `trust_level >= 1` mới nhận được lệnh. Triển khai bản máy chủ mới: migration `0027_device_caps` (cột `device_profiles.caps`) chạy trước, rồi gateway, rồi api, rồi web-admin.
 
+### 3f. TV stream-only (23/11/2026)
+
+App TV Mindo phát quảng cáo **trực tiếp bằng URL, không tải về** (không lưu video/ảnh trên TV). AMS cấp URL phát qua manifest (`creatives[].url`, hỗ trợ `Range`) và URL ký ngắn hạn theo thiết bị `POST /v1/media/tokens` -> `GET /v1/media/:id/stream` (DEVICE-PROTOCOL mục 7.6). Cần `MEDIA_TOKEN_SECRET` (hoặc GATEWAY_SECRET/FIELD_ENC_KEY) đặt trên Worker để dùng URL ký.
+
 ### 3b. Creative dán link (`delivery: "stream"`)
 
 Manifest có thể chứa creative `delivery: "stream"` (`url`, `kind` mp4/webm/hls/dash, `duration_ms`, `etag`; không `sha256`, không `size_bytes`). App phải: phát trực tiếp bằng ExoPlayer/Media3 (không tải vào bộ nhớ đệm bắt buộc, không kiểm sha256), **bỏ qua và chuyển creative kế tiếp khi stream lỗi**, ghi log lỗi theo `creative_id` (chưa có loại sự kiện lỗi riêng trong giao thức; không gửi `impression` cho lượt lỗi), và gửi `impression` với `played_ms` thực (rebuffer làm `played_ms` ngắn đi; dưới 0.9 x `duration_ms` thì không hợp lệ). Không giảm bitrate/fps/độ phân giải khi phát. Chi tiết: `DEVICE-PROTOCOL.md` mục 7.0, `VIDEO-LINK.md`. Trang YouTube/Vimeo không phải stream trực tiếp: nằm ngoài phạm vi (AMS từ chối khi dán).

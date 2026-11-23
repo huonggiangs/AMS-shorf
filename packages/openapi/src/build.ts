@@ -359,6 +359,27 @@ export function buildGatewayDoc(routes: RouteKey[]): Json {
       parameters: [...sigHeaders(true), { name: 'timeout', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 25 } }],
       responses: { '200': { description: 'Danh sách lệnh (rỗng nếu hết thời gian chờ)', content: { 'application/json': { schema: { type: 'object', properties: { commands: { type: 'array', items: { type: 'object' } }, waited: { type: 'boolean' } } } } } }, ...common429 },
     },
+    'POST /v1/media/tokens': {
+      summary: 'Cấp URL stream ngắn hạn cho TV (stream-only, không tải về)',
+      description: 'Thiết bị ký yêu cầu, gửi `{creative_ids:[<=24]}`. Chỉ creative tải lên có trong manifest của CHÍNH thiết bị và nằm dưới kho media của AMS mới được cấp. Trả `streams[id].path` (đường dẫn tương đối, nối vào địa chỉ gateway), hạn `ttl_s` (mặc định 6 giờ, `MEDIA_STREAM_TTL_S` 300..86400). 503 `not_configured` nếu chưa đặt `MEDIA_TOKEN_SECRET` (hoặc GATEWAY_SECRET/FIELD_ENC_KEY): thiết bị phát URL trong manifest. Giới hạn `MEDIA_TOKEN_LIMIT_PER_HOUR` (240). Có audit_log `device.media_token`.',
+      parameters: sigHeaders(true),
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['creative_ids'], properties: { creative_ids: { type: 'array', minItems: 1, maxItems: 24, items: { type: 'string' } } } } } } },
+      responses: { '200': { description: 'OK', content: { 'application/json': { schema: { type: 'object', properties: { ttl_s: { type: 'integer' }, expires_at: { type: 'string', format: 'date-time' }, streams: { type: 'object', additionalProperties: { type: 'object', properties: { path: { type: 'string' }, exp: { type: 'integer' } } } }, skipped: { type: 'array', items: { type: 'string' } } } } } } }, ...common429 },
+    },
+    'GET /v1/media/:id/stream': {
+      summary: 'Phát stream media cho TV (token HMAC ngắn hạn, Range/206, không cache)',
+      description: 'KHÔNG cần chữ ký thiết bị (player WebView/ExoPlayer không ký được từng Range): quyền nằm trong URL (`d` device_id, `exp`, `k` khóa đối tượng, `t` HMAC-SHA256) lấy từ POST /v1/media/tokens. Hỗ trợ `Range` (206, `Content-Range`, `Accept-Ranges: bytes`), tối đa 8 MiB mỗi phản hồi; không Range và tệp lớn => 206 mảnh đầu. `Cache-Control: private, no-store`. 403 khi token sai/hết hạn; 404 khi creative hết duyệt/không có tệp (thu hồi có hiệu lực ngay); 429 khi quá `MEDIA_STREAM_LIMIT_PER_MIN` (1200/phút/thiết bị).',
+      security: [],
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+        { name: 'd', in: 'query', required: true, schema: { type: 'string' } },
+        { name: 'exp', in: 'query', required: true, schema: { type: 'integer' } },
+        { name: 'k', in: 'query', required: true, schema: { type: 'string' } },
+        { name: 't', in: 'query', required: true, schema: { type: 'string' } },
+        { name: 'Range', in: 'header', schema: { type: 'string', pattern: '^bytes=\\d*-\\d*$' } },
+      ],
+      responses: { '200': { description: 'Toàn bộ tệp (nhỏ)' }, '206': { description: 'Một đoạn' }, '403': { description: 'Token sai/hết hạn' }, '404': { description: 'Không có' }, '416': { description: 'Range ngoài tệp' }, ...common429 },
+    },
     'GET /v1/manifest': {
       summary: 'Manifest của thiết bị (đầy đủ hoặc delta)',
       description: 'Điều kiện: `If-None-Match`/`?etag=` trùng => 304. `?delta=1&etag=<base>` => bản delta nếu còn. Header `X-Manifest-Kind: full|delta`. Thiết bị PHẢI kiểm `sha256` từng creative trước khi phát.',

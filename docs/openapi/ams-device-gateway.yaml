@@ -510,6 +510,146 @@ paths:
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/RetryLater"
+  /v1/media/tokens:
+    post:
+      operationId: gatewayPostMediaTokens
+      tags:
+        - device
+      security: *a1
+      x-ams-source: services/edge-gateway/src/gateway.ts
+      summary: Cấp URL stream ngắn hạn cho TV (stream-only, không tải về)
+      description: "Thiết bị ký yêu cầu, gửi `{creative_ids:[<=24]}`. Chỉ creative tải lên có trong manifest của CHÍNH thiết bị và nằm dưới kho media của AMS mới được cấp. Trả `streams[id].path` (đường dẫn tương đối, nối vào địa chỉ gateway), hạn `ttl_s` (mặc định 6 giờ, `MEDIA_STREAM_TTL_S` 300..86400). 503 `not_configured` nếu chưa đặt `MEDIA_TOKEN_SECRET` (hoặc GATEWAY_SECRET/FIELD_ENC_KEY): thiết bị phát URL trong manifest. Giới hạn `MEDIA_TOKEN_LIMIT_PER_HOUR` (240). Có audit_log `device.media_token`."
+      parameters:
+        - name: x-device-id
+          in: header
+          required: true
+          schema:
+            type: string
+          description: device_id từ /v1/register
+        - name: x-timestamp
+          in: header
+          required: true
+          schema:
+            type: integer
+          description: epoch giây; lệch máy chủ tối đa 300s
+        - name: x-nonce
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16,64}$
+          description: dùng một lần (chống phát lại)
+        - name: x-signature
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{86}$
+          description: Ed25519, base64url không padding (64 byte)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - creative_ids
+              properties:
+                creative_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 24
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ttl_s:
+                    type: integer
+                  expires_at:
+                    type: string
+                    format: date-time
+                  streams:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                        exp:
+                          type: integer
+                  skipped:
+                    type: array
+                    items:
+                      type: string
+        "401": *a2
+        "403": *a3
+        "409": *a4
+        "413": *a5
+        "422": *a6
+        "429": *a7
+        "503": *a8
+  /v1/media/{id}/stream:
+    get:
+      operationId: gatewayGetMediaByIdStream
+      tags:
+        - device
+      security: []
+      x-ams-source: services/edge-gateway/src/gateway.ts
+      summary: Phát stream media cho TV (token HMAC ngắn hạn, Range/206, không cache)
+      description: "KHÔNG cần chữ ký thiết bị (player WebView/ExoPlayer không ký được từng Range): quyền nằm trong URL (`d` device_id, `exp`, `k` khóa đối tượng, `t` HMAC-SHA256) lấy từ POST /v1/media/tokens. Hỗ trợ `Range` (206, `Content-Range`, `Accept-Ranges: bytes`), tối đa 8 MiB mỗi phản hồi; không Range và tệp lớn => 206 mảnh đầu. `Cache-Control: private, no-store`. 403 khi token sai/hết hạn; 404 khi creative hết duyệt/không có tệp (thu hồi có hiệu lực ngay); 429 khi quá `MEDIA_STREAM_LIMIT_PER_MIN` (1200/phút/thiết bị)."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: d
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: exp
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: k
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: t
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: Range
+          in: header
+          schema:
+            type: string
+            pattern: ^bytes=\d*-\d*$
+      responses:
+        "200":
+          description: Toàn bộ tệp (nhỏ)
+        "206":
+          description: Một đoạn
+        "401": *a2
+        "403": *a3
+        "404":
+          description: Không có
+        "409": *a4
+        "413": *a5
+        "416":
+          description: Range ngoài tệp
+        "422": *a6
+        "429": *a7
+        "503": *a8
   /v1/pair:
     post:
       operationId: gatewayPostPair

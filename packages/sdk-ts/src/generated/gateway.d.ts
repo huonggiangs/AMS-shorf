@@ -174,6 +174,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/media/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cấp URL stream ngắn hạn cho TV (stream-only, không tải về)
+         * @description Thiết bị ký yêu cầu, gửi `{creative_ids:[<=24]}`. Chỉ creative tải lên có trong manifest của CHÍNH thiết bị và nằm dưới kho media của AMS mới được cấp. Trả `streams[id].path` (đường dẫn tương đối, nối vào địa chỉ gateway), hạn `ttl_s` (mặc định 6 giờ, `MEDIA_STREAM_TTL_S` 300..86400). 503 `not_configured` nếu chưa đặt `MEDIA_TOKEN_SECRET` (hoặc GATEWAY_SECRET/FIELD_ENC_KEY): thiết bị phát URL trong manifest. Giới hạn `MEDIA_TOKEN_LIMIT_PER_HOUR` (240). Có audit_log `device.media_token`.
+         */
+        post: operations["gatewayPostMediaTokens"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/media/{id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Phát stream media cho TV (token HMAC ngắn hạn, Range/206, không cache)
+         * @description KHÔNG cần chữ ký thiết bị (player WebView/ExoPlayer không ký được từng Range): quyền nằm trong URL (`d` device_id, `exp`, `k` khóa đối tượng, `t` HMAC-SHA256) lấy từ POST /v1/media/tokens. Hỗ trợ `Range` (206, `Content-Range`, `Accept-Ranges: bytes`), tối đa 8 MiB mỗi phản hồi; không Range và tệp lớn => 206 mảnh đầu. `Cache-Control: private, no-store`. 403 khi token sai/hết hạn; 404 khi creative hết duyệt/không có tệp (thu hồi có hiệu lực ngay); 429 khi quá `MEDIA_STREAM_LIMIT_PER_MIN` (1200/phút/thiết bị).
+         */
+        get: operations["gatewayGetMediaByIdStream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/pair": {
         parameters: {
             query?: never;
@@ -1473,6 +1513,114 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayPostMediaTokens: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    creative_ids: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ttl_s?: number;
+                        /** Format: date-time */
+                        expires_at?: string;
+                        streams?: {
+                            [key: string]: {
+                                path?: string;
+                                exp?: number;
+                            };
+                        };
+                        skipped?: string[];
+                    };
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayGetMediaByIdStream: {
+        parameters: {
+            query: {
+                d: string;
+                exp: number;
+                k: string;
+                t: string;
+            };
+            header?: {
+                Range?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Toàn bộ tệp (nhỏ) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Một đoạn */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            /** @description Không có */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            /** @description Range ngoài tệp */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
             503: components["responses"]["RetryLater"];
         };
     };

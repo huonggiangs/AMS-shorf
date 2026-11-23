@@ -53,6 +53,7 @@ tags:
   - name: rate-cards
   - name: reconcile
   - name: refund-requests
+  - name: reports
   - name: revenue
   - name: rtb-floors
   - name: schedule
@@ -4092,7 +4093,7 @@ paths:
       x-ams-permission:
         module: devices
         action: view
-      x-ams-source: services/api/src/routes/devices.ts:202
+      x-ams-source: services/api/src/routes/devices.ts:204
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4120,7 +4121,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/devices.ts:211
+      x-ams-source: services/api/src/routes/devices.ts:213
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4157,7 +4158,7 @@ paths:
       x-ams-permission:
         module: devices
         action: delete
-      x-ams-source: services/api/src/routes/devices.ts:379
+      x-ams-source: services/api/src/routes/devices.ts:381
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4194,7 +4195,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/devices.ts:239
+      x-ams-source: services/api/src/routes/devices.ts:241
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4236,7 +4237,7 @@ paths:
       x-ams-permission:
         module: devices
         action: delete
-      x-ams-source: services/api/src/routes/devices.ts:383
+      x-ams-source: services/api/src/routes/devices.ts:385
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4271,7 +4272,7 @@ paths:
       x-ams-permission:
         module: devices
         action: view
-      x-ams-source: services/api/src/routes/devices.ts:413
+      x-ams-source: services/api/src/routes/devices.ts:415
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4304,7 +4305,7 @@ paths:
       x-ams-permission:
         module: devices
         action: approve
-      x-ams-source: services/api/src/routes/devices.ts:312
+      x-ams-source: services/api/src/routes/devices.ts:314
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4508,7 +4509,7 @@ paths:
       x-ams-permission:
         module: devices
         action: view
-      x-ams-source: services/api/src/routes/devices.ts:390
+      x-ams-source: services/api/src/routes/devices.ts:392
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4543,7 +4544,7 @@ paths:
       x-ams-permission:
         module: devices
         action: write
-      x-ams-source: services/api/src/routes/devices.ts:290
+      x-ams-source: services/api/src/routes/devices.ts:292
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4585,7 +4586,7 @@ paths:
       x-ams-permission:
         module: devices
         action: approve
-      x-ams-source: services/api/src/routes/devices.ts:357
+      x-ams-source: services/api/src/routes/devices.ts:359
       description: |-
         Quyền cần có: mô-đun `devices`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -4984,7 +4985,32 @@ paths:
         - *a3
         - *a4
         - *a5
-      x-ams-source: services/api/src/routes/history.ts:137
+      x-ams-source: services/api/src/routes/history.ts:138
+      description: |-
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/history/diagnostics:
+    get:
+      operationId: adminGetHistoryDiagnostics
+      tags:
+        - history
+      summary: GET /admin/v1/history/diagnostics
+      parameters: []
+      x-ams-source: services/api/src/routes/history.ts:160
       description: |-
         Chỉ tài khoản nội bộ.
 
@@ -5014,7 +5040,7 @@ paths:
         - *a3
         - *a4
         - *a5
-      x-ams-source: services/api/src/routes/history.ts:144
+      x-ams-source: services/api/src/routes/history.ts:145
       description: |-
         Chỉ tài khoản nội bộ.
 
@@ -5044,7 +5070,7 @@ paths:
           required: true
           schema:
             type: string
-      x-ams-source: services/api/src/routes/history.ts:159
+      x-ams-source: services/api/src/routes/history.ts:162
       description: |-
         Chỉ tài khoản nội bộ.
 
@@ -8121,6 +8147,102 @@ paths:
       security:
         - cookieAuth: []
           csrfToken: []
+  /admin/v1/reports/views:
+    get:
+      operationId: adminGetReportsViews
+      tags:
+        - reports
+      summary: GET /admin/v1/reports/views
+      parameters: []
+      description: |-
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/reports/views/export.csv:
+    get:
+      operationId: adminGetReportsViewsExport.csv
+      tags:
+        - reports
+      summary: GET /admin/v1/reports/views/export.csv
+      parameters: []
+      description: |-
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/reports/views/report.html:
+    get:
+      operationId: adminGetReportsViewsReport.html
+      tags:
+        - reports
+      summary: GET /admin/v1/reports/views/report.html
+      parameters: []
+      description: |-
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/reports/views/report.pdf:
+    get:
+      operationId: adminGetReportsViewsReport.pdf
+      tags:
+        - reports
+      summary: GET /admin/v1/reports/views/report.pdf
+      parameters: []
+      description: |-
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
   /admin/v1/revenue:
     get:
       operationId: adminGetRevenue
@@ -10224,7 +10346,7 @@ paths:
         - *a3
         - *a4
         - *a5
-      x-ams-source: services/api/src/routes/history.ts:137
+      x-ams-source: services/api/src/routes/history.ts:138
       description: |-
         Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
 
@@ -10254,7 +10376,7 @@ paths:
         - *a3
         - *a4
         - *a5
-      x-ams-source: services/api/src/routes/history.ts:144
+      x-ams-source: services/api/src/routes/history.ts:145
       description: |-
         Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
 
@@ -10284,7 +10406,7 @@ paths:
           required: true
           schema:
             type: string
-      x-ams-source: services/api/src/routes/history.ts:159
+      x-ams-source: services/api/src/routes/history.ts:162
       description: |-
         Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
 
@@ -11397,6 +11519,102 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Quote"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/reports/views:
+    get:
+      operationId: portalGetReportsViews
+      tags:
+        - reports
+      summary: GET /portal/v1/reports/views
+      parameters: []
+      description: |-
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/reports/views/export.csv:
+    get:
+      operationId: portalGetReportsViewsExport.csv
+      tags:
+        - reports
+      summary: GET /portal/v1/reports/views/export.csv
+      parameters: []
+      description: |-
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/reports/views/report.html:
+    get:
+      operationId: portalGetReportsViewsReport.html
+      tags:
+        - reports
+      summary: GET /portal/v1/reports/views/report.html
+      parameters: []
+      description: |-
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/reports/views/report.pdf:
+    get:
+      operationId: portalGetReportsViewsReport.pdf
+      tags:
+        - reports
+      summary: GET /portal/v1/reports/views/report.pdf
+      parameters: []
+      description: |-
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
         4XX:
           $ref: "#/components/responses/Error"
         5XX:
