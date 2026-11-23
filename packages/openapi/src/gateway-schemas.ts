@@ -99,6 +99,8 @@ const manifestZone = z.object({
   text_color: z.string().optional(),
   font_size: z.number().int().optional(),
   scroll_speed: z.number().int().optional(),
+  scroll_dir: z.enum(['left', 'right']).optional().describe('CHI vung marquee: huong chay, mac dinh left'),
+  clock: z.object({ hour12: z.boolean().optional(), tz: z.string().optional(), date: z.boolean().optional() }).optional().describe('CHI vung clock: dinh dang gio, mui gio IANA, hien ngay'),
   url: z.string().optional(),
   qr_kind: z.enum(['text', 'image_url', 'data_url']).optional().describe('CHI vung qr: text = ve QR tu url; image_url = tai anh tu url (VietQR); data_url = anh nhung'),
   qr: z.record(z.unknown()).optional().describe('CHI vung qr: cau hinh goc (mode image|url|vietqr)'),

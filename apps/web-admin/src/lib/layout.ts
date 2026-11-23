@@ -5,11 +5,11 @@ export const ZONE_TYPES = ['video', 'image', 'marquee', 'text', 'clock', 'weathe
 export type ZoneType = (typeof ZONE_TYPES)[number];
 export const ZONE_LABEL: Record<ZoneType, string> = { video: 'Video', image: 'Ảnh', marquee: 'Chữ chạy', text: 'Văn bản', clock: 'Đồng hồ', weather: 'Thời tiết', qr: 'Mã QR' };
 export const TRANSITIONS = [
-  { id: 'none', label: 'Không' },
-  { id: 'fade', label: 'Mờ dần' },
+  { id: 'none', label: 'Mặc định (Cắt trực tiếp)' },
+  { id: 'fade', label: 'Mờ dần (Crossfade)' },
   { id: 'slide-left', label: 'Trượt sang trái' },
   { id: 'slide-right', label: 'Trượt sang phải' },
-  { id: 'zoom', label: 'Phóng to' },
+  { id: 'zoom', label: 'Phóng to mượt' },
 ] as const;
 export const MAX_ZONES = 8;
 
@@ -31,6 +31,8 @@ export const zoneSchema = z
     text_color: z.string().nullish(),
     font_size: z.coerce.number().nullish(),
     scroll_speed: z.coerce.number().nullish(),
+    scroll_dir: z.enum(['left', 'right']).nullish(),
+    clock: z.object({ hour12: z.boolean().optional(), tz: z.string().optional(), date: z.boolean().optional() }).nullish(),
     url: z.string().nullish(),
     qr: z.object({ mode: z.enum(['image', 'url', 'vietqr']), value: z.string().optional(), vietqr: z.object({ bin: z.string(), account: z.string(), name: z.string().optional(), amount: z.coerce.number().optional(), memo: z.string().optional(), template: z.string().optional() }).optional() }).nullish(),
     weather: z.object({ mode: z.enum(['gps', 'fixed']), lat: z.coerce.number().optional(), lon: z.coerce.number().optional(), label: z.string().optional() }).nullish(),

@@ -54,6 +54,10 @@ export const zoneSchema = z
     text_color: hex.optional(),
     font_size: z.number().int().min(8).max(200).optional(),
     scroll_speed: z.number().int().min(0).max(100).optional(),
+    /** chu chay: huong chay (mac dinh left = tu phai sang trai) */
+    scroll_dir: z.enum(['left', 'right']).optional(),
+    /** dong ho: dinh dang gio, mui gio IANA, hien ngay */
+    clock: z.object({ hour12: z.boolean().optional(), tz: z.string().regex(/^[A-Za-z_]+(\/[A-Za-z_+-]+){0,2}$/).max(40).optional(), date: z.boolean().optional() }).optional(),
     url: z.string().max(500).optional(),
     qr: qrSchema.optional(),
     weather: weatherSchema.optional(),
