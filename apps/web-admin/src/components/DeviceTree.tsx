@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, ApiError, errMsg } from '../api/client';
 import { listOf } from '../api/schemas';
-import { flattenTree, groupTreeSchema, locationSchema, TREE_ERRORS, treeDeviceSchema, VOL_TEXT, type GroupNode, type TreeDevice } from '../api/deviceTree';
+import { flattenTree, groupTreeSchema, locationSchema, TREE_ERRORS, treeDeviceSchema, nextBeatText, volumeCapBadge, volumeStatus, type GroupNode, type TreeDevice } from '../api/deviceTree';
 import { useAct } from '../api/hooks';
 import { CMD_ERRORS } from './DeviceOps';
 import { OpsDialog } from './OpsDialog';
@@ -127,10 +127,12 @@ export function VolumeSlider({ d, canWrite, onSent }: { d: TreeDevice; canWrite:
   useEffect(() => { if (cmd) setDraft(null); }, [cmd?.id, cmd?.state]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   const shown = draft ?? (open && cmd?.percent != null ? cmd.percent : d.volume ?? cmd?.percent ?? 0);
-  const disabled = !canWrite || !d.controllable;
+  const disabled = !canWrite || !d.controllable || d.can_set_volume === false;
+  const badge = volumeCapBadge(d);
+  const nowMs = Date.now();
   const send = (percent: number) => {
     setSending(true);
-    void act(() => api.post(`/admin/v1/devices/${d.id}/commands`, { body: { type: 'set_volume', args: { percent } } }), `Đã xếp lệnh âm lượng ${percent}%. Thiết bị nhận ở lần heartbeat kế tiếp.`)
+    void act(() => api.post(`/admin/v1/devices/${d.id}/commands`, { body: { type: 'set_volume', args: { percent } } }), `Đã xếp lệnh âm lượng ${percent}%. ${nextBeatText(d, Date.now())}.`)
       .then((r) => { if (r) onSent?.(); })
       .finally(() => { setSending(false); });
   };
@@ -139,16 +141,21 @@ export function VolumeSlider({ d, canWrite, onSent }: { d: TreeDevice; canWrite:
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => send(v), VOLUME_DEBOUNCE_MS);
   };
-  const st = draft !== null ? { text: 'Sẽ gửi khi bạn dừng kéo…', tone: 'info' as const } : sending ? { text: 'Đang gửi lệnh…', tone: 'warn' as const } : cmd ? VOL_TEXT[cmd.state] : null;
+  const st = draft !== null ? { text: 'Sẽ gửi khi bạn dừng kéo…', tone: 'info' as const } : sending ? { text: 'Đang gửi lệnh…', tone: 'warn' as const } : cmd ? volumeStatus(cmd, nowMs) : null;
   return (
-    <div style={{ minWidth: 170, maxWidth: 200 }} title={disabled ? (!d.controllable ? 'Thiết bị chưa ghép mã / chưa cấp quyền hoặc đang bị chặn nên chưa gửi lệnh được.' : 'Bạn không có quyền gửi lệnh tới thiết bị.') : undefined}>
+    <div style={{ minWidth: 170, maxWidth: 200 }} title={disabled ? (!d.controllable ? 'Thiết bị chưa ghép mã / chưa cấp quyền hoặc đang bị chặn nên chưa gửi lệnh được.' : d.can_set_volume === false ? badge.title : 'Bạn không có quyền gửi lệnh tới thiết bị.') : undefined}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <input type="range" min={0} max={100} step={1} value={shown} disabled={disabled} aria-label={`Âm lượng ${d.name}`} onChange={(e) => change(Number(e.target.value))} style={{ flex: 1 }} />
         <b className="mono" style={{ width: 42, textAlign: 'right' }}>{shown}%</b>
       </div>
       <div style={{ fontSize: 12, color: 'var(--mut)', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         {st ? <span style={{ color: st.tone === 'ok' ? 'var(--ok)' : st.tone === 'bad' ? 'var(--bad)' : st.tone === 'warn' ? 'var(--warn)' : undefined, fontWeight: 600 }}>{st.text}</span> : null}
+        {st && 'retry' in st && st.retry && cmd?.percent != null && !disabled ? <button type="button" className="btn" style={{ padding: '0 8px', fontSize: 12 }} disabled={sending} onClick={() => send(cmd.percent as number)}>Thử lại</button> : null}
         <span>{cmd?.state === 'acked' && cmd.applied_percent != null ? `Đang áp dụng: ${cmd.applied_percent}% (${cmd.mode === 'player' ? 'qua trình phát' : 'hệ thống'})` : d.volume != null ? `Thiết bị báo: ${d.volume}%` : 'Chưa nhận báo cáo âm lượng'}</span>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--mut)', marginTop: 2 }}>
+        <span data-testid="vol-cap" title={badge.title} style={{ fontWeight: 600, color: badge.tone === 'ok' ? 'var(--ok)' : badge.tone === 'bad' ? 'var(--bad)' : undefined }}>{badge.text}</span>
+        {' · '}<span data-testid="vol-eta">{nextBeatText(d, nowMs)}</span>
       </div>
     </div>
   );

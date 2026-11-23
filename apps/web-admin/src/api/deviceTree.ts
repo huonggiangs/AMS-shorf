@@ -42,7 +42,12 @@ export const treeDeviceSchema = z
     location_address: z.string().nullish(),
     volume: n.nullish(),
     volume_at: z.string().nullish(),
-    volume_cmd: z.object({ id: z.string(), state: z.enum(VOL_STATES), percent: n.nullable(), applied_percent: n.nullable().optional(), mode: z.enum(['system', 'player']).nullable().optional(), created_at: z.string() }).nullish(),
+    caps: z.array(z.string()).nullish(),
+    /** true/false khi app tu khai (caps) hoac da tung ack set_volume kem ket qua; null = chua ro (van cho gui) */
+    can_set_volume: z.boolean().nullish(),
+    last_heartbeat_at: z.string().nullish(),
+    next_heartbeat_at: z.string().nullish(),
+    volume_cmd: z.object({ id: z.string(), state: z.enum(VOL_STATES), percent: n.nullable(), applied_percent: n.nullable().optional(), mode: z.enum(['system', 'player']).nullable().optional(), deliveries: n.nullish(), expires_at: z.string().nullish(), created_at: z.string() }).nullish(),
   })
   .passthrough();
 export type TreeDevice = z.infer<typeof treeDeviceSchema>;
@@ -91,6 +96,35 @@ export const VOL_TEXT: Record<string, { text: string; tone: 'info' | 'ok' | 'bad
   failed: { text: 'Thiết bị báo lỗi', tone: 'bad' },
   expired: { text: 'Lệnh hết hạn, thiết bị không phản hồi', tone: 'bad' },
   cancelled: { text: 'Đã hủy', tone: 'info' },
+};
+
+export const VOL_STALE_MS = 15 * 60_000;
+export const VOL_NOT_RECEIVED = 'Thiết bị chưa nhận lệnh: app trên TV chưa hỗ trợ hoặc đang ngoại tuyến';
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+type VolCmd = NonNullable<TreeDevice['volume_cmd']>;
+/** Trạng thái lệnh âm lượng thật cho người vận hành (kể cả "chờ quá lâu" và "app báo đã nhận nhưng không áp dụng"). */
+export function volumeStatus(cmd: VolCmd, nowMs: number): { text: string; tone: 'info' | 'ok' | 'bad' | 'warn'; retry: boolean } {
+  const age = nowMs - Date.parse(cmd.created_at);
+  const stale = Number.isFinite(age) && age > VOL_STALE_MS;
+  switch (cmd.state) {
+    case 'pending': return stale ? { text: VOL_NOT_RECEIVED, tone: 'bad', retry: true } : { ...VOL_TEXT['pending']!, retry: false };
+    case 'delivered': return stale ? { text: 'Thiết bị đã nhận lệnh nhưng không phản hồi: app có thể chưa hỗ trợ âm lượng', tone: 'bad', retry: true } : { ...VOL_TEXT['delivered']!, retry: false };
+    case 'acked': return cmd.applied_percent != null ? { ...VOL_TEXT['acked']!, retry: false } : { text: 'Thiết bị báo đã nhận nhưng không báo mức đã áp dụng: app có thể chưa hỗ trợ âm lượng. Kiểm tra mức thiết bị báo ở dòng dưới', tone: 'warn', retry: true };
+    case 'failed': return { text: 'Thiết bị báo lỗi hoặc không thực hiện được: app trên TV chưa hỗ trợ âm lượng?', tone: 'bad', retry: true };
+    case 'expired': return { text: (cmd.deliveries ?? 0) > 0 ? 'Thiết bị đã nhận lệnh nhưng không phản hồi: app có thể chưa hỗ trợ âm lượng' : VOL_NOT_RECEIVED, tone: 'bad', retry: true };
+    default: return { ...VOL_TEXT['cancelled']!, retry: true };
+  }
+}
+/** Huy hiệu khả năng: dựa trên danh sách `caps` thiết bị tự khai, không đoán. */
+export function volumeCapBadge(d: Pick<TreeDevice, 'can_set_volume'>): { text: string; tone: 'ok' | 'bad' | 'info'; title: string } {
+  if (d.can_set_volume === true) return { text: 'App hỗ trợ âm lượng', tone: 'ok', title: 'App trên thiết bị đã khai hỗ trợ set_volume hoặc từng xác nhận lệnh âm lượng.' };
+  if (d.can_set_volume === false) return { text: 'App chưa hỗ trợ âm lượng', tone: 'bad', title: 'App trên thiết bị khai không có set_volume. Cần cài bản app mới (xem docs/TV-APP-INTEGRATION.md).' };
+  return { text: 'Chưa rõ app có hỗ trợ', tone: 'info', title: 'App chưa khai danh sách tính năng. Vẫn gửi được; nếu thiết bị không phản hồi thì app chưa hỗ trợ.' };
+}
+export const nextBeatText = (d: Pick<TreeDevice, 'next_heartbeat_at' | 'last_heartbeat_at'>, nowMs: number): string => {
+  if (!d.next_heartbeat_at) return 'Chưa thấy nhịp heartbeat gần đây (thiết bị có thể đang ngoại tuyến)';
+  const t = Date.parse(d.next_heartbeat_at);
+  return t >= nowMs ? `Nhịp heartbeat kế tiếp dự kiến ${hhmm(d.next_heartbeat_at)} (còn ~${Math.max(1, Math.round((t - nowMs) / 1000))} giây)` : `Nhịp dự kiến ${hhmm(d.next_heartbeat_at)} đã qua, thiết bị chưa gọi lại`;
 };
 
 /** Danh sách phẳng có thụt lề theo độ sâu, đúng thứ tự cây (cha trước con) để dùng trong <select>. */

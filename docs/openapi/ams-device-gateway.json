@@ -2110,6 +2110,14 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 100
+          },
+          "caps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_.-]{0,29}$"
+            },
+            "maxItems": 24
           }
         },
         "additionalProperties": true
@@ -3449,6 +3457,14 @@
               "landscape",
               "portrait"
             ]
+          },
+          "caps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_.-]{0,29}$"
+            },
+            "maxItems": 24
           }
         },
         "required": [
