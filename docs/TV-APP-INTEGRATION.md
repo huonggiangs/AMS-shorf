@@ -51,18 +51,56 @@ Vùng vẽ theo ADS.png (tỷ lệ theo chiều cao/1080): hàng trên (chip tà
 
 Cột `creatives.overlay`/`format` và các route `PUT /:id/overlay`, manifest có `overlay` đã được a1/a3 làm. Lược đồ TV khớp phần giao nhau; phần còn thiếu nằm ở mục 3 của tệp yêu cầu.
 
-### 3c. Âm lượng từ xa (d-tree): việc app TV phải làm
+### 3c. Âm lượng từ xa (set_volume): việc app TV phải làm
 
-Trang **Thiết bị > Nhóm thiết bị** có thanh trượt âm lượng cho từng thiết bị và nút "Đặt âm lượng cả nhóm". Giao thức: lệnh `set_volume`, TV nhận ở heartbeat kế tiếp (polling, không tức thời), ack, và báo âm lượng thật. App cần:
+Trang **Thiết bị > Nhóm thiết bị** có thanh trượt âm lượng cho từng thiết bị và nút "Đặt âm lượng cả nhóm". Luồng đầy đủ:
 
-1. **Nhận lệnh** `{"id","type":"set_volume","args":{"percent":0..100}}` trong `commands[]` của heartbeat. Kiểm `percent` là số nguyên 0..100, ngoài khoảng thì ack `failed`.
-2. **Đặt âm lượng** bằng `AudioManager`: `val am = getSystemService(AUDIO_SERVICE) as AudioManager; val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC); am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(percent / 100f * max), 0)` (cờ `0`: không hiện thanh âm lượng hệ thống). Nếu thiết bị có âm lượng cố định (`isVolumeFixed`) thì ack `failed` với `result:"volume_fixed"`.
-3. **Ack** qua `POST /v1/commands/ack` `{"acks":[{"id":"<id lệnh>","status":"ok"}]}` sau khi đặt xong. `id` không đổi khi giao lại: app nhớ id đã xử lý, bỏ qua lần giao lại nhưng vẫn ack (idempotent).
-4. **Báo âm lượng thật** trong mọi heartbeat: `"volume": round(100 * am.getStreamVolume(STREAM_MUSIC) / am.getStreamMaxVolume(STREAM_MUSIC))`. Người dùng bấm phím âm lượng trên remote cũng làm số này đổi; admin luôn thấy số thật, không phải số đã yêu cầu. Trường tùy chọn: app cũ không gửi thì admin hiện "Chưa nhận báo cáo âm lượng".
-5. **`refresh_manifest`** (nút "Đồng bộ lại ngay"): app đã xử lý theo mục 6 của giao thức; không cần làm thêm.
-6. **`screenshot`** ("Xem màn hình") chưa làm; đặc tả trong `DEVICE-PROTOCOL.md` mục 6.2.
+```
+kéo thanh trượt (debounce 0,5 s) -> POST /admin/v1/devices/{id}/commands {"type":"set_volume","args":{"percent":55}}
+ -> dòng device_commands (pending) -> heartbeat kế tiếp trả commands[] (delivered)
+ -> app đặt âm lượng -> POST /v1/commands/ack {"acks":[{"id","status":"ok","result":"{\"applied_percent\":55,\"mode\":\"system\"}"}]}
+ -> web: acked + "Đang áp dụng: 55%"; heartbeat sau đó báo "volume" thật.
+```
 
-Thiết bị phải ở `trust_level >= 1` (TV đã ghép mã, thang máy/LED đã cấp quyền) mới nhận được lệnh. Hạn lệnh 1 giờ: TV tắt lâu hơn thì lệnh hết hạn (`expired`), UI hiện "Lệnh hết hạn, thiết bị không phản hồi".
+**Nguyên nhân web "chưa điều khiển được" thường gặp** (kiểm theo thứ tự):
+
+1. Web/gateway production chưa triển khai bản có `set_volume` (xem lệnh cuối mục này).
+2. **App trên TV bỏ qua `commands[]` của heartbeat.** Mindo TV (`chanvideotv`, nhánh trước `feat/set-volume`) chỉ gửi `{"app_version"}` và bỏ qua toàn bộ phản hồi, nên không bao giờ nhận lệnh. Brain-rot Java (`vn/brainrot/parental/tv/Ams*.java`) và Signage Player cũ ack "ok" mọi lệnh nhưng không đổi âm lượng (web cũ hiện "đã xác nhận" sai).
+3. Thiết bị chưa `trust_level >= 1` (TV chưa ghép mã 6 số; thang máy/LED chưa bấm Cấp quyền): web khóa thanh trượt, API trả 409.
+4. Độ trễ: lệnh chỉ tới ở heartbeat kế tiếp (mặc định đang phát ~5 phút, rảnh ~10 phút). Web hiện "Nhịp heartbeat kế tiếp dự kiến HH:MM". Rút ngắn: đặt biến gateway `HB_PAIRED_S=60`; app dùng `next_interval` của máy chủ (không tự đặt chu kỳ) hoặc long-poll `GET /v1/commands/wait?timeout=25`.
+
+**Yêu cầu với app:**
+
+1. **Khai năng lực**: gửi `"caps":["set_volume"]` ở `register` và/hoặc mọi heartbeat (mảng tên tính năng, mỗi tên `^[a-z][a-z0-9_.-]{0,29}$`, tối đa 24). Web hiện huy hiệu "App hỗ trợ âm lượng" dựa trên đây; app không gửi `caps` thì web hiện "Chưa rõ app có hỗ trợ" (vẫn cho gửi lệnh nhưng giải thích).
+2. **Nhận lệnh** `{"id","type":"set_volume","args":{"percent":0..100}}` trong `commands[]` của heartbeat. `percent` ngoài 0..100 hoặc không phải số nguyên: ack `failed`, `result:"bad_args"`.
+3. **Đặt âm lượng**:
+   ```kotlin
+   val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+   val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+   am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(percent / 100f * max), 0) // cờ 0: không hiện thanh âm lượng
+   val applied = Math.round(am.getStreamVolume(AudioManager.STREAM_MUSIC) * 100f / max) // ĐỌC LẠI
+   ```
+   Mã đầy đủ đã viết: `apps/tv-android/app/.../AndroidDeviceVolume.kt` và `AmsGatewaySource.runCommands` (repo chanvideotv, nhánh `feat/set-volume`); Signage Player: `signage-player/set-volume.patch`.
+4. **Ack đúng sự thật** qua `POST /v1/commands/ack`: thành công `{"id","status":"ok","result":"{\"applied_percent\":N,\"mode\":\"system\"}"}` (N là mức ĐỌC LẠI, khác `percent` nếu TV box cố định âm lượng); thất bại `{"id","status":"failed","result":"<lý do ngắn>"}` (`bad_args`, `unsupported:<type>`, `volume_fixed`...). `result` là chuỗi, tối đa 500 ký tự. **Không ack "ok" cho lệnh app không làm được**: web sẽ coi như đã chạy. Nếu ack "ok" mà không kèm `applied_percent`, web hiện cảnh báo "không báo mức đã áp dụng, app có thể chưa hỗ trợ".
+5. **Idempotent**: giao ít nhất một lần, `id` không đổi khi giao lại. App nhớ id đã xử lý (kèm kết quả), lần giao lại chỉ ack lại kết quả cũ, không đặt lại âm lượng.
+6. **Báo âm lượng thật** trong mọi heartbeat: `"volume": round(100 * getStreamVolume / getStreamMaxVolume)`. Người dùng bấm phím âm lượng trên remote làm số này đổi; admin luôn thấy số thật, không phải số đã yêu cầu.
+7. **`refresh_manifest`** (nút "Đồng bộ lại ngay") theo mục 6 của giao thức; **`screenshot`** chưa làm (`DEVICE-PROTOCOL.md` mục 6.2).
+
+**Trạng thái trên web** (mỗi thiết bị): đang chờ thiết bị nhận lệnh; đã gửi, chờ xác nhận; đã xác nhận + "Đang áp dụng N%"; báo lỗi; hết hạn/chờ quá 15 phút: "Thiết bị chưa nhận lệnh: app trên TV chưa hỗ trợ hoặc đang ngoại tuyến" kèm nút **Thử lại** (gửi lại đúng mức cũ). Hạn lệnh 1 giờ.
+
+**Cách kiểm tra bằng adb** (TV bật gỡ lỗi USB/mạng, `adb connect <ip-tv>:5555`):
+
+```
+adb shell media volume --get --stream 3          # đọc âm lượng nhạc hiện tại (stream 3 = STREAM_MUSIC)
+# trên web: kéo thanh trượt của TV đó tới 40%, chờ tới nhịp heartbeat (xem "Nhịp heartbeat kế tiếp dự kiến")
+adb shell media volume --get --stream 3          # phải đổi tương ứng ~40% của mức tối đa (vd max 15 -> 6)
+adb logcat | grep -i "set_volume\|ams"                  # xem lệnh đã nhận (tên tag tùy app)
+adb shell media volume --show --stream 3 --set 5 # (tùy chọn) đổi tay rồi chờ heartbeat: web phải hiện "Thiết bị báo" khớp
+```
+
+Nghiệm thu: (a) web hiện "Đang áp dụng: 40%" sau ack; (b) `adb ... --get` khớp; (c) rút mạng TV, kéo thanh trượt: sau 15 phút web hiện câu "Thiết bị chưa nhận lệnh..." và nút Thử lại; (d) nút Thử lại gửi lại đúng mức cũ; (e) cài app CŨ: web hiện huy hiệu "Chưa rõ app có hỗ trợ" và, nếu app ack "ok" không kèm kết quả, cảnh báo thay vì "đã xác nhận".
+
+Thiết bị phải ở `trust_level >= 1` mới nhận được lệnh. Triển khai bản máy chủ mới: migration `0027_device_caps` (cột `device_profiles.caps`) chạy trước, rồi gateway, rồi api, rồi web-admin.
 
 ### 3b. Creative dán link (`delivery: "stream"`)
 

@@ -128,6 +128,16 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   const volSeen = new Map<string, { v: number; at: number }>();
   const VOLUME_UPSERT = `INSERT INTO device_profiles (device_id, volume, volume_at) VALUES (?,?,?)
        ON CONFLICT (device_id) DO UPDATE SET volume = excluded.volume, volume_at = excluded.volume_at`;
+  // tinh nang app bao cao (caps): ghi ngay khi doi (hiem), nho ban da ghi de khong ghi lai moi heartbeat
+  const capsSeen = new Map<string, string>();
+  const CAPS_UPSERT = `INSERT INTO device_profiles (device_id, caps) VALUES (?,?) ON CONFLICT (device_id) DO UPDATE SET caps = excluded.caps`;
+  async function saveCaps(deviceId: string, caps: string[]): Promise<void> {
+    const json = JSON.stringify([...new Set(caps)].sort());
+    if (capsSeen.get(deviceId) === json) return;
+    await rt.db.run(CAPS_UPSERT, [deviceId, json]);
+    if (capsSeen.size >= 100_000) capsSeen.clear();
+    capsSeen.set(deviceId, json);
+  }
   async function flush(): Promise<void> {
     const vols = volDirty;
     volDirty = new Map();
@@ -274,6 +284,7 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     if (input.px_w !== undefined || input.orientation !== undefined) {
       await rt.db.run(PROFILE_UPSERT, [row.id, input.px_w ?? null, input.px_h ?? null, input.orientation ?? null, null, null, nowIso]);
     }
+    if (input.caps) await saveCaps(row.id, input.caps).catch((e) => console.error('[gateway] ghi caps loi:', safeErr(e)));
     if (!created) {
       const hasScreen = region ? (await rt.db.query('SELECT 1 AS x FROM screens WHERE device_id = ? LIMIT 1', [row.id])).length > 0 : true;
       await rt.db.run('UPDATE devices SET model = COALESCE(?, model), os = COALESCE(?, os), app_version = COALESCE(?, app_version), region_id = ? WHERE id = ?', [
@@ -359,6 +370,9 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
         dl_mbps: hb.dl_mbps ?? null, cache_used_mb: cacheMb, cache_slots: hb.cache_slots ?? null, state: hb.state,
       });
     }
+    if (hb.caps) await saveCaps(dev.id, hb.caps).catch((e) => console.error('[gateway] ghi caps loi:', safeErr(e)));
+    // nhip ke tiep that (khong suy tu last_seen_at vi last_seen chi ghi moi >10 phut): web hien "thiet bi nhan lenh luc ~HH:MM"
+    await rt.kv.set(`hbnext:${dev.id}`, `${now.getTime()}:${now.getTime() + next * 1000}`, Math.ceil(next * 3 + 120)).catch(() => undefined);
     if (hb.volume !== undefined) {
       const vs = volSeen.get(dev.id);
       if (!vs || vs.v !== hb.volume || nowS - vs.at >= PROFILE_REFRESH_S) {

@@ -110,14 +110,14 @@ async function assignColumn(c: Ctx, col: 'group_id' | 'location_id', ids: string
 
 /* ------------------------------------------------------------------ danh sach thiet bi cho trang Nhom / Dia diem */
 const DEV_SELECT = `d.id, d.name, d.kind, d.model, d.app_version, d.status, d.blocked, d.trust_level, d.paired_at, d.last_seen_at,
-  p.px_w, p.px_h, p.orientation, p.mac, p.serial, p.volume, p.volume_at, p.group_id, p.location_id, g.name AS group_name, l.name AS location_name, l.address AS location_address,
+  p.px_w, p.px_h, p.orientation, p.mac, p.serial, p.volume, p.volume_at, p.caps, p.group_id, p.location_id, g.name AS group_name, l.name AS location_name, l.address AS location_address,
   (SELECT sc.px_w FROM screens sc WHERE sc.device_id = d.id ORDER BY sc.id LIMIT 1) AS screen_px_w,
   (SELECT sc.px_h FROM screens sc WHERE sc.device_id = d.id ORDER BY sc.id LIMIT 1) AS screen_px_h`;
 const DEV_FROM = `FROM devices d LEFT JOIN device_profiles p ON p.device_id = d.id
   LEFT JOIN device_groups g ON g.id = p.group_id AND g.deleted_at IS NULL LEFT JOIN locations l ON l.id = p.location_id AND l.deleted_at IS NULL`;
 interface DevRow {
   id: string; name: string | null; kind: string; model: string | null; app_version: string | null; status: string; blocked: number; trust_level: number; paired_at: string | null; last_seen_at: string | null;
-  px_w: number | null; px_h: number | null; orientation: string | null; mac: string | null; serial: string | null; volume: number | null; volume_at: string | null;
+  px_w: number | null; px_h: number | null; orientation: string | null; mac: string | null; serial: string | null; volume: number | null; volume_at: string | null; caps: string | null;
   group_id: string | null; location_id: string | null; group_name: string | null; location_name: string | null; location_address: string | null; screen_px_w: number | null; screen_px_h: number | null;
 }
 const devSpec = (groupIds: string[] | 'none' | null): ListSpec => ({
@@ -135,7 +135,7 @@ const devSpec = (groupIds: string[] | 'none' | null): ListSpec => ({
   },
 });
 
-interface VolCmd { id: string; device_id: string; status: string; args: string | null; expires_at: string; result: string | null; created_at: string }
+interface VolCmd { id: string; device_id: string; status: string; args: string | null; expires_at: string; result: string | null; created_at: string; deliveries: number }
 export type VolState = 'pending' | 'delivered' | 'acked' | 'failed' | 'expired' | 'cancelled';
 export function volState(r: Pick<VolCmd, 'status' | 'result' | 'expires_at'>, nowIso: string): VolState {
   if (r.status === 'failed' && r.result === CANCEL_RESULT) return 'cancelled';
@@ -149,13 +149,22 @@ async function presentDevices(c: Ctx, rows: DevRow[]) {
   const last = new Map<string, VolCmd>();
   for (const part of chunkForIn(rows.map((r) => r.id))) {
     const cmds = await rt.db.query<VolCmd>(
-      `SELECT k.id, k.device_id, k.status, k.args, k.expires_at, k.result, k.created_at FROM device_commands k WHERE k.type = 'set_volume' AND k.device_id IN (${placeholders(part.length)}) ORDER BY k.created_at DESC, k.id DESC`,
+      `SELECT k.id, k.device_id, k.status, k.args, k.expires_at, k.result, k.created_at, k.deliveries FROM device_commands k WHERE k.type = 'set_volume' AND k.device_id IN (${placeholders(part.length)}) ORDER BY k.created_at DESC, k.id DESC`,
       part,
     );
     for (const k of cmds) if (!last.has(k.device_id)) last.set(k.device_id, k);
   }
+  // nhip heartbeat that (gateway ghi kv `hbnext:<id>` = "<luc nay ms>:<luc ke tiep ms>")
+  const hb = new Map<string, { last: string; next: string }>();
+  await Promise.all(rows.map(async (d) => {
+    const v = await rt.kv.get(`hbnext:${d.id}`).catch(() => null);
+    const m = v ? /^(\d+):(\d+)$/.exec(v) : null;
+    if (m) hb.set(d.id, { last: new Date(Number(m[1])).toISOString(), next: new Date(Number(m[2])).toISOString() });
+  }));
   return rows.map((d) => {
     const k = last.get(d.id);
+    let caps: string[] | null = null;
+    try { const j = d.caps ? (JSON.parse(d.caps) as unknown) : null; if (Array.isArray(j)) caps = j.filter((x): x is string => typeof x === 'string'); } catch { caps = null; }
     let percent: number | null = null;
     try { percent = k?.args ? (JSON.parse(k.args) as { percent?: number }).percent ?? null : null; } catch { percent = null; }
     const w = num(d.screen_px_w ?? d.px_w, 0);
@@ -167,6 +176,9 @@ async function presentDevices(c: Ctx, rows: DevRow[]) {
       if (rs && Number.isInteger(rs.applied_percent)) applied = rs.applied_percent as number;
       if (rs && (rs.mode === 'system' || rs.mode === 'player')) mode = rs.mode;
     } catch { /* result khong phai JSON */ }
+    // huy hieu nang luc: app khai (caps) la nguon chinh; chua khai thi chi coi la "co" khi tung ack set_volume KEM ket qua that; con lai = chua ro
+    const canSetVolume: boolean | null = caps ? caps.includes('set_volume') : applied !== null && k?.status === 'acked' ? true : null;
+    const beat = hb.get(d.id);
     return {
       id: d.id,
       name: d.name ?? d.id,
@@ -190,7 +202,11 @@ async function presentDevices(c: Ctx, rows: DevRow[]) {
       location_address: d.location_address,
       volume: d.volume === null || d.volume === undefined ? null : num(d.volume),
       volume_at: d.volume_at,
-      volume_cmd: k ? { id: k.id, state: volState(k, nowIso), percent, applied_percent: applied, mode, created_at: k.created_at } : null,
+      caps,
+      can_set_volume: canSetVolume,
+      last_heartbeat_at: beat?.last ?? null,
+      next_heartbeat_at: beat?.next ?? null,
+      volume_cmd: k ? { id: k.id, state: volState(k, nowIso), percent, applied_percent: applied, mode, deliveries: num(k.deliveries), expires_at: k.expires_at, created_at: k.created_at } : null,
     };
   });
 }

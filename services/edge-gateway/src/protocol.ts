@@ -73,6 +73,9 @@ export const SCREEN_ORIENTATIONS = ['landscape', 'portrait'] as const;
 /** Nguon dang phat (Signage Player): ams (manifest tu may chu), usb, lan. */
 export const PLAY_SOURCES = ['ams', 'usb', 'lan'] as const;
 
+/** Danh sach tinh nang app tren thiet bi bao cao (vd 'set_volume', 'reboot', 'lock'); web dung de hien huy hieu "ho tro am luong". Tuy chon. */
+export const capsField = z.array(z.string().regex(/^[a-z][a-z0-9_.-]{0,29}$/)).max(24);
+
 export const registerBody = z.object({
   pubkey: z.string().regex(B64URL_RE).length(43), // 32 byte base64url khong padding
   kind: z.enum(DEVICE_KINDS).default('tv'),
@@ -84,6 +87,7 @@ export const registerBody = z.object({
   px_w: pxField.optional(),
   px_h: pxField.optional(),
   orientation: z.enum(SCREEN_ORIENTATIONS).optional(),
+  caps: capsField.optional(),
 });
 export type RegisterBody = z.infer<typeof registerBody>;
 
@@ -110,6 +114,8 @@ export const heartbeatBody = z.object({
   region: z.string().regex(REGION_RE).optional(),
   /** am luong hien tai 0-100 (AudioManager STREAM_MUSIC quy ve %). Tuy chon, tuong thich nguoc: app cu khong gui. */
   volume: z.number().int().min(0).max(100).optional(),
+  /** tinh nang app ho tro (xem capsField); gui o heartbeat dau tien sau khi khoi dong la du, gui lai moi lan cung duoc */
+  caps: capsField.optional(),
 });
 export type HeartbeatBody = z.infer<typeof heartbeatBody>;
 

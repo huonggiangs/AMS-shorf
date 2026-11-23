@@ -26,5 +26,5 @@ export default function setup(): void {
   const all = readdirSync(join(ROOT, 'packages/db/migrations')).filter((f) => f.endsWith('.sql') && !f.includes('.postgres.')).map((f) => f.replace('.sqlite', '').replace(/\.sql$/, ''));
   const miss = all.filter((n) => !out.includes(n));
   if (miss.length) throw new Error('migration khong duoc ap: ' + miss.join(', ') + '\n' + out);
-  process.env['CF_TEST_MIGRATIONS_OUT'] = out;
+  process.env['CF_TEST_MIGRATIONS_OUT'] = out.slice(-4000); // gioi han: 1 bien moi truong > 128 KB lam fork worker loi E2BIG
 }

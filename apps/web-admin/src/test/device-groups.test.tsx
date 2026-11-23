@@ -97,7 +97,7 @@ describe('d-tree: trang Nhóm thiết bị', () => {
     expect(await screen.findByText('Đang áp dụng: 40% (qua trình phát)')).toBeInTheDocument();
   });
   it('thanh trượt âm lượng: debounce rồi gửi MỘT lệnh set_volume, hiện trạng thái chờ', async () => {
-    handlers.push(me(mk(all)), treeH, devsH([dev({ volume_cmd: { id: 'c1', state: 'pending', percent: 35, created_at: '2026-11-19T03:00:00.000Z' } })]),
+    handlers.push(me(mk(all)), treeH, devsH([dev({ volume_cmd: { id: 'c1', state: 'pending', percent: 35, created_at: new Date().toISOString() } })]),
       (u, init) => (u.pathname === '/api/admin/v1/devices/d1/commands' && init?.method === 'POST' ? { status: 201, body: { id: 'c2', state: 'pending' } } : undefined));
     vi.stubGlobal('fetch', mockFetch());
     mount('/device-groups');
@@ -111,6 +111,39 @@ describe('d-tree: trang Nhóm thiết bị', () => {
     expect(reqs.filter((r) => r.method === 'POST')).toHaveLength(0); // chưa gửi trong lúc kéo
     await waitFor(() => expect(reqs.filter((r) => r.method === 'POST' && r.path === '/api/admin/v1/devices/d1/commands')).toHaveLength(1), { timeout: 2000 });
     expect(reqs.find((r) => r.method === 'POST')!.body).toEqual({ type: 'set_volume', args: { percent: 55 } });
+  });
+  it('lệnh âm lượng chờ quá lâu / hết hạn chưa giao: báo rõ "chưa nhận lệnh", có nút Thử lại gửi lại đúng mức cũ', async () => {
+    handlers.push(me(mk(all)), treeH, devsH([dev({ volume_cmd: { id: 'c1', state: 'expired', percent: 65, deliveries: 0, created_at: '2026-11-19T03:00:00.000Z' } })]),
+      (u, init) => (u.pathname === '/api/admin/v1/devices/d1/commands' && init?.method === 'POST' ? { status: 201, body: { id: 'c2', state: 'pending' } } : undefined));
+    vi.stubGlobal('fetch', mockFetch());
+    mount('/device-groups');
+    expect(await screen.findByText('Thiết bị chưa nhận lệnh: app trên TV chưa hỗ trợ hoặc đang ngoại tuyến')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Thử lại' }));
+    await waitFor(() => expect(reqs.find((r) => r.method === 'POST')?.body).toEqual({ type: 'set_volume', args: { percent: 65 } }));
+  });
+  it('app báo đã nhận (ack) nhưng không báo mức áp dụng: KHÔNG hiện "đã xác nhận" xanh, cảnh báo app có thể chưa hỗ trợ', async () => {
+    handlers.push(me(mk(all)), treeH, devsH([dev({ volume_cmd: { id: 'c1', state: 'acked', percent: 70, applied_percent: null, deliveries: 1, created_at: '2026-11-19T03:00:00.000Z' } })]));
+    vi.stubGlobal('fetch', mockFetch());
+    mount('/device-groups');
+    expect(await screen.findByText(/không báo mức đã áp dụng/)).toBeInTheDocument();
+    expect(screen.queryByText('Thiết bị đã xác nhận')).not.toBeInTheDocument();
+  });
+  it('huy hiệu khả năng + ETA heartbeat: caps khai có/không/chưa rõ; app khai không hỗ trợ thì khóa thanh trượt', async () => {
+    const soon = new Date(Date.now() + 90_000).toISOString();
+    handlers.push(me(mk(all)), treeH, devsH([
+      dev({ id: 'd1', can_set_volume: true, caps: ['set_volume'], next_heartbeat_at: soon }),
+      dev({ id: 'd2', name: 'Màn B', can_set_volume: false, caps: ['reboot'] }),
+      dev({ id: 'd3', name: 'Màn C', can_set_volume: null }),
+    ]));
+    vi.stubGlobal('fetch', mockFetch());
+    mount('/device-groups');
+    expect(await screen.findByText('App hỗ trợ âm lượng')).toBeInTheDocument();
+    expect(screen.getByText('App chưa hỗ trợ âm lượng')).toBeInTheDocument();
+    expect(screen.getByText('Chưa rõ app có hỗ trợ')).toBeInTheDocument();
+    expect(screen.getByLabelText('Âm lượng Màn B')).toBeDisabled();
+    expect(screen.getByLabelText('Âm lượng Màn C')).not.toBeDisabled(); // chưa rõ: vẫn cho gửi
+    expect(screen.getByText(/Nhịp heartbeat kế tiếp dự kiến/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Chưa thấy nhịp heartbeat gần đây/).length).toBe(2);
   });
   it('thiết bị chưa cấp quyền: thanh trượt và nút Đồng bộ bị khóa; Xem màn hình luôn khóa với chú thích', async () => {
     handlers.push(me(mk(all)), treeH, devsH([dev({ controllable: false, synced: false, status: 'offline', online: false })]));
