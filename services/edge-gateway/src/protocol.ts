@@ -228,6 +228,10 @@ export interface ManifestZone {
   text_color?: string;
   font_size?: number;
   scroll_speed?: number;
+  /** marquee: 'left' (mac dinh, chay tu phai sang trai) | 'right' */
+  scroll_dir?: 'left' | 'right';
+  /** clock: dinh dang gio 12/24, mui gio IANA (thieu = mui gio thiet bi), hien ngay */
+  clock?: { hour12?: boolean; tz?: string; date?: boolean };
   url?: string;
   /** vung qr: 'text' (thiet bi tu ve QR tu `url`) | 'image_url' (tai anh tu `url`, vd VietQR) | 'data_url' (anh nhung trong `url`) */
   qr_kind?: 'text' | 'image_url' | 'data_url';

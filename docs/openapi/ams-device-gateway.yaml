@@ -1779,6 +1779,23 @@ components:
                           type: integer
                         scroll_speed:
                           type: integer
+                        scroll_dir:
+                          type: string
+                          enum:
+                            - left
+                            - right
+                          description: "CHI vung marquee: huong chay, mac dinh left"
+                        clock:
+                          type: object
+                          properties:
+                            hour12:
+                              type: boolean
+                            tz:
+                              type: string
+                            date:
+                              type: boolean
+                          additionalProperties: true
+                          description: "CHI vung clock: dinh dang gio, mui gio IANA, hien ngay"
                         url:
                           type: string
                         qr_kind:
@@ -2107,6 +2124,23 @@ components:
                           type: integer
                         scroll_speed:
                           type: integer
+                        scroll_dir:
+                          type: string
+                          enum:
+                            - left
+                            - right
+                          description: "CHI vung marquee: huong chay, mac dinh left"
+                        clock:
+                          type: object
+                          properties:
+                            hour12:
+                              type: boolean
+                            tz:
+                              type: string
+                            date:
+                              type: boolean
+                          additionalProperties: true
+                          description: "CHI vung clock: dinh dang gio, mui gio IANA, hien ngay"
                         url:
                           type: string
                         qr_kind:

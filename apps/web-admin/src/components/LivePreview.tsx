@@ -37,7 +37,14 @@ const CSS = `
 function Clock({ z }: { z: Zone }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
-  return <div style={{ ...center, background: z.bg_color ?? '#111827', color: z.text_color ?? '#fff', fontSize: `${Math.max(10, (z.font_size ?? 24) * 0.6)}px` }}><b className="mono">{now.toLocaleTimeString('vi-VN')}</b></div>;
+  const tz = z.clock?.tz ? { timeZone: z.clock.tz } : {};
+  let time: string;
+  let date = '';
+  try {
+    time = now.toLocaleTimeString('vi-VN', { ...tz, hour12: !!z.clock?.hour12 });
+    if (z.clock?.date) date = now.toLocaleDateString('vi-VN', { ...tz, weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+  } catch { time = now.toLocaleTimeString('vi-VN'); }
+  return <div style={{ ...center, flexDirection: 'column', background: z.bg_color ?? '#111827', color: z.text_color ?? '#fff', fontSize: `${Math.max(10, (z.font_size ?? 24) * 0.6)}px` }}><b className="mono">{time}</b>{date ? <small style={{ fontSize: '0.5em', opacity: 0.85 }}>{date}</small> : null}</div>;
 }
 const center = { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' } as const;
 
@@ -156,7 +163,7 @@ function ZoneView({ z, items, playing, runKey, ctl, primary }: { z: Zone; items:
   if (isMediaZone(z)) return <MediaZone z={z} items={items} playing={playing} runKey={runKey} ctl={ctl} primary={primary} />;
   if (z.type === 'marquee') {
     const dur = Math.max(4, Math.round(28 - (z.scroll_speed ?? 60) * 0.22));
-    return <div style={{ ...center, justifyContent: 'flex-start', background: z.bg_color ?? '#DC2626', color: z.text_color ?? '#fff', fontSize: `${Math.max(9, (z.font_size ?? 16) * 0.7)}px`, overflow: 'hidden' }}><span className="lp-marq" style={{ ['--lp-dur' as string]: `${dur}s` }}>{z.rich ? <RichView html={z.rich} line k={0.7} /> : z.text ?? ''}</span></div>;
+    return <div style={{ ...center, justifyContent: 'flex-start', background: z.bg_color ?? '#DC2626', color: z.text_color ?? '#fff', fontSize: `${Math.max(9, (z.font_size ?? 16) * 0.7)}px`, overflow: 'hidden' }}><span className="lp-marq" style={{ ['--lp-dur' as string]: `${dur}s`, ...(z.scroll_dir === 'right' ? { animationDirection: 'reverse' } : {}) }}>{z.rich ? <RichView html={z.rich} line k={0.7} /> : z.text ?? ''}</span></div>;
   }
   if (z.type === 'text') return <div style={{ ...center, background: z.bg_color ?? '#111827', color: z.text_color ?? '#fff', fontSize: `${Math.max(9, (z.font_size ?? 24) * 0.6)}px`, padding: 6, overflow: 'hidden', whiteSpace: 'pre-wrap' }}>{z.rich ? <RichView html={z.rich} k={0.6} /> : z.text ?? ''}</div>;
   if (z.type === 'clock') return <Clock z={z} />;

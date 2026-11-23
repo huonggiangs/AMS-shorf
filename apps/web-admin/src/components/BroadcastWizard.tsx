@@ -113,6 +113,16 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
     setItemZones((c) => ({ ...c, [id]: zone.id }));
   };
   const removeMedia = (id: string) => { setIds(ids.filter((x) => x !== id)); setItemZones((c) => { const n = { ...c }; delete n[id]; return n; }); };
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const dropMedia = (to: string) => {
+    if (dragId && dragId !== to) setIds((cur) => { const n = cur.filter((x) => x !== dragId); n.splice(n.indexOf(to), 0, dragId); return n; });
+    setDragId(null); setOverId(null);
+  };
+  const quick = (k: 'full' | 'half' | 'three') => {
+    if (zones.length > 0 && !window.confirm('Áp dụng mẫu nhanh sẽ thay thế các vùng hiện có. Tiếp tục?')) return;
+    applyZones(quickLayout(k, orientation), orientation, null);
+  };
   const moveMedia = (id: string, d: number) => setIds((cur) => {
     const z = zoneOfItem(id);
     const same = cur.filter((x) => zoneOfItem(x) === z);
@@ -264,7 +274,7 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
     <div role="group" aria-label="Thuộc tính thành phần">
       <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>Thuộc tính thành phần</h3>
       <Field label="Tên vùng"><input maxLength={60} value={sel.name ?? ''} onChange={(e) => setZones((c) => c.map((z) => (z.id === sel.id ? { ...z, name: e.target.value } : z)))} /></Field>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 6 }} className="wz-xywh">
         {(['x', 'y', 'w', 'h'] as const).map((k) => (
           <Field key={k} label={{ x: 'X (%)', y: 'Y (%)', w: 'Rộng (%)', h: 'Cao (%)' }[k]}>
             <input type="number" min={0} max={100} step={0.5} value={Math.round(sel[k] * 10) / 10} onChange={(e) => setZ(sel.id, { [k]: Number(e.target.value) })} />
@@ -280,7 +290,7 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
           {itemsIn(sel).map((id) => {
             const it = prev.items.find((x) => x.id === id);
             return (
-              <div key={id} className="wz-layer" style={{ cursor: 'default' }}>
+              <div key={id} className={`wz-media${overId === id ? ' over' : ''}`} draggable data-media={id} onDragStart={() => setDragId(id)} onDragOver={(e) => { e.preventDefault(); setOverId(id); }} onDragLeave={() => setOverId(null)} onDrop={(e) => { e.preventDefault(); dropMedia(id); }} onDragEnd={() => { setDragId(null); setOverId(null); }}>
                 <div style={{ width: 40, height: 40, borderRadius: 6, overflow: 'hidden', background: '#111', flex: '0 0 auto' }}>
                   {it?.url ? (it.kind === 'image' ? <img src={it.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <video src={`${it.url}#t=0.5`} muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : null}
                 </div>
@@ -310,9 +320,17 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
             <Field label="Màu nền"><input type="color" value={sel.bg_color ?? '#DC2626'} onChange={(e) => setZ(sel.id, { bg_color: e.target.value.toUpperCase() })} /></Field>
             <Field label="Màu chữ"><input type="color" value={sel.text_color ?? '#FFFFFF'} onChange={(e) => setZ(sel.id, { text_color: e.target.value.toUpperCase() })} /></Field>
             <Field label="Cỡ chữ"><input type="number" min={8} max={200} value={sel.font_size ?? 18} onChange={(e) => setZ(sel.id, { font_size: Number(e.target.value) })} /></Field>
+            {sel.type === 'marquee' ? <Field label="Hướng chạy"><select value={sel.scroll_dir ?? 'left'} onChange={(e) => setZ(sel.id, { scroll_dir: e.target.value as 'left' | 'right' })}><option value="left">Từ phải sang trái</option><option value="right">Từ trái sang phải</option></select></Field> : null}
             {sel.type === 'marquee' ? <Field label="Tốc độ (0–100)"><input type="number" min={0} max={100} value={sel.scroll_speed ?? 60} onChange={(e) => setZ(sel.id, { scroll_speed: Number(e.target.value) })} /></Field> : null}
           </div>
         </>
+      ) : null}
+      {sel.type === 'clock' ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <Field label="Định dạng giờ"><select value={sel.clock?.hour12 ? '12' : '24'} onChange={(e) => setZ(sel.id, { clock: { ...sel.clock, hour12: e.target.value === '12' } })}><option value="24">24 giờ</option><option value="12">12 giờ (AM/PM)</option></select></Field>
+          <Field label="Múi giờ"><select value={sel.clock?.tz ?? ''} onChange={(e) => setZ(sel.id, { clock: { ...sel.clock, tz: e.target.value || undefined } })}><option value="">Theo thiết bị</option><option value="Asia/Ho_Chi_Minh">Việt Nam (GMT+7)</option><option value="Asia/Bangkok">Bangkok</option><option value="Asia/Singapore">Singapore</option><option value="Asia/Tokyo">Tokyo</option><option value="UTC">UTC</option></select></Field>
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, gridColumn: '1 / -1' }}><input type="checkbox" checked={!!sel.clock?.date} onChange={(e) => setZ(sel.id, { clock: { ...sel.clock, date: e.target.checked } })} />Hiện ngày tháng</label>
+        </div>
       ) : null}
       {sel.type === 'qr' ? <QrEditor zone={sel} set={(p) => setZ(sel.id, p)} /> : null}
       {sel.type === 'weather' ? <WeatherEditor zone={sel} set={(p) => setZ(sel.id, p)} /> : null}
@@ -328,27 +346,30 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
   const step2 = (
     <div className="wz-3" style={{ margin: '-18px -24px', height: 'calc(100% + 36px)' }}>
       <div>{layerList}</div>
-      <div>
-        <div className="wz-tool">
-          {TOOLS.map((t) => <Btn key={t} disabled={zones.length >= MAX_ZONES} onClick={() => addZone(t)}>+ {ZONE_LABEL[t]}</Btn>)}
-        </div>
-        <div className="wz-tool">
-          <span style={{ color: 'var(--mut)', fontSize: 12 }}>Mẫu nhanh:</span>
-          <Btn onClick={() => applyZones(quickLayout('full', orientation), orientation, null)}>Toàn màn hình</Btn>
-          <Btn onClick={() => applyZones(quickLayout('half', orientation), orientation, null)}>Chia đôi 50/50</Btn>
-          <Btn onClick={() => applyZones(quickLayout('three', orientation), orientation, null)}>3 vùng + Chữ chạy</Btn>
-          <Btn tone={previewing ? '' : 'p'} aria-pressed={previewing} onClick={() => setPreviewing((v) => !v)}>{previewing ? '✎ Quay lại chỉnh sửa' : '👁 Xem trước'}</Btn>
-        </div>
+      <div style={{ padding: 10 }}>
         {previewing ? (
-          prev.loading ? <LoadingBlock /> : <LivePreview orientation={orientation} zones={visibleZones} items={prev.items} header={signage ? f.header : null} footer={signage ? f.footer : null} maxHeight={480} onRetry={prev.refresh} />
+          prev.loading ? <LoadingBlock /> : <LivePreview orientation={orientation} zones={visibleZones} items={prev.items} header={signage ? f.header : null} footer={signage ? f.footer : null} maxHeight={560} onRetry={prev.refresh} />
         ) : (
           <>
-            <ZoneCanvas orientation={orientation} zones={zones} selected={selected} onSelect={setSelected} onChange={(z) => setZones(z)} itemsOf={itemsOfZone} hidden={hidden} maxHeight={480} />
-            <div style={{ color: 'var(--mut)', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{zones.length}/{MAX_ZONES} vùng · Kéo vùng để di chuyển, kéo góc vàng để đổi kích thước · {orientation === 'portrait' ? 'Khung dọc 9:16' : 'Khung ngang 16:9'}</div>
+            <ZoneCanvas orientation={orientation} zones={zones} selected={selected} onSelect={setSelected} onChange={(z) => setZones(z)} itemsOf={itemsOfZone} hidden={hidden} maxHeight={560} />
+            <div style={{ color: 'var(--mut)', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{zones.length}/{MAX_ZONES} vùng · Kéo vùng để di chuyển, kéo tay nắm xanh để đổi kích thước · Phím mũi tên nhích 1% (Shift 5%, Alt đổi kích thước) · {orientation === 'portrait' ? 'Khung dọc 9:16' : 'Khung ngang 16:9'}</div>
           </>
         )}
       </div>
-      <div>{props}</div>
+      <div>
+        <h3 className="wz-sec">Thêm thành phần</h3>
+        <div className="wz-add">
+          {TOOLS.map((t) => <Btn key={t} disabled={zones.length >= MAX_ZONES} onClick={() => addZone(t)}>+ {ZONE_LABEL[t]}</Btn>)}
+        </div>
+        <h3 className="wz-sec">Mẫu nhanh</h3>
+        <div className="wz-add" style={{ gridTemplateColumns: '1fr', marginBottom: 6 }}>
+          <Btn onClick={() => quick('full')}>Toàn màn hình</Btn>
+          <Btn onClick={() => quick('half')}>Chia đôi 50/50</Btn>
+          <Btn onClick={() => quick('three')}>3 vùng + Chữ chạy</Btn>
+        </div>
+        <Btn className="wz-dark" aria-pressed={previewing} onClick={() => setPreviewing((v) => !v)}>{previewing ? '✎ Quay lại chỉnh sửa' : '👁 Xem trước'}</Btn>
+        {props}
+      </div>
     </div>
   );
 

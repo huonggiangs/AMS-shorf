@@ -6642,6 +6642,15 @@ export interface components {
                     text_color?: string;
                     font_size?: number;
                     scroll_speed?: number;
+                    /** @enum {string} */
+                    scroll_dir?: "left" | "right";
+                    clock?: {
+                        hour12?: boolean;
+                        tz?: string;
+                        date?: boolean;
+                    } & {
+                        [key: string]: unknown;
+                    };
                     url?: string;
                     qr?: {
                         /** @enum {string} */
@@ -7027,6 +7036,15 @@ export interface components {
                 text_color?: string;
                 font_size?: number;
                 scroll_speed?: number;
+                /** @enum {string} */
+                scroll_dir?: "left" | "right";
+                clock?: {
+                    hour12?: boolean;
+                    tz?: string;
+                    date?: boolean;
+                } & {
+                    [key: string]: unknown;
+                };
                 url?: string;
                 qr?: {
                     /** @enum {string} */
@@ -7409,6 +7427,15 @@ export interface components {
                     text_color?: string;
                     font_size?: number;
                     scroll_speed?: number;
+                    /** @enum {string} */
+                    scroll_dir?: "left" | "right";
+                    clock?: {
+                        hour12?: boolean;
+                        tz?: string;
+                        date?: boolean;
+                    } & {
+                        [key: string]: unknown;
+                    };
                     url?: string;
                     qr?: {
                         /** @enum {string} */
@@ -7642,6 +7669,15 @@ export interface components {
                 text_color?: string;
                 font_size?: number;
                 scroll_speed?: number;
+                /** @enum {string} */
+                scroll_dir?: "left" | "right";
+                clock?: {
+                    hour12?: boolean;
+                    tz?: string;
+                    date?: boolean;
+                } & {
+                    [key: string]: unknown;
+                };
                 url?: string;
                 qr?: {
                     /** @enum {string} */

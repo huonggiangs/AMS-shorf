@@ -11936,6 +11936,23 @@ components:
                         type: integer
                         minimum: 0
                         maximum: 100
+                      scroll_dir:
+                        type: string
+                        enum:
+                          - left
+                          - right
+                      clock:
+                        type: object
+                        properties:
+                          hour12:
+                            type: boolean
+                          tz:
+                            type: string
+                            pattern: ^[A-Za-z_]+(\/[A-Za-z_+-]+){0,2}$
+                            maxLength: 40
+                          date:
+                            type: boolean
+                        additionalProperties: true
                       url:
                         type: string
                         maxLength: 500
@@ -13013,6 +13030,23 @@ components:
                 type: integer
                 minimum: 0
                 maximum: 100
+              scroll_dir:
+                type: string
+                enum:
+                  - left
+                  - right
+              clock:
+                type: object
+                properties:
+                  hour12:
+                    type: boolean
+                  tz:
+                    type: string
+                    pattern: ^[A-Za-z_]+(\/[A-Za-z_+-]+){0,2}$
+                    maxLength: 40
+                  date:
+                    type: boolean
+                additionalProperties: true
               url:
                 type: string
                 maxLength: 500
@@ -14018,6 +14052,23 @@ components:
                         type: integer
                         minimum: 0
                         maximum: 100
+                      scroll_dir:
+                        type: string
+                        enum:
+                          - left
+                          - right
+                      clock:
+                        type: object
+                        properties:
+                          hour12:
+                            type: boolean
+                          tz:
+                            type: string
+                            pattern: ^[A-Za-z_]+(\/[A-Za-z_+-]+){0,2}$
+                            maxLength: 40
+                          date:
+                            type: boolean
+                        additionalProperties: true
                       url:
                         type: string
                         maxLength: 500
@@ -14664,6 +14715,23 @@ components:
                 type: integer
                 minimum: 0
                 maximum: 100
+              scroll_dir:
+                type: string
+                enum:
+                  - left
+                  - right
+              clock:
+                type: object
+                properties:
+                  hour12:
+                    type: boolean
+                  tz:
+                    type: string
+                    pattern: ^[A-Za-z_]+(\/[A-Za-z_+-]+){0,2}$
+                    maxLength: 40
+                  date:
+                    type: boolean
+                additionalProperties: true
               url:
                 type: string
                 maxLength: 500

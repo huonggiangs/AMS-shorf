@@ -450,6 +450,7 @@ export interface components {
             orientation?: "landscape" | "portrait";
             region?: string;
             volume?: number;
+            caps?: string[];
         } & {
             [key: string]: unknown;
         };
@@ -674,6 +675,19 @@ export interface components {
                         text_color?: string;
                         font_size?: number;
                         scroll_speed?: number;
+                        /**
+                         * @description CHI vung marquee: huong chay, mac dinh left
+                         * @enum {string}
+                         */
+                        scroll_dir?: "left" | "right";
+                        /** @description CHI vung clock: dinh dang gio, mui gio IANA, hien ngay */
+                        clock?: {
+                            hour12?: boolean;
+                            tz?: string;
+                            date?: boolean;
+                        } & {
+                            [key: string]: unknown;
+                        };
                         url?: string;
                         /**
                          * @description CHI vung qr: text = ve QR tu url; image_url = tai anh tu url (VietQR); data_url = anh nhung
@@ -827,6 +841,19 @@ export interface components {
                         text_color?: string;
                         font_size?: number;
                         scroll_speed?: number;
+                        /**
+                         * @description CHI vung marquee: huong chay, mac dinh left
+                         * @enum {string}
+                         */
+                        scroll_dir?: "left" | "right";
+                        /** @description CHI vung clock: dinh dang gio, mui gio IANA, hien ngay */
+                        clock?: {
+                            hour12?: boolean;
+                            tz?: string;
+                            date?: boolean;
+                        } & {
+                            [key: string]: unknown;
+                        };
                         url?: string;
                         /**
                          * @description CHI vung qr: text = ve QR tu url; image_url = tai anh tu url (VietQR); data_url = anh nhung
@@ -906,6 +933,7 @@ export interface components {
             px_h?: number;
             /** @enum {string} */
             orientation?: "landscape" | "portrait";
+            caps?: string[];
         } & {
             [key: string]: unknown;
         };
