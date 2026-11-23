@@ -25,6 +25,8 @@ export const zoneSchema = z
     z: z.coerce.number().default(0),
     transition: z.string().default('none'),
     text: z.string().nullish(),
+    /** van ban dinh dang (tap con HTML da lam sach: p, b, i, u, s, span, br); `text` luon la ban van ban thuan du phong */
+    rich: z.string().nullish(),
     bg_color: z.string().nullish(),
     text_color: z.string().nullish(),
     font_size: z.coerce.number().nullish(),

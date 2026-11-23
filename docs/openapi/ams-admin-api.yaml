@@ -11918,7 +11918,10 @@ components:
                         default: none
                       text:
                         type: string
-                        maxLength: 200
+                        maxLength: 2000
+                      rich:
+                        type: string
+                        maxLength: 20000
                       bg_color:
                         type: string
                         pattern: ^#[0-9A-Fa-f]{6}$
@@ -12992,7 +12995,10 @@ components:
                 default: none
               text:
                 type: string
-                maxLength: 200
+                maxLength: 2000
+              rich:
+                type: string
+                maxLength: 20000
               bg_color:
                 type: string
                 pattern: ^#[0-9A-Fa-f]{6}$
@@ -13994,7 +14000,10 @@ components:
                         default: none
                       text:
                         type: string
-                        maxLength: 200
+                        maxLength: 2000
+                      rich:
+                        type: string
+                        maxLength: 20000
                       bg_color:
                         type: string
                         pattern: ^#[0-9A-Fa-f]{6}$
@@ -14637,7 +14646,10 @@ components:
                 default: none
               text:
                 type: string
-                maxLength: 200
+                maxLength: 2000
+              rich:
+                type: string
+                maxLength: 20000
               bg_color:
                 type: string
                 pattern: ^#[0-9A-Fa-f]{6}$

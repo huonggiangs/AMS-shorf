@@ -10,6 +10,7 @@ import { QrEditor, WeatherEditor } from './ZoneExtras';
 import { usePreviewItems } from './PreviewDialogs';
 import { ZoneCanvas } from './ZoneCanvas';
 import { MAX_ZONES, PRESETS, TRANSITIONS, ZONE_LABEL, clampZone, isMediaZone, layoutError, newZone, templateSchema, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
+import { RichEditor } from './RichText';
 
 const BASE = '/admin/v1/broadcast';
 const TARGETS: { id: string; label: string; orientation: Orientation }[] = [
@@ -301,7 +302,10 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
       ) : null}
       {sel.type === 'marquee' || sel.type === 'text' ? (
         <>
-          <Field label={sel.type === 'marquee' ? 'Nội dung chữ chạy' : 'Nội dung văn bản'}><input maxLength={200} value={sel.text ?? ''} onChange={(e) => setZ(sel.id, { text: e.target.value })} /></Field>
+          <div className="fd">
+            <label id={`rt-l-${sel.id}`}>{sel.type === 'marquee' ? 'Nội dung chữ chạy' : 'Nội dung hiển thị'}</label>
+            <RichEditor key={`${sel.id}:${sel.type}`} label={sel.type === 'marquee' ? 'Nội dung chữ chạy' : 'Nội dung hiển thị'} line={sel.type === 'marquee'} rich={sel.rich} text={sel.text} baseColor={sel.text_color} baseBg={sel.bg_color ?? (sel.type === 'marquee' ? '#DC2626' : '#111827')} baseSize={sel.font_size ?? (sel.type === 'marquee' ? 18 : 24)} onChange={(v) => setZ(sel.id, { rich: v.rich || undefined, text: v.text })} />
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <Field label="Màu nền"><input type="color" value={sel.bg_color ?? '#DC2626'} onChange={(e) => setZ(sel.id, { bg_color: e.target.value.toUpperCase() })} /></Field>
             <Field label="Màu chữ"><input type="color" value={sel.text_color ?? '#FFFFFF'} onChange={(e) => setZ(sel.id, { text_color: e.target.value.toUpperCase() })} /></Field>

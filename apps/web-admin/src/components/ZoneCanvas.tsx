@@ -1,6 +1,7 @@
 import { useRef, useState, type PointerEvent } from 'react';
 import { ASPECT, clampZone, isMediaZone, zoneName, type Orientation, type Zone } from '../lib/layout';
 import type { PreviewItem } from './LivePreview';
+import { RichView } from './RichText';
 
 const COLORS: Record<string, string> = { video: '#2563EB', image: '#059669', marquee: '#DC2626', text: '#475569', clock: '#7C3AED', weather: '#0891B2', qr: '#B45309' };
 type Drag = { id: string; mode: 'move' | 'resize'; sx: number; sy: number; orig: Zone };
@@ -67,7 +68,7 @@ export function ZoneCanvas({ orientation, zones, selected, onSelect, onChange, i
             style={{ position: 'absolute', left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%`, zIndex: z.z, background: first?.url ? '#000' : `${COLORS[z.type]}55`, border: `2px solid ${isSel ? '#FBBF24' : COLORS[z.type]}`, color: '#fff', fontSize: 11, overflow: 'hidden', cursor: 'move', boxSizing: 'border-box', opacity: hidden.has(z.id) ? 0.25 : 1 }}
           >
             <Thumb item={first} />
-            {z.type === 'marquee' || z.type === 'text' ? <div style={{ position: 'absolute', inset: 0, background: z.bg_color ?? '#DC2626', color: z.text_color ?? '#fff', display: 'flex', alignItems: 'center', padding: '0 6px', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: Math.max(9, Math.min(16, (z.font_size ?? 16) * 0.6)) }}>{z.text ?? ''}</div> : null}
+            {z.type === 'marquee' || z.type === 'text' ? <div style={{ position: 'absolute', inset: 0, background: z.bg_color ?? '#DC2626', color: z.text_color ?? '#fff', display: 'flex', alignItems: 'center', padding: '0 6px', overflow: 'hidden', whiteSpace: z.rich && z.type === 'text' ? 'normal' : 'nowrap', fontSize: Math.max(9, Math.min(16, (z.font_size ?? 16) * 0.6)) }}>{z.rich ? <RichView html={z.rich} line={z.type === 'marquee'} k={Math.max(9, Math.min(16, (z.font_size ?? 16) * 0.6)) / (z.font_size ?? 16)} /> : z.text ?? ''}</div> : null}
             <span style={{ position: 'absolute', left: 2, top: 2, background: 'rgba(0,0,0,.6)', padding: '1px 5px', borderRadius: 4, maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{zoneName(z, i)}</span>
             <span aria-hidden onPointerDown={(e) => start(e, z, 'resize')} style={{ position: 'absolute', right: 0, bottom: 0, width: 16, height: 16, background: '#FBBF24', cursor: 'nwse-resize' }} />
           </div>

@@ -214,7 +214,10 @@ export interface ManifestZone {
   h: number;
   z?: number;
   transition?: string;
+  /** van ban thuan (luon co o vung marquee/text; thiet bi cu chi doc truong nay) */
   text?: string;
+  /** van ban dinh dang (tap con HTML: p[text-align,line-height], b, i, u, s, span[color,background-color,font-size,font-weight,font-family,letter-spacing], br); da lam sach o may chu */
+  rich?: string;
   bg_color?: string;
   text_color?: string;
   font_size?: number;

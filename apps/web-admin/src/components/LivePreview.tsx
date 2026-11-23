@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { isMediaZone, zoneName, ASPECT, type Orientation, type Zone } from '../lib/layout';
 import { qrImageSrc, type QrConfig } from '../lib/qr';
 import { fetchWeather, getGps, resolveCoords, weatherInfo, type WeatherNow } from '../lib/weather';
+import { RichView } from './RichText';
 
 export interface PreviewItem {
   id: string;
@@ -155,9 +156,9 @@ function ZoneView({ z, items, playing, runKey, ctl, primary }: { z: Zone; items:
   if (isMediaZone(z)) return <MediaZone z={z} items={items} playing={playing} runKey={runKey} ctl={ctl} primary={primary} />;
   if (z.type === 'marquee') {
     const dur = Math.max(4, Math.round(28 - (z.scroll_speed ?? 60) * 0.22));
-    return <div style={{ ...center, justifyContent: 'flex-start', background: z.bg_color ?? '#DC2626', color: z.text_color ?? '#fff', fontSize: `${Math.max(9, (z.font_size ?? 16) * 0.7)}px`, overflow: 'hidden' }}><span className="lp-marq" style={{ ['--lp-dur' as string]: `${dur}s` }}>{z.text ?? ''}</span></div>;
+    return <div style={{ ...center, justifyContent: 'flex-start', background: z.bg_color ?? '#DC2626', color: z.text_color ?? '#fff', fontSize: `${Math.max(9, (z.font_size ?? 16) * 0.7)}px`, overflow: 'hidden' }}><span className="lp-marq" style={{ ['--lp-dur' as string]: `${dur}s` }}>{z.rich ? <RichView html={z.rich} line k={0.7} /> : z.text ?? ''}</span></div>;
   }
-  if (z.type === 'text') return <div style={{ ...center, background: z.bg_color ?? '#111827', color: z.text_color ?? '#fff', fontSize: `${Math.max(9, (z.font_size ?? 24) * 0.6)}px`, padding: 6, overflow: 'hidden', whiteSpace: 'pre-wrap' }}>{z.text ?? ''}</div>;
+  if (z.type === 'text') return <div style={{ ...center, background: z.bg_color ?? '#111827', color: z.text_color ?? '#fff', fontSize: `${Math.max(9, (z.font_size ?? 24) * 0.6)}px`, padding: 6, overflow: 'hidden', whiteSpace: 'pre-wrap' }}>{z.rich ? <RichView html={z.rich} k={0.6} /> : z.text ?? ''}</div>;
   if (z.type === 'clock') return <Clock z={z} />;
   if (z.type === 'weather') return <WeatherZone z={z} />;
   return <QrZone z={z} />;

@@ -68,6 +68,24 @@ Thiết bị phải ở `trust_level >= 1` (TV đã ghép mã, thang máy/LED đ
 
 Manifest có thể chứa creative `delivery: "stream"` (`url`, `kind` mp4/webm/hls/dash, `duration_ms`, `etag`; không `sha256`, không `size_bytes`). App phải: phát trực tiếp bằng ExoPlayer/Media3 (không tải vào bộ nhớ đệm bắt buộc, không kiểm sha256), **bỏ qua và chuyển creative kế tiếp khi stream lỗi**, ghi log lỗi theo `creative_id` (chưa có loại sự kiện lỗi riêng trong giao thức; không gửi `impression` cho lượt lỗi), và gửi `impression` với `played_ms` thực (rebuffer làm `played_ms` ngắn đi; dưới 0.9 x `duration_ms` thì không hợp lệ). Không giảm bitrate/fps/độ phân giải khi phát. Chi tiết: `DEVICE-PROTOCOL.md` mục 7.0, `VIDEO-LINK.md`. Trang YouTube/Vimeo không phải stream trực tiếp: nằm ngoài phạm vi (AMS từ chối khi dán).
 
+### 3d. Văn bản định dạng trong bố cục đa vùng (`zones[].rich`)
+
+Vùng `text`/`marquee` của `layout` có thể kèm `rich` (định dạng đậm/nghiêng/màu/cỡ/căn lề…) bên cạnh `text` thuần; đặc tả trường ở DEVICE-PROTOCOL.md. App TV **không cần WebView**: `rich` chỉ gồm `p`, `b`, `i`, `u`, `s`, `br`, `span` nên tự tách chuỗi rồi dựng `SpannableStringBuilder`:
+
+| `rich` | Android |
+| --- | --- |
+| mỗi `<p>` | một đoạn, nối bằng `\n`; `text-align` → `AlignmentSpan.Standard` (`ALIGN_NORMAL`/`CENTER`/`OPPOSITE`) hoặc `setJustificationMode(INTER_WORD)` (API 26+) cho `justify`; `line-height` → `setLineSpacing(0f, hệ_số)` |
+| `<br>` | `\n` trong đoạn |
+| `<b>` / `<i>` | `StyleSpan(BOLD)` / `StyleSpan(ITALIC)` |
+| `<u>` / `<s>` | `UnderlineSpan` / `StrikethroughSpan` |
+| `color` / `background-color` | `ForegroundColorSpan` / `BackgroundColorSpan` |
+| `font-size:NNpx` | `AbsoluteSizeSpan(NN × hệ số khung, true)`; hệ số = hệ số đang áp cho `font_size` của vùng (đơn vị khung thiết kế) |
+| `font-weight` 300 / 500 / 900 | API 28+: `TypefaceSpan(Typeface.create(base, weight, italic))`; cũ hơn: `sans-serif-light` / `sans-serif-medium` / `sans-serif-black` |
+| `font-family` | Roboto, Arial, Verdana, Tahoma, `sans-serif` → `sans-serif`; Georgia, Times New Roman, `serif` → `serif`; Courier New, `monospace` → `monospace` |
+| `letter-spacing:Npx` | `ScaleXSpan` xấp xỉ hoặc `TextView.setLetterSpacing(N / textSize)` cho cả khối |
+
+`font_size`, `text_color`, `bg_color` của vùng là kiểu nền, kiểu trong `rich` ghi đè. `marquee` luôn một `<p>`: dựng một `TextView` một dòng (`ellipsize=marquee`) với cùng Spannable. Không parse được hoặc không có `rich` thì dùng `text`. Máy chủ đã làm sạch `rich` (danh sách thẻ/thuộc tính cố định), nhưng TV vẫn **bỏ qua** thẻ/thuộc tính lạ thay vì hiển thị hoặc thực thi chúng.
+
 ## 8. Rủi ro và tuân thủ
 
 (Mục số 8 được giữ để khớp tham chiếu trong PATCH-NOTES.)

@@ -1,5 +1,6 @@
 import { useRef, useState, type PointerEvent } from 'react';
 import { Field } from './ui';
+import { RichEditor } from './RichText';
 import { QrEditor, WeatherEditor } from './ZoneExtras';
 import { ASPECT, MAX_ZONES, TRANSITIONS, ZONE_LABEL, ZONE_TYPES, clampZone, isMediaZone, newZone, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
 
@@ -81,7 +82,7 @@ export function ZoneEditor({ orientation, zones, onChange, selected, onSelect }:
             {isMediaZone(sel) ? <Field label="Chuyển cảnh"><select value={sel.transition} onChange={(e) => set(sel.id, { transition: e.target.value })}>{TRANSITIONS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></Field> : null}
             {sel.type === 'marquee' ? (
               <>
-                <Field label="Nội dung chữ chạy"><input maxLength={200} value={sel.text ?? ''} onChange={(e) => set(sel.id, { text: e.target.value })} /></Field>
+                <div className="fd"><label>Nội dung chữ chạy</label><RichEditor key={`${sel.id}:m`} label="Nội dung chữ chạy" line rich={sel.rich} text={sel.text} baseColor={sel.text_color} baseBg={sel.bg_color ?? '#DC2626'} baseSize={sel.font_size ?? 18} onChange={(v) => set(sel.id, { rich: v.rich || undefined, text: v.text })} /></div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <Field label="Màu nền"><input type="color" value={sel.bg_color ?? '#DC2626'} onChange={(e) => set(sel.id, { bg_color: e.target.value.toUpperCase() })} /></Field>
                   <Field label="Màu chữ"><input type="color" value={sel.text_color ?? '#FFFFFF'} onChange={(e) => set(sel.id, { text_color: e.target.value.toUpperCase() })} /></Field>
@@ -92,7 +93,7 @@ export function ZoneEditor({ orientation, zones, onChange, selected, onSelect }:
             ) : null}
             {sel.type === 'text' ? (
               <>
-                <Field label="Nội dung văn bản"><textarea maxLength={200} rows={3} value={sel.text ?? ''} onChange={(e) => set(sel.id, { text: e.target.value })} /></Field>
+                <div className="fd"><label>Nội dung hiển thị</label><RichEditor key={`${sel.id}:t`} label="Nội dung hiển thị" rich={sel.rich} text={sel.text} baseColor={sel.text_color} baseBg={sel.bg_color ?? '#111827'} baseSize={sel.font_size ?? 24} onChange={(v) => set(sel.id, { rich: v.rich || undefined, text: v.text })} /></div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <Field label="Màu nền"><input type="color" value={sel.bg_color ?? '#111827'} onChange={(e) => set(sel.id, { bg_color: e.target.value.toUpperCase() })} /></Field>
                   <Field label="Màu chữ"><input type="color" value={sel.text_color ?? '#FFFFFF'} onChange={(e) => set(sel.id, { text_color: e.target.value.toUpperCase() })} /></Field>

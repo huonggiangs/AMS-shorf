@@ -34,6 +34,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/commands/wait": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Long-poll lệnh (tin khẩn thời gian thực)
+         * @description Giữ kết nối tối đa `timeout` giây (1–25, mặc định 25) và trả ngay khi có lệnh pending (kiểm cờ hàng đợi mỗi ~1,5 giây). Lệnh giao at-least-once như heartbeat; ack qua /v1/commands/ack. Giới hạn 600 lần/giờ/thiết bị (429 + `Retry-After`). Thiết bị vẫn heartbeat định kỳ.
+         */
+        get: operations["gatewayGetCommandsWait"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/events": {
         parameters: {
             query?: never;
@@ -429,6 +449,7 @@ export interface components {
             /** @enum {string} */
             orientation?: "landscape" | "portrait";
             region?: string;
+            volume?: number;
         } & {
             [key: string]: unknown;
         };
@@ -561,8 +582,22 @@ export interface components {
                 id: string;
                 campaign_id: string;
                 url: string;
-                /** @description hex; thiet bi PHAI kiem tra truoc khi phat */
-                sha256: string;
+                /** @description hex; thiet bi PHAI kiem tra truoc khi phat. Chi co o creative tai len; creative delivery=stream KHONG co sha256 */
+                sha256?: string;
+                /**
+                 * @description vang mat = tai len (tai ve + kiem sha256); 'stream' = phat truc tiep tu url ben ngoai (ExoPlayer/Media3), khong tai ve
+                 * @constant
+                 */
+                delivery?: "stream";
+                /**
+                 * @description chi voi delivery=stream: dinh dang luong
+                 * @enum {string}
+                 */
+                kind?: "mp4" | "webm" | "hls" | "dash";
+                /** @description chi voi delivery=stream: thoi luong khai bao (ms), dung cho quy tac 0.9 x thoi luong */
+                duration_ms?: number;
+                /** @description chi voi delivery=stream: ETag luc duyet (neu co) */
+                etag?: string | null;
                 duration_s: number | null;
                 px_w: number | null;
                 px_h: number | null;
@@ -615,6 +650,58 @@ export interface components {
                 header?: string;
                 /** @description CHI thang may/LED: ghi de footer cap manifest cho lich nay (chuoi rong = an) */
                 footer?: string;
+                /** @description CHI lich noi bo (slot bp_*) co bo cuc da vung; thiet bi cu bo qua truong la */
+                layout?: {
+                    /** @enum {string} */
+                    orientation: "landscape" | "portrait";
+                    zones: ({
+                        id: string;
+                        /** @enum {string} */
+                        type: "video" | "image" | "marquee" | "text" | "clock" | "weather" | "qr";
+                        /** @description % khung, 0..100 */
+                        x: number;
+                        y: number;
+                        w: number;
+                        h: number;
+                        z?: number;
+                        /** @enum {string} */
+                        transition?: "none" | "fade" | "slide-left" | "slide-right" | "zoom";
+                        /** @description Van ban thuan (thiet bi cu chi doc truong nay) */
+                        text?: string;
+                        /** @description Van ban dinh dang cho vung marquee/text: tap con HTML da lam sach (p, b, i, u, s, span, br); thieu = dung text */
+                        rich?: string;
+                        bg_color?: string;
+                        text_color?: string;
+                        font_size?: number;
+                        scroll_speed?: number;
+                        url?: string;
+                        /**
+                         * @description CHI vung qr: text = ve QR tu url; image_url = tai anh tu url (VietQR); data_url = anh nhung
+                         * @enum {string}
+                         */
+                        qr_kind?: "text" | "image_url" | "data_url";
+                        /** @description CHI vung qr: cau hinh goc (mode image|url|vietqr) */
+                        qr?: {
+                            [key: string]: unknown;
+                        };
+                        /** @description CHI vung weather: thiet bi tu lay Open-Meteo (api.open-meteo.com) theo lat/lon */
+                        weather?: {
+                            /** @enum {string} */
+                            mode: "gps" | "fixed";
+                            lat?: number;
+                            lon?: number;
+                            label?: string;
+                        } & {
+                            [key: string]: unknown;
+                        };
+                        /** @description CHI vung video/image: tep phat o vung nay, theo thu tu */
+                        creative_ids?: string[];
+                    } & {
+                        [key: string]: unknown;
+                    })[];
+                } & {
+                    [key: string]: unknown;
+                };
             } & {
                 [key: string]: unknown;
             })[];
@@ -646,8 +733,22 @@ export interface components {
                 id: string;
                 campaign_id: string;
                 url: string;
-                /** @description hex; thiet bi PHAI kiem tra truoc khi phat */
-                sha256: string;
+                /** @description hex; thiet bi PHAI kiem tra truoc khi phat. Chi co o creative tai len; creative delivery=stream KHONG co sha256 */
+                sha256?: string;
+                /**
+                 * @description vang mat = tai len (tai ve + kiem sha256); 'stream' = phat truc tiep tu url ben ngoai (ExoPlayer/Media3), khong tai ve
+                 * @constant
+                 */
+                delivery?: "stream";
+                /**
+                 * @description chi voi delivery=stream: dinh dang luong
+                 * @enum {string}
+                 */
+                kind?: "mp4" | "webm" | "hls" | "dash";
+                /** @description chi voi delivery=stream: thoi luong khai bao (ms), dung cho quy tac 0.9 x thoi luong */
+                duration_ms?: number;
+                /** @description chi voi delivery=stream: ETag luc duyet (neu co) */
+                etag?: string | null;
                 duration_s: number | null;
                 px_w: number | null;
                 px_h: number | null;
@@ -702,6 +803,58 @@ export interface components {
                 header?: string;
                 /** @description CHI thang may/LED: ghi de footer cap manifest cho lich nay (chuoi rong = an) */
                 footer?: string;
+                /** @description CHI lich noi bo (slot bp_*) co bo cuc da vung; thiet bi cu bo qua truong la */
+                layout?: {
+                    /** @enum {string} */
+                    orientation: "landscape" | "portrait";
+                    zones: ({
+                        id: string;
+                        /** @enum {string} */
+                        type: "video" | "image" | "marquee" | "text" | "clock" | "weather" | "qr";
+                        /** @description % khung, 0..100 */
+                        x: number;
+                        y: number;
+                        w: number;
+                        h: number;
+                        z?: number;
+                        /** @enum {string} */
+                        transition?: "none" | "fade" | "slide-left" | "slide-right" | "zoom";
+                        /** @description Van ban thuan (thiet bi cu chi doc truong nay) */
+                        text?: string;
+                        /** @description Van ban dinh dang cho vung marquee/text: tap con HTML da lam sach (p, b, i, u, s, span, br); thieu = dung text */
+                        rich?: string;
+                        bg_color?: string;
+                        text_color?: string;
+                        font_size?: number;
+                        scroll_speed?: number;
+                        url?: string;
+                        /**
+                         * @description CHI vung qr: text = ve QR tu url; image_url = tai anh tu url (VietQR); data_url = anh nhung
+                         * @enum {string}
+                         */
+                        qr_kind?: "text" | "image_url" | "data_url";
+                        /** @description CHI vung qr: cau hinh goc (mode image|url|vietqr) */
+                        qr?: {
+                            [key: string]: unknown;
+                        };
+                        /** @description CHI vung weather: thiet bi tu lay Open-Meteo (api.open-meteo.com) theo lat/lon */
+                        weather?: {
+                            /** @enum {string} */
+                            mode: "gps" | "fixed";
+                            lat?: number;
+                            lon?: number;
+                            label?: string;
+                        } & {
+                            [key: string]: unknown;
+                        };
+                        /** @description CHI vung video/image: tep phat o vung nay, theo thu tu */
+                        creative_ids?: string[];
+                    } & {
+                        [key: string]: unknown;
+                    })[];
+                } & {
+                    [key: string]: unknown;
+                };
             } & {
                 [key: string]: unknown;
             })[];
@@ -993,6 +1146,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommandAckResponse"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["RetryLater"];
+            503: components["responses"]["RetryLater"];
+        };
+    };
+    gatewayGetCommandsWait: {
+        parameters: {
+            query?: {
+                timeout?: number;
+            };
+            header: {
+                /** @description device_id từ /v1/register */
+                "x-device-id": string;
+                /** @description epoch giây; lệch máy chủ tối đa 300s */
+                "x-timestamp": number;
+                /** @description dùng một lần (chống phát lại) */
+                "x-nonce": string;
+                /** @description Ed25519, base64url không padding (64 byte) */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Danh sách lệnh (rỗng nếu hết thời gian chờ) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        commands?: Record<string, never>[];
+                        waited?: boolean;
+                    };
                 };
             };
             401: components["responses"]["Error"];

@@ -222,6 +222,30 @@ describe('thong bao khan + goi USB', () => {
     expect((await content.json('POST', '/admin/v1/layout-templates', { name: 'Hong', zones: [{ id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 50 }, { id: 'w', type: 'weather', x: 0, y: 50, w: 20, h: 20, weather: { mode: 'fixed', lat: 123, lon: 5 } }] })).status).toBe(422);
   });
 
+  it('van ban dinh dang (rich): may chu lam sach HTML, tu dat lai text thuan, chu chay mot dong; vung khac khong giu rich', async () => {
+    const dirty = '<p style="text-align:center;position:fixed" onclick="x()"><b>Giam gia</b> <span style="color:#f00;font-size:40px;font-family:Comic Sans">50%</span><script>alert(1)</script></p><div>Dong hai &amp; ba</div>';
+    const zones = [
+      { id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 60 },
+      { id: 't', type: 'text', x: 0, y: 60, w: 100, h: 25, text: 'cu', rich: dirty },
+      { id: 'bar', type: 'marquee', x: 0, y: 85, w: 100, h: 15, rich: '<p><b>A</b></p><p>B</p>' },
+      { id: 'img', type: 'image', x: 0, y: 0, w: 10, h: 10, rich: '<p>khong</p>' },
+    ];
+    const ok = await content.json('POST', '/admin/v1/layout-templates', { name: 'Rich', zones });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    const t = ok.body.zones.find((z: any) => z.id === 't');
+    expect(t.rich).toBe('<p style="text-align:center"><b>Giam gia</b> <span style="color:#FF0000;font-size:40px">50%</span></p><p>Dong hai &amp; ba</p>');
+    expect(t.text).toBe('Giam gia 50%\nDong hai & ba');
+    const bar = ok.body.zones.find((z: any) => z.id === 'bar');
+    expect(bar.rich).toBe('<p><b>A</b> B</p>');
+    expect(bar.text).toBe('A B');
+    expect(ok.body.zones.find((z: any) => z.id === 'img').rich).toBeUndefined();
+    const long = await content.json('POST', '/admin/v1/layout-templates', { name: 'Dai', zones: [zones[0], { id: 'bar', type: 'marquee', x: 0, y: 85, w: 100, h: 15, rich: `<p>${'x'.repeat(201)}</p>` }] });
+    expect(long.status).toBe(422);
+    const old = await content.json('POST', '/admin/v1/layout-templates', { name: 'Cu', zones: [zones[0], { id: 'old', type: 'text', x: 0, y: 60, w: 50, h: 20, text: 'Chi co text' }] });
+    expect(old.body.zones.find((z: any) => z.id === 'old')).toMatchObject({ text: 'Chi co text' });
+    expect(old.body.zones.find((z: any) => z.id === 'old').rich).toBeUndefined();
+  });
+
   it('mau bo cuc: CRUD + kiem tra vung (vuot khung, trung ma, qua 8 vung); quyen xem/ghi', async () => {
     const zones = [
       { id: 'main', type: 'video', x: 0, y: 0, w: 100, h: 80, z: 0, transition: 'fade' },

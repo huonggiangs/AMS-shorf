@@ -18037,7 +18037,11 @@
                         },
                         "text": {
                           "type": "string",
-                          "maxLength": 200
+                          "maxLength": 2000
+                        },
+                        "rich": {
+                          "type": "string",
+                          "maxLength": 20000
                         },
                         "bg_color": {
                           "type": "string",
@@ -19708,7 +19712,11 @@
                 },
                 "text": {
                   "type": "string",
-                  "maxLength": 200
+                  "maxLength": 2000
+                },
+                "rich": {
+                  "type": "string",
+                  "maxLength": 20000
                 },
                 "bg_color": {
                   "type": "string",
@@ -21217,7 +21225,11 @@
                         },
                         "text": {
                           "type": "string",
-                          "maxLength": 200
+                          "maxLength": 2000
+                        },
+                        "rich": {
+                          "type": "string",
+                          "maxLength": 20000
                         },
                         "bg_color": {
                           "type": "string",
@@ -22214,7 +22226,11 @@
                 },
                 "text": {
                   "type": "string",
-                  "maxLength": 200
+                  "maxLength": 2000
+                },
+                "rich": {
+                  "type": "string",
+                  "maxLength": 20000
                 },
                 "bg_color": {
                   "type": "string",

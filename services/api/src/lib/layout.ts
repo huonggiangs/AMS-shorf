@@ -1,5 +1,6 @@
 // Bo cuc da vung (migration 0021): kiem tra zod dung chung cho mau bo cuc va chuong trinh phat song. Toa do tinh theo % khung (0..100).
 import { z } from 'zod';
+import { richHtmlToPlain, sanitizeRich, RICH_LIMITS } from '@ams/shared';
 
 export const ZONE_TYPES = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr'] as const;
 export const MEDIA_ZONE_TYPES = ['video', 'image'] as const;
@@ -45,7 +46,10 @@ export const zoneSchema = z
     h: z.number().min(1).max(100),
     z: z.number().int().min(0).max(20).default(0),
     transition: z.enum(['none', 'fade', 'slide-left', 'slide-right', 'zoom']).default('none'),
-    text: z.string().max(200).optional(),
+    /** Van ban thuan (thiet bi cu doc truong nay). Neu co `rich`, may chu tu dong dat lai = van ban thuan cua `rich`. */
+    text: z.string().max(2000).optional(),
+    /** Van ban dinh dang: tap con HTML (p, b, i, u, s, span, br), duoc lam sach lai o may chu. */
+    rich: z.string().max(RICH_LIMITS.html).optional(),
     bg_color: hex.optional(),
     text_color: hex.optional(),
     font_size: z.number().int().min(8).max(200).optional(),
@@ -54,7 +58,22 @@ export const zoneSchema = z
     qr: qrSchema.optional(),
     weather: weatherSchema.optional(),
   })
-  .refine((v) => v.x + v.w <= 100.01 && v.y + v.h <= 100.01, { message: 'Vùng vượt ra ngoài khung (x+w và y+h tối đa 100%)' });
+  .refine((v) => v.x + v.w <= 100.01 && v.y + v.h <= 100.01, { message: 'Vùng vượt ra ngoài khung (x+w và y+h tối đa 100%)' })
+  .transform((v, ctx) => {
+    if (v.type !== 'text' && v.type !== 'marquee') {
+      const { rich: _r, ...rest } = v;
+      return rest;
+    }
+    if (v.rich !== undefined) {
+      const clean = sanitizeRich(v.rich, { singleLine: v.type === 'marquee' });
+      const { rich: _r, ...rest } = v;
+      const text = richHtmlToPlain(clean);
+      if (v.type === 'marquee' && text.length > 200) { ctx.addIssue({ code: 'custom', message: 'Chữ chạy tối đa 200 ký tự', path: ['rich'] }); return z.NEVER; }
+      return clean ? { ...rest, rich: clean, text } : { ...rest, text: '' };
+    }
+    if (v.type === 'marquee' && (v.text?.length ?? 0) > 200) { ctx.addIssue({ code: 'custom', message: 'Chữ chạy tối đa 200 ký tự', path: ['text'] }); return z.NEVER; }
+    return v;
+  });
 
 export const zonesSchema = z
   .array(zoneSchema)

@@ -2754,7 +2754,12 @@
                             ]
                           },
                           "text": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Van ban thuan (thiet bi cu chi doc truong nay)"
+                          },
+                          "rich": {
+                            "type": "string",
+                            "description": "Van ban dinh dang cho vung marquee/text: tap con HTML da lam sach (p, b, i, u, s, span, br); thieu = dung text"
                           },
                           "bg_color": {
                             "type": "string"
@@ -3197,7 +3202,12 @@
                             ]
                           },
                           "text": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Van ban thuan (thiet bi cu chi doc truong nay)"
+                          },
+                          "rich": {
+                            "type": "string",
+                            "description": "Van ban dinh dang cho vung marquee/text: tap con HTML da lam sach (p, b, i, u, s, span, br); thieu = dung text"
                           },
                           "bg_color": {
                             "type": "string"
