@@ -15,6 +15,7 @@ import { CAMPAIGN_DELETABLE_STATES, CAMPAIGN_EDITABLE_STATES, InvalidTransitionE
 import { TOPIC_CAMPAIGN_APPROVED, approvedKey, enqueueCampaignRelease, enqueueManifestBump, runOutbox } from '../outbox.js';
 import { allowUnscannedCreatives, assertScanOk } from './creatives-scan.js';
 import { assertLockPolicy, recordApproval } from '../lib/creative-security.js';
+import { assertAttestVersion, assertMayAttest, attestInputSchema, recordAttestation } from '../lib/attestation.js';
 import { assertPriced, loadSnapshot, planCampaignPrices, quoteFromRows, unavailableQuote, writeCampaignPrices } from '../lib/pricing.js';
 import { isBannedIndustry, loadTvSettings } from './tv-experience.js';
 import { requirePerm } from '../auth/middleware.js';
@@ -472,6 +473,9 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
   r.post('/:id/approve', requirePerm('campaigns', 'approve'), async (c) => {
     const rt = getRt(c);
     const u = c.get('user');
+    // cam ket phap ly (tuy chon): chi ghi khi nguoi duyet tick; ap dung cho cac creative duoc duyet theo chien dich nay. Khong co attest => khong cam ket (ky bo sung o trang Media).
+    const ab = await parseBody(c, z.object({ attest: attestInputSchema.optional() }));
+    if (ab.attest) { assertMayAttest(u); assertAttestVersion(ab.attest); }
     const row = await loadCampaign(c, c.req.param('id'), true);
     // approve = CHI pending_review -> awaiting_funds (scheduled/active/paused -> awaiting_funds la hoan tac kich hoat cua payments, khong phai duyet)
     if (row.state !== 'pending_review') throw new InvalidTransitionError(row.state, 'awaiting_funds', 'not_allowed', 'Chỉ duyệt được chiến dịch đang chờ duyệt.');
@@ -516,6 +520,7 @@ export function campaignRoutes(external: boolean): Hono<AppEnv> {
       await writeCampaignPrices(db, row.id, plan.rows, u.id, nowIso);
       const ap = await db.run("UPDATE creatives SET review_state = 'approved', state = CASE WHEN state IN ('uploading','importing') THEN state ELSE 'ready' END, review_note = NULL WHERE campaign_id = ? AND review_state = 'pending'", [row.id]);
       for (const cr of pendingCreatives) await recordApproval(db, cr, nowIso); // R1-14: gan duyet voi phien ban/dau van tay noi dung
+      if (ab.attest) for (const cr of pendingCreatives) await recordAttestation(db, rt, c, u, { id: cr.id, customer_id: row.customer_id }, ab.attest, 'campaign', nowIso);
       // manifest chi phat chien dich co lich: tao lich ca ngay mac dinh neu admin chua xep lich rieng
       await ensureDefaultSlot(rt, db, row.id, jsonParse<string[]>(row.target_types, ['tv'])[0] ?? 'tv');
       await auditCtx(c, db, {

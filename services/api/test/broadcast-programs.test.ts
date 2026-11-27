@@ -50,6 +50,7 @@ async function libraryMedia(o: { w?: number; h?: number; review?: string; campai
      VALUES (?, ?, ?, ?, 'elevator', ?, ?, 'portrait', 'video', 'upload', ?, 'video/mp4', ?, 15, 'clean', ?, 'ready', ?)`,
     [id, o.campaignId ?? null, customerId, `kho-${id}.mp4`, o.w ?? 1080, o.h ?? 1920, key, bytes.length, o.review ?? 'approved', NOW],
   );
+  await rt.db.run("INSERT INTO creative_attestations (id, creative_id, content_version, version, kid_safe, signed_by, signed_by_name, signed_at, source) VALUES (?,?,1,'legal-v1',1,'test','Người ký thử',?,'approve')", [rt.id(), id, NOW]);
   return id;
 }
 

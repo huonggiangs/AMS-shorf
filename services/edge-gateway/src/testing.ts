@@ -3,6 +3,17 @@ import type { Runtime } from '@ams/runtime';
 import { canonicalRequest, ed25519Sign, generateEd25519KeyPair, sha256Hex, toBase64Url, randomBytes, utf8, type Ed25519KeyPair } from '@ams/shared';
 import { HEADER } from './protocol.js';
 
+/** Test: ghi mot cam ket phap ly hieu luc (nguoi ky gia lap) cho creative, gan voi content_version hien tai. */
+export async function attestForTest(rt: Runtime, creativeId: string, o: { kidSafe?: boolean; by?: string; name?: string; version?: string; contentVersion?: number; revoked?: boolean } = {}): Promise<string> {
+  const id = rt.id();
+  const sec = (await rt.db.query<{ content_version: number }>('SELECT content_version FROM creative_security WHERE creative_id = ?', [creativeId]))[0];
+  await rt.db.run(
+    'INSERT INTO creative_attestations (id, creative_id, content_version, version, kid_safe, signed_by, signed_by_name, signed_at, source, revoked_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [id, creativeId, o.contentVersion ?? Number(sec?.content_version ?? 1), o.version ?? 'legal-v1', o.kidSafe === false ? 0 : 1, o.by ?? 'test-signer', o.name ?? 'Người ký thử nghiệm', rt.clock.now().toISOString(), 'approve', o.revoked ? rt.clock.now().toISOString() : null],
+  );
+  return id;
+}
+
 export interface FixtureCreative {
   id: string;
   sha256: string;
@@ -28,6 +39,10 @@ export interface FixtureOpts {
   durationS?: number;
   state?: string;
   withObjects?: boolean;
+  /** false = khong ky cam ket phap ly cho creative (mac dinh: co ky, kid_safe = true) */
+  attested?: boolean;
+  /** lua chon kid_safe cua nguoi ky (mac dinh true trong fixture de cac test TV cu giu nguyen) */
+  kidSafe?: boolean;
   /** loai thuong chien dich (WP-18). Fixture mac dinh 'cover' de test cu giu nguyen; cot DB mac dinh 'performance'. */
   rewardModel?: 'cover' | 'performance';
   interactionRewardVnd?: number;
@@ -71,6 +86,7 @@ export async function seedAdFixture(rt: Runtime, o: FixtureOpts = {}): Promise<A
          VALUES (?, ?, ?, ?, ?, ?, ?, 'landscape', 'video', 'upload', ?, 'video/mp4', ?, ?, 'clean', 'approved', 'ready', ?)`,
         [id, cid, customerId, `c${k}.mp4`, o.targetType ?? 'tv', w, h, key, bytes.length, o.durationS ?? 15, now],
       );
+      if (o.attested !== false) await attestForTest(rt, id, { kidSafe: o.kidSafe });
       creatives.push({ id, sha256: await sha256Hex(bytes) });
     }
     campaigns.push({ id: cid, slotId, creatives });

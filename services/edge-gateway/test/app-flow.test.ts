@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MANIFEST_EPOCH_KEY } from '@ams/shared';
 import { enqueueCommand } from '../src/commands.js';
-import { seedAdFixture } from '../src/testing.js';
+import { attestForTest, seedAdFixture } from '../src/testing.js';
 import { TestDevice, harness, type Harness } from './helpers.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -23,6 +23,7 @@ async function libraryCreative(): Promise<string> {
      VALUES (?, NULL, ?, ?, 'elevator', 1080, 1920, 'portrait', 'video', 'upload', ?, 'video/mp4', ?, 15, 'clean', 'approved', 'ready', ?)`,
     [id, customerId, `lib-${id}.mp4`, key, bytes.length, h.rt.clock.now().toISOString()],
   );
+  await attestForTest(h.rt, id);
   return id;
 }
 

@@ -248,6 +248,8 @@ export const mediaSchema = z
     /** upload (mặc định) | stream (dán link: TV phát trực tiếp, máy chủ không giữ tệp) */
     delivery: z.string().nullish(),
     stream: streamSchema.nullish(),
+    /** cam kết pháp lý (chỉ tài khoản nội bộ): valid | missing | stale */
+    attestation: z.object({ status: z.string(), version: z.string().nullish(), kid_safe: z.boolean().default(false), signed_by_name: z.string().nullish(), signed_at: z.string().nullish(), source: z.string().nullish() }).nullish(),
   })
   .passthrough();
 export type Media = z.infer<typeof mediaSchema>;

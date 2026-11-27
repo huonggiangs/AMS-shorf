@@ -53,6 +53,13 @@ interface CreativeRow {
   stream_url?: string | null;
   stream_kind?: 'mp4' | 'webm' | 'hls' | 'dash' | null;
   stream_etag?: string | null;
+  /** cam ket phap ly hieu luc (creative_attestations, 0029): thieu = creative KHONG duoc phat */
+  at_id?: string | null;
+  at_version?: string | null;
+  at_kid?: number | null;
+  at_by?: string | null;
+  at_name?: string | null;
+  at_at?: string | null;
 }
 interface SlotRow {
   campaign_id: string;
@@ -429,6 +436,8 @@ export class ManifestService {
     }
     for (const r of creativeRows) {
       if (seenCreative.has(r.id)) continue; // cung tep o nhieu chuong trinh: chi dua vao manifest mot lan
+      const att = attestOf(r);
+      if (!att) continue; // KHONG co cam ket phap ly hieu luc (nguoi ky + dung phien ban noi dung hien tai) => khong phat creative xuong thiet bi
       if (type === 'elevator') {
         const known = !!r.px_w && !!r.px_h;
         if (known && !isElevatorResolution(Number(r.px_w), Number(r.px_h))) continue; // chi creative doc 9:16 HD-4K
@@ -456,6 +465,7 @@ export class ManifestService {
           ...(sov.ov ? { overlay: sov.ov } : {}),
           media_type: 'video',
           size_bytes: null,
+          ...att,
           ...(signage ? { fit: signage.fit } : {}),
         });
         seenCreative.add(r.id);
@@ -502,6 +512,7 @@ export class ManifestService {
         ...(ov ? { overlay: ov } : {}),
         media_type: isImage ? 'image' : 'video',
         size_bytes: sizeBytes === null ? null : Number(sizeBytes),
+        ...att,
         ...(signage ? { fit: signage.fit } : {}),
       });
     }
@@ -671,9 +682,11 @@ export class ManifestService {
   private async queryProgramCreatives(type: string): Promise<CreativeRow[]> {
     return this.rt.db.query<CreativeRow>(
       `SELECT cr.id, 'bp_' || bp.id AS campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay, cr.customer_id, cr.scan_state,
-              COALESCE(cs.content_version, 1) AS content_version, kr.kid_safe AS kr_kid, kr.content_version AS kr_version
+              COALESCE(cs.content_version, 1) AS content_version, kr.kid_safe AS kr_kid, kr.content_version AS kr_version,
+              att.id AS at_id, att.version AS at_version, att.kid_safe AS at_kid, att.signed_by AS at_by, att.signed_by_name AS at_name, att.signed_at AS at_at
          FROM broadcast_programs bp JOIN broadcast_program_items i ON i.program_id = bp.id JOIN creatives cr ON cr.id = i.creative_id
          LEFT JOIN creative_security cs ON cs.creative_id = cr.id LEFT JOIN creative_kid_review kr ON kr.creative_id = cr.id
+         LEFT JOIN creative_attestations att ON att.id = (SELECT a2.id FROM creative_attestations a2 WHERE a2.creative_id = cr.id AND a2.revoked_at IS NULL AND a2.content_version = COALESCE(cs.content_version, 1) ORDER BY a2.signed_at DESC, a2.id DESC LIMIT 1)
         WHERE bp.status = 'published' AND bp.target_type = ? AND cr.campaign_id IS NULL AND cr.review_state = 'approved' AND cr.state = 'ready'
           AND cr.scan_state NOT IN ('infected','failed','needs_manual_review','pending')
           AND NOT (cs.approved_version IS NOT NULL AND cs.approved_version <> cs.content_version)`,
@@ -685,9 +698,11 @@ export class ManifestService {
     return this.rt.db.query<CreativeRow>(
       `SELECT cr.id, cr.campaign_id, cr.target_type, cr.px_w, cr.px_h, cr.kind, cr.storage_key, cr.size_bytes, cr.duration_s, cr.sha256, cr.format, cr.overlay, cr.customer_id, cr.scan_state,
               COALESCE(cs.content_version, 1) AS content_version, kr.kid_safe AS kr_kid, kr.content_version AS kr_version,
-              st.stream_url, st.stream_kind, st.etag AS stream_etag
+              st.stream_url, st.stream_kind, st.etag AS stream_etag,
+              att.id AS at_id, att.version AS at_version, att.kid_safe AS at_kid, att.signed_by AS at_by, att.signed_by_name AS at_name, att.signed_at AS at_at
          FROM creatives cr JOIN campaigns c ON c.id = cr.campaign_id LEFT JOIN creative_security cs ON cs.creative_id = cr.id LEFT JOIN creative_kid_review kr ON kr.creative_id = cr.id
          LEFT JOIN creative_stream st ON st.creative_id = cr.id
+         LEFT JOIN creative_attestations att ON att.id = (SELECT a2.id FROM creative_attestations a2 WHERE a2.creative_id = cr.id AND a2.revoked_at IS NULL AND a2.content_version = COALESCE(cs.content_version, 1) ORDER BY a2.signed_at DESC, a2.id DESC LIMIT 1)
         WHERE c.state = 'active' AND cr.target_type = ? AND cr.review_state = 'approved' AND cr.state = 'ready'
           AND NOT (cs.approved_version IS NOT NULL AND cs.approved_version <> cs.content_version)
           AND cr.scan_state NOT IN ('infected','failed','needs_manual_review','pending')
@@ -716,6 +731,18 @@ export class ManifestService {
     }
     return h;
   }
+}
+
+/**
+ * Cac truong cam ket phap ly ma TV (Mindo WP-30) bat buoc, lay tu ban ghi that (creative_attestations): kid_safe = lua chon cua nguoi ky (mac dinh false),
+ * legal_attested = true, attested_by = ten nguoi ky (1..64 ky tu), attestation_version = phien ban van ban, attested_at = thoi diem ky.
+ * Khong co ban ghi hieu luc => null (creative khong vao manifest).
+ */
+function attestOf(r: CreativeRow): { kid_safe: boolean; legal_attested: true; attested_by: string; attestation_version: string; attested_at: string } | null {
+  if (!r.at_id || !r.at_version || !r.at_at) return null;
+  const by = (r.at_name?.trim() || r.at_by || '').slice(0, 64);
+  if (!by) return null;
+  return { kid_safe: Number(r.at_kid ?? 0) === 1, legal_attested: true, attested_by: by, attestation_version: r.at_version, attested_at: r.at_at };
 }
 
 /**

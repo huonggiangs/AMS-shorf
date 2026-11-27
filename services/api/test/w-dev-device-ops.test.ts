@@ -247,6 +247,10 @@ describe('kid_safe/lock co xac nhan nguoi duyet -> manifest -> impression', () =
     tv = await new Tv().init();
     await pairVia(devops, tv, 'Phòng 101');
   });
+  const reattest = async () => { // cam ket phap ly gan voi content_version: sua noi dung => ky lai
+    const v = (await rt.db.query<{ content_version: number }>('SELECT content_version FROM creative_security WHERE creative_id = ?', [cid]))[0]?.content_version ?? 1;
+    await rt.db.run("INSERT INTO creative_attestations (id, creative_id, content_version, version, kid_safe, signed_by, signed_by_name, signed_at, source) VALUES (?,?,?,'legal-v1',1,'test','Người ký thử',?,'approve')", [rt.id(), cid, v, NOW]);
+  };
   const lockOf = async () => (await tv.manifest()).creatives.find((c) => c.id === cid)?.overlay;
 
   it('TV chua co kid_safe: manifest co creative, KHONG co lock; dat kid_safe thieu xac nhan -> 422; nguoi khong co quyen duyet -> 403', async () => {
@@ -264,6 +268,7 @@ describe('kid_safe/lock co xac nhan nguoi duyet -> manifest -> impression', () =
     expect((await put({ kid_safe: true, contexts: ['lock', 'fullscreen'], confirm_reviewed: true })).body.error.code).toBe('reviewer_confirmation_required'); // thieu ghi chu
     const ok = await put({ kid_safe: true, contexts: ['lock', 'fullscreen'], confirm_reviewed: true, note: 'Đã xem toàn bộ nội dung, phù hợp trẻ em' });
     expect(ok.status).toBe(200);
+    await reattest();
     expect(ok.body).toMatchObject({ kid_safe: true, lock_eligible: true, kid_review: { current: true } });
     expect(await lockOf()).toMatchObject({ kid_safe: true, contexts: ['lock', 'fullscreen'] });
     const a = await audit('tv.kid_safe.approve');
@@ -274,6 +279,8 @@ describe('kid_safe/lock co xac nhan nguoi duyet -> manifest -> impression', () =
     // (noi dung doi => creative con phai duoc duyet lai media: gia lap duyet lai de chi con thieu xac nhan kid_safe)
     expect(await lockOf()).toBeUndefined(); // chua duyet lai noi dung => ra khoi manifest hoan toan
     await rt.db.run('UPDATE creative_security SET approved_version = content_version WHERE creative_id = ?', [cid]);
+    expect(await lockOf()).toBeUndefined(); // duyet lai nhung CHUA ky lai cam ket => van khong phat
+    await reattest();
     const o = await lockOf();
     expect(o?.contexts).toEqual(['fullscreen']);
     expect(o?.kid_safe).not.toBe(true);
@@ -281,8 +288,10 @@ describe('kid_safe/lock co xac nhan nguoi duyet -> manifest -> impression', () =
     expect(list).toMatchObject({ kid_safe: true, lock_eligible: false, kid_review: { current: false } });
     // sua thoi luong ma khong xac nhan lai van khong khoi phuc lock
     await put({ duration_s: 20 });
+    await reattest();
     expect((await lockOf())?.contexts).not.toContain('lock');
     expect((await put({ kid_safe: true, confirm_reviewed: true, note: 'Đã xem lại bản mới' })).status).toBe(200);
+    await reattest();
     expect(await lockOf()).toMatchObject({ kid_safe: true, contexts: expect.arrayContaining(['lock']) });
   });
   it('impression hop le tu TV da ghep (trust 1) -> 202 valid=1; TV chua ghep -> flagged', async () => {

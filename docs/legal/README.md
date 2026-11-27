@@ -43,3 +43,5 @@ Mẫu hợp đồng dịch vụ quảng cáo (`contract_doc_templates`, mã `ads
 ## 6. Chưa làm (cần quyết định hoặc cần nhà cung cấp)
 
 Chữ ký điện tử cho hợp đồng, lọc thiết bị `kid_safe` theo đối tượng, quy trình gỡ nội dung theo khiếu nại, tự đăng ký công khai, ánh xạ trường thật của MISA/Viettel.
+
+- `CAM-KET-NOI-DUNG-legal-v1.md`: văn bản cam kết pháp lý nội dung quảng cáo (người duyệt tick khi duyệt/tải lên). **Chờ luật sư rà soát.**

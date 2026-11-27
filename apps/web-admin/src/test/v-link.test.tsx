@@ -78,8 +78,11 @@ describe('Media: dan link video', () => {
     await userEvent.type(within(dlg).getAllByRole('textbox')[0]!, 'da xem het');
     await userEvent.click(within(dlg).getByRole('button', { name: 'Duyệt video' }));
     expect(await within(dlg).findByRole('alert')).toHaveTextContent('Tôi đã xem toàn bộ nội dung');
-    await userEvent.click(within(dlg).getByRole('checkbox'));
+    await userEvent.click(within(dlg).getByRole('checkbox', { name: /đã xem toàn bộ/i }));
     await userEvent.click(within(dlg).getByRole('button', { name: 'Duyệt video' }));
-    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path.endsWith('/m1/approve'))?.body).toEqual({ manual_review_note: 'da xem het', content_version: 3, confirm_full_view: true }));
+    expect(await within(dlg).findByRole('alert')).toHaveTextContent('cam kết pháp lý'); // bat buoc tick cam ket
+    await userEvent.click(within(dlg).getByRole('checkbox', { name: 'Cam kết pháp lý' }));
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Duyệt video' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path.endsWith('/m1/approve'))?.body).toEqual({ manual_review_note: 'da xem het', content_version: 3, attest: { accepted: true, version: 'legal-v1', kid_safe: false }, confirm_full_view: true }));
   });
 });

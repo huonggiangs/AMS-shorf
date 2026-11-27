@@ -339,6 +339,22 @@ GET  <gateway><path>             (KHÔNG ký: WebView/ExoPlayer không ký đư�
 - TV làm mới token khi còn dưới 1/3 hạn; mất mạng/token lỗi 403 thì xin lại, vẫn lỗi thì rơi về `url` của manifest.
 - Mã: `services/edge-gateway/src/gateway.ts`, test `test/media-stream.test.ts`.
 
+### 7.7 Cam kết pháp lý của creative (24/11/2026, migration 0029)
+
+Ràng buộc gốc (17/11): quảng cáo hiển thị trên màn hình phải kèm cam kết nội dung không vi phạm pháp luật Việt Nam và các nước khác. Manifest **chỉ** phát creative có cam kết **hiệu lực** (do người dùng có quyền `media:approve` tick ô cam kết khi duyệt/tải lên/ký bổ sung; AMS không tự ký). Mỗi creative trong `creatives[]` (cả TV, thang máy, LED, kể cả chương trình `bp_*`) có thêm:
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `kid_safe` | boolean | Lựa chọn của người ký ("Phù hợp trẻ em"); mặc định `false`. TV Mindo chỉ phát khi `true` (thiếu/false = bỏ). Thang máy/LED bỏ qua trường này. Không liên quan `overlay.kid_safe` (màn khóa, tv-experience) |
+| `legal_attested` | `true` | Luôn `true` (creative không có cam kết hiệu lực không có mặt trong manifest) |
+| `attested_by` | string 1..64 | Tên người ký (cắt còn 64 ký tự) |
+| `attestation_version` | string | Phiên bản văn bản, ví dụ `legal-v1` (xem `docs/legal/CAM-KET-NOI-DUNG-legal-v1.md`) |
+| `attested_at` | ISO 8601 UTC | Thời điểm ký (TV bỏ qua) |
+
+Hiệu lực: bản ghi mới nhất chưa thu hồi **và** `content_version` lúc ký = `content_version` hiện tại. Đổi nội dung (tệp/định dạng/overlay/liên kết) hoặc trả lại/thu hồi duyệt thì creative rời manifest cho tới khi ký lại. Lịch sử ký chỉ thêm, không xóa (bảng `creative_attestations`). Khớp WP-30 của TV Mindo (`legal_attested === true`, `attested_by` 1..64, `attestation_version` không rỗng) và `kid_safe === true`.
+
+API admin: `POST /media/:id/approve` nhận `attest:{accepted:true,version,kid_safe?}`; `POST /media/:id/attest` (ký bổ sung), `POST /media/attest-bulk` (ký hàng loạt, `confirm:true`, tối đa 200), `GET /media/:id/attestations` (lịch sử), `POST /media/upload-url` và `/media/import` nhận `attest` (người tải nội bộ), `POST /campaigns/:id/approve` nhận `attest` cho các tệp duyệt theo chiến dịch.
+
 ### 7.3 Đường công khai cho CDN: `GET /v1/manifest/g/{group}`
 
 Không ký, nội dung giống bản có ký, `Cache-Control: public, max-age=60, s-maxage=900, stale-while-revalidate=60`, `ETag`, `304` khi `?etag=` hoặc `If-None-Match` trùng. `{group}` là `manifest_group` từ heartbeat (`HN.all.tv`; dấu chấm giữ nguyên). Chỉ phục vụ nhóm đã từng được thiết bị thật hỏi (nhóm lạ: `404 not_found`). Tắt bằng `MANIFEST_PUBLIC=0`. Nội dung không bí mật (URL media công khai + sha256). Dùng đường này khi có nhiều thiết bị cùng nhóm sau CDN; đường có ký dành cho thiết bị cần xác thực hoặc nhóm riêng.

@@ -82,6 +82,11 @@ export const manifestCreative = z.object({
   overlay: overlay.optional(),
   media_type: z.enum(['video', 'image']),
   size_bytes: z.number().nullable(),
+  kid_safe: z.boolean().describe('lua chon cua NGUOI KY cam ket (mac dinh false = khong an toan cho tre). TV gia dinh (Mindo) chi phat khi true'),
+  legal_attested: z.literal(true).describe('cam ket phap ly hieu luc; creative khong co cam ket KHONG co mat trong manifest'),
+  attested_by: z.string().min(1).max(64).describe('ten nguoi ky cam ket'),
+  attestation_version: z.string().describe('phien ban van ban cam ket, vd legal-v1 (docs/legal/CAM-KET-NOI-DUNG-legal-v1.md)'),
+  attested_at: z.string().describe('ISO 8601 UTC thoi diem ky'),
   fit: z.enum(['fit', 'cover']).optional().describe('CHI thang may/LED: cach hien trong khung (mac dinh fit = vua khung, giu ti le, co vien den neu lech; cover = phu kin, co the cat mep)'),
 });
 const manifestZone = z.object({

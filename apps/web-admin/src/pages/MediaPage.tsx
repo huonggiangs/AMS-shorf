@@ -7,6 +7,8 @@ import { useAct, useBase } from '../api/hooks';
 import { useAuth } from '../auth/AuthProvider';
 import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, PageHead, StatusTag, Tabs } from '../components/ui';
 import { Dialog } from '../components/Dialog';
+import { AttestApproveDialog, AttestBox, AttestHistoryLoader, AttestTag, EMPTY_ATTEST, ATTEST_REQUIRED_MSG, SignDialog, type AttestState } from '../components/AttestBox';
+import { attestBody } from '../lib/attest';
 import { PromptDialog } from '../components/Prompt';
 import { reasonText } from './CreativeReview';
 import { AD_FORMAT_OPTIONS } from '../components/OverlayForm';
@@ -77,6 +79,9 @@ export default function MediaPage() {
   const [autoPick, setAutoPick] = useState(false);
   const [rej, setRej] = useState<string | null>(null);
   const [rev, setRev] = useState<string | null>(null);
+  const [appr, setAppr] = useState<Media | null>(null);
+  const [sign, setSign] = useState<{ ids: string[]; label: string; bulk: boolean } | null>(null);
+  const [signBusy, setSignBusy] = useState(false);
   const [prevId, setPrevId] = useState<string | null>(null);
   const canDelete = can('media', 'delete') && !base.isExternal;
   const [picked, setPicked] = useState<Picked>({});
@@ -116,15 +121,33 @@ export default function MediaPage() {
   };
   const canApprove = can('media', 'approve') && !base.isExternal;
   const actOn = (m: Media, a: 'confirm' | 'recheck' | 'retry') => void act(() => api.post(`${base.media}/${m.id}/${a === 'retry' ? 'import/retry' : a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : a === 'retry' ? 'Đã xếp lại việc tải từ liên kết.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.');
-  const approveBtns = (m: Media) => (m.status === 'pending' && canApprove && !m.blocker ? <span><Btn tone="p" className="sm" onClick={() => void act(() => api.post(`${base.media}/${m.id}/approve`), 'Đã duyệt media.')}>{t('Duyệt')}</Btn> <Btn className="sm" onClick={() => setRej(m.id)}>{t('Trả lại')}</Btn></span> : null);
+  const approveBtns = (m: Media) => (m.status === 'pending' && canApprove && !m.blocker ? <span><Btn tone="p" className="sm" onClick={() => setAppr(m)}>{t('Duyệt')}</Btn> <Btn className="sm" onClick={() => setRej(m.id)}>{t('Trả lại')}</Btn></span> : null);
   const listExtra = (m: Media) => (
     <>
       <TransferBar m={m} />
       {m.warnings?.length ? <ul aria-label="Lưu ý về tệp" style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 12.5, color: 'var(--warn, #B45309)' }}>{m.warnings.map((w) => <li key={w}>{w}</li>)}</ul> : null}
       {m.status !== 'approved' && m.blocker ? <Blocker m={m} canApprove={canApprove} onReview={() => setRev(m.id)} onAction={(a) => actOn(m, a)} onReject={() => setRej(m.id)} onPickFile={canWrite ? () => { setAutoPick(true); setUp(true); } : undefined} /> : null}
+      {!base.isExternal && m.status === 'approved' ? <div style={{ marginTop: 4 }}><AttestTag a={m.attestation} />{canApprove && m.attestation && m.attestation.status !== 'valid' ? <> <Btn className="sm" onClick={() => setSign({ ids: [m.id], label: m.name, bulk: false })}>Ký cam kết</Btn></> : null}</div> : null}
       {!base.isExternal && m.diag ? <DiagBox d={m.diag} /> : null}
     </>
   );
+  // Ký xác nhận hàng loạt: gom mọi tệp ĐÃ DUYỆT còn thiếu cam kết (hoặc cam kết cũ do nội dung đổi); chủ dự án tự bấm, hệ thống không tự ký
+  const openBulkSign = async () => {
+    setSignBusy(true);
+    try {
+      const ids: string[] = [];
+      for (const f of ['missing', 'stale']) {
+        const r = await api.get(base.media, { query: { page_size: 200, filter: `status:approved,attestation:${f}` }, schema: listOf(mediaSchema) });
+        ids.push(...r.items.filter((m) => m.status === 'approved').map((m) => m.id));
+      }
+      if (!ids.length) await act(async () => undefined, 'Không có tệp đã duyệt nào đang thiếu cam kết.');
+      else setSign({ ids, label: `${ids.length} tệp đã duyệt đang thiếu cam kết pháp lý.`, bulk: true });
+    } catch (e) {
+      await act(async () => { throw e; });
+    } finally {
+      setSignBusy(false);
+    }
+  };
   const pickedIds = Object.keys(picked);
   const pageItems = query.data?.items ?? [];
   const pageAllOn = pageItems.length > 0 && pageItems.every((m) => picked[m.id]);
@@ -158,7 +181,7 @@ export default function MediaPage() {
   };
   return (
     <>
-      <PageHead title="Kho tư liệu" sub="Kho tệp quảng cáo và trạng thái kiểm duyệt." actions={can('media', 'write') ? <span style={{ display: 'inline-flex', gap: 8 }}><Btn onClick={() => setLk(true)}>Dán link video</Btn><Btn tone="p" icon="plus" onClick={() => { setAutoPick(false); setUp(true); }}>{t('Tải nội dung mới')}</Btn></span> : null} />
+      <PageHead title="Kho tư liệu" sub="Kho tệp quảng cáo và trạng thái kiểm duyệt." actions={can('media', 'write') || canApprove ? <span style={{ display: 'inline-flex', gap: 8 }}>{canApprove ? <Btn disabled={signBusy} onClick={() => void openBulkSign()}>Ký xác nhận hàng loạt</Btn> : null}{can('media', 'write') ? <><Btn onClick={() => setLk(true)}>Dán link video</Btn><Btn tone="p" icon="plus" onClick={() => { setAutoPick(false); setUp(true); }}>{t('Tải nội dung mới')}</Btn></> : null}</span> : null} />
       <div className="tb" style={{ marginBottom: 12, background: 'none', padding: 0 }}>
         <label className="sr"><input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder={t('Tìm…')} aria-label={t('Tìm…')} /></label>
         <Tabs<'list' | 'grid'> label="Kiểu hiển thị" value={view} onChange={setView} items={[{ id: 'list', label: 'Danh sách' }, { id: 'grid', label: 'Lưới' }]} />
@@ -179,7 +202,7 @@ export default function MediaPage() {
           onToggle={(id) => { const m = pageItems.find((x) => x.id === id); if (m) toggle(m); }} onToggleAll={() => togglePage()} />
       ) : (
         <div className="g g3">
-          {query.data.items.map((m) => <MediaCard key={m.id} m={m} canApprove={canApprove} internal={!base.isExternal} onPickFile={canWrite ? () => { setAutoPick(true); setUp(true); } : undefined} selectable={canDelete} selected={!!picked[m.id]} onToggle={() => toggle(m)} onMakeThumb={canWrite && thumbSupported() ? () => void makeThumb(m) : undefined} onReview={() => setRev(m.id)} onPreview={() => setPrevId(m.id)} onAction={(a) => void act(() => api.post(`${base.media}/${m.id}/${a === 'retry' ? 'import/retry' : a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : a === 'retry' ? 'Đã xếp lại việc tải từ liên kết.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.')} onApprove={() => void act(() => api.post(`${base.media}/${m.id}/approve`), 'Đã duyệt media.')} onReject={() => setRej(m.id)} />)}
+          {query.data.items.map((m) => <MediaCard key={m.id} m={m} canApprove={canApprove} internal={!base.isExternal} onPickFile={canWrite ? () => { setAutoPick(true); setUp(true); } : undefined} selectable={canDelete} selected={!!picked[m.id]} onToggle={() => toggle(m)} onMakeThumb={canWrite && thumbSupported() ? () => void makeThumb(m) : undefined} onReview={() => setRev(m.id)} onPreview={() => setPrevId(m.id)} onAction={(a) => void act(() => api.post(`${base.media}/${m.id}/${a === 'retry' ? 'import/retry' : a}`, a === 'confirm' ? { body: {} } : undefined), a === 'confirm' ? 'Đã xác nhận lại tệp.' : a === 'retry' ? 'Đã xếp lại việc tải từ liên kết.' : 'Đã gửi kiểm tra lại, kết quả hiện sau ít phút.')} onApprove={() => setAppr(m)} onSign={canApprove ? () => setSign({ ids: [m.id], label: m.name, bulk: false }) : undefined} onReject={() => setRej(m.id)} />)}
         </div>
       )}
       <div className="tf" style={{ background: 'none' }}>
@@ -191,13 +214,15 @@ export default function MediaPage() {
       {delOpen ? <DeleteSelectedDialog items={Object.entries(picked).map(([id, v]) => ({ id, ...v }))} onClose={() => setDelOpen(false)} onDone={(ids) => setPicked((p) => { const n = { ...p }; for (const id of ids) delete n[id]; return n; })} /> : null}
       {edit ? <MediaEditDialog key={edit.id} m={edit} onClose={() => setEdit(null)} /> : null}
       {rev ? <ReviewDialog id={rev} onClose={() => setRev(null)} /> : null}
+      {appr ? <AttestApproveDialog title="Duyệt tệp" label={appr.name} onClose={() => setAppr(null)} onSubmit={async (attest) => { await api.post(`${base.media}/${appr.id}/approve`, { body: { attest, content_version: appr.content_version } }); await act(async () => undefined, 'Đã duyệt và ký cam kết. Tệp có thể gắn vào chiến dịch.', [base.media, '/admin/v1/media']); }} /> : null}
+      {sign ? <SignDialog ids={sign.ids} label={sign.label} bulk={sign.bulk} onClose={() => setSign(null)} onDone={(msg) => void act(async () => undefined, msg, [base.media, '/admin/v1/media'])} /> : null}
       {prevId ? <MediaPreviewDialog id={prevId} onClose={() => setPrevId(null)} /> : null}
       <PromptDialog open={!!rej} title="Trả lại media" label="Lý do (khách hàng nhận email kèm lý do)" onClose={() => setRej(null)} onSubmit={async (reason) => { if (rej) await act(() => api.post(`${base.media}/${rej}/reject`, { body: { reason } }), 'Đã trả lại.'); }} />
     </>
   );
 }
 
-function MediaCard({ m, canApprove, internal, selectable, selected, onToggle, onMakeThumb, onApprove, onReject, onReview, onPreview, onAction, onPickFile }: { m: Media; canApprove: boolean; internal?: boolean; onPickFile?: () => void; selectable?: boolean; selected?: boolean; onToggle?: () => void; onMakeThumb?: (() => void) | undefined; onApprove: () => void; onReject: () => void; onReview: () => void; onPreview?: () => void; onAction: (a: 'confirm' | 'recheck' | 'retry') => void }) {
+function MediaCard({ m, canApprove, internal, selectable, selected, onToggle, onMakeThumb, onApprove, onSign, onReject, onReview, onPreview, onAction, onPickFile }: { m: Media; onSign?: (() => void) | undefined; canApprove: boolean; internal?: boolean; onPickFile?: () => void; selectable?: boolean; selected?: boolean; onToggle?: () => void; onMakeThumb?: (() => void) | undefined; onApprove: () => void; onReject: () => void; onReview: () => void; onPreview?: () => void; onAction: (a: 'confirm' | 'recheck' | 'retry') => void }) {
   const t = useT();
   const fmtLabel = m.format && m.format !== 'fullscreen' ? AD_FORMAT_OPTIONS.find((o) => o.id === m.format)?.label : null;
   const meta = [m.delivery === 'stream' ? `LINK ${m.stream?.stream_kind?.toUpperCase() ?? ''}`.trim() : m.mime?.split('/')[1]?.toUpperCase(), m.delivery === 'stream' ? m.stream?.stream_host : null, fmtLabel, m.width && m.height ? `${m.width}×${m.height}` : null, m.duration_sec ? `${m.duration_sec} giây` : null].filter(Boolean).join(' · ');
@@ -214,6 +239,7 @@ function MediaCard({ m, canApprove, internal, selectable, selected, onToggle, on
         <TransferBar m={m} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <span><StatusTag status={m.status} />{onPreview && m.kind !== 'link' && m.status !== 'processing' ? <> <Btn className="sm" onClick={onPreview} aria-label={`Xem trước ${m.name}`}>Xem trước</Btn></> : null}</span>
+          {m.status === 'approved' && internal ? <span><AttestTag a={m.attestation} />{onSign && m.attestation && m.attestation.status !== 'valid' ? <> <Btn className="sm" onClick={onSign}>Ký cam kết</Btn></> : null}</span> : null}
           {m.status === 'pending' && canApprove && !m.blocker ? <span><Btn tone="p" className="sm" onClick={m.delivery === 'stream' ? onReview : onApprove}>{m.delivery === 'stream' ? 'Xem và duyệt' : t('Duyệt')}</Btn> <Btn className="sm" onClick={onReject}>{t('Trả lại')}</Btn></span> : null}
         </div>
         {m.warnings?.length ? <ul aria-label="Lưu ý về tệp" style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12.5, color: 'var(--warn, #B45309)' }}>{m.warnings.map((w) => <li key={w}>{w}</li>)}</ul> : null}
@@ -359,6 +385,7 @@ function ReviewDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [seen, setSeen] = useState(false);
+  const [at, setAt] = useState<AttestState>(EMPTY_ATTEST);
   const m = q.data;
   const stream = m?.delivery === 'stream' ? m.stream : null;
   const submit = async () => {
@@ -366,10 +393,11 @@ function ReviewDialog({ id, onClose }: { id: string; onClose: () => void }) {
     const text = (mode === 'approve' ? note : reason).trim();
     if (text.length < 3) return setErr('Nhập ghi chú/lý do (tối thiểu 3 ký tự).');
     if (mode === 'approve' && stream && !seen) return setErr('Hãy xem toàn bộ video rồi tick xác nhận "Tôi đã xem toàn bộ nội dung".');
+    if (mode === 'approve' && !at.accepted) return setErr(ATTEST_REQUIRED_MSG);
     setErr('');
     setBusy(true);
     try {
-      if (mode === 'approve') await api.post(`${base.media}/${m.id}/approve`, { body: { manual_review_note: text, content_version: m.content_version, ...(stream ? { confirm_full_view: true } : {}) } });
+      if (mode === 'approve') await api.post(`${base.media}/${m.id}/approve`, { body: { manual_review_note: text, content_version: m.content_version, attest: attestBody(true, at.kidSafe), ...(stream ? { confirm_full_view: true } : {}) } });
       else await api.post(`${base.media}/${m.id}/reject`, { body: { reason: text } });
       await act(async () => undefined, mode === 'approve' ? 'Đã duyệt. Tệp có thể gắn vào chiến dịch.' : 'Đã trả lại.', [base.media, '/admin/v1/media']);
       onClose();
@@ -394,9 +422,10 @@ function ReviewDialog({ id, onClose }: { id: string; onClose: () => void }) {
             <div>
               {m.blocker ? <p style={{ margin: '0 0 8px', fontSize: 13 }}>{m.blocker.message}</p> : null}
               {m.scan_reasons.length ? <ul aria-label="Lý do cần kiểm tra" style={{ margin: '0 0 10px', paddingLeft: 18, fontSize: 13 }}>{m.scan_reasons.map((r) => <li key={r}>{reasonText(r)}</li>)}</ul> : null}
+              {!base.isExternal ? <AttestHistoryLoader id={m.id} /> : null}
               <Tabs value={mode} onChange={(v) => { setMode(v); setErr(''); }} items={[{ id: 'approve', label: 'Duyệt' }, { id: 'reject', label: 'Trả lại' }]} />
               {mode === 'approve'
-                ? <><Field label="Ghi chú kiểm tra (ghi vào nhật ký, tối thiểu 3 ký tự)" hint="Bạn xác nhận đã xem tệp, nội dung an toàn và đúng quy định quảng cáo."><textarea value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></Field>{stream ? <FullViewConfirm checked={seen} onChange={setSeen} /> : null}</>
+                ? <><Field label="Ghi chú kiểm tra (ghi vào nhật ký, tối thiểu 3 ký tự)" hint="Bạn xác nhận đã xem tệp, nội dung an toàn và đúng quy định quảng cáo."><textarea value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></Field>{stream ? <FullViewConfirm checked={seen} onChange={setSeen} /> : null}<AttestBox value={at} onChange={setAt} /></>
                 : <Field label="Lý do trả lại (khách hàng nhận email kèm lý do)"><textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} /></Field>}
             </div>
           </div>

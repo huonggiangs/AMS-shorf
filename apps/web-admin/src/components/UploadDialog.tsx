@@ -8,6 +8,9 @@ import { customerSchema, listOf, uploadUrlSchema } from '../api/schemas';
 import { useAct, useBase } from '../api/hooks';
 import { Btn, Field } from './ui';
 import { Dialog } from './Dialog';
+import { AttestBox, EMPTY_ATTEST, type AttestState } from './AttestBox';
+import { attestBody } from '../lib/attest';
+import { useAuth } from '../auth/AuthProvider';
 import { OverlayForm, emptyOverlay, overlayError, overlayPayload } from './OverlayForm';
 import { useT } from '../i18n';
 import { checkMediaUrl, type LinkSource } from '../lib/creative';
@@ -105,6 +108,10 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
   const [url, setUrl] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [ov, setOv] = useState(emptyOverlay());
+  const { can: canDo } = useAuth();
+  const [at, setAt] = useState<AttestState>(EMPTY_ATTEST);
+  const canAttest = !base.isExternal && canDo('media', 'approve');
+  const attestPart = canAttest && at.accepted ? { attest: attestBody(true, at.kidSafe) } : {};
   const [err, setErr] = useState('');
   const [prog, setProg] = useState<{ phase: Phase; percent: number; label: string } | null>(null);
   const [done, setDone] = useState<Done | null>(null);
@@ -243,7 +250,7 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
     let u = resumeRef.current?.key === fkey ? resumeRef.current.u : null;
     if (!u) {
       mapProgress('upload', 0, 'Đang tải lên… 0%');
-      u = await api.post(`${base.media}/upload-url`, { body: { name: toSend.name, content_type: sendType, size_bytes: toSend.size, ...dims, ...(customerId ? { customer_id: customerId } : {}), format: ov.format, ...(overlayPayload(ov) ? { overlay: overlayPayload(ov) } : {}) }, schema: uploadUrlSchema });
+      u = await api.post(`${base.media}/upload-url`, { body: { name: toSend.name, content_type: sendType, size_bytes: toSend.size, ...dims, ...(customerId ? { customer_id: customerId } : {}), format: ov.format, ...(overlayPayload(ov) ? { overlay: overlayPayload(ov) } : {}), ...attestPart }, schema: uploadUrlSchema });
     }
     try {
       await uploadToStore(base.media, u, toSend, {
@@ -303,7 +310,7 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
     setStage('working');
     setProg({ phase: 'upload', percent: 10, label: 'Đang gửi yêu cầu…' });
     try {
-      await api.post(`${base.media}/import`, { body: { source: linkSource, url: url.trim(), ...(customerId ? { customer_id: customerId } : {}), format: ov.format, ...(overlayPayload(ov) ? { overlay: overlayPayload(ov) } : {}) } });
+      await api.post(`${base.media}/import`, { body: { source: linkSource, url: url.trim(), ...(customerId ? { customer_id: customerId } : {}), format: ov.format, ...(overlayPayload(ov) ? { overlay: overlayPayload(ov) } : {}), ...attestPart } });
       await act(async () => undefined, 'Đã gửi yêu cầu tải từ liên kết. Tiến độ hiện ở thẻ tệp (tự cập nhật); nếu tệp cần chuyển sang H.264, hệ thống sẽ hướng dẫn bạn tải tệp về máy rồi kéo vào ô tải lên.', [base.media, '/admin/v1/media', '/portal/v1/media']);
       reset();
       onClose();
@@ -467,6 +474,7 @@ export function UploadDialog({ open, onClose, initialFile, autoPick }: { open: b
             <details style={{ marginTop: 6 }} open={!file && !!url.trim()}>
               <summary style={{ cursor: 'pointer', fontSize: 13 }}>{file ? 'Tùy chọn hiển thị (không bắt buộc)' : 'Mô tả hiển thị cho liên kết (không bắt buộc)'}</summary>
               <OverlayForm value={ov} onChange={setOv} />
+              {canAttest ? <><AttestBox value={at} onChange={setAt} /><p style={{ margin: '6px 0 0', fontSize: 12.5, color: 'var(--mut)' }}>Không tick: tệp vẫn được duyệt nhưng chưa phát được xuống màn hình cho tới khi có người ký cam kết.</p></> : null}
             </details>
 
             <details style={{ marginTop: 6 }}>

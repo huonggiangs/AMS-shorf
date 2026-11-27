@@ -3238,6 +3238,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/media/attest-bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/media/attest-bulk
+         * @description Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostMediaAttestBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/media/bulk-delete": {
         parameters: {
             query?: never;
@@ -3406,6 +3430,54 @@ export interface paths {
          *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
          */
         post: operations["adminPostMediaByIdApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/media/{id}/attest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /admin/v1/media/{id}/attest
+         * @description Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        post: operations["adminPostMediaByIdAttest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/media/{id}/attestations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/media/{id}/attestations
+         * @description Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
+         *
+         *     Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetMediaByIdAttestations"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6893,6 +6965,18 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        AdminPostCampaignsByIdApproveRequest: {
+            attest?: {
+                /** @constant */
+                accepted: true;
+                version: string;
+                kid_safe?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
         AdminPostCampaignsByIdRejectRequest: {
             reason: string;
         } & {
@@ -7324,6 +7408,21 @@ export interface components {
              */
             status: "active" | "inactive";
         };
+        AdminPostMediaAttestBulkRequest: {
+            ids: string[];
+            attest: {
+                /** @constant */
+                accepted: true;
+                version: string;
+                kid_safe?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+            /** @constant */
+            confirm: true;
+        } & {
+            [key: string]: unknown;
+        };
         AdminPostMediaBulkDeleteRequest: {
             ids: string[];
         } & {
@@ -7333,6 +7432,27 @@ export interface components {
             content_version?: number;
             manual_review_note?: string;
             confirm_full_view?: boolean;
+            attest?: {
+                /** @constant */
+                accepted: true;
+                version: string;
+                kid_safe?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        AdminPostMediaByIdAttestRequest: {
+            attest: {
+                /** @constant */
+                accepted: true;
+                version: string;
+                kid_safe?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
+            content_version?: number;
         } & {
             [key: string]: unknown;
         };
@@ -7375,6 +7495,14 @@ export interface components {
             customer_id?: (unknown | string) | null;
             format?: string;
             overlay?: (unknown | unknown) | null;
+            attest?: {
+                /** @constant */
+                accepted: true;
+                version: string;
+                kid_safe?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
         };
@@ -7406,6 +7534,14 @@ export interface components {
             customer_id?: (unknown | string) | null;
             format?: string;
             overlay?: (unknown | unknown) | null;
+            attest?: {
+                /** @constant */
+                accepted: true;
+                version: string;
+                kid_safe?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
         };
@@ -8443,6 +8579,17 @@ export interface components {
             } & {
                 [key: string]: unknown;
             }) | null;
+            attestation?: ({
+                status: string;
+                version?: string | null;
+                /** @default false */
+                kid_safe: boolean;
+                signed_by_name?: string | null;
+                signed_at?: string | null;
+                source?: string | null;
+            } & {
+                [key: string]: unknown;
+            }) | null;
         } & {
             [key: string]: unknown;
         };
@@ -8659,6 +8806,14 @@ export interface components {
             customer_id?: (unknown | string) | null;
             format?: string;
             overlay?: (unknown | unknown) | null;
+            attest?: {
+                /** @constant */
+                accepted: true;
+                version: string;
+                kid_safe?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
         };
@@ -8690,6 +8845,14 @@ export interface components {
             customer_id?: (unknown | string) | null;
             format?: string;
             overlay?: (unknown | unknown) | null;
+            attest?: {
+                /** @constant */
+                accepted: true;
+                version: string;
+                kid_safe?: boolean;
+            } & {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
         };
@@ -9971,7 +10134,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostCampaignsByIdApproveRequest"];
+            };
+        };
         responses: {
             /** @description Thành công */
             200: {
@@ -13373,6 +13540,32 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
+    adminPostMediaAttestBulk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostMediaAttestBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
     adminPostMediaBulkDelete: {
         parameters: {
             query?: never;
@@ -13589,6 +13782,58 @@ export interface operations {
                 "application/json": components["schemas"]["AdminPostMediaByIdApproveRequest"];
             };
         };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminPostMediaByIdAttest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPostMediaByIdAttestRequest"];
+            };
+        };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetMediaByIdAttestations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Thành công */
             200: {

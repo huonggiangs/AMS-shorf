@@ -17,7 +17,7 @@ describe('admin client', () => {
   it('dien path/query, gan CSRF cho phuong thuc ghi, gui JSON', async () => {
     const m = mock(200, { status: 'scheduled', reserved_vnd: 1000 });
     const c = createAdminClient({ baseUrl: 'http://api.test/', fetch: m.fetch, csrfToken: 'tok' });
-    const r = await c.post('/admin/v1/campaigns/{id}/approve', { path: { id: 'c 1' } });
+    const r = await c.post('/admin/v1/campaigns/{id}/approve', { path: { id: 'c 1' }, body: {} });
     expect(r.ok).toBe(true);
     expect(m.calls[0]!.url).toBe('http://api.test/admin/v1/campaigns/c%201/approve');
     expect((m.calls[0]!.init.headers as Record<string, string>)['x-csrf-token']).toBe('tok');

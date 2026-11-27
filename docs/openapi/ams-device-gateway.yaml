@@ -1815,6 +1815,24 @@ components:
                 type:
                   - number
                   - "null"
+              kid_safe:
+                type: boolean
+                description: lua chon cua NGUOI KY cam ket (mac dinh false = khong an toan cho tre). TV gia dinh (Mindo) chi phat khi true
+              legal_attested:
+                type: boolean
+                const: true
+                description: cam ket phap ly hieu luc; creative khong co cam ket KHONG co mat trong manifest
+              attested_by:
+                type: string
+                minLength: 1
+                maxLength: 64
+                description: ten nguoi ky cam ket
+              attestation_version:
+                type: string
+                description: phien ban van ban cam ket, vd legal-v1 (docs/legal/CAM-KET-NOI-DUNG-legal-v1.md)
+              attested_at:
+                type: string
+                description: ISO 8601 UTC thoi diem ky
               fit:
                 type: string
                 enum:
@@ -1831,6 +1849,11 @@ components:
               - format
               - media_type
               - size_bytes
+              - kid_safe
+              - legal_attested
+              - attested_by
+              - attestation_version
+              - attested_at
             additionalProperties: true
         schedule:
           type: array
@@ -2162,6 +2185,24 @@ components:
                 type:
                   - number
                   - "null"
+              kid_safe:
+                type: boolean
+                description: lua chon cua NGUOI KY cam ket (mac dinh false = khong an toan cho tre). TV gia dinh (Mindo) chi phat khi true
+              legal_attested:
+                type: boolean
+                const: true
+                description: cam ket phap ly hieu luc; creative khong co cam ket KHONG co mat trong manifest
+              attested_by:
+                type: string
+                minLength: 1
+                maxLength: 64
+                description: ten nguoi ky cam ket
+              attestation_version:
+                type: string
+                description: phien ban van ban cam ket, vd legal-v1 (docs/legal/CAM-KET-NOI-DUNG-legal-v1.md)
+              attested_at:
+                type: string
+                description: ISO 8601 UTC thoi diem ky
               fit:
                 type: string
                 enum:
@@ -2178,6 +2219,11 @@ components:
               - format
               - media_type
               - size_bytes
+              - kid_safe
+              - legal_attested
+              - attested_by
+              - attestation_version
+              - attested_at
             additionalProperties: true
         creatives_removed:
           type: array

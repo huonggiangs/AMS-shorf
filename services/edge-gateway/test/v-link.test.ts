@@ -1,6 +1,7 @@
 // v-link: manifest cho creative "dan link" (stream): delivery/kind/duration_ms/etag, KHONG sha256/size; creative tai len khong doi; loai khi bi gan co.
 import { describe, expect, it } from 'vitest';
 import { TestDevice, harness, impression, type Harness } from './helpers.js';
+import { attestForTest } from '../src/testing.js';
 
 const J = async <T = any>(r: Response): Promise<T> => (await r.json()) as T;
 const STREAM_URL = 'https://cdn.adhost.vn/ads/8k.mp4';
@@ -14,6 +15,7 @@ async function addStream(h: Harness, o: { kind?: string; px?: boolean; state?: s
      VALUES (?, ?, ?, 'stream.mp4', 'tv', ?, ?, 'landscape', 'video', 'url', ?, NULL, 'video/mp4', NULL, 20, 'clean', 'approved', 'ready', ?)`,
     [id, camp.id, h.fixture.customerId, o.px === false ? null : 7680, o.px === false ? null : 4320, STREAM_URL, now],
   );
+  await attestForTest(h.rt, id);
   await h.rt.db.run(
     `INSERT INTO creative_stream (creative_id, delivery, stream_url, stream_kind, declared_duration_s, content_type, content_length, etag, last_modified, body_hash, binding, probe_status, fail_count, needs_review, checked_at, created_at)
      VALUES (?, 'stream', ?, ?, 20, 'video/mp4', 5000000, '"abc"', NULL, NULL, 'b1', 'ok', 0, 0, ?, ?)`,
@@ -115,6 +117,7 @@ describe('Signage Player (thang may) + creative stream', () => {
        VALUES (?, ?, ?, 'st.mp4', 'elevator', ?, ?, 'portrait', 'video', 'url', ?, NULL, 'video/mp4', NULL, 15, 'clean', 'approved', 'ready', ?)`,
       [id, campId, customerId, w, hgt, STREAM_URL, now],
     );
+    await attestForTest(h.rt, id);
     await h.rt.db.run(
       `INSERT INTO creative_stream (creative_id, delivery, stream_url, stream_kind, declared_duration_s, binding, probe_status, fail_count, needs_review, checked_at, created_at) VALUES (?, 'stream', ?, 'hls', 15, 'b', 'ok', 0, 0, ?, ?)`,
       [id, STREAM_URL, now, now],

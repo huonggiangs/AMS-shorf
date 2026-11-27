@@ -58,6 +58,9 @@ export const SECRETS = {
   gateway: [
     { name: 'FIELD_ENC_KEY', required: false },
     { name: 'VIEWER_OTP_SECRET', required: false },
+    // Token URL stream cua TV (stream-only, commit 06acbeb): 32 byte ngau nhien, TU SINH neu chua co (khong can --generate-secrets); khong bao gio in ra log.
+    // Thieu => POST /v1/media/tokens tra 503 va TV phat URL cong khai trong manifest. Doi bi mat chi lam het hieu luc cac URL ngan han (6 gio).
+    { name: 'MEDIA_TOKEN_SECRET', required: false, gen: 'hex32', autoGen: true },
   ],
 };
 
@@ -491,6 +494,7 @@ function fieldEncKeyFromBackups(env) {
 }
 
 function genValue(kind) {
+  if (kind === 'hex32') return randomBytes(32).toString('hex'); // 32 byte = hex 64 ký tự
   return kind === 'b64' ? randomBytes(32).toString('base64') : randomBytes(36).toString('hex'); // hex 72 ký tự
 }
 
@@ -514,7 +518,7 @@ function ensureSecrets(a, cfgs, phase, state) {
       if (present && !a.overwriteSecrets) continue;
       let val = supplied[s.name];
       if (!val && key === 'gateway' && s.name === 'FIELD_ENC_KEY') val = state.fieldEncKey || fieldEncKeyFromBackups(a.env);
-      if (!val && s.gen && a.genSecrets && !present) { val = genValue(s.gen); sensitive.add(val); generated[s.name] = val; }
+      if (!val && s.gen && (a.genSecrets || s.autoGen) && !present) { val = genValue(s.gen); sensitive.add(val); generated[s.name] = val; }
       if (val) toSet[s.name] = val;
       else if (!present && s.required) missingRequired.push(s.name);
     }

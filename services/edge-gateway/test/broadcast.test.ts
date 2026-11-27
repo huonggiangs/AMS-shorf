@@ -1,7 +1,7 @@
 // Chuong trinh phat song noi bo (migrations/0020): tep trong kho (chua gan chien dich) -> manifest cua thiet bi thang may; khong qua hop dong/thanh toan.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MANIFEST_EPOCH_KEY, sha256Hex } from '@ams/shared';
-import { seedAdFixture } from '../src/testing.js';
+import { attestForTest, seedAdFixture } from '../src/testing.js';
 import { TestDevice, harness, type Harness } from './helpers.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -24,6 +24,7 @@ async function libraryCreative(opts: { w?: number; h?: number; campaignId?: stri
      VALUES (?, ?, ?, ?, 'elevator', ?, ?, 'portrait', 'video', 'upload', ?, 'video/mp4', ?, 15, 'clean', ?, 'ready', ?)`,
     [id, opts.campaignId ?? null, customerId, `lib-${id}.mp4`, opts.w ?? 1080, opts.h ?? 1920, key, bytes.length, opts.review ?? 'approved', h.rt.clock.now().toISOString()],
   );
+  await attestForTest(h.rt, id);
   return { id, sha256: await sha256Hex(bytes) };
 }
 

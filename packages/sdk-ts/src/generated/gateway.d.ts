@@ -670,6 +670,19 @@ export interface components {
                 /** @enum {string} */
                 media_type: "video" | "image";
                 size_bytes: number | null;
+                /** @description lua chon cua NGUOI KY cam ket (mac dinh false = khong an toan cho tre). TV gia dinh (Mindo) chi phat khi true */
+                kid_safe: boolean;
+                /**
+                 * @description cam ket phap ly hieu luc; creative khong co cam ket KHONG co mat trong manifest
+                 * @constant
+                 */
+                legal_attested: true;
+                /** @description ten nguoi ky cam ket */
+                attested_by: string;
+                /** @description phien ban van ban cam ket, vd legal-v1 (docs/legal/CAM-KET-NOI-DUNG-legal-v1.md) */
+                attestation_version: string;
+                /** @description ISO 8601 UTC thoi diem ky */
+                attested_at: string;
                 /**
                  * @description CHI thang may/LED: cach hien trong khung (mac dinh fit = vua khung, giu ti le, co vien den neu lech; cover = phu kin, co the cat mep)
                  * @enum {string}
@@ -838,6 +851,19 @@ export interface components {
                 /** @enum {string} */
                 media_type: "video" | "image";
                 size_bytes: number | null;
+                /** @description lua chon cua NGUOI KY cam ket (mac dinh false = khong an toan cho tre). TV gia dinh (Mindo) chi phat khi true */
+                kid_safe: boolean;
+                /**
+                 * @description cam ket phap ly hieu luc; creative khong co cam ket KHONG co mat trong manifest
+                 * @constant
+                 */
+                legal_attested: true;
+                /** @description ten nguoi ky cam ket */
+                attested_by: string;
+                /** @description phien ban van ban cam ket, vd legal-v1 (docs/legal/CAM-KET-NOI-DUNG-legal-v1.md) */
+                attestation_version: string;
+                /** @description ISO 8601 UTC thoi diem ky */
+                attested_at: string;
                 /**
                  * @description CHI thang may/LED: cach hien trong khung (mac dinh fit = vua khung, giu ti le, co vien den neu lech; cover = phu kin, co the cat mep)
                  * @enum {string}

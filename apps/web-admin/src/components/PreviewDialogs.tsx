@@ -1,3 +1,4 @@
+import { AttestHistoryLoader } from './AttestBox';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCallback } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -85,6 +86,7 @@ export function MediaPreviewDialog({ id, onClose }: { id: string; onClose: () =>
     <Dialog open onClose={onClose} size="lg" label="Xem trước tệp">
       <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Xem trước: {m?.name ?? '…'}</h2>
       {q.isLoading || !m ? <LoadingBlock /> : m.preview_url ? (isVideo ? <PreviewVideo src={m.preview_url} name={m.name} onExpired={() => void q.refetch()} /> : <img src={m.preview_url} alt={`Xem trước ${m.name}`} style={{ maxWidth: '100%', maxHeight: '65vh', display: 'block', margin: '0 auto' }} />) : <p>{m.source === 'youtube' ? 'Nguồn YouTube không xem trước được. Hãy tải video về rồi tải lên kho (giữ phần mô tả hiển thị).' : m.source && m.source !== 'upload' ? 'Tệp từ liên kết chưa được tải về kho nên chưa xem trước được.' : 'Chưa có bản xem trước cho tệp này.'}</p>}
+      {m && m.attestation ? <AttestHistoryLoader id={m.id} /> : null}
       <div className="da" style={{ marginTop: 10 }}><button type="button" className="btn" onClick={onClose}>Đóng</button></div>
     </Dialog>
   );

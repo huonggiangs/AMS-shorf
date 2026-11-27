@@ -55,7 +55,12 @@ describe('Noi dung & Media: moi trang thai khong duyet duoc co giai thich + hanh
     expect(await within(dlg).findByRole('alert')).toHaveTextContent('tối thiểu 3 ký tự');
     await userEvent.type(within(dlg).getByRole('textbox'), 'da xem het video');
     await userEvent.click(within(dlg).getByRole('button', { name: 'Duyệt tệp' }));
-    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path.endsWith('/m1/approve'))?.body).toEqual({ manual_review_note: 'da xem het video', content_version: 2 }));
+    expect(await within(dlg).findByRole('alert')).toHaveTextContent('cam kết pháp lý'); // o cam ket bat buoc
+    expect(calls.find((c) => c.method === 'POST' && c.path.endsWith('/m1/approve'))).toBeUndefined();
+    await userEvent.click(within(dlg).getByRole('checkbox', { name: 'Phù hợp trẻ em' })); // kid_safe do nguoi duyet chon
+    await userEvent.click(within(dlg).getByRole('checkbox', { name: 'Cam kết pháp lý' }));
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Duyệt tệp' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path.endsWith('/m1/approve'))?.body).toEqual({ manual_review_note: 'da xem het video', content_version: 2, attest: { accepted: true, version: 'legal-v1', kid_safe: true } }));
   });
 
   it('thumb_url: the hien anh dai dien (duong API co xac thuc); chua co anh thi hien khung VIDEO; tep da duyet khong con Cho duyet', async () => {

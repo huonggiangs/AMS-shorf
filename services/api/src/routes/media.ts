@@ -25,6 +25,7 @@ import { parseDiag, saveDiag } from '../lib/creative-diag.js';
 import { requirePerm } from '../auth/middleware.js';
 import { can } from '@ams/config';
 import { autoApprovePrivileged } from '../lib/auto-approve.js';
+import { assertAttestVersion, assertMayAttest, attestInputSchema, attestationHistory, attestationStatus, presentAttestation, recordAttestation, revokeAttestations } from '../lib/attestation.js';
 import { AD_FORMATS, STREAM_KINDS, STREAM_MIME, isAdFormat, parseOverlay, sha256Hex, validateStreamUrl, type CreativeOverlay } from '@ams/shared';
 import { ProbeError, probeStreamUrl, streamBinding, type StreamProbe } from '../lib/stream-probe.js';
 import { REASON_UNSCANNED, adoptProbe, assertStreamApprovable, detailOf, loadStream, markStreamApproved, presentStream, type StreamRow } from '../lib/video-link.js';
@@ -37,10 +38,19 @@ const M_SELECT = `m.id, m.campaign_id, m.customer_id, m.name, m.target_type, m.p
   m.uploaded_by, m.uploader_kind, m.scan_state, m.review_state, m.review_note, m.state, m.created_at, m.sha256, m.format, m.overlay, cu.short_name AS owner_name, cu.payment_code AS customer_code, COALESCE(sec.content_version, 1) AS content_version, cv.detail AS scan_detail, th.created_at AS thumb_at, m.description, m.tags,
   st.stream_url AS st_url, st.stream_kind AS st_kind, st.declared_duration_s AS st_dur, st.probe_status AS st_status, st.needs_review AS st_review, st.content_type AS st_ct, st.content_length AS st_len,
   st.etag AS st_etag, st.last_modified AS st_lm, st.checked_at AS st_checked, st.probe_detail AS st_detail, st.full_view_at AS st_fv, st.approved_at AS st_appr,
-  tr.kind AS tr_kind, tr.status AS tr_status, tr.bytes_done AS tr_done, tr.bytes_total AS tr_total, tr.error_code AS tr_error_code, tr.error_message AS tr_error, tr.total_parts AS tr_total_parts, tr.parts AS tr_parts, dg.diag AS diag_json`;
-const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_validation cv ON cv.creative_id = m.id LEFT JOIN creative_thumbnails th ON th.creative_id = m.id LEFT JOIN creative_transfers tr ON tr.creative_id = m.id LEFT JOIN creative_diag dg ON dg.creative_id = m.id LEFT JOIN creative_stream st ON st.creative_id = m.id';
+  tr.kind AS tr_kind, tr.status AS tr_status, tr.bytes_done AS tr_done, tr.bytes_total AS tr_total, tr.error_code AS tr_error_code, tr.error_message AS tr_error, tr.total_parts AS tr_total_parts, tr.parts AS tr_parts, dg.diag AS diag_json,
+  att.id AS att_id, att.version AS att_version, att.kid_safe AS att_kid, att.signed_by AS att_by, att.signed_by_name AS att_name, att.signed_at AS att_at, att.content_version AS att_cv, att.source AS att_source`;
+const M_FROM = 'FROM creatives m JOIN customers cu ON cu.id = m.customer_id LEFT JOIN creative_security sec ON sec.creative_id = m.id LEFT JOIN creative_validation cv ON cv.creative_id = m.id LEFT JOIN creative_thumbnails th ON th.creative_id = m.id LEFT JOIN creative_transfers tr ON tr.creative_id = m.id LEFT JOIN creative_diag dg ON dg.creative_id = m.id LEFT JOIN creative_stream st ON st.creative_id = m.id LEFT JOIN creative_attestations att ON att.id = (SELECT a2.id FROM creative_attestations a2 WHERE a2.creative_id = m.id AND a2.revoked_at IS NULL ORDER BY a2.signed_at DESC, a2.id DESC LIMIT 1)';
 
 interface MediaRow {
+  att_id?: string | null;
+  att_version?: string | null;
+  att_kid?: number | null;
+  att_by?: string | null;
+  att_name?: string | null;
+  att_at?: string | null;
+  att_cv?: number | null;
+  att_source?: string | null;
   id: string;
   campaign_id: string | null;
   customer_id: string;
@@ -174,6 +184,13 @@ function reasonsOf(raw: string | null | undefined): string[] {
   }
 }
 
+/** Cam ket phap ly (0029): valid = con hieu luc cho noi dung hien tai; stale = noi dung da doi sau khi ky; missing = chua co. Khach (portal) khong thay. */
+function attestationOf(m: MediaRow): Record<string, unknown> {
+  const has = !!m.att_id;
+  const status = !has ? 'missing' : num(m.att_cv ?? 0) === num(m.content_version ?? 1) ? 'valid' : 'stale';
+  return { status, version: m.att_version ?? null, kid_safe: has && num(m.att_kid ?? 0) === 1, signed_by: m.att_by ?? null, signed_by_name: m.att_name ?? null, signed_at: m.att_at ?? null, source: m.att_source ?? null };
+}
+
 const statusOf = (m: Pick<MediaRow, 'state' | 'review_state'>): string => (m.state === 'uploading' || m.state === 'importing' ? 'processing' : m.review_state === 'returned' ? 'rejected' : m.review_state);
 
 /** Anh dai dien: duong dan API co xac thuc (cookie phien, cung origin voi /api); `v` = thoi diem tao de trinh duyet nap lai khi doi anh. */
@@ -239,6 +256,7 @@ export const present = (m: MediaRow, external = false): Record<string, unknown> 
   overlay: overlayOf(m.overlay),
   sha256: m.sha256,
   content_version: num(m.content_version ?? 1), // R1-14: gui kem khi duyet; doi noi dung => 409
+  attestation: external ? null : attestationOf(m),
   created_at: m.created_at,
 });
 
@@ -260,6 +278,7 @@ function mediaSpec(u: AuthUser, nowIso: string): ListSpec {
       },
       customer_id: eq('m.customer_id'),
       campaign_id: eq('m.campaign_id'),
+      attestation: (v) => (v === 'missing' ? { sql: 'att.id IS NULL', params: [] } : v === 'valid' ? { sql: 'att.id IS NOT NULL AND att.content_version = COALESCE(sec.content_version, 1)', params: [] } : v === 'stale' ? { sql: 'att.id IS NOT NULL AND att.content_version <> COALESCE(sec.content_version, 1)', params: [] } : null),
       delivery: (v) => (v === 'stream' ? { sql: 'st.creative_id IS NOT NULL', params: [] } : v === 'upload' ? { sql: 'st.creative_id IS NULL', params: [] } : null),
       kind: (v) => (v === 'stream' ? { sql: 'st.creative_id IS NOT NULL', params: [] } : v === 'link' ? { sql: "m.source <> 'upload'", params: [] } : { sql: "m.source = 'upload' AND m.kind = ?", params: [v] }),
     },
@@ -342,6 +361,8 @@ const uploadBody = z.object({
   customer_id: z.string().max(64).optional().nullable(),
   format: z.string().max(20).optional(),
   overlay: overlayInput,
+  /** cam ket phap ly cua nguoi tai len (chi nguoi noi bo co quyen media:approve); khong co = creative khong co cam ket */
+  attest: attestInputSchema.optional(),
 });
 
 const importBody = z.object({
@@ -352,6 +373,7 @@ const importBody = z.object({
   // mo ta hien thi (giong tai len tu may): dinh dang + lop phu (chu/QR/hotline)
   format: z.string().max(20).optional(),
   overlay: overlayInput,
+  attest: attestInputSchema.optional(),
 });
 
 const linkBody = z.object({
@@ -590,6 +612,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const rt = getRt(c);
     const u = c.get('user');
     const b = await parseBody(c, uploadBody);
+    if (b.attest) assertMayAttest(u); // khach/nguoi khong co quyen duyet gui attest => 403, khong im lang bo qua
     const customerId = await resolveOwner(c, b.customer_id);
     const library = u.kind === 'internal' && customerId === SHARED_POOL_ID; // kho chung: nguoi noi bo, nhan moi dinh dang/codec, chuyen ma sau
     let mime = b.content_type.toLowerCase().split(';')[0]!.trim();
@@ -642,7 +665,8 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
          VALUES (?,NULL,?,?,?,?,?,?,?,'upload',NULL,?,?,?,?,?,?,'pending','pending','uploading',?,?,?)`,
         [id, customerId, b.name, target, b.width ?? null, b.height ?? null, b.width && b.height ? (b.width >= b.height ? 'landscape' : 'portrait') : null, isVideoMime(mime) ? 'video' : 'image', key, mime, b.size_bytes, b.duration_sec === undefined ? null : Math.round(b.duration_sec), u.id, u.kind, fo.format ?? 'fullscreen', fo.overlay ?? null, nowIso],
       );
-      await auditCtx(c, db, { action: 'media.upload_url', objectType: 'creative', objectId: id, customerId, diff: { name: b.name, size_bytes: b.size_bytes, mime } });
+      if (b.attest) await recordAttestation(db, rt, c, u, { id, customer_id: customerId }, b.attest, 'upload', nowIso);
+      await auditCtx(c, db, { action: 'media.upload_url', objectType: 'creative', objectId: id, customerId, diff: { name: b.name, size_bytes: b.size_bytes, mime, attested: !!b.attest } });
     });
     return c.json(
       viaMultipart
@@ -731,6 +755,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const rt = getRt(c);
     const u = c.get('user');
     const b = await parseBody(c, importBody);
+    if (b.attest) assertMayAttest(u);
     const customerId = await resolveOwner(c, b.customer_id);
     const fo = checkFormatOverlay(b.format, b.overlay, external);
     if (b.source === 'youtube') throw unprocessable(YOUTUBE_MSG, 'youtube_unsupported');
@@ -757,6 +782,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
         [id, customerId, name.slice(0, 200), plan.source, url, u.id, u.kind, fo.format ?? 'fullscreen', fo.overlay ?? null, nowIso],
       );
       await syncKidFlags(db, id, fo.overlay ?? null, nowIso); // cot kid_safe/lock_context dong bo nhu route /overlay
+      if (b.attest) await recordAttestation(db, rt, c, u, { id, customer_id: customerId }, b.attest, 'upload', nowIso);
       await db.run("INSERT INTO creative_transfers (creative_id, kind, status, parts, bytes_done, attempts, started_at, updated_at) VALUES (?,'import','queued','[]',0,0,?,?)", [id, nowIso, nowIso]);
       await enqueueMediaImport(db, rt, id, '1');
       await auditCtx(c, db, { action: 'media.import', objectType: 'creative', objectId: id, customerId, diff: { source: plan.source, host: chk.url.hostname, format: fo.format ?? 'fullscreen', overlay: fo.overlay ? 'set' : 'none' } });
@@ -949,9 +975,14 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     const rt = getRt(c);
     const u = c.get('user');
     const m = await loadMedia(c, c.req.param('id'));
-    const body = await parseBody(c, z.object({ content_version: z.coerce.number().int().min(1).optional(), manual_review_note: z.string().trim().min(3, 'Nhập ghi chú kiểm tra thủ công (tối thiểu 3 ký tự)').max(500).optional(), confirm_full_view: z.boolean().optional() }));
+    const body = await parseBody(c, z.object({ content_version: z.coerce.number().int().min(1).optional(), manual_review_note: z.string().trim().min(3, 'Nhập ghi chú kiểm tra thủ công (tối thiểu 3 ký tự)').max(500).optional(), confirm_full_view: z.boolean().optional(), attest: attestInputSchema.optional() }));
     if (m.state === 'uploading' || m.state === 'importing' || m.state === 'invalid') throw conflict('Tệp chưa tải xong hoặc không hợp lệ.', 'invalid_state');
-    if (m.review_state === 'approved') return c.json(present(m, external));
+    if (body.attest) { assertMayAttest(u); assertAttestVersion(body.attest); }
+    if (m.review_state === 'approved') {
+      // da duyet (idempotent): neu kem cam ket thi ky bo sung (khong tu ky khi khong co attest)
+      if (body.attest && m.state === 'ready' && (await signExisting(c, m, body.attest, 'late', body.content_version)) === 'signed') await bumpManifest(rt);
+      return c.json(present(await loadMedia(c, m.id), external));
+    }
     // Cloudflare (khong co ClamAV): nguoi co quyen media:approve xem tep roi duyet MOT BUOC; ghi chu bat buoc, ghi audit + creative_validation.engine='manual'.
     const manual = m.scan_state === NEEDS_MANUAL_REVIEW && body.manual_review_note !== undefined;
     assertScanOk(manual ? { ...m, scan_state: 'clean' } : m, await allowUnscannedCreatives(rt), { creative_id: m.id, scan_state: m.scan_state });
@@ -979,11 +1010,82 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
       if (res.changes === 0) throw conflict('Tệp vừa đổi trạng thái.', 'invalid_state');
       const ap = await recordApproval(db, { id: m.id, ...cur }, nowIso);
       if (isStream) await markStreamApproved(db, m.id, u.id, nowIso);
-      await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'approved' }, scan_state: m.scan_state, content_version: ap.version, content_hash: ap.hash, version_bound: body.content_version !== undefined, delivery: isStream ? 'stream' : 'upload', full_view_confirmed: isStream ? true : undefined } });
+      if (body.attest) await recordAttestation(db, rt, c, u, { id: m.id, customer_id: m.customer_id }, body.attest, 'approve', nowIso);
+      await auditCtx(c, db, { action: 'media.approve', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { attested: !!body.attest, review_state: { from: m.review_state, to: 'approved' }, scan_state: m.scan_state, content_version: ap.version, content_hash: ap.hash, version_bound: body.content_version !== undefined, delivery: isStream ? 'stream' : 'upload', full_view_confirmed: isStream ? true : undefined } });
     });
     await bumpManifest(rt);
     await emailOwner(rt, m.customer_id, `Tệp "${m.name ?? ''}" đã được duyệt`, `<p>Tệp <b>${esc(m.name)}</b> đã được duyệt và có thể dùng cho chiến dịch.</p>`);
     return c.json(present(await loadMedia(c, m.id), external));
+  });
+
+
+  /** Ky cam ket cho creative DA DUYET (ky bo sung / ky hang loat). Idempotent: da co cam ket hieu luc cung lua chon kid_safe thi khong ghi them. */
+  async function signExisting(c: Ctx, m: MediaRow, a: z.infer<typeof attestInputSchema>, source: 'late' | 'bulk', expectedVersion?: number): Promise<'signed' | 'already_valid'> {
+    const rt = getRt(c);
+    const u = c.get('user');
+    assertMayAttest(u);
+    assertAttestVersion(a);
+    if (m.review_state !== 'approved' || m.state !== 'ready') throw conflict('Chỉ ký cam kết cho tệp đã được duyệt. Hãy duyệt tệp trước.', 'not_approved');
+    await assertContentVersion(rt.db, m.id, expectedVersion);
+    const nowIso = rt.clock.now().toISOString();
+    return rt.db.tx(async (db) => {
+      const cur = await attestationStatus(db, m.id);
+      if (cur.status === 'valid' && cur.row && (cur.row.kid_safe === 1) === (a.kid_safe === true)) return 'already_valid' as const;
+      await recordAttestation(db, rt, c, u, { id: m.id, customer_id: m.customer_id }, a, source, nowIso);
+      return 'signed' as const;
+    });
+  }
+
+  r.post('/:id/attest', requirePerm('media', 'approve'), async (c) => {
+    const rt = getRt(c);
+    const m = await loadMedia(c, c.req.param('id'));
+    const b = await parseBody(c, z.object({ attest: attestInputSchema, content_version: z.coerce.number().int().min(1).optional() }));
+    const res = await signExisting(c, m, b.attest, 'late', b.content_version);
+    if (res === 'signed') await bumpManifest(rt);
+    return c.json({ result: res, media: present(await loadMedia(c, m.id), external) });
+  });
+
+  /** Lich su nguoi ky (chi them, khong xoa): ai ky, khi nao, phien ban van ban, kid_safe, con hieu luc khong. */
+  r.get('/:id/attestations', requirePerm('media', 'view'), async (c) => {
+    const rt = getRt(c);
+    const m = await loadMedia(c, c.req.param('id'));
+    const cur = (await attestationStatus(rt.db, m.id));
+    const sec = num(m.content_version ?? 1);
+    const items = (await attestationHistory(rt.db, m.id)).map((h) => ({
+      id: h.id, version: h.version, kid_safe: h.kid_safe === 1, signed_by: h.signed_by, signed_by_name: h.signed_by_name, signed_at: h.signed_at, source: h.source, content_version: Number(h.content_version),
+      revoked_at: h.revoked_at, revoked_reason: h.revoked_reason, effective: !h.revoked_at && Number(h.content_version) === sec && h.id === cur.row?.id,
+    }));
+    return c.json({ current: presentAttestation(cur.row, cur.status), items, total: items.length });
+  });
+
+  /**
+   * Ky xac nhan hang loat cho creative DA DUYET nhung thieu cam ket (du lieu cu). Moi creative van ghi nguoi ky + audit rieng.
+   * Bat buoc confirm: true (chu du an tu bam; he thong khong tu ky). Toi da 200/lan; loi tung tep khong chan ca lo.
+   */
+  r.post('/attest-bulk', requirePerm('media', 'approve'), async (c) => {
+    const rt = getRt(c);
+    const b = await parseBody(c, z.object({
+      ids: z.array(z.string().trim().min(1).max(64)).min(1, 'Chọn ít nhất 1 tệp').max(BULK_DELETE_MAX, `Tối đa ${BULK_DELETE_MAX} tệp mỗi lần`),
+      attest: attestInputSchema,
+      confirm: z.literal(true, { errorMap: () => ({ message: 'Hãy xác nhận ký hàng loạt.' }) }),
+    }));
+    assertMayAttest(c.get('user'));
+    assertAttestVersion(b.attest);
+    const signed: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+    for (const id of [...new Set(b.ids)]) {
+      let m: MediaRow;
+      try { m = await loadMedia(c, id); } catch { skipped.push({ id, reason: 'not_found' }); continue; }
+      try {
+        const res = await signExisting(c, m, b.attest, 'bulk');
+        if (res === 'signed') signed.push(id); else skipped.push({ id, reason: 'already_valid' });
+      } catch (e) {
+        if (e instanceof HttpError) skipped.push({ id, reason: e.code }); else throw e;
+      }
+    }
+    await rt.db.tx(async (db) => { await auditCtx(c, db, { action: 'media.attest_bulk', objectType: 'creative', objectId: null, diff: { version: b.attest.version, kid_safe: b.attest.kid_safe === true, requested: b.ids.length, signed: signed.length, skipped: skipped.length } }); });
+    if (signed.length) await bumpManifest(rt);
+    return c.json({ signed, skipped, total: b.ids.length });
   });
 
   r.post('/:id/reject', requirePerm('media', 'approve'), async (c) => {
@@ -993,6 +1095,7 @@ export function mediaRoutes(external: boolean): Hono<AppEnv> {
     if (m.state === 'uploading' || m.state === 'importing') throw conflict('Tệp chưa tải xong.', 'invalid_state');
     await rt.db.tx(async (db) => {
       await db.run("UPDATE creatives SET review_state = 'rejected', review_note = ?, state = 'rejected' WHERE id = ?", [b.reason, m.id]);
+      await revokeAttestations(db, rt, [m.id], c.get('user').id, 'tra_lai', rt.clock.now().toISOString(), { ip: c.get('ip'), customerId: m.customer_id }); // thu hoi duyet => cam ket cu mat hieu luc
       await auditCtx(c, db, { action: 'media.reject', objectType: 'creative', objectId: m.id, customerId: m.customer_id, diff: { review_state: { from: m.review_state, to: 'rejected' }, reason: b.reason } });
     });
     await bumpManifest(rt);

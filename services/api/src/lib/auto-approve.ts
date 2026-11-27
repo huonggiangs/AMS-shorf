@@ -1,6 +1,8 @@
 // Tu duyet cho nguoi noi bo CO QUYEN media:approve (vd Super admin) khi chinh ho tai tep len.
 // Khong hard-code vai tro: dung dung ham phan quyen `can()` (packages/config) voi perms + vai tro hien tai cua nguoi tai len.
 // Khach/doi tac khong bao gio vao day. Tep 'infected'/'failed'/'pending'/chua quet khong tu duyet.
+// KHONG BAO GIO ghi cam ket phap ly (creative_attestations) thay nguoi dung: cam ket chi co khi nguoi tai len da tick o cam ket luc tai len (routes/media.ts, source='upload').
+// Khong tick => van duoc duyet nhung manifest khong phat cho thiet bi cho toi khi co nguoi co quyen ky bo sung.
 // Goi o hai cho: cuoi POST /media/:id/confirm (duong Cloudflare dong bo) va sweepAutoApprove() (sau khi media-worker/validator quet xong).
 import type { Runtime } from '@ams/runtime';
 import { can } from '@ams/config';

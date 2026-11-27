@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MANIFEST_EPOCH_KEY, SIGNAGE_CONFIG_KEY, uuidv7 } from '@ams/shared';
 import { enqueueCommand } from '../src/gateway.js';
-import { seedAdFixture } from '../src/testing.js';
+import { attestForTest, seedAdFixture } from '../src/testing.js';
 import { TestDevice, harness, type Harness } from './helpers.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -101,6 +101,7 @@ describe('dang ky + do phan giai (muc 4)', () => {
        SELECT ?, campaign_id, customer_id, 'ban 4K', target_type, 2160, 3840, orientation, kind, source, storage_key, mime, size_bytes, duration_s, scan_state, review_state, state, created_at FROM creatives WHERE id = ?`,
       [extra, camp.creatives[0]!.id],
     );
+    await attestForTest(h.rt, extra);
     await bump();
     const d = await el({ px_w: 1080, px_h: 1920 });
     const ids = (await J(await d.call('GET', '/v1/manifest'))).creatives.map((c: any) => c.id);

@@ -193,6 +193,15 @@ export interface ManifestCreative {
   overlay?: CreativeOverlay;
   media_type: 'video' | 'image';
   size_bytes: number | null;
+  /** Cam ket phap ly (WP-30 cua TV Mindo), tu ban ghi that do nguoi co quyen duyet ky; creative khong co cam ket hieu luc KHONG co mat trong manifest. */
+  kid_safe: boolean;
+  legal_attested: true;
+  /** ten nguoi ky (1..64 ky tu) */
+  attested_by: string;
+  /** phien ban van ban cam ket, vd 'legal-v1' */
+  attestation_version: string;
+  /** thoi diem ky (ISO 8601, UTC) */
+  attested_at: string;
   /** CHI thang may/LED: 'cover' (mac dinh) hoac 'fit' */
   fit?: 'fit' | 'cover';
 }

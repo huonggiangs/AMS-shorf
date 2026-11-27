@@ -8,6 +8,8 @@ import { Dialog } from '../components/Dialog';
 import { fmtDateTime } from '../lib/format';
 import { useUi } from '../state/ui';
 import { TvMetaSection } from '../components/TvMeta';
+import { AttestBox, ATTEST_REQUIRED_MSG, EMPTY_ATTEST, type AttestState } from '../components/AttestBox';
+import { attestBody } from '../lib/attest';
 import { FullViewConfirm, StreamInfoPanel, StreamPlayer } from '../components/StreamReview';
 
 const PAGE_SIZE = 12;
@@ -85,12 +87,12 @@ export default function CreativeReview() {
   const total = q.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const refresh = () => qc.invalidateQueries({ queryKey: [ENDPOINT] });
-  const submit = async (item: ScanQueueItem, decision: 'approve' | 'reject', note: string, alsoApprove = false, seen = false) => {
+  const submit = async (item: ScanQueueItem, decision: 'approve' | 'reject', note: string, alsoApprove = false, seen = false, at: AttestState = EMPTY_ATTEST) => {
     const cfv = item.delivery === 'stream' && decision === 'approve' ? { confirm_full_view: seen } : {};
     try {
       if (decision === 'approve' && alsoApprove) {
         // một bước: xác nhận an toàn (kiểm tra thủ công) + duyệt nội dung => dùng được ngay cho chiến dịch
-        await api.post(`/admin/v1/media/${item.id}/approve`, { body: { manual_review_note: note, content_version: item.content_version, ...cfv } });
+        await api.post(`/admin/v1/media/${item.id}/approve`, { body: { manual_review_note: note, content_version: item.content_version, attest: attestBody(true, at.kidSafe), ...cfv } });
         notify('Đã duyệt creative. Tệp có thể gắn vào chiến dịch.');
       } else {
         await api.post(`/admin/v1/media/${item.id}/scan-review`, { body: { decision, note, content_version: item.content_version, ...cfv } });
@@ -120,7 +122,7 @@ export default function CreativeReview() {
         <div className="pg">{Array.from({ length: pages }, (_, i) => <button key={i} type="button" className={i + 1 === page ? 'on' : ''} aria-label={`Trang ${i + 1}`} aria-current={i + 1 === page ? 'page' : undefined} onClick={() => setPage(i + 1)}>{i + 1}</button>)}</div>
       </div>
       <TvMetaSection />
-      {dlg ? <ReasonDialog key={`${dlg.item.id}-${dlg.decision}`} item={dlg.item} decision={dlg.decision} onClose={() => setDlg(null)} onSubmit={(note, both, seen) => submit(dlg.item, dlg.decision, note, both, seen)} /> : null}
+      {dlg ? <ReasonDialog key={`${dlg.item.id}-${dlg.decision}`} item={dlg.item} decision={dlg.decision} onClose={() => setDlg(null)} onSubmit={(note, both, seen, at) => submit(dlg.item, dlg.decision, note, both, seen, at)} /> : null}
     </>
   );
 }
@@ -158,8 +160,9 @@ function ReviewCard({ m, onApprove, onReject, onRecheck }: { m: ScanQueueItem; o
   );
 }
 
-function ReasonDialog({ item, decision, onClose, onSubmit }: { item: ScanQueueItem; decision: 'approve' | 'reject'; onClose: () => void; onSubmit: (note: string, both: boolean, seen: boolean) => Promise<boolean> }) {
+function ReasonDialog({ item, decision, onClose, onSubmit }: { item: ScanQueueItem; decision: 'approve' | 'reject'; onClose: () => void; onSubmit: (note: string, both: boolean, seen: boolean, at: AttestState) => Promise<boolean> }) {
   const [note, setNote] = useState('');
+  const [at, setAt] = useState<AttestState>(EMPTY_ATTEST);
   const [both, setBoth] = useState(true);
   const [seen, setSeen] = useState(false);
   const isStream = item.delivery === 'stream';
@@ -172,8 +175,9 @@ function ReasonDialog({ item, decision, onClose, onSubmit }: { item: ScanQueueIt
         e.preventDefault();
         if (note.trim().length < MIN_NOTE) return setErr(`Nhập lý do (tối thiểu ${MIN_NOTE} ký tự).`);
         if (decision === 'approve' && isStream && !seen) return setErr('Hãy xem toàn bộ video rồi tick xác nhận "Tôi đã xem toàn bộ nội dung".');
+        if (decision === 'approve' && both && !at.accepted) return setErr(ATTEST_REQUIRED_MSG);
         setErr(''); setBusy(true);
-        const ok = await onSubmit(note.trim(), both, seen);
+        const ok = await onSubmit(note.trim(), both, seen, at);
         setBusy(false);
         if (ok) onClose();
       }}>
@@ -187,6 +191,7 @@ function ReasonDialog({ item, decision, onClose, onSubmit }: { item: ScanQueueIt
             <span>Đồng thời duyệt nội dung quảng cáo (dùng được ngay cho chiến dịch). Bỏ chọn nếu chỉ xác nhận an toàn.</span>
           </label>
         ) : null}
+        {decision === 'approve' && both ? <AttestBox value={at} onChange={setAt} /> : null}
         {err ? <p role="alert" style={{ color: 'var(--bad)', margin: '8px 0 0' }}>{err}</p> : null}
         <div className="da" style={{ marginTop: 14 }}>
           <button type="button" className="btn" onClick={onClose}>Hủy</button>
