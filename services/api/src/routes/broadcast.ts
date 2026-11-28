@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { CommandError, enqueueCommand } from '@ams/edge-gateway';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { dbTarget, fitsTarget } from '../lib/creative.js';
-import { SIGNAGE_LIMITS, legacyMirror, playlistMediaIds, playlistTotalS, validateDisplayText, zoneLoop, zonePlaylist, type FieldError, type PlaylistItem } from '@ams/shared';
+import { SIGNAGE_LIMITS, isElevatorProgramMedia, legacyMirror, playlistMediaIds, playlistTotalS, validateDisplayText, zoneLoop, zonePlaylist, type FieldError, type PlaylistItem } from '@ams/shared';
 import { conflict, notFound, tooMany, unprocessable } from '../lib/errors.js';
 import { eq, getRt, jsonParse, num, parseBody, placeholders, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
@@ -290,7 +290,7 @@ async function checkItems(c: Ctx, target: string, ids: string[]): Promise<void> 
     if (target === 'led_p5') {
       if (r.target_type && r.target_type !== 'led_p5') throw unprocessable(`Tệp "${r.name ?? id}" không dành cho màn LED.`, 'creative_size_mismatch');
     } else if (w && h) {
-      const fit = fitsTarget(target as 'tv' | 'elevator', w, h);
+      const fit = target === 'elevator' && isElevatorProgramMedia(w, h) ? { ok: true, message: '' } : fitsTarget(target as 'tv' | 'elevator', w, h); // thang may: cho phep tep ngang 16:9 (vung chia 2/3)
       if (!fit.ok) throw unprocessable(`Tệp "${r.name ?? id}": ${fit.message}`, 'creative_size_mismatch');
     }
   }

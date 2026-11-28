@@ -1,5 +1,5 @@
 import type { Runtime } from '@ams/runtime';
-import { ANY, flattenZones, MANIFEST_EPOCH_KEY, isHttpsUrl, itemPlayS, legacyMirror, zoneLoop, zonePlaylist, type PlaylistItem, elevatorTierFor, isElevatorResolution, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, safeErr, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
+import { ANY, flattenZones, MANIFEST_EPOCH_KEY, isHttpsUrl, itemPlayS, legacyMirror, zoneLoop, zonePlaylist, type PlaylistItem, elevatorTierFor, isElevatorResolution, isElevatorProgramMedia, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, safeErr, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
 import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestLayout, type ManifestPlaylistItem, type ManifestSlot, type ManifestZone } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 
@@ -475,7 +475,8 @@ export class ManifestService {
     const elevatorBest = new Map<string, number>();
     if (type === 'elevator' && px) {
       for (const r of creativeRows) {
-        if (!r.px_w || !r.px_h || !isElevatorResolution(Number(r.px_w), Number(r.px_h))) continue;
+        const okRes = r.campaign_id.startsWith('bp_') ? isElevatorProgramMedia : isElevatorResolution; // chuong trinh phat song: nhan ca tep ngang 16:9
+        if (!r.px_w || !r.px_h || !okRes(Number(r.px_w), Number(r.px_h))) continue;
         const tw = elevatorTierFor(Number(r.px_w), Number(r.px_h)).w;
         if (tw <= px.w && tw > (elevatorBest.get(r.campaign_id) ?? 0)) elevatorBest.set(r.campaign_id, tw);
       }
@@ -486,7 +487,8 @@ export class ManifestService {
       if (!att) continue; // KHONG co cam ket phap ly hieu luc (nguoi ky + dung phien ban noi dung hien tai) => khong phat creative xuong thiet bi
       if (type === 'elevator') {
         const known = !!r.px_w && !!r.px_h;
-        if (known && !isElevatorResolution(Number(r.px_w), Number(r.px_h))) continue; // chi creative doc 9:16 HD-4K
+        const okRes = r.campaign_id.startsWith('bp_') ? isElevatorProgramMedia : isElevatorResolution;
+        if (known && !okRes(Number(r.px_w), Number(r.px_h))) continue; // chien dich: chi doc 9:16 HD-4K; chuong trinh phat song: them ngang 16:9
         if (px && !known) continue; // nhom theo do phan giai: creative chua biet kich thuoc thi khong dua vao
         if (px && elevatorTierFor(Number(r.px_w), Number(r.px_h)).w !== elevatorBest.get(r.campaign_id)) continue;
       } else if (px && (r.px_w !== px.w || r.px_h !== px.h)) continue; // LED khong tu co gian: dung do phan giai

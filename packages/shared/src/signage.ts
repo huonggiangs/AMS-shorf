@@ -174,6 +174,14 @@ export function isElevatorResolution(w: number, h: number): boolean {
 }
 
 /**
+ * Tep dung trong CHUONG TRINH PHAT SONG thang may: doc 9:16 (HD-4K) HOAC ngang 16:9 (xoay: 1280x720 .. 3840x2160).
+ * Man thang may doc nhung layout co the chia 2/3 vung nen mot vung rong van hien thi tep ngang (co giãn theo vung).
+ */
+export function isElevatorProgramMedia(w: number, h: number): boolean {
+  return isElevatorResolution(w, h) || isElevatorResolution(h, w);
+}
+
+/**
  * Bac chuan gan nhat KHONG VUOT do phan giai (w x h): bac lon nhat co chieu rong <= w (sai so +2%).
  * Khong bao gio day len bac cao hon (man HD khong nhan 4K). Duoi 720 px: tra bac thap nhat. Tra anh xoay ngang (w > h) ve doc.
  */
