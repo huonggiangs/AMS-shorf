@@ -65,7 +65,7 @@ export default function Broadcast() {
                   <td className="mono">{fmtMin(p.start_min)}–{fmtMin(p.end_min)}</td>
                   <td className="mono">{p.item_count}</td>
                   <td><Tag tone={STATUS[p.status]?.tone ?? 'info'}>{STATUS[p.status]?.label ?? p.status}</Tag></td>
-                  <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                  <td style={{ textAlign: 'right', maxWidth: 260 }}>
                     {p.item_count > 0 ? <button type="button" className="btn sm" onClick={() => void api.get(`${BASE}/${p.id}`, { schema: broadcastSchema }).then(setView)}>Xem trước</button> : null}{' '}
                     {p.item_count > 0 ? <button type="button" className="btn sm" onClick={() => setUsb(p)}>Chép ra USB</button> : null}{' '}
                     {canWrite ? <button type="button" className="btn sm" onClick={() => void api.get(`${BASE}/${p.id}`, { schema: broadcastSchema }).then(setEdit)}>Sửa</button> : null}{' '}

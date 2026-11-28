@@ -111,3 +111,8 @@ dialog.dlg.wiz[open]{display:flex;flex-direction:column}
 .wz-rightcol { max-width: 100%; overflow-x: hidden; }
 .wz-rightcol select, .wz-rightcol input:not([type="checkbox"]), .wz-rightcol textarea { max-width: 100%; box-sizing: border-box; text-overflow: ellipsis; }
 .wz-pl-edit select, .wz-pl-edit input:not([type="checkbox"]) { width: 100%; }
+
+/* Danh sách chương trình phát sóng: bảng không bị cắt nút thao tác khi màn hẹp */
+.card.cp { overflow-x: auto; }
+.card.cp td:last-child .btn { margin: 2px 0 2px 4px; }
+@media (max-width: 1100px) { .card.cp th:nth-child(5), .card.cp td:nth-child(5), .card.cp th:nth-child(6), .card.cp td:nth-child(6) { display: none; } }
