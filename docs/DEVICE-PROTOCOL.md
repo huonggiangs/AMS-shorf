@@ -169,7 +169,7 @@ Chữ ký thiết bị. Thân JSON nhỏ (mục tiêu <512 byte, **tối đa c�
 | `app_ver` | string | cập nhật `devices.app_version` |
 | `soc_temp` (độ C), `rssi` (dBm, <=0), `dl_mbps`, `cache_used_mb`, `cache_slots` | số | telemetry; có thể bị lấy mẫu phía server (không ảnh hưởng phản hồi) |
 | `manifest_etag` | string | etag đang giữ (thông tin) |
-| `app_version` | string | bí danh của `app_ver` (Signage Player) |
+| `app_version` | string | bí danh của `app_ver` (D Play) |
 | `source` | `ams`\|`usb`\|`lan` | nguồn đang phát; hiện ở cột "Nguồn phát" trên admin |
 | `cache_mb` | số >= 0 | dung lượng cache (MB) đang dùng; hiện trên admin (nếu có `cache_used_mb` mà không có `cache_mb` thì dùng giá trị đó) |
 | `px_w`, `px_h`, `orientation`, `region` | tùy chọn | như `register`; đổi giá trị thì gateway cập nhật nhóm manifest ngay (không quá 1 lần/phút/thiết bị) |
@@ -186,13 +186,13 @@ Phản hồi `200`:
 - Online suy diễn: coi thiết bị online nếu `last_seen < 2,5 x chu kỳ` (phía hiển thị).
 - `manifest_etag`: nếu khác etag đang giữ, gọi `GET /v1/manifest`. `manifest_group`/`manifest_url`: dạng công khai để CDN cache (mục 7.3).
 - `commands`: mảng `{id, type, args?}` lấy từ bảng `device_commands` (vòng đời `pending -> delivered -> acked|failed`, hoặc `expired`). Heartbeat trả các lệnh đang chờ và đánh dấu `delivered`; nếu chưa ack sau **120 giây** (`CMD_REDELIVER_S`) thì được giao lại ở heartbeat kế tiếp, tối đa **10 lần giao** (`MAX_DELIVERIES`) rồi chuyển `failed`. Lệnh quá hạn (TTL mặc định 7 ngày) bị sweeper chuyển `expired`, không giao nữa. Tối đa 50 lệnh mở/thiết bị (`queue_full`). Ít nhất một lần: lệnh phải **idempotent** (app nhớ id đã thực thi). `type` ban đầu: `refresh_manifest`, `reboot`, `set_monitor` (đặt `state` 3). `type` lạ: app không thực thi; **khuyến nghị ack `failed` với `result:"unsupported:<type>"`** (ack `ok` làm web tưởng đã chạy). Heartbeat/register nhận thêm `caps` (mảng tên tính năng app hỗ trợ, vd `["set_volume"]`) và `volume` (0-100). Lệnh enqueue có `audit_log` (`device.command.enqueue`) và `idempotency_key` (UNIQUE theo thiết bị). Admin tạo/liệt kê/hủy lệnh qua `/admin/v1/devices/{id}/commands` (danh mục loại lệnh, TTL, hạn mức: xem `TV-CONNECT-AMS.md` mục 3.2). Biến `HB_PAIRED_S` (tùy chọn, mặc định tắt, tối thiểu 30) rút ngắn chu kỳ cơ sở của thiết bị trust >= 1 để lệnh tới nhanh hơn; vẫn là polling.
-- `min_app_version` (tùy chọn, ví dụ `"2.4.0"`): bản tối thiểu server chấp nhận; thấp hơn thì app nên tự cập nhật. Thang máy/LED: đặt theo từng loại ở admin (Màn hình > Cấu hình Signage Player), ưu tiên hơn công tắc toàn hệ thống.
+- `min_app_version` (tùy chọn, ví dụ `"2.4.0"`): bản tối thiểu server chấp nhận; thấp hơn thì app nên tự cập nhật. Thang máy/LED: đặt theo từng loại ở admin (Màn hình > Cấu hình D Play), ưu tiên hơn công tắc toàn hệ thống.
 - **Chỉ thang máy/LED**, có khi vận hành đã cấu hình (trường vắng mặt = không có): `hotline` (chuỗi <= 60, hiện ở màn logo, lưu để hiện cả khi mất mạng), `app_update_url` (HTTPS, <= 300 ký tự) và `app_update_sha256` (64 hex): box không có kho ứng dụng tải tệp, **kiểm SHA-256 trước khi cài**, chỉ cài khi `app_ver` < `min_app_version`. Cả ba chỉ có hiệu lực sau <= 15 giây từ lúc đổi cấu hình (cache cấu hình ngắn). Đổi `app_update_*` cần quyền `devices:approve` và được ghi `audit_log` (`signage.config`).
 - Lệnh thêm (mục 6.2): `reset_pin`, `set_volume`, `set_orientation`, `message`. **`id` lệnh KHÔNG ĐỔI khi giao lại** (ack chậm, quá 120 giây): app nhớ id đã xử lý và bỏ qua lần giao lại nhưng vẫn ack.
 - Heartbeat gần nhau hơn 5 giây: `429 rate_limited` + `Retry-After`.
 - **Giảm tải:** khi quá tải server trả `503 overloaded` kèm `Retry-After` (giây, đã jitter ±20%) trước khi tốn CPU xác thực. App ngủ đúng `Retry-After` rồi thử lại, không tự rút ngắn.
 
-### 6.2 Lệnh Signage Player (thang máy / LED)
+### 6.2 Lệnh D Play (thang máy / LED)
 
 Lệnh tạo ở admin (`POST /admin/v1/devices/{id}/commands`), thiết bị phải ở `trust_level` >= 1 (đã cấp quyền), loại lệnh phải hợp với loại thiết bị. Mọi lệnh ghi `audit_log`; `idempotency_key` chống tạo trùng.
 
@@ -291,7 +291,7 @@ Creative do khách/nhân viên **dán link** (không tải lên) có dạng khá
 - `reward_points`: điểm thưởng nếu người xem xem đủ (chỉ TV có tài khoản; `format = reward` hiển thị lời nhắc).
 - Quy tắc xoay vòng: xem mục 7.5 (thang máy/LED đã chốt; TV vẫn là gợi ý). Chuyển sang bản đầy đủ khi `etag` đổi chỉ sau khi tải xong mọi creative mới.
 
-**Bố cục đa vùng (tùy chọn, chỉ lịch nội bộ `bp_*`)**: slot có thể kèm `layout: {orientation: 'landscape'|'portrait', zones:[{id, type, x, y, w, h, z, transition, text?, bg_color?, text_color?, font_size?, scroll_speed?, url?, creative_ids?}]}`. `type` ∈ `video|image|marquee|clock|weather|qr`; `x,y,w,h` là **phần trăm khung** (0..100); `z` = lớp vẽ (lớn hơn vẽ sau); `transition` ∈ `none|fade|slide-left|slide-right|zoom`. Vùng `video`/`image` có `creative_ids` (tệp phát ở vùng đó, theo thứ tự, lặp vô hạn); `creative_ids` của slot vẫn liệt kê **toàn bộ** tệp theo thứ tự nên thiết bị chưa hỗ trợ `layout` cứ phát tuần tự một vùng như trước (thiết bị cũ bỏ qua trường lạ). Vắng `layout` = màn đơn. **Vùng `qr`**: gateway tính sẵn `qr_kind` ∈ `text|image_url|data_url` và `url` (VietQR → URL ảnh `https://img.vietqr.io/image/<BIN>-<STK>-<template>.png?amount&addInfo&accountName`; ảnh tải lên → data URL ≤ 200 KB; còn lại → nội dung để thiết bị tự vẽ mã QR); kèm `qr` gốc để tham chiếu. **Vùng `weather`**: `weather:{mode:'gps'|'fixed', lat, lon, label?}`; thiết bị/trình xem trước lấy dữ liệu từ Open-Meteo (không cần khóa), làm mới mỗi 10 phút; `gps` dùng vị trí thiết bị, `fixed` dùng toạ độ đã cấu hình. Signage Player hiện chưa vẽ vùng đa-zone, QR, thời tiết (chỉ trình xem trước web).
+**Bố cục đa vùng (tùy chọn, chỉ lịch nội bộ `bp_*`)**: slot có thể kèm `layout: {orientation: 'landscape'|'portrait', zones:[{id, type, x, y, w, h, z, transition, text?, bg_color?, text_color?, font_size?, scroll_speed?, url?, creative_ids?}]}`. `type` ∈ `video|image|marquee|clock|weather|qr`; `x,y,w,h` là **phần trăm khung** (0..100); `z` = lớp vẽ (lớn hơn vẽ sau); `transition` ∈ `none|fade|slide-left|slide-right|zoom`. Vùng `video`/`image` có `creative_ids` (tệp phát ở vùng đó, theo thứ tự, lặp vô hạn); `creative_ids` của slot vẫn liệt kê **toàn bộ** tệp theo thứ tự nên thiết bị chưa hỗ trợ `layout` cứ phát tuần tự một vùng như trước (thiết bị cũ bỏ qua trường lạ). Vắng `layout` = màn đơn. **Vùng `qr`**: gateway tính sẵn `qr_kind` ∈ `text|image_url|data_url` và `url` (VietQR → URL ảnh `https://img.vietqr.io/image/<BIN>-<STK>-<template>.png?amount&addInfo&accountName`; ảnh tải lên → data URL ≤ 200 KB; còn lại → nội dung để thiết bị tự vẽ mã QR); kèm `qr` gốc để tham chiếu. **Vùng `weather`**: `weather:{mode:'gps'|'fixed', lat, lon, label?}`; thiết bị/trình xem trước lấy dữ liệu từ Open-Meteo (không cần khóa), làm mới mỗi 10 phút; `gps` dùng vị trí thiết bị, `fixed` dùng toạ độ đã cấu hình. D Play hiện chưa vẽ vùng đa-zone, QR, thời tiết (chỉ trình xem trước web).
 
 **Thời lượng từng tư liệu (`durations`, tùy chọn)**: vùng `video`/`image` có thể kèm `durations: {<creative_id>: giây}` (số nguyên 1..3600; chỉ chứa tệp thuộc chương trình). Ảnh: hiển thị đúng số giây đó, **thiếu = 8 giây** (đổi từ 5 giây khi có danh sách phát; thống nhất toàn hệ thống). Video: thiếu = phát hết tệp; có giá trị = phát tối đa số giây đó rồi chuyển tệp kế. Thiết bị cũ bỏ qua trường này.
 
@@ -436,7 +436,7 @@ Sự kiện hợp lệ: ghi doanh thu `revenue_micro_vnd` (đơn giá **tạm** 
 
 Bậc tin cậy: `0` chưa ghép/chưa xác minh (không hoa hồng, không tính tiền quảng cáo); `1` đã ghép tài khoản hoặc do vận hành cấp; `2` đã chứng thực thiết bị thật (**chưa hiện thực**).
 
-### 8.5 `POST /v1/logs` (nhật ký thiết bị, Signage Player)
+### 8.5 `POST /v1/logs` (nhật ký thiết bị, D Play)
 
 Chữ ký thiết bị như `/v1/*`. Thân JSON **<= 8 KB** (`413 payload_too_large`), tối đa 100 dòng:
 
@@ -520,7 +520,7 @@ Phản hồi `200 {"ok":true,"stored":N}`. Giới hạn theo `device_id`: **60 l
 6. Bộ phát: lọc slot theo giờ `Asia/Ho_Chi_Minh` và `priority`; đo `vcr_pct`/`played_ms` thật; sinh UUIDv7; xả lô 5-10 phút.
 7. Xử lý đủ bảng lỗi mục 9 và quy tắc thử lại mục 10; không đếm sự kiện lại sau khi gửi lỗi.
 
-## 14. Trả lời câu hỏi của đội app Signage Player
+## 14. Trả lời câu hỏi của đội app D Play
 
 1. **Gateway production** là `https://gw-ams.anio.vn` (đúng; admin ở `https://ams.anio.vn`). Dùng làm mặc định `Prefs.gwBase` là phù hợp.
 2. **Đăng ký lại cùng khóa**: luôn nhận lại **cùng `device_id`** (`200`, `created:false`); an toàn khi xóa dữ liệu app mà giữ khóa. Nếu mất cả khóa thì là thiết bị mới.

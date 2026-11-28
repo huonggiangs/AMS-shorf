@@ -1,4 +1,4 @@
-// Signage Player (man hinh thang may / LED 9:16): cap quyen, nhat ky thiet bi, cau hinh chu/hotline/cap nhat app, chu theo lich phat.
+// D Play (man hinh thang may / LED 9:16): cap quyen, nhat ky thiet bi, cau hinh chu/hotline/cap nhat app, chu theo lich phat.
 // Moi kiem tra quyen THAT nam o may chu; nut o day chi an/hien theo quyen hien co.
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -155,7 +155,7 @@ export function SignageConfigCard({ canWrite }: { canWrite: boolean }) {
   const cfg = q.data.kinds[kind];
   return (
     <div className="card cp" style={{ margin: '18px 0' }}>
-      <div className="ch"><div><h2>Chữ, hotline và cập nhật app (Signage Player)</h2><p>Áp dụng cho mọi màn hình cùng loại. Màn hình nhận lại sau tối đa vài chục giây.</p></div></div>
+      <div className="ch"><div><h2>Chữ, hotline và cập nhật app (D Play)</h2><p>Áp dụng cho mọi màn hình cùng loại. Màn hình nhận lại sau tối đa vài chục giây.</p></div></div>
       <div className="acts" role="tablist" aria-label="Loại màn hình">
         {(['elevator', 'led_p5'] as const).map((k) => <button key={k} type="button" role="tab" aria-selected={kind === k} className={`btn sm ${kind === k ? 'p' : ''}`} onClick={() => setKind(k)}>{kindLabel(k)}</button>)}
       </div>

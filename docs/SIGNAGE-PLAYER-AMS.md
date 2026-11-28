@@ -1,4 +1,4 @@
-# Signage Player (màn hình thang máy / LED 9:16) với AMS
+# D Play (màn hình thang máy / LED 9:16) với AMS
 
 Ứng dụng Android `vn.anio.signage` dùng gateway `https://gw-ams.anio.vn` và trang quản trị `https://ams.anio.vn`. Tài liệu này gồm: (1) tình trạng 13 yêu cầu bổ sung, (2) hướng dẫn vận hành cấp quyền cho màn thang máy mới, (3) trường và đường dẫn cho đội app. Giao thức chi tiết ở `docs/DEVICE-PROTOCOL.md`.
 
@@ -24,7 +24,7 @@ Giới hạn đã biết: chưa kiểm trên ams.anio.vn thật và thiết bị
 
 ## 2. Cấp quyền cho màn thang máy mới (5 bước, cho người không rành kỹ thuật)
 
-1. **Bật màn hình và mở ứng dụng Signage Player.** Màn tự đăng ký và hiện mã thiết bị (dãy chữ số/chữ). Màn phải có mạng. Không cần nhập mã 6 số.
+1. **Bật màn hình và mở ứng dụng D Play.** Màn tự đăng ký và hiện mã thiết bị (dãy chữ số/chữ). Màn phải có mạng. Không cần nhập mã 6 số.
 2. **Vào ams.anio.vn > Thiết bị.** Ô "Chờ cấp quyền" cho biết số màn đang chờ. Bấm vào ô hoặc lọc Trạng thái = "Chờ cấp quyền", tìm dòng có mã trùng với mã trên màn.
 3. **Mở dòng đó rồi bấm "Cấp quyền".** Chọn **địa điểm lắp đặt** (chung cư/tòa nhà, đã tạo ở trang Màn hình thang máy & LED; nếu chưa có thì thêm vị trí trước), có thể đặt tên hiển thị, bấm "Cấp quyền". Cần tài khoản có quyền duyệt thiết bị (mặc định chỉ quản trị cấp cao; có thể cấp cho vai trò vận hành thiết bị ở trang Phân quyền).
 4. **Chờ khoảng 1 đến 10 phút.** Màn tự nhận lịch đúng độ phân giải ở lần kết nối kế tiếp. Dòng thiết bị chuyển thành "Đã cấp quyền", hiện nguồn phát, phiên bản app, bộ nhớ đệm.
