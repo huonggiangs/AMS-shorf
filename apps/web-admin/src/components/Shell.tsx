@@ -75,7 +75,7 @@ export function Shell() {
       {ui.menuOpen ? <div className="scrim" onClick={() => ui.setMenuOpen(false)} /> : null}
       <aside className={`side ${ui.menuOpen ? 'open' : ''}`} aria-label="menu">
         <div className="logo">
-          <i><Icon n="tv" /></i>
+          <img className="logo-img" src="/logo.png" alt="AMS" width={36} height={36} />
           <b>AMS<small>Bảng điều hành</small></b>
         </div>
         <nav className="ngs" aria-label={t('Điều hướng chính')}>

@@ -70,7 +70,7 @@ describe('Noi dung & Media: moi trang thai khong duyet duoc co giai thich + hanh
     vi.stubGlobal('fetch', mockFetch());
     const { container } = mount('/media');
     await screen.findByText('t1.mp4');
-    const imgs = container.querySelectorAll('img');
+    const imgs = container.querySelectorAll('img:not(.logo-img)');
     expect(imgs).toHaveLength(1);
     expect(imgs[0]).toHaveAttribute('src', '/api/admin/v1/media/t1/thumbnail?v=2026-11-20T00%3A00%3A00.000Z');
     expect(container.querySelectorAll('.ph')).toHaveLength(1);

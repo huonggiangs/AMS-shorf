@@ -208,3 +208,6 @@ a.nv{text-decoration:none}
 .side .sl{color:var(--mut)}.side .sl:hover{color:var(--ink)}.side .sl.on{color:var(--pri)}
 .side a.nv{color:var(--mut)}.side a.nv:hover{color:var(--ink)}.side a.nv.on{color:var(--pri)}
 .side .sl:hover,.side a.nv:hover{text-decoration:none}
+
+/* logo AMS (anh) thay bieu tuong TV o thanh ben */
+.side .logo .logo-img{width:36px;height:36px;object-fit:contain;flex:none;display:block}
