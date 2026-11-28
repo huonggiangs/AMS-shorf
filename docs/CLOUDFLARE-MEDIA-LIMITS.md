@@ -117,7 +117,7 @@ Video dán link **không đi qua** đường tải lên: Worker không nhận, k
 - Máy chủ KHÔNG tin trình duyệt: mọi tệp vẫn qua `finalizeUpload` (codec, kích thước, thời lượng, dung lượng).
 - Một thanh tiến độ chung: chuyển 0-60% (nếu có), tải lên 60-97%, xác nhận 97-100%. Có Hủy; cảnh báo `beforeunload`.
 
-**Quy tắc codec thang máy** (`videoSpecProblem`, `videoSpecWarnings`): H.264, H.265 nhận; VP9 nhận kèm cảnh báo (`warnings` trong phản hồi `confirm`/`GET /media`, hiện ở thẻ tệp); AV1/VP8/khác chặn. Quyết định này là suy luận từ tài liệu Signage Player (chỉ ghi "H.264 hoặc H.265", từng ghi "AV1/VP9 không phát được trên đa số box"); VP9 chưa được thử trên thiết bị thật. Muốn chặn lại VP9: bỏ `'vp09'` khỏi `VIDEO_RULES.elevatorCodecs`.
+**Quy tắc codec thang máy** (`videoSpecProblem`, `videoSpecWarnings`): H.264, H.265 nhận; VP9 nhận kèm cảnh báo (`warnings` trong phản hồi `confirm`/`GET /media`, hiện ở thẻ tệp); AV1/VP8/khác chặn. Quyết định này là suy luận từ tài liệu D Play (chỉ ghi "H.264 hoặc H.265", từng ghi "AV1/VP9 không phát được trên đa số box"); VP9 chưa được thử trên thiết bị thật. Muốn chặn lại VP9: bỏ `'vp09'` khỏi `VIDEO_RULES.elevatorCodecs`.
 
 **WebM/MOV**: trước đây `finalizeUpload` chỉ kiểm codec MP4; nay MP4, MOV (`probeMp4`) và WebM (`probeWebm`, EBML) đều kiểm codec/kích thước/thời lượng. Nhập liên kết nhận ra WebM (`1A45DFA3`) và MOV (`ftyp qt`). Đây là nguyên nhân thật của lỗi `not_media` với tệp Drive `.webm`: bộ nhận dạng cũ chỉ biết MP4/PNG/JPG nên coi tệp WebM hợp lệ là "không phải video" rồi báo nhầm "không chia sẻ công khai".
 

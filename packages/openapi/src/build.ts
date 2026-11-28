@@ -341,7 +341,7 @@ export function buildGatewayDoc(routes: RouteKey[]): Json {
       responses: { '200': json('HeartbeatResponse', G.heartbeatResponse, 'OK'), ...common429 },
     },
     'POST /v1/logs': {
-      summary: 'Gửi nhật ký thiết bị (Signage Player)',
+      summary: 'Gửi nhật ký thiết bị (D Play)',
       description: `Thân tối đa ${MAX_LOGS_BODY_BYTES / 1024} KB, tối đa 100 dòng. Giới hạn tần suất theo device_id (mặc định 60 lần/giờ, 5000 dòng/ngày; 429 + \`Retry-After\`). \`ts\` quá cũ bị kẹp về mốc 7 ngày, tương lai kẹp +5 phút. Lưu 7 ngày; quản trị xem ở ngăn chi tiết thiết bị.`,
       parameters: sigHeaders(true),
       requestBody: { required: true, content: { 'application/json': { schema: c.add('LogsRequest', logsBody) } } },

@@ -65,7 +65,7 @@ kéo thanh trượt (debounce 0,5 s) -> POST /admin/v1/devices/{id}/commands {"t
 **Nguyên nhân web "chưa điều khiển được" thường gặp** (kiểm theo thứ tự):
 
 1. Web/gateway production chưa triển khai bản có `set_volume` (xem lệnh cuối mục này).
-2. **App trên TV bỏ qua `commands[]` của heartbeat.** Mindo TV (`chanvideotv`, nhánh trước `feat/set-volume`) chỉ gửi `{"app_version"}` và bỏ qua toàn bộ phản hồi, nên không bao giờ nhận lệnh. Brain-rot Java (`vn/brainrot/parental/tv/Ams*.java`) và Signage Player cũ ack "ok" mọi lệnh nhưng không đổi âm lượng (web cũ hiện "đã xác nhận" sai).
+2. **App trên TV bỏ qua `commands[]` của heartbeat.** Mindo TV (`chanvideotv`, nhánh trước `feat/set-volume`) chỉ gửi `{"app_version"}` và bỏ qua toàn bộ phản hồi, nên không bao giờ nhận lệnh. Brain-rot Java (`vn/brainrot/parental/tv/Ams*.java`) và D Play cũ ack "ok" mọi lệnh nhưng không đổi âm lượng (web cũ hiện "đã xác nhận" sai).
 3. Thiết bị chưa `trust_level >= 1` (TV chưa ghép mã 6 số; thang máy/LED chưa bấm Cấp quyền): web khóa thanh trượt, API trả 409.
 4. Độ trễ: lệnh chỉ tới ở heartbeat kế tiếp (mặc định đang phát ~5 phút, rảnh ~10 phút). Web hiện "Nhịp heartbeat kế tiếp dự kiến HH:MM". Rút ngắn: đặt biến gateway `HB_PAIRED_S=60`; app dùng `next_interval` của máy chủ (không tự đặt chu kỳ) hoặc long-poll `GET /v1/commands/wait?timeout=25`.
 
@@ -80,7 +80,7 @@ kéo thanh trượt (debounce 0,5 s) -> POST /admin/v1/devices/{id}/commands {"t
    am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(percent / 100f * max), 0) // cờ 0: không hiện thanh âm lượng
    val applied = Math.round(am.getStreamVolume(AudioManager.STREAM_MUSIC) * 100f / max) // ĐỌC LẠI
    ```
-   Mã đầy đủ đã viết: `apps/tv-android/app/.../AndroidDeviceVolume.kt` và `AmsGatewaySource.runCommands` (repo chanvideotv, nhánh `feat/set-volume`); Signage Player: `signage-player/set-volume.patch`.
+   Mã đầy đủ đã viết: `apps/tv-android/app/.../AndroidDeviceVolume.kt` và `AmsGatewaySource.runCommands` (repo chanvideotv, nhánh `feat/set-volume`); D Play: `signage-player/set-volume.patch`.
 4. **Ack đúng sự thật** qua `POST /v1/commands/ack`: thành công `{"id","status":"ok","result":"{\"applied_percent\":N,\"mode\":\"system\"}"}` (N là mức ĐỌC LẠI, khác `percent` nếu TV box cố định âm lượng); thất bại `{"id","status":"failed","result":"<lý do ngắn>"}` (`bad_args`, `unsupported:<type>`, `volume_fixed`...). `result` là chuỗi, tối đa 500 ký tự. **Không ack "ok" cho lệnh app không làm được**: web sẽ coi như đã chạy. Nếu ack "ok" mà không kèm `applied_percent`, web hiện cảnh báo "không báo mức đã áp dụng, app có thể chưa hỗ trợ".
 5. **Idempotent**: giao ít nhất một lần, `id` không đổi khi giao lại. App nhớ id đã xử lý (kèm kết quả), lần giao lại chỉ ack lại kết quả cũ, không đặt lại âm lượng.
 6. **Báo âm lượng thật** trong mọi heartbeat: `"volume": round(100 * getStreamVolume / getStreamMaxVolume)`. Người dùng bấm phím âm lượng trên remote làm số này đổi; admin luôn thấy số thật, không phải số đã yêu cầu.

@@ -19,11 +19,11 @@
 
 ## Thông báo khẩn (chữ chạy gửi ngay)
 
-Trang **Thông báo khẩn** (menu Quảng cáo, quyền `schedule`): nhập nội dung ≤ 200 ký tự, thời gian hiển thị 3–120 giây (giới hạn của lệnh `message`), chọn đích (tất cả / thang máy / TV / LED P5) và khu vực. API: `POST /admin/v1/broadcast/notice` (`schedule:write`) đặt lệnh `message` vào hàng đợi của từng thiết bị **đã duyệt (trust ≥ 1) và không bị chặn** khớp bộ lọc: thang máy/LED nhận `{text, duration_s}`, TV nhận `{text, seconds}`. Tối đa 500 thiết bị mỗi lần, 10 lần gửi / 10 phút / người; lệnh hết hạn sau 10 phút. Trả `{matched, queued, skipped}` (`skipped` = hàng đợi thiết bị đầy). Lịch sử: `GET /admin/v1/broadcast/notice` (30 lần gần nhất, lấy từ `audit_log` action `broadcast.notice`, không thêm bảng). Thiết bị nhận ở lần heartbeat kế tiếp; app phải hiển thị lệnh `message` (Signage Player: xem việc bên app).
+Trang **Thông báo khẩn** (menu Quảng cáo, quyền `schedule`): nhập nội dung ≤ 200 ký tự, thời gian hiển thị 3–120 giây (giới hạn của lệnh `message`), chọn đích (tất cả / thang máy / TV / LED P5) và khu vực. API: `POST /admin/v1/broadcast/notice` (`schedule:write`) đặt lệnh `message` vào hàng đợi của từng thiết bị **đã duyệt (trust ≥ 1) và không bị chặn** khớp bộ lọc: thang máy/LED nhận `{text, duration_s}`, TV nhận `{text, seconds}`. Tối đa 500 thiết bị mỗi lần, 10 lần gửi / 10 phút / người; lệnh hết hạn sau 10 phút. Trả `{matched, queued, skipped}` (`skipped` = hàng đợi thiết bị đầy). Lịch sử: `GET /admin/v1/broadcast/notice` (30 lần gần nhất, lấy từ `audit_log` action `broadcast.notice`, không thêm bảng). Thiết bị nhận ở lần heartbeat kế tiếp; app phải hiển thị lệnh `message` (D Play: xem việc bên app).
 
 ## Chép ra USB
 
-`GET /admin/v1/broadcast/:id/usb-package` (`schedule:view`) trả `{folder:'ANIO', playlist, files:[{name,url,sha256,size_bytes}], total_bytes}`; chỉ khi mọi tệp đã duyệt/sẵn sàng (422 `media_not_ready`/`no_items`). `playlist` là nội dung `playlist.json` mà Signage Player đọc (`PlaylistIo.parse` và `UsbScanner`):
+`GET /admin/v1/broadcast/:id/usb-package` (`schedule:view`) trả `{folder:'ANIO', playlist, files:[{name,url,sha256,size_bytes}], total_bytes}`; chỉ khi mọi tệp đã duyệt/sẵn sàng (422 `media_not_ready`/`no_items`). `playlist` là nội dung `playlist.json` mà D Play đọc (`PlaylistIo.parse` và `UsbScanner`):
 
 ```json
 { "version": "bp<id>-v<n>", "name": "...", "header": "...", "footer": "...",
@@ -51,7 +51,7 @@ Nhóm menu **Phát sóng nội bộ** (tham khảo QuangBáo Cloud). API đều 
 - **Manifest**: slot `bp_*` có thêm `layout` (xem DEVICE-PROTOCOL.md) kèm `creative_ids` theo vùng; `creative_ids` của slot không đổi nên thiết bị cũ vẫn phát tuần tự.
 - **Web**: trang *Mẫu bố cục* (thẻ mẫu, trình soạn kéo-thả/đổi kích thước, nút *Sử dụng mẫu này* tạo chương trình nháp); *Xem trước* trong Chương trình phát sóng (trình phát mô phỏng với video/ảnh thật, chữ chạy, đồng hồ, header/footer, Tạm dừng/Phát lại, 9:16/16:9) và nút *Xem trước* ở từng tệp trong Kho tư liệu.
 - **Văn bản định dạng (vùng `text`/`marquee`)**: trình soạn ở bước 02 có thanh công cụ (đậm/nghiêng/gạch chân/gạch ngang, độ đậm Mảnh→Rất đậm, phông, cỡ chữ, khoảng cách chữ, màu chữ, màu nền chữ, căn trái/giữa/phải/đều, giãn dòng, xóa định dạng; Enter xuống dòng, Ctrl+B/I/U; dán chỉ nhận văn bản thuần). Lưu `rich` (HTML con đã làm sạch) **và** `text` (thuần, dự phòng cho TV cũ). Máy chủ (`services/api/src/lib/layout.ts` → `@ams/shared` `sanitizeRich`) làm sạch lại và ghi đè `text` khi lưu mẫu/chương trình; chữ chạy bị ép một dòng ≤ 200 ký tự; vùng loại khác không giữ `rich`. Khung xem trước (bước 02, *Xem trước*, danh sách) vẽ `rich` bằng phần tử React, không dùng `innerHTML`. Cách TV vẽ: TV-APP-INTEGRATION.md mục 3d. Bản sao `apps/web-admin/src/lib/richtext.ts` phải giống hệt `packages/shared/src/richtext.ts` (test đối chiếu).
-- **Hạn chế**: Signage Player hiện chưa vẽ nhiều vùng (vẫn phát tuần tự một vùng); thời tiết và mã QR trong bản xem trước là hình minh họa.
+- **Hạn chế**: D Play hiện chưa vẽ nhiều vùng (vẫn phát tuần tự một vùng); thời tiết và mã QR trong bản xem trước là hình minh họa.
 
 
 ## Trình tạo 4 bước, chọn thiết bị và đẩy ngay (migration 0022)
@@ -60,7 +60,7 @@ Nhóm menu **Phát sóng nội bộ** (tham khảo QuangBáo Cloud). API đều 
 - **Chọn thiết bị**: bảng phụ `broadcast_program_devices(program_id, device_id)` (không dùng ALTER). `device_ids` (≤ 500) trong POST/PUT; mỗi thiết bị phải tồn tại, đã duyệt (trust ≥ 1), không bị khóa, đúng loại màn (`duplicate_devices`, `device_not_found`, `device_not_approved`, `device_kind_mismatch`). Không chọn thiết bị nào = lọc theo `regions` như trước. `GET /devices-pick?target=&regions=&q=` trả danh sách thiết bị hợp lệ (tối đa 500, `truncated`).
 - **Manifest theo thiết bị**: chương trình có thiết bị riêng chỉ xuất hiện trong manifest nhóm `region.daypart.modelClass.d-<deviceId>` của đúng các thiết bị đó (nhóm này chỉ phục vụ qua `/v1/manifest` có xác thực, route công khai `/v1/manifest/g/...` từ chối); thiết bị khác không thấy.
 - **Đẩy ngay**: xuất bản, sửa chương trình đang phát (hợp thiết bị cũ + mới) và dừng phát/xóa đều xếp lệnh `refresh_manifest` (idempotency theo chương trình + phiên bản) và trả `push: {matched, pushed, skipped}`. `GET /:id/delivery` trả từng thiết bị kèm trạng thái lệnh (`pending|delivered|acked|failed|expired`) và trực tuyến/ngoại tuyến; giao diện tự làm mới 4 giây.
-- **Hạn chế**: thời lượng từng tệp chưa lưu trong chương trình; nút ẩn lớp chỉ áp dụng cho trình soạn/xem trước; Signage Player chưa vẽ đa vùng.
+- **Hạn chế**: thời lượng từng tệp chưa lưu trong chương trình; nút ẩn lớp chỉ áp dụng cho trình soạn/xem trước; D Play chưa vẽ đa vùng.
 
 
 ## QR, thời tiết và xem trước video

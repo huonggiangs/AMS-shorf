@@ -109,7 +109,7 @@ function UsbDialog({ program, onClose }: { program: Broadcast; onClose: () => vo
   return (
     <Dialog open onClose={onClose} size="lg" label="Chép ra USB">
       <h2 style={{ margin: '0 0 10px', fontSize: 18 }}>Chép “{program.name}” ra USB</h2>
-      <p style={{ margin: '0 0 10px' }}>Tạo thư mục <b>ANIO</b> trên ổ USB gồm các tệp phát và <b>playlist.json</b>. Cắm USB vào thiết bị chạy Signage Player (nguồn phát USB) để phát không cần mạng.</p>
+      <p style={{ margin: '0 0 10px' }}>Tạo thư mục <b>ANIO</b> trên ổ USB gồm các tệp phát và <b>playlist.json</b>. Cắm USB vào thiết bị chạy D Play (nguồn phát USB) để phát không cần mạng.</p>
       {supported ? <Note>Bấm “Chọn ổ USB”, chọn ổ/thư mục gốc của USB rồi cho phép ghi. Trình duyệt Chrome/Edge trên máy tính.</Note> : <Note warn>Trình duyệt này không cho ghi thẳng ra USB. Bấm “Tải danh sách” để lấy playlist.json và danh sách liên kết, rồi chép tay vào thư mục ANIO.</Note>}
       {err ? <p role="alert" style={{ color: 'var(--bad, #c0392b)' }}>{err}</p> : null}
       {log.length ? <pre style={{ maxHeight: 200, overflow: 'auto', fontSize: 12 }}>{log.join('\n')}</pre> : null}

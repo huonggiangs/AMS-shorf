@@ -5,7 +5,7 @@ Tài liệu này mô tả đường đi của số liệu lượt xem từ màn 
 ## 1. Luồng dữ liệu
 
 ```
-App màn hình (Signage Player 9:16 / Mindo TV)
+App màn hình (D Play 9:16 / Mindo TV)
    │  POST /v1/events  (ký Ed25519, lô <= 50 sự kiện)
    ▼
 Gateway (services/edge-gateway/src/events.ts, events-compat.ts)
@@ -26,7 +26,7 @@ Hai loại thiết bị gửi hai loại sự kiện khác nhau:
 
 | App | Sự kiện | Trường (đúng như app gửi) |
 |---|---|---|
-| Signage Player (thang máy/LED) | `proof_of_play` | `type, event_id (UUIDv7), ts (ISO UTC .SSS Z), creative_id, duration_ms` |
+| D Play (thang máy/LED) | `proof_of_play` | `type, event_id (UUIDv7), ts (ISO UTC .SSS Z), creative_id, duration_ms` |
 | Mindo (TV) | `impression` | `type, event_id, ts, campaign_id, creative_id, slot_id?, vcr_pct, played_ms` |
 
 Gateway **chấp nhận thêm** các dạng cũ (và đếm lại bằng `alias:<tên>` để biết app nào còn gửi kiểu cũ): UUID mọi phiên bản; `ts` có múi giờ, epoch giây/mili giây; tên camelCase (`creativeId`, `eventId`, `campaignId`, `timestamp`); thời lượng ở `played_ms`/`duration_s`/`duration`; `type` là `pop|play|playback|view`; thân `{items|batch|data|records:[...]}` hoặc mảng trần. Giá trị rác (event_id không phải UUID, thiếu creative, thời lượng không phải số) vẫn bị từ chối với lý do `malformed`.

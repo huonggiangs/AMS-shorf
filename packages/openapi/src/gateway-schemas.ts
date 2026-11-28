@@ -26,7 +26,7 @@ export const pairResponse = z.union([
 export const deviceCommand = z
   .object({
     id: z.string().describe('id dong trong bang device_commands'),
-    type: z.string().regex(/^[a-z][a-z0-9_.-]{0,39}$/).describe('refresh_manifest, reboot, set_monitor; Signage Player: reset_pin (args rong), set_volume {percent 0-100}, set_orientation {orientation landscape|portrait}, message {text <= 200, duration_s? 3-120}; TV: lock, unlock, message {text, seconds}... Type la: bo qua nhung VAN ack.'),
+    type: z.string().regex(/^[a-z][a-z0-9_.-]{0,39}$/).describe('refresh_manifest, reboot, set_monitor; D Play: reset_pin (args rong), set_volume {percent 0-100}, set_orientation {orientation landscape|portrait}, message {text <= 200, duration_s? 3-120}; TV: lock, unlock, message {text, seconds}... Type la: bo qua nhung VAN ack.'),
     args: z.record(z.unknown()).optional(),
   })
   .describe('Vong doi: pending -> delivered -> acked|failed, hoac expired (TTL mac dinh 1 gio theo admin, toi da 7 ngay; reset_pin mac dinh 15 phut, toi da 1 gio). Giao lai sau 120s neu chua ack, toi da 10 lan giao; `id` KHONG DOI khi giao lai. At-least-once: thiet bi phai idempotent theo id.');

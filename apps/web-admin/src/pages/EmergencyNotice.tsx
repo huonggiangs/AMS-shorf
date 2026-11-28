@@ -35,7 +35,7 @@ export default function EmergencyNotice() {
   };
   return (
     <>
-      <PageHead eyebrow="Gửi ngay xuống màn hình" title="Thông báo khẩn" sub="Chữ chạy hiện tạm thời trên thiết bị đã duyệt. Thiết bị đang mở app Signage Player (1.1.2 trở lên) nhận trong khoảng 2 giây nhờ kênh thời gian thực; thiết bị cũ nhận ở lần đồng bộ kế tiếp. Bỏ qua nếu quá 10 phút." />
+      <PageHead eyebrow="Gửi ngay xuống màn hình" title="Thông báo khẩn" sub="Chữ chạy hiện tạm thời trên thiết bị đã duyệt. Thiết bị đang mở app D Play (1.1.2 trở lên) nhận trong khoảng 2 giây nhờ kênh thời gian thực; thiết bị cũ nhận ở lần đồng bộ kế tiếp. Bỏ qua nếu quá 10 phút." />
       {canWrite ? (
         <form className="card cp" onSubmit={(e) => { e.preventDefault(); if (window.confirm(`Gửi thông báo này tới ${TARGETS.find((x) => x.id === f.target)?.label}${f.regions.trim() ? ` (khu vực ${f.regions})` : ''}?`)) void send(); }}>
           <Field label="Nội dung (tối đa 200 ký tự)"><textarea required maxLength={200} rows={3} value={f.text} onChange={(e) => setF({ ...f, text: e.target.value })} /></Field>
@@ -77,7 +77,7 @@ export default function EmergencyNotice() {
             ))}</tbody></table>
         </div>
       ) : null}
-      <Note>Thông báo chỉ gửi tới thiết bị đã được duyệt và không bị chặn. Màn hình cần dùng bản Signage Player/ứng dụng hỗ trợ lệnh “message”.</Note>
+      <Note>Thông báo chỉ gửi tới thiết bị đã được duyệt và không bị chặn. Màn hình cần dùng bản D Play/ứng dụng hỗ trợ lệnh “message”.</Note>
     </>
   );
 }
