@@ -30,14 +30,14 @@ const M = [{ id: 'm1', name: 'TVC Tết 15s.mp4', kind: 'video', status: 'approv
     await pg.getByRole('button', { name: '3 vùng + Chữ chạy' }).click();
     await pg.getByRole('button', { name: '+ Danh sách phát' }).click(); // nhom thu 4: "Danh sách phát 4"
     const box = async (xywh) => { for (const [i, l] of ['X (%)', 'Y (%)', 'Rộng (%)', 'Cao (%)'].entries()) await pg.getByLabel(l, { exact: true }).fill(String(xywh[i])); };
-    await pg.getByRole('button', { name: '+ Video', exact: true }).click();
+    await pg.getByRole('button', { name: '+ Video', exact: true }).evaluate((e) => e.click());
     await box([0, 0, 100, 49]);
     await pg.getByRole('button', { name: 'Thêm mục Video' }).click();
     await pg.getByRole('combobox', { name: 'Chọn tệp' }).selectOption('m1');
     await pg.getByRole('button', { name: 'Xong' }).click();
-    await pg.getByRole('button', { name: '+ Văn bản', exact: true }).click();
+    await pg.getByRole('button', { name: '+ Văn bản', exact: true }).evaluate((e) => e.click());
     await box([0, 47, 100, 12]);
-    await pg.getByRole('button', { name: '+ Ảnh', exact: true }).click();
+    await pg.getByRole('button', { name: '+ Ảnh', exact: true }).evaluate((e) => e.click());
     await box([0, 57, 100, 43]);
     await pg.getByRole('button', { name: 'Thêm mục Ảnh' }).click();
     await pg.getByRole('combobox', { name: 'Chọn tệp' }).selectOption('m2');
