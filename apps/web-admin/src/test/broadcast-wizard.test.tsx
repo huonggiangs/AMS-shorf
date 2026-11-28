@@ -49,7 +49,8 @@ describe('BroadcastWizard', () => {
     await user.click(screen.getByRole('button', { name: /Bước tiếp theo/ }));
     // buoc 2: them tu lieu vao vung
     await user.click(await screen.findByText(/Toàn màn hình|Video 1/, { selector: '.nm' }));
-    await user.selectOptions(await screen.findByRole('combobox', { name: /Thêm tư liệu/ }), 'm1');
+    await user.click(await screen.findByRole('button', { name: 'Thêm mục Video' }));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Chọn tệp' }), 'm1');
     await user.click(screen.getByRole('button', { name: /Bước tiếp theo/ }));
     await user.click(await screen.findByLabelText('Chọn TM-01'));
     await user.click(screen.getByRole('button', { name: /Bước tiếp theo/ }));

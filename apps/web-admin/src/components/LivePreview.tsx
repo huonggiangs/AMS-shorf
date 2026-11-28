@@ -3,6 +3,7 @@ import { isMediaZone, zoneName, ASPECT, type Orientation, type Zone } from '../l
 import { qrImageSrc, type QrConfig } from '../lib/qr';
 import { fetchWeather, getGps, resolveCoords, weatherInfo, type WeatherNow } from '../lib/weather';
 import { RichView } from './RichText';
+import { PlaylistView, type ViewItem } from './PlaylistView';
 
 export interface PreviewItem {
   id: string;
@@ -26,6 +27,10 @@ const CSS = `
 @keyframes lp-sr{from{transform:translateX(-100%)}to{transform:none}}@keyframes lp-zoom{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
 .lp-marq{display:inline-block;white-space:nowrap;padding-left:100%;animation:lp-marq var(--lp-dur,12s) linear infinite}
 @keyframes lp-marq{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+.lp-pl{position:relative;width:100%;height:100%;background:#000}
+.lp-slot{position:absolute;inset:0;transition:opacity .6s,transform .6s}.lp-slot.off{opacity:0;pointer-events:none}
+.lp-slot.lp-fx-slide-left.off{transform:translateX(100%)}.lp-slot.lp-fx-slide-right.off{transform:translateX(-100%)}.lp-slot.lp-fx-zoom.off{transform:scale(.7)}
+.lp-slot[class*=lp-fx-]{animation:none}
 .lp-paused *{animation-play-state:paused!important}
 .lp-err{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:8px;text-align:center;background:rgba(17,24,39,.92);color:#fecaca;font-size:11px;z-index:5}
 .lp-err button{font-size:11px;padding:2px 8px}
@@ -51,68 +56,24 @@ const center = { width: '100%', height: '100%', display: 'flex', alignItems: 'ce
 /** Dieu khien phat chung cho cac vung video (tua, bat tieng) */
 interface Ctl { muted: boolean; onTime?: (t: number, d: number) => void; registerSeek?: (fn: ((t: number) => void) | null) => void; onRetry?: (id: string) => void }
 
-/** Mot vung video/anh: phat lan luot cac tep gan vao vung, lap vo han. Video that dung the <video>; loi hien ro thay vi khung den. */
+/** Chuyen playlist cua vung (hoac danh sach tep cu cua vung) thanh cac muc hien thi. */
+export function viewItemsOf(z: Zone, items: PreviewItem[]): { list: ViewItem[]; loop: boolean } {
+  if (Array.isArray(z.playlist)) {
+    const list = z.playlist.map((it): ViewItem => {
+      if (it.type === 'text') return { id: it.id, type: 'text', name: it.name, url: null, duration: it.duration, text: it.text_content, style: it.style };
+      const m = items.find((x) => x.id === it.media_id);
+      return { id: it.id, type: it.type, name: it.name || m?.name || 'Tệp', url: it.url ?? m?.url ?? null, note: m?.note, duration: it.duration ?? null, mediaId: it.media_id };
+    });
+    return { list, loop: z.loop !== false };
+  }
+  return { list: items.map((i): ViewItem => ({ id: i.id, type: i.kind, name: i.name ?? i.id, url: i.url, note: i.note, duration: i.kind === 'image' ? i.duration_s ?? 5 : null, mediaId: i.id })), loop: true };
+}
+
+/** Mot vung video/anh/playlist: phat tuan tu bang bo may playlist (xem truoc: khong gui luot hien thi). */
 function MediaZone({ z, items, playing, runKey, ctl, primary }: { z: Zone; items: PreviewItem[]; playing: boolean; runKey: number; ctl: Ctl; primary: boolean }) {
-  const [idx, setIdx] = useState(0);
-  const [err, setErr] = useState<string | null>(null);
-  const retried = useRef<Set<string>>(new Set());
-  const video = useRef<HTMLVideoElement>(null);
-  useEffect(() => { setIdx(0); setErr(null); retried.current.clear(); }, [runKey]);
-  const cur = items.length ? items[idx % items.length]! : null;
-  const next = () => { setErr(null); setIdx((i) => (i + 1) % Math.max(1, items.length)); };
-  useEffect(() => {
-    if (!cur || !playing) return;
-    if (cur.kind === 'video' && cur.url && !err) return; // chuyen khi video ket thuc (onEnded)
-    if (items.length <= 1 && cur.kind === 'image') return; // mot anh: giu nguyen
-    const wait = err ? 3000 : Math.max(cur.duration_s ? 1 : 2, cur.duration_s ?? (cur.kind === 'image' ? 5 : 10)) * 1000;
-    if (err && items.length <= 1) return; // loi + chi mot tep: giu thong bao loi
-    const t = setTimeout(next, wait);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cur?.id, idx, playing, items.length, err]);
-  useEffect(() => {
-    const v = video.current;
-    if (!v) return;
-    v.muted = ctl.muted;
-    if (playing) void v.play?.()?.catch?.(() => undefined);
-    else v.pause?.();
-  }, [playing, cur?.id, ctl.muted, err]);
-  useEffect(() => {
-    if (!primary || !ctl.registerSeek) return;
-    ctl.registerSeek((t) => { const v = video.current; if (v && Number.isFinite(v.duration)) v.currentTime = Math.max(0, Math.min(v.duration, t)); });
-    return () => ctl.registerSeek?.(null);
-  }, [primary, cur?.id]);
-  if (!cur) return <div className="lp-ph">{zoneName(z)}: chưa có tệp</div>;
-  const fx = z.transition && z.transition !== 'none' ? `lp-fx-${z.transition}` : '';
-  if (!cur.url) return <div key={`${cur.id}:${idx}`} className={`lp-ph ${fx}`}>{cur.name ?? cur.id}<br />{cur.note ?? '(chưa có bản xem trước)'}</div>;
-  if (cur.kind === 'image') return <img key={`${cur.id}:${idx}`} className={`lp-fill ${fx}`} src={cur.url} alt={cur.name ?? 'Ảnh'} onError={() => setErr('Không tải được ảnh (liên kết hết hạn hoặc tệp lỗi).')} />;
-  const fail = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    const code = e.currentTarget.error?.code;
-    // URL ky het han (mac dinh 15 phut): xin URL moi mot lan truoc khi bao loi
-    if (!retried.current.has(cur.id) && ctl.onRetry) { retried.current.add(cur.id); ctl.onRetry(cur.id); return; }
-    setErr(code === 4 ? 'Trình duyệt không phát được định dạng/đường dẫn này (cần MP4 H.264).' : code === 2 ? 'Lỗi mạng khi tải video.' : code === 3 ? 'Video bị hỏng hoặc không giải mã được.' : 'Không tải được video.');
-  };
-  return (
-    <>
-      <video
-        key={`${cur.id}:${idx}:${cur.url}`}
-        ref={video}
-        className={`lp-fill ${fx}`}
-        src={cur.url}
-        muted={ctl.muted}
-        playsInline
-        preload="auto"
-        autoPlay={playing}
-        loop={items.length <= 1}
-        onLoadedData={() => setErr(null)}
-        onTimeUpdate={(e) => { if (primary) ctl.onTime?.(e.currentTarget.currentTime, e.currentTarget.duration); }}
-        onEnded={next}
-        onError={fail}
-        aria-label={cur.name ?? 'Video'}
-      />
-      {err ? <div className="lp-err" role="alert"><span>⚠ {cur.name ?? 'Video'}: {err}</span><button type="button" className="btn sm" onClick={() => { retried.current.delete(cur.id); setErr(null); ctl.onRetry?.(cur.id); }}>Tải lại</button></div> : null}
-    </>
-  );
+  const { list, loop } = useMemo(() => viewItemsOf(z, items), [z.playlist, z.loop, items]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!list.length) return <div className="lp-ph">{zoneName(z)}: chưa có tệp</div>;
+  return <PlaylistView items={list} loop={loop} playing={playing} runKey={runKey} ctl={ctl} primary={primary} transition={z.transition} isPreview />;
 }
 
 /** Ma QR that: anh tai len, QR tao tai cho tu URL/van ban, hoac anh VietQR. */
@@ -182,7 +143,7 @@ export function LivePreview({ orientation: o0, zones, items, header, footer, max
   const [runKey, setRunKey] = useState(0);
   useEffect(() => setOrientation(o0), [o0]);
   const firstMedia = zones.find(isMediaZone)?.id;
-  const primaryId = zones.find((z) => z.type === 'video')?.id ?? firstMedia;
+  const primaryId = zones.find((z) => z.type === 'video' || z.type === 'playlist')?.id ?? firstMedia;
   const byZone = useMemo(() => {
     const ids = new Set(zones.filter(isMediaZone).map((z) => z.id));
     const m = new Map<string, PreviewItem[]>();
@@ -202,7 +163,7 @@ export function LivePreview({ orientation: o0, zones, items, header, footer, max
         {header ? <div className="lp-bar" style={{ top: 0 }}>{header}</div> : null}
         {sorted.map((z) => (
           <div key={z.id} className="lp-zone" data-zone={z.id} style={{ left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%`, zIndex: z.z ?? 0 }}>
-            <ZoneView z={z} items={byZone.get(z.id) ?? []} playing={playing} runKey={runKey} ctl={ctl} primary={z.id === primaryId} />
+            <ZoneView z={z} items={Array.isArray(z.playlist) ? items : byZone.get(z.id) ?? []} playing={playing} runKey={runKey} ctl={ctl} primary={z.id === primaryId} />
           </div>
         ))}
         {footer ? <div className="lp-bar" style={{ bottom: 0 }}>{footer}</div> : null}

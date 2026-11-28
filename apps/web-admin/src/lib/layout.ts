@@ -1,9 +1,9 @@
 // Bo cuc da vung (kieu QuangBao Cloud): kieu du lieu + mau co san + ham dung chung cho trinh soan, trinh xem truoc va chuong trinh phat song.
 import { z } from 'zod';
 
-export const ZONE_TYPES = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr'] as const;
+export const ZONE_TYPES = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr', 'playlist'] as const;
 export type ZoneType = (typeof ZONE_TYPES)[number];
-export const ZONE_LABEL: Record<ZoneType, string> = { video: 'Video', image: 'Ảnh', marquee: 'Chữ chạy', text: 'Văn bản', clock: 'Đồng hồ', weather: 'Thời tiết', qr: 'Mã QR' };
+export const ZONE_LABEL: Record<ZoneType, string> = { video: 'Video', image: 'Ảnh', marquee: 'Chữ chạy', text: 'Văn bản', clock: 'Đồng hồ', weather: 'Thời tiết', qr: 'Mã QR', playlist: 'Danh sách phát' };
 export const TRANSITIONS = [
   { id: 'none', label: 'Mặc định (Cắt trực tiếp)' },
   { id: 'fade', label: 'Mờ dần (Crossfade)' },
@@ -12,6 +12,9 @@ export const TRANSITIONS = [
   { id: 'zoom', label: 'Phóng to mượt' },
 ] as const;
 export const MAX_ZONES = 8;
+
+const playlistItemSchema = z
+  .object({ id: z.string(), type: z.enum(['video', 'image', 'text']), media_id: z.string().nullish().transform((v) => v ?? undefined), url: z.string().nullish().transform((v) => v ?? undefined), text_content: z.string().nullish().transform((v) => v ?? undefined), style: z.object({ rich: z.string().optional(), bg_color: z.string().optional(), text_color: z.string().optional(), font_size: z.coerce.number().optional() }).nullish().transform((v) => v ?? undefined), duration: z.coerce.number().nullish().transform((v) => v ?? undefined), name: z.string().default('') });
 
 export const zoneSchema = z
   .object({
@@ -36,6 +39,11 @@ export const zoneSchema = z
     url: z.string().nullish(),
     qr: z.object({ mode: z.enum(['image', 'url', 'vietqr']), value: z.string().optional(), vietqr: z.object({ bin: z.string(), account: z.string(), name: z.string().optional(), amount: z.coerce.number().optional(), memo: z.string().optional(), template: z.string().optional() }).optional() }).nullish(),
     durations: z.record(z.coerce.number()).nullish(),
+    /** danh sach phat cua vung video/anh/playlist (xem lib/playlist.ts) + lap lai; creative_ids/durations la truong cu duoc dong bo de ung dung doi van chay */
+    playlist: z.array(playlistItemSchema).nullish(),
+    loop: z.boolean().nullish(),
+    creative_id: z.string().nullish(),
+    creative_ids: z.array(z.string()).nullish(),
     weather: z.object({ mode: z.enum(['gps', 'fixed']), lat: z.coerce.number().optional(), lon: z.coerce.number().optional(), label: z.string().optional() }).nullish(),
   })
   .passthrough();
@@ -50,7 +58,7 @@ export const templateSchema = z
   .passthrough();
 export type LayoutTemplate = z.infer<typeof templateSchema>;
 
-export const isMediaZone = (z: Pick<Zone, 'type'>): boolean => z.type === 'video' || z.type === 'image';
+export const isMediaZone = (z: Pick<Zone, 'type'>): boolean => z.type === 'video' || z.type === 'image' || z.type === 'playlist';
 export const zoneName = (z: Zone, i = 0): string => (z.name && z.name.trim() ? z.name : `${ZONE_LABEL[z.type]} ${i + 1}`);
 
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n));
@@ -66,7 +74,7 @@ export function clampZone(z: Zone): Zone {
 export function newZone(type: ZoneType, existing: Zone[]): Zone {
   let n = existing.length + 1;
   while (existing.some((z) => z.id === `z${n}`)) n++;
-  const base: Zone = { id: `z${n}`, type, x: 10, y: 10, w: 50, h: 40, z: Math.min(20, existing.length), transition: type === 'video' || type === 'image' ? 'fade' : 'none' };
+  const base: Zone = { id: `z${n}`, type, x: 10, y: 10, w: 50, h: 40, z: Math.min(20, existing.length), transition: type === 'video' || type === 'image' || type === 'playlist' ? 'fade' : 'none', ...(type === 'video' || type === 'image' || type === 'playlist' ? { playlist: [], loop: true } : {}) };
   if (type === 'marquee') return { ...base, x: 0, y: 88, w: 100, h: 12, text: 'Nhập nội dung chữ chạy', bg_color: '#DC2626', text_color: '#FFFFFF', font_size: 18, scroll_speed: 60 };
   if (type === 'text') return { ...base, w: 40, h: 20, text: 'Nhập nội dung văn bản', bg_color: '#111827', text_color: '#FFFFFF', font_size: 24 };
   if (type === 'clock') return { ...base, w: 30, h: 15, bg_color: '#111827', text_color: '#FFFFFF', font_size: 28 };
