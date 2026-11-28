@@ -46,7 +46,7 @@ describe('Bước 2: thiết kế phân vùng', () => {
     expect(screen.getByText(/Danh sách lớp thành phần \(1\)/)).toBeInTheDocument();
     expect(screen.getByText('540 × 960 · CHUẨN HIỂN THỊ DOOH')).toBeInTheDocument();
     expect(canvas().style.aspectRatio.replace(/\s/g, '')).toBe('9/16');
-    for (const t of ['Video', 'Ảnh', 'Chữ chạy', 'Văn bản', 'Đồng hồ', 'Thời tiết', 'Mã QR']) expect(screen.getByRole('button', { name: `+ ${t}` })).toBeInTheDocument();
+    for (const t of ['Video', 'Ảnh', 'Chữ chạy', 'Văn bản', 'Đồng hồ', 'Thời tiết', 'Mã QR', 'Danh sách phát']) expect(screen.getByRole('button', { name: `+ ${t}` })).toBeInTheDocument();
     for (const t of ['Toàn màn hình', 'Chia đôi 50/50', '3 vùng + Chữ chạy', '👁 Xem trước']) expect(screen.getByRole('button', { name: t })).toBeInTheDocument();
   });
 
@@ -124,13 +124,15 @@ describe('Bước 2: thiết kế phân vùng', () => {
     expect(layers()).toEqual(['Chữ chạy 1', 'Video 2']);
   });
 
-  it('tư liệu: thêm, kéo thả đổi thứ tự, chuyển cảnh có nhãn mới; vùng đồng hồ/chữ chạy có thuộc tính riêng', async () => {
+  it('tư liệu (danh sách phát): thêm, kéo thả đổi thứ tự, chuyển cảnh có nhãn mới; vùng đồng hồ/chữ chạy có thuộc tính riêng', async () => {
     const user = await openStep2();
     await user.click(await screen.findByText('Video 1', { selector: '.nm' }));
-    const add = await screen.findByRole('combobox', { name: /Thêm tư liệu/ });
-    await user.selectOptions(add, 'm1');
-    await user.selectOptions(screen.getByRole('combobox', { name: /Thêm tư liệu/ }), 'm2');
-    const rows = () => Array.from(document.querySelectorAll('[data-media]')).map((e) => e.getAttribute('data-media'));
+    for (const id of ['m1', 'm2']) {
+      await user.click(await screen.findByRole('button', { name: 'Thêm mục Video' }));
+      await user.selectOptions(await screen.findByRole('combobox', { name: 'Chọn tệp' }), id);
+      await user.click(screen.getByRole('button', { name: 'Xong' }));
+    }
+    const rows = () => Array.from(document.querySelectorAll('[data-item]')).map((e) => e.getAttribute('data-media'));
     expect(rows()).toEqual(['m1', 'm2']);
     const dt = { setData: () => undefined, getData: () => '', effectAllowed: '' };
     fireEvent.dragStart(document.querySelector('[data-media="m2"]')!, { dataTransfer: dt });
@@ -147,14 +149,14 @@ describe('Bước 2: thiết kế phân vùng', () => {
     expect((screen.getByLabelText('Hướng chạy') as HTMLSelectElement).value).toBe('right');
   });
 
-  it('thời lượng từng tư liệu (giây) lưu vào vùng, link dán được gán nhãn [Link], nhãn khung 4K theo bước 1', async () => {
+  it('thời lượng từng mục (giây) lưu vào danh sách phát, link dán được gán nhãn [Link], nhãn khung 4K theo bước 1', async () => {
     const user = await openStep2();
     await user.click(await screen.findByText('Video 1', { selector: '.nm' }));
-    const picker = await screen.findByRole('combobox', { name: /Thêm tư liệu/ });
+    await user.click(await screen.findByRole('button', { name: 'Thêm mục Video' }));
+    const picker = await screen.findByRole('combobox', { name: 'Chọn tệp' });
     expect(within(picker).getByRole('option', { name: '[Link] Clip YouTube' })).toBeInTheDocument();
     await user.selectOptions(picker, 'm1');
     const sec = screen.getByLabelText('Số giây hiển thị Video A') as HTMLInputElement;
-    expect(sec.placeholder).toBe('Hết');
     fireEvent.change(sec, { target: { value: '30' } });
     expect((screen.getByLabelText('Số giây hiển thị Video A') as HTMLInputElement).value).toBe('30');
     fireEvent.change(screen.getByLabelText('Số giây hiển thị Video A'), { target: { value: '' } });

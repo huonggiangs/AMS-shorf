@@ -9,8 +9,10 @@ import { LivePreview } from './LivePreview';
 import { QrEditor, WeatherEditor } from './ZoneExtras';
 import { usePreviewItems } from './PreviewDialogs';
 import { ZoneCanvas } from './ZoneCanvas';
-import { IMAGE_DEFAULT_S, RES_LABEL, type Resolution, MAX_ZONES, PRESETS, TRANSITIONS, ZONE_LABEL, clampZone, isMediaZone, layoutError, newZone, templateSchema, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
+import { RES_LABEL, type Resolution, MAX_ZONES, PRESETS, TRANSITIONS, ZONE_LABEL, clampZone, isMediaZone, layoutError, newZone, templateSchema, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
+import { PlaylistPanel } from './PlaylistPanel';
 import { RichEditor } from './RichText';
+import { withPlaylist, hydrateZones, zonePlaylist, type PlaylistItem, ITEM_DEFAULT_S } from '../lib/playlist';
 
 const BASE = '/admin/v1/broadcast';
 const TARGETS: { id: string; label: string; orientation: Orientation }[] = [
@@ -19,7 +21,14 @@ const TARGETS: { id: string; label: string; orientation: Orientation }[] = [
   { id: 'led_p5', label: 'LED P5 (dọc)', orientation: 'portrait' },
 ];
 const STEPS = ['01. Thông tin chung', '02. Thiết kế phân vùng', '03. Chọn thiết bị', '04. Lập lịch & Phát hành'];
-const TOOLS: ZoneType[] = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr'];
+const TOOLS: ZoneType[] = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr', 'playlist'];
+/** Chuyen toan bo muc phat tu bo cuc cu sang vung media dau tien cua bo cuc moi (doi mau/huong khong lam mat danh sach). */
+export const carryItems = (old: Zone[], next: Zone[]): Zone[] => {
+  const items = old.filter(isMediaZone).flatMap((z) => zonePlaylist(z));
+  const k = next.findIndex(isMediaZone);
+  if (!items.length || k < 0) return next;
+  return next.map((z, i) => (i === k ? withPlaylist(z, items, old.find(isMediaZone)?.loop ?? true) : z));
+};
 const toMin = (s: string): number => { const [h, m] = s.split(':').map(Number); return (h ?? 0) * 60 + (m ?? 0); };
 const toTime = (n: number): string => `${String(Math.floor(n / 60) % 24).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 const CMD_LABEL: Record<string, string> = { pending: 'Đang chờ thiết bị nhận', delivered: 'Đã giao, chờ xác nhận', acked: 'Thiết bị đã nhận', failed: 'Lỗi', expired: 'Hết hạn (thiết bị sẽ tự đồng bộ)' };
@@ -57,10 +66,8 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
   });
   const defOrientation = (t: string): Orientation => TARGETS.find((x) => x.id === t)?.orientation ?? 'portrait';
   const [orientation, setOrientation] = useState<Orientation>(program?.layout?.orientation ?? defOrientation(program?.target_type ?? 'elevator'));
-  const [zones, setZones] = useState<Zone[]>((program?.layout?.zones as Zone[] | undefined) ?? quickLayout('full', program?.layout?.orientation ?? defOrientation(program?.target_type ?? 'elevator')));
+  const [zones, setZones] = useState<Zone[]>(() => (program?.layout?.zones ? hydrateZones(program.layout.zones as Zone[], program.items) : quickLayout('full', program?.layout?.orientation ?? defOrientation(program?.target_type ?? 'elevator'))));
   const [templateId, setTemplateId] = useState<string | null>(program?.layout?.template_id ?? null);
-  const [ids, setIds] = useState<string[]>(program?.items.map((i) => i.creative_id) ?? []);
-  const [itemZones, setItemZones] = useState<Record<string, string>>(Object.fromEntries((program?.items ?? []).flatMap((i) => (i.zone_id ? [[i.creative_id, i.zone_id] as [string, string]] : []))));
   const [resolution, setResolutionS] = useState<Resolution>(() => { try { const v = localStorage.getItem('ams-bw-res'); return v === 'fhd' || v === '4k' ? v : 'view'; } catch { return 'view'; } });
   const setResolution = (r: Resolution) => { setResolutionS(r); try { localStorage.setItem('ams-bw-res', r); } catch { /* ignore */ } };
   const [selected, setSelected] = useState<string | null>(null);
@@ -70,25 +77,17 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
   const [deviceIds, setDeviceIds] = useState<string[]>(program?.device_ids ?? []);
   const [devQ, setDevQ] = useState('');
   const [devRegion, setDevRegion] = useState('');
-  const [pickMedia, setPickMedia] = useState('');
 
   const tpls = useQuery({ queryKey: ['/admin/v1/layout-templates', 'wizard'], queryFn: () => api.get('/admin/v1/layout-templates', { query: { page_size: 100 }, schema: listOf(templateSchema) }) });
   const media = useQuery({ queryKey: ['/admin/v1/media', 'broadcast-pick'], queryFn: () => api.get('/admin/v1/media', { query: { page_size: 200, status: 'approved' }, schema: listOf(mediaSchema) }) });
+  const zonePl = (z: Zone): PlaylistItem[] => zonePlaylist(z);
+  const ids = useMemo(() => [...new Set(zones.filter(isMediaZone).flatMap((z) => zonePlaylist(z)).flatMap((i) => (i.media_id ? [i.media_id] : [])))], [zones]);
+  const totalItems = useMemo(() => zones.filter(isMediaZone).reduce((n, z) => n + zonePlaylist(z).length, 0), [zones]);
   const pool = useMemo(() => (media.data?.items ?? []).filter((m) => (m as { campaign_id?: unknown }).campaign_id == null || ids.includes(m.id)), [media.data, ids]);
-  const nameOf = (id: string) => media.data?.items.find((m) => m.id === id)?.name ?? program?.items.find((i) => i.creative_id === id)?.name ?? id;
   const signage = f.target_type === 'elevator' || f.target_type === 'led_p5';
 
-  const mediaZones = zones.filter(isMediaZone);
-  const firstMedia = mediaZones[0]?.id ?? null;
-  const zoneOfItem = (id: string): string | null => {
-    const z = itemZones[id];
-    return z && mediaZones.some((m) => m.id === z) ? z : firstMedia;
-  };
-  const itemsIn = (z: Zone): string[] => ids.filter((id) => zoneOfItem(id) === z.id);
-  const effZoneOf = useMemo(() => Object.fromEntries(ids.map((id) => [id, zoneOfItem(id)])), [ids, itemZones, zones]); // eslint-disable-line react-hooks/exhaustive-deps
-  const allDur = useMemo(() => Object.assign({}, ...zones.map((z) => z.durations ?? {})) as Record<string, number>, [zones]);
-  const prev = usePreviewItems(ids, effZoneOf, allDur);
-  const itemsOfZone = (z: Zone) => prev.items.filter((i) => i.zoneId === z.id);
+  const prev = usePreviewItems(ids);
+  const itemsOfZone = (z: Zone) => zonePl(z).flatMap((it) => { const p = it.media_id ? prev.items.find((x) => x.id === it.media_id) : undefined; return p ? [p] : []; });
   const visibleZones = zones.filter((z) => !hidden.has(z.id));
   const layoutErr = layoutError(zones);
   const sel = zones.find((z) => z.id === selected) ?? null;
@@ -103,42 +102,18 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
   };
   const delZone = (id: string) => { setZones(reindex(zones.filter((z) => z.id !== id))); if (selected === id) setSelected(null); };
   const moveZone = (i: number, d: number) => setZones((cur) => { const j = i + d; if (j < 0 || j >= cur.length) return cur; const n = [...cur]; [n[i], n[j]] = [n[j]!, n[i]!]; return reindex(n); });
-  const applyZones = (z: Zone[], o: Orientation, tpl: string | null) => { setZones(z); setOrientation(o); setTemplateId(tpl); setSelected(null); setHidden(new Set()); };
+  const applyZones = (z: Zone[], o: Orientation, tpl: string | null) => { setZones((cur) => carryItems(cur, z)); setOrientation(o); setTemplateId(tpl); setSelected(null); setHidden(new Set()); };
   const pickTemplate = (id: string) => {
     const preset = PRESETS.find((p) => p.id === id);
     const tp = tpls.data?.items.find((x) => x.id === id);
     const src = preset ?? tp;
     if (src) applyZones(src.zones.map((z) => ({ ...z })), src.orientation, tp ? tp.id : null);
   };
-  const addMedia = (zone: Zone, id: string) => {
-    if (!id || ids.includes(id)) return;
-    setIds([...ids, id]);
-    setItemZones((c) => ({ ...c, [id]: zone.id }));
-  };
-  const setDur = (zid: string, cid: string, v: string) => setZones((cur) => cur.map((z) => { if (z.id !== zid) return z; const d = { ...(z.durations ?? {}) }; const n = Math.round(Number(v)); if (!v || !(n >= 1)) delete d[cid]; else d[cid] = Math.min(3600, n); return { ...z, durations: Object.keys(d).length ? d : null }; }));
-  const removeMedia = (id: string) => { setZones((cur) => cur.map((z) => (z.durations && id in z.durations ? { ...z, durations: Object.fromEntries(Object.entries(z.durations).filter(([k]) => k !== id)) } : z))); setIds(ids.filter((x) => x !== id)); setItemZones((c) => { const n = { ...c }; delete n[id]; return n; }); };
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
-  const dropMedia = (to: string) => {
-    if (dragId && dragId !== to) setIds((cur) => { const n = cur.filter((x) => x !== dragId); n.splice(n.indexOf(to), 0, dragId); return n; });
-    setDragId(null); setOverId(null);
-  };
+  const setPl = (zid: string, fn: (cur: PlaylistItem[]) => PlaylistItem[]) => setZones((cur) => cur.map((z) => (z.id === zid ? withPlaylist(z, fn(zonePlaylist(z))) : z)));
   const quick = (k: 'full' | 'half' | 'three') => {
     if (zones.length > 0 && !window.confirm('Áp dụng mẫu nhanh sẽ thay thế các vùng hiện có. Tiếp tục?')) return;
     applyZones(quickLayout(k, orientation), orientation, null);
   };
-  const moveMedia = (id: string, d: number) => setIds((cur) => {
-    const z = zoneOfItem(id);
-    const same = cur.filter((x) => zoneOfItem(x) === z);
-    const k = same.indexOf(id);
-    const other = same[k + d];
-    if (!other) return cur;
-    const n = [...cur];
-    const a = n.indexOf(id);
-    const b = n.indexOf(other);
-    [n[a], n[b]] = [n[b]!, n[a]!];
-    return n;
-  });
 
   // buoc 3: danh sach thiet bi de chon
   const pickQuery = useQuery({
@@ -165,9 +140,12 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
   };
   const [err, setErr] = useState('');
 
+  /** Dong goi payload luu: vung media ghi playlist + loop, dong thoi dong bo truong cu (creative_ids/durations) de ung dung doi van chay. */
   const body = () => {
     const endMin = f.end === '24:00' ? 1440 : toMin(f.end);
-    const validZ = new Set(mediaZones.map((z) => z.id));
+    const zs = zones.map((z) => (isMediaZone(z) ? withPlaylist(z, zonePlaylist(z).map((it) => (it.type !== 'video' && !(it.duration && it.duration > 0) ? { ...it, duration: ITEM_DEFAULT_S } : it)), z.loop ?? true) : z));
+    const itemZone: Record<string, string> = {};
+    for (const z of zs) if (isMediaZone(z)) for (const id of z.creative_ids ?? []) if (!(id in itemZone)) itemZone[id] = z.id;
     return {
       name: f.name.trim(),
       target_type: f.target_type,
@@ -178,16 +156,16 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
       end_min: endMin,
       priority: Number(f.priority),
       ...(signage ? { header: f.header.trim() === '' ? null : f.header, footer: f.footer.trim() === '' ? null : f.footer } : {}),
-      creative_ids: ids,
-      layout: { template_id: templateId, orientation, zones },
-      item_zones: Object.fromEntries(ids.flatMap((id) => { const z = zoneOfItem(id); return z && validZ.has(z) ? [[id, z] as [string, string]] : []; })),
+      creative_ids: Object.keys(itemZone),
+      layout: { template_id: templateId, orientation, zones: zs },
+      item_zones: itemZone,
       device_ids: devMode === 'devices' ? deviceIds : [],
     };
   };
   const save = async (publish: boolean) => {
     for (let s = 0; s <= 3; s++) { const e = stepError(s); if (e) { setErr(e); setStep(s); return; } }
     if (devMode === 'devices' && deviceIds.length === 0) { setErr('Chọn ít nhất một thiết bị, hoặc chuyển sang "Theo khu vực".'); setStep(2); return; }
-    if (publish && ids.length === 0) { setErr('Thêm ít nhất một tệp (video/ảnh) vào vùng để phát hành.'); setStep(1); return; }
+    if (publish && totalItems === 0) { setErr('Thêm ít nhất một mục (video/ảnh/text) vào danh sách phát để phát hành.'); setStep(1); return; }
     setErr('');
     setBusy(true);
     try {
@@ -233,14 +211,14 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
     <div style={{ maxWidth: 920, margin: '0 auto' }}>
       <Field label="Tên chương trình"><input required maxLength={120} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Ví dụ: Ưu đãi cuối năm" /></Field>
       <Field label="Loại màn hình">
-        <select value={f.target_type} onChange={(e) => { const t = e.target.value; setF({ ...f, target_type: t }); const o = defOrientation(t); if (o !== orientation) { setOrientation(o); setZones(quickLayout('full', o)); setTemplateId(null); setItemZones({}); } setDeviceIds([]); }}>
+        <select value={f.target_type} onChange={(e) => { const t = e.target.value; setF({ ...f, target_type: t }); const o = defOrientation(t); if (o !== orientation) { setOrientation(o); setZones((cur) => carryItems(cur, quickLayout('full', o))); setTemplateId(null); } setDeviceIds([]); }}>
           {TARGETS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
         </select>
       </Field>
       <Field label="Định hướng màn hình">
         <div style={{ display: 'flex', gap: 8 }}>
           {(['portrait', 'landscape'] as Orientation[]).map((o) => (
-            <Btn key={o} tone={orientation === o ? 'p' : ''} aria-pressed={orientation === o} onClick={() => { if (o !== orientation) { setOrientation(o); setZones(quickLayout('full', o)); setTemplateId(null); setItemZones({}); setSelected(null); } }}>{o === 'portrait' ? 'Dọc 9:16' : 'Ngang 16:9'}</Btn>
+            <Btn key={o} tone={orientation === o ? 'p' : ''} aria-pressed={orientation === o} onClick={() => { if (o !== orientation) { setOrientation(o); setZones((cur) => carryItems(cur, quickLayout('full', o))); setTemplateId(null); setSelected(null); } }}>{o === 'portrait' ? 'Dọc 9:16' : 'Ngang 16:9'}</Btn>
           ))}
         </div>
       </Field>
@@ -288,32 +266,15 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
       </div>
       {isMediaZone(sel) ? (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '12px 0 6px' }}>
-            <b style={{ fontSize: 13 }}>Danh sách tư liệu phát ({itemsIn(sel).length})</b>
-          </div>
-          {itemsIn(sel).length === 0 ? <p style={{ color: 'var(--mut)', fontSize: 13, margin: '0 0 8px' }}>Chưa có tư liệu. Thêm video/ảnh bên dưới.</p> : null}
-          {itemsIn(sel).map((id) => {
-            const it = prev.items.find((x) => x.id === id);
-            return (
-              <div key={id} className={`wz-media${overId === id ? ' over' : ''}`} draggable data-media={id} onDragStart={() => setDragId(id)} onDragOver={(e) => { e.preventDefault(); setOverId(id); }} onDragLeave={() => setOverId(null)} onDrop={(e) => { e.preventDefault(); dropMedia(id); }} onDragEnd={() => { setDragId(null); setOverId(null); }}>
-                <div style={{ width: 40, height: 40, borderRadius: 6, overflow: 'hidden', background: '#111', flex: '0 0 auto' }}>
-                  {it?.url ? (it.kind === 'image' ? <img src={it.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <video src={`${it.url}#t=0.5`} muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : null}
-                </div>
-                <div className="nm">{nameOf(id)}</div>
-                <input type="number" min={1} max={3600} aria-label={`Số giây hiển thị ${nameOf(id)}`} title={it?.kind === 'image' ? 'Giây hiển thị (mặc định 5)' : 'Giây phát tối đa (trống = phát hết video)'} placeholder={it?.kind === 'image' ? String(IMAGE_DEFAULT_S) : 'Hết'} value={sel.durations?.[id] ?? ''} onChange={(e) => setDur(sel.id, id, e.target.value)} style={{ width: 52, height: 28, padding: '0 4px' }} />
-                <span aria-hidden style={{ fontSize: 11, color: 'var(--mut)' }}>s</span>
-                <button type="button" aria-label={`Lên ${nameOf(id)}`} onClick={() => moveMedia(id, -1)}>↑</button>
-                <button type="button" aria-label={`Xuống ${nameOf(id)}`} onClick={() => moveMedia(id, 1)}>↓</button>
-                <button type="button" aria-label={`Bỏ ${nameOf(id)}`} style={{ color: '#DC2626' }} onClick={() => removeMedia(id)}>🗑</button>
-              </div>
-            );
-          })}
-          <Field label="+ Thêm tư liệu (kho đã duyệt, chưa gắn chiến dịch)">
-            <select value={pickMedia} onChange={(e) => { addMedia(sel, e.target.value); setPickMedia(''); }}>
-              <option value="">{media.isLoading ? 'Đang tải…' : '— chọn tệp —'}</option>
-              {pool.filter((m) => !ids.includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.delivery === 'stream' ? '[Link] ' : ''}{m.name}{m.width && m.height ? ` · ${m.width}×${m.height}` : ''}</option>)}
-            </select>
-          </Field>
+          <PlaylistPanel
+            items={zonePl(sel)}
+            loop={sel.loop ?? true}
+            pool={pool}
+            loading={media.isLoading}
+            thumbOf={(mid) => { const p = prev.items.find((x) => x.id === mid); return p?.url ? { url: p.url, kind: p.kind } : undefined; }}
+            onItems={(items) => setPl(sel.id, () => items)}
+            onLoop={(v) => setZones((c) => c.map((z) => (z.id === sel.id ? withPlaylist(z, zonePlaylist(z), v) : z)))}
+          />
           <Field label="Hiệu ứng chuyển cảnh"><select value={sel.transition} onChange={(e) => setZ(sel.id, { transition: e.target.value })}>{TRANSITIONS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></Field>
         </>
       ) : null}
