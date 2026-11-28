@@ -9,8 +9,9 @@ import { LivePreview } from './LivePreview';
 import { QrEditor, WeatherEditor } from './ZoneExtras';
 import { usePreviewItems } from './PreviewDialogs';
 import { ZoneCanvas } from './ZoneCanvas';
-import { RES_LABEL, type Resolution, MAX_ZONES, PRESETS, TRANSITIONS, ZONE_LABEL, clampZone, isMediaZone, layoutError, newZone, templateSchema, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
+import { RES_LABEL, type Resolution, MAX_GROUP_CHILDREN, MAX_ZONES, PRESETS, TRANSITIONS, ZONE_LABEL, clampZone, isMediaZone, layoutError, templateSchema, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
 import { PlaylistPanel } from './PlaylistPanel';
+import { addZoneTo, canAdd, childrenOf, deleteZone, displayIndex, groupOf, isGroup, isTop, moveSibling, setParent, siblingPos, targetGroup, topCount, ungroup } from '../lib/groups';
 import { RichEditor } from './RichText';
 import { withPlaylist, hydrateZones, zonePlaylist, type PlaylistItem, ITEM_DEFAULT_S } from '../lib/playlist';
 
@@ -21,7 +22,8 @@ const TARGETS: { id: string; label: string; orientation: Orientation }[] = [
   { id: 'led_p5', label: 'LED P5 (dọc)', orientation: 'portrait' },
 ];
 const STEPS = ['01. Thông tin chung', '02. Thiết kế phân vùng', '03. Chọn thiết bị', '04. Lập lịch & Phát hành'];
-const TOOLS: ZoneType[] = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr', 'playlist'];
+/** `group` = "+ Danh sách phát": khung chứa nhiều thành phần (video/ảnh/văn bản...) trong MỘT phiên phát. Vùng `playlist` cũ vẫn đọc được nhưng không còn nút thêm riêng. */
+const TOOLS: ZoneType[] = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr', 'group'];
 /** Chuyen toan bo muc phat tu bo cuc cu sang vung media dau tien cua bo cuc moi (doi mau/huong khong lam mat danh sach). */
 export const carryItems = (old: Zone[], next: Zone[]): Zone[] => {
   const items = old.filter(isMediaZone).flatMap((z) => zonePlaylist(z));
@@ -88,20 +90,32 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
 
   const prev = usePreviewItems(ids);
   const itemsOfZone = (z: Zone) => zonePl(z).flatMap((it) => { const p = it.media_id ? prev.items.find((x) => x.id === it.media_id) : undefined; return p ? [p] : []; });
-  const visibleZones = zones.filter((z) => !hidden.has(z.id));
+  const visibleZones = zones.filter((z) => !hidden.has(z.id) && !(z.parent_id && hidden.has(z.parent_id))); // an nhom thi an luon vung con
+  const idx = useMemo(() => displayIndex(zones), [zones]);
+  const nameOf = (z: Zone): string => zoneName(z, idx.get(z.id) ?? 0);
+  const tgt = targetGroup(zones, selected);
   const layoutErr = layoutError(zones);
   const sel = zones.find((z) => z.id === selected) ?? null;
 
   const setZ = (id: string, patch: Partial<Zone>) => setZones((cur) => cur.map((z) => (z.id === id ? clampZone({ ...z, ...patch }) : z)));
-  const reindex = (a: Zone[]) => a.map((z, i) => ({ ...z, z: Math.min(20, i) }));
+  /** Them: `group` luon la vung ngoai; loai khac vao nhom dang chon (hoac nhom cua vung con dang chon), xep doc duoi cac con co san. */
   const addZone = (t: ZoneType) => {
-    if (zones.length >= MAX_ZONES) return;
-    const z = newZone(t, zones);
-    setZones(reindex([...zones, z]));
-    setSelected(z.id);
+    const r = addZoneTo(zones, t, selected);
+    if (!r) return;
+    setZones(r.zones);
+    setSelected(r.id);
   };
-  const delZone = (id: string) => { setZones(reindex(zones.filter((z) => z.id !== id))); if (selected === id) setSelected(null); };
-  const moveZone = (i: number, d: number) => setZones((cur) => { const j = i + d; if (j < 0 || j >= cur.length) return cur; const n = [...cur]; [n[i], n[j]] = [n[j]!, n[i]!]; return reindex(n); });
+  const delZone = (id: string) => {
+    const z = zones.find((x) => x.id === id);
+    if (!z) return;
+    const n = isGroup(z) ? childrenOf(zones, id).length : 0;
+    if (n > 0 && !window.confirm(`Xóa nhóm "${nameOf(z)}" và ${n} thành phần bên trong?`)) return;
+    setZones(deleteZone(zones, id));
+    if (selected === id || (selected && zones.find((x) => x.id === selected)?.parent_id === id)) setSelected(null);
+  };
+  const moveZone = (id: string, d: -1 | 1) => setZones((cur) => moveSibling(cur, id, d));
+  const toGroup = (id: string, gid: string | null) => { const r = setParent(zones, id, gid); if (r) setZones(r); };
+  const doUngroup = (gid: string) => { const r = ungroup(zones, gid); if (r) { setZones(r); setSelected(null); } };
   const applyZones = (z: Zone[], o: Orientation, tpl: string | null) => { setZones((cur) => carryItems(cur, z)); setOrientation(o); setTemplateId(tpl); setSelected(null); setHidden(new Set()); };
   const pickTemplate = (id: string) => {
     const preset = PRESETS.find((p) => p.id === id);
@@ -237,18 +251,38 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
     </div>
   );
 
+  const layerRow = (z: Zone, kid: boolean) => {
+    const nm = nameOf(z);
+    const pos = siblingPos(zones, z.id);
+    const an = kid && z.parent_id ? `${nm} (trong ${nameOf(groupOf(zones, z) ?? z)})` : nm; // nhãn truy cập duy nhất: vùng ngoài và vùng con có thể cùng tên "Video 1"
+    return (
+      <div className={`wz-layer${kid ? ' kid' : ''}${isGroup(z) ? ' grp' : ''}`} data-layer={z.id} role="button" tabIndex={0} aria-pressed={z.id === selected} onClick={() => setSelected(z.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelected(z.id); }}>
+        <div className="nm">{nm}<small>{Math.round(z.x)}%, {Math.round(z.y)}% · {Math.round(z.w)}×{Math.round(z.h)}%</small></div>
+        <button type="button" aria-label={`${hidden.has(z.id) ? 'Hiện' : 'Ẩn'} ${an}`} onClick={(e) => { e.stopPropagation(); setHidden((h) => { const n = new Set(h); if (n.has(z.id)) n.delete(z.id); else n.add(z.id); return n; }); }}>{hidden.has(z.id) ? '🚫' : '👁'}</button>
+        <button type="button" aria-label={`Lên ${an}`} disabled={pos.first} onClick={(e) => { e.stopPropagation(); moveZone(z.id, -1); }}>↑</button>
+        <button type="button" aria-label={`Xuống ${an}`} disabled={pos.last} onClick={(e) => { e.stopPropagation(); moveZone(z.id, 1); }}>↓</button>
+        <button type="button" aria-label={`Xóa ${an}`} style={{ color: '#DC2626' }} onClick={(e) => { e.stopPropagation(); delZone(z.id); }}>🗑</button>
+      </div>
+    );
+  };
   const layerList = (
     <div>
       <h3 style={{ margin: '0 0 10px', fontSize: 14 }}>Danh sách lớp thành phần ({zones.length})</h3>
-      {zones.map((z, i) => (
-        <div key={z.id} className="wz-layer" role="button" tabIndex={0} aria-pressed={z.id === selected} onClick={() => setSelected(z.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelected(z.id); }}>
-          <div className="nm">{zoneName(z, i)}<small>{Math.round(z.x)}%, {Math.round(z.y)}% · {Math.round(z.w)}×{Math.round(z.h)}%</small></div>
-          <button type="button" aria-label={`${hidden.has(z.id) ? 'Hiện' : 'Ẩn'} ${zoneName(z, i)}`} onClick={(e) => { e.stopPropagation(); setHidden((h) => { const n = new Set(h); if (n.has(z.id)) n.delete(z.id); else n.add(z.id); return n; }); }}>{hidden.has(z.id) ? '🚫' : '👁'}</button>
-          <button type="button" aria-label={`Lên ${zoneName(z, i)}`} disabled={i === 0} onClick={(e) => { e.stopPropagation(); moveZone(i, -1); }}>↑</button>
-          <button type="button" aria-label={`Xuống ${zoneName(z, i)}`} disabled={i === zones.length - 1} onClick={(e) => { e.stopPropagation(); moveZone(i, 1); }}>↓</button>
-          <button type="button" aria-label={`Xóa ${zoneName(z, i)}`} style={{ color: '#DC2626' }} onClick={(e) => { e.stopPropagation(); delZone(z.id); }}>🗑</button>
-        </div>
-      ))}
+      <div data-testid="layer-tree">
+        {zones.filter((z) => isTop(z) || !zones.some((g) => g.id === z.parent_id)).map((z) => {
+          const kids = isGroup(z) ? childrenOf(zones, z.id) : [];
+          return (
+            <div key={z.id} className="wz-node">
+              {layerRow(z, false)}
+              {isGroup(z) ? (
+                <div className="wz-kids" role="group" aria-label={`Thành phần trong ${nameOf(z)}`} data-parent={z.id}>
+                  {kids.length === 0 ? <p className="wz-kids-empty">Nhóm trống. Bấm + Video / + Ảnh / + Văn bản để thêm vào nhóm.</p> : kids.map((c, k) => <div key={c.id} className={`wz-kid${k === kids.length - 1 ? ' last' : ''}`}>{layerRow(c, true)}</div>)}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
       {layoutErr ? <p role="alert" style={{ color: 'var(--bad, #c0392b)', fontSize: 13 }}>{layoutErr}</p> : null}
     </div>
   );
@@ -257,6 +291,7 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
     <div role="group" aria-label="Thuộc tính thành phần">
       <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>Thuộc tính thành phần</h3>
       <Field label="Tên vùng"><input maxLength={60} value={sel.name ?? ''} onChange={(e) => setZones((c) => c.map((z) => (z.id === sel.id ? { ...z, name: e.target.value } : z)))} /></Field>
+      {sel.parent_id ? <p className="wz-note" data-testid="rel-note">Tọa độ tính theo % của nhóm “{nameOf(groupOf(zones, sel) ?? sel)}”.</p> : null}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 6 }} className="wz-xywh">
         {(['x', 'y', 'w', 'h'] as const).map((k) => (
           <Field key={k} label={{ x: 'X (%)', y: 'Y (%)', w: 'Rộng (%)', h: 'Cao (%)' }[k]}>
@@ -264,6 +299,20 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
           </Field>
         ))}
       </div>
+      {isGroup(sel) ? (
+        <div data-testid="group-props">
+          <p className="wz-note">Nhóm là khung chứa nhiều thành phần (video, ảnh, văn bản…) trong một phiên phát. Chọn nhóm rồi bấm “+ Video / + Ảnh / + Văn bản…” để thêm vào nhóm; kéo nhóm thì các thành phần đi theo.</p>
+          <p className="wz-note"><b>{childrenOf(zones, sel.id).length}</b>/{MAX_GROUP_CHILDREN} thành phần</p>
+          <Btn aria-label="Gỡ nhóm" disabled={topCount(zones) - 1 + childrenOf(zones, sel.id).length > MAX_ZONES} title={`Giữ các thành phần, chỉ bỏ khung nhóm (tối đa ${MAX_ZONES} vùng ngoài nhóm)`} onClick={() => doUngroup(sel.id)}>Gỡ nhóm (giữ thành phần)</Btn>
+        </div>
+      ) : (
+        <Field label="Đưa vào nhóm" hint={zones.some(isGroup) ? undefined : 'Chưa có nhóm. Bấm “+ Danh sách phát” để tạo.'}>
+          <select aria-label="Đưa vào nhóm" value={sel.parent_id ?? ''} onChange={(e) => toGroup(sel.id, e.target.value || null)}>
+            <option value="">— Không (vùng ngoài nhóm) —</option>
+            {zones.filter((g) => isGroup(g) && (g.id === sel.parent_id || childrenOf(zones, g.id).length < MAX_GROUP_CHILDREN)).map((g) => <option key={g.id} value={g.id}>{nameOf(g)}</option>)}
+          </select>
+        </Field>
+      )}
       {isMediaZone(sel) ? (
         <>
           <PlaylistPanel
@@ -320,15 +369,16 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
         ) : (
           <>
             <ZoneCanvas orientation={orientation} resolution={resolution} zones={zones} selected={selected} onSelect={setSelected} onChange={(z) => setZones(z)} itemsOf={itemsOfZone} hidden={hidden} maxHeight={560} />
-            <div style={{ color: 'var(--mut)', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{zones.length}/{MAX_ZONES} vùng · Kéo vùng để di chuyển, kéo tay nắm xanh để đổi kích thước · Phím mũi tên nhích 1% (Shift 5%, Alt đổi kích thước) · {orientation === 'portrait' ? 'Khung dọc 9:16' : 'Khung ngang 16:9'}</div>
+            <div style={{ color: 'var(--mut)', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{topCount(zones)}/{MAX_ZONES} vùng{zones.length > topCount(zones) ? ` (+${zones.length - topCount(zones)} trong nhóm)` : ''} · Kéo vùng để di chuyển, kéo tay nắm xanh để đổi kích thước · Phím mũi tên nhích 1% (Shift 5%, Alt đổi kích thước) · {orientation === 'portrait' ? 'Khung dọc 9:16' : 'Khung ngang 16:9'}</div>
           </>
         )}
       </div>
       <div>
         <h3 className="wz-sec">Thêm thành phần</h3>
         <div className="wz-add">
-          {TOOLS.map((t) => <Btn key={t} disabled={zones.length >= MAX_ZONES} onClick={() => addZone(t)}>+ {ZONE_LABEL[t]}</Btn>)}
+          {TOOLS.map((t) => <Btn key={t} disabled={!canAdd(zones, t, selected)} onClick={() => addZone(t)}>+ {ZONE_LABEL[t]}</Btn>)}
         </div>
+        {tgt ? <p className="wz-note" data-testid="add-target">Thành phần mới sẽ vào nhóm “{nameOf(tgt)}”. Bấm vào vùng trống của khung để thêm ra ngoài nhóm.</p> : null}
         <h3 className="wz-sec">Mẫu nhanh</h3>
         <div className="wz-add" style={{ gridTemplateColumns: '1fr', marginBottom: 6 }}>
           <Btn onClick={() => quick('full')}>Toàn màn hình</Btn>

@@ -118,6 +118,10 @@ Mỗi vùng `video`/`image` của `layout` có thể có `durations: {creative_i
 
 Vùng video/ảnh/`playlist` mang `playlist` (video, ảnh, văn bản phát tuần tự). App mới dùng **chỉ** `playlist` (vùng cũ đã được máy chủ đọc thành playlist; `creative_ids`/`durations` vẫn còn cho app cũ). Luật phát, ví dụ JSON, lô `item_impression` (hàng đợi cục bộ, gửi mỗi 5 phút hoặc 50 log, thử lại idempotent): xem **`docs/PLAYLIST.md`**. Mặc định ảnh/văn bản 8 giây; video theo thời lượng thật của tệp.
 
+### 3g. Nhóm vùng (`group`): app KHÔNG phải đổi gì
+
+Người vận hành có thể gom nhiều thành phần (video, ảnh, văn bản, chữ chạy...) vào một **nhóm** trong một phiên phát. Trong **manifest** máy chủ đã **làm phẳng**: không có vùng `type:"group"`, không có `parent_id`; mọi vùng con là vùng thường với `x/y/w/h` **tuyệt đối (% màn hình)**, kèm `group_id` (chỉ thông tin, có thể bỏ qua) và `z` đã đánh theo thứ tự xếp lớp (nhóm trước, con sau; tối đa 20, trùng thì giữ thứ tự mảng, nên **sắp xếp ổn định theo `z`**). `item_impression.zone_id` vẫn là id của vùng con. Chi tiết và ví dụ: `docs/PLAYLIST.md` mục 9.
+
 ### 3d. Văn bản định dạng trong bố cục đa vùng (`zones[].rich`)
 
 Vùng `text`/`marquee` của `layout` có thể kèm `rich` (định dạng đậm/nghiêng/màu/cỡ/căn lề…) bên cạnh `text` thuần; đặc tả trường ở DEVICE-PROTOCOL.md. App TV **không cần WebView**: `rich` chỉ gồm `p`, `b`, `i`, `u`, `s`, `br`, `span` nên tự tách chuỗi rồi dựng `SpannableStringBuilder`:

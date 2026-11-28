@@ -26,7 +26,7 @@ const M = [{ id: 'm1', name: 'TVC Tết 15s.mp4', kind: 'video', status: 'approv
     await pg.getByLabel('Tên chương trình').fill('Ưu đãi cuối năm');
     await pg.getByRole('tab', { name: /Thiết kế phân vùng/ }).click();
     await pg.getByRole('button', { name: '3 vùng + Chữ chạy' }).click();
-    await pg.getByRole('button', { name: '+ Danh sách phát' }).click();
+    await pg.getByRole("button", { name: "+ Video", exact: true }).click();
     for (const [t, media] of [['Video', 'm1'], ['Ảnh', 'm2'], ['Text', null]]) {
       await pg.getByRole('button', { name: `Thêm mục ${t}` }).click();
       if (media) await pg.getByRole('combobox', { name: 'Chọn tệp' }).selectOption(media);

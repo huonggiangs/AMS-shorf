@@ -1,9 +1,11 @@
 // Bo cuc da vung (kieu QuangBao Cloud): kieu du lieu + mau co san + ham dung chung cho trinh soan, trinh xem truoc va chuong trinh phat song.
 import { z } from 'zod';
 
-export const ZONE_TYPES = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr', 'playlist'] as const;
+export const ZONE_TYPES = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr', 'playlist', 'group'] as const;
 export type ZoneType = (typeof ZONE_TYPES)[number];
-export const ZONE_LABEL: Record<ZoneType, string> = { video: 'Video', image: 'Ảnh', marquee: 'Chữ chạy', text: 'Văn bản', clock: 'Đồng hồ', weather: 'Thời tiết', qr: 'Mã QR', playlist: 'Danh sách phát' };
+export const ZONE_LABEL: Record<ZoneType, string> = { video: 'Video', image: 'Ảnh', marquee: 'Chữ chạy', text: 'Văn bản', clock: 'Đồng hồ', weather: 'Thời tiết', qr: 'Mã QR', playlist: 'Danh sách phát', group: 'Danh sách phát' };
+/** Loai vung them duoc o trinh soan mau (khong co nhom: nhom chi o buoc 02 cua chuong trinh phat song). */
+export const FLAT_ZONE_TYPES = ZONE_TYPES.filter((t) => t !== 'group');
 export const TRANSITIONS = [
   { id: 'none', label: 'Mặc định (Cắt trực tiếp)' },
   { id: 'fade', label: 'Mờ dần (Crossfade)' },
@@ -11,7 +13,10 @@ export const TRANSITIONS = [
   { id: 'slide-right', label: 'Trượt sang phải' },
   { id: 'zoom', label: 'Phóng to mượt' },
 ] as const;
+/** vung cap ngoai (nhom tinh la 1 vung) */
 export const MAX_ZONES = 8;
+export const MAX_GROUP_CHILDREN = 50;
+export const MAX_ZONES_TOTAL = 100;
 
 const playlistItemSchema = z
   .object({ id: z.string(), type: z.enum(['video', 'image', 'text']), media_id: z.string().nullish().transform((v) => v ?? undefined), url: z.string().nullish().transform((v) => v ?? undefined), text_content: z.string().nullish().transform((v) => v ?? undefined), style: z.object({ rich: z.string().optional(), bg_color: z.string().optional(), text_color: z.string().optional(), font_size: z.coerce.number().optional() }).nullish().transform((v) => v ?? undefined), duration: z.coerce.number().nullish().transform((v) => v ?? undefined), name: z.string().default('') });
@@ -21,6 +26,8 @@ export const zoneSchema = z
     id: z.string(),
     name: z.string().nullish(),
     type: z.enum(ZONE_TYPES),
+    /** vung con cua nhom (`type:'group'`): id nhom; x/y/w/h la % cua NHOM */
+    parent_id: z.string().nullish(),
     x: z.coerce.number(),
     y: z.coerce.number(),
     w: z.coerce.number(),
@@ -74,6 +81,7 @@ export function clampZone(z: Zone): Zone {
 export function newZone(type: ZoneType, existing: Zone[]): Zone {
   let n = existing.length + 1;
   while (existing.some((z) => z.id === `z${n}`)) n++;
+  if (type === 'group') return { id: `z${n}`, type, x: 10, y: 10, w: 50, h: 50, z: Math.min(20, existing.length), transition: 'none' };
   const base: Zone = { id: `z${n}`, type, x: 10, y: 10, w: 50, h: 40, z: Math.min(20, existing.length), transition: type === 'video' || type === 'image' || type === 'playlist' ? 'fade' : 'none', ...(type === 'video' || type === 'image' || type === 'playlist' ? { playlist: [], loop: true } : {}) };
   if (type === 'marquee') return { ...base, x: 0, y: 88, w: 100, h: 12, text: 'Nhập nội dung chữ chạy', bg_color: '#DC2626', text_color: '#FFFFFF', font_size: 18, scroll_speed: 60 };
   if (type === 'text') return { ...base, w: 40, h: 20, text: 'Nhập nội dung văn bản', bg_color: '#111827', text_color: '#FFFFFF', font_size: 24 };
@@ -99,8 +107,12 @@ export const PRESETS: Preset[] = [
 /** Loi bo cuc thuong gap (cung quy tac may chu), de bao ngay tren form. Tra ve '' neu hop le. */
 export function layoutError(zones: Zone[]): string {
   if (zones.length === 0) return 'Cần ít nhất một vùng.';
-  if (zones.length > MAX_ZONES) return `Tối đa ${MAX_ZONES} vùng.`;
+  if (zones.length > MAX_ZONES_TOTAL) return `Tối đa ${MAX_ZONES_TOTAL} vùng (tính cả vùng trong nhóm).`;
+  if (zones.filter((z) => !z.parent_id).length > MAX_ZONES) return `Tối đa ${MAX_ZONES} vùng ngoài nhóm (mỗi nhóm tính là một vùng).`;
   if (new Set(zones.map((z) => z.id)).size !== zones.length) return 'Mã vùng bị trùng.';
+  const gids = new Set(zones.filter((z) => z.type === 'group' && !z.parent_id).map((z) => z.id));
+  if (zones.some((z) => z.parent_id && (!gids.has(z.parent_id) || z.type === 'group'))) return 'Có vùng thuộc nhóm không hợp lệ (chỉ một cấp nhóm).';
+  for (const g of gids) if (zones.filter((z) => z.parent_id === g).length > MAX_GROUP_CHILDREN) return `Mỗi nhóm tối đa ${MAX_GROUP_CHILDREN} vùng.`;
   if (zones.some((z) => z.x + z.w > 100.01 || z.y + z.h > 100.01 || z.x < 0 || z.y < 0)) return 'Có vùng vượt ra ngoài khung.';
   if (!zones.some(isMediaZone)) return 'Cần ít nhất một vùng video hoặc ảnh để phát tệp.';
   return '';

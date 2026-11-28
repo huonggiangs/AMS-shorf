@@ -54,7 +54,7 @@ const addItem = async (user: ReturnType<typeof userEvent.setup>, t: 'Video' | '�
 };
 
 describe('Bước 2: danh sách phát', () => {
-  it('nút "+ Danh sách phát" cạnh "+ Mã QR" trong lưới 2 cột; tạo vùng playlist rỗng, loop mặc định bật', async () => {
+  it('nút "+ Danh sách phát" cạnh "+ Mã QR" trong lưới 2 cột; tạo NHÓM (khung chứa), thành phần thêm sau đó vào nhóm; vùng Ảnh con có playlist rỗng, loop bật', async () => {
     const user = await openStep2();
     const add = document.querySelector('.wz-add')!;
     const labels = Array.from(add.querySelectorAll('button')).map((b) => b.textContent);
@@ -62,10 +62,11 @@ describe('Bước 2: danh sách phát', () => {
     expect(labels.indexOf('+ Danh sách phát')).toBe(labels.indexOf('+ Mã QR') + 1);
     await user.click(screen.getByRole('button', { name: '+ Danh sách phát' }));
     expect(layers()).toEqual(['Video 1', 'Danh sách phát 2']);
-    expect(await screen.findByText(/Danh sách phát \(0 mục\)/)).toBeInTheDocument();
-    expect((screen.getByLabelText(/Lặp lại/) as HTMLInputElement).checked).toBe(true);
+    expect(await screen.findByTestId('group-props')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '+ Ảnh' }));
-    expect(await screen.findByText(/Danh sách phát \(0 mục\)/)).toBeInTheDocument(); // vùng Ảnh cũng dùng kiến trúc playlist
+    expect(layers()).toEqual(['Video 1', 'Danh sách phát 2', 'Ảnh 1']); // 'Ảnh 1' là vùng con (đánh số trong nhóm)
+    expect(await screen.findByText(/Danh sách phát \(0 mục\)/)).toBeInTheDocument(); // vùng Ảnh dùng kiến trúc playlist
+    expect((screen.getByLabelText(/Lặp lại/) as HTMLInputElement).checked).toBe(true);
   });
 
   it('thêm mục, mặc định 8s (ảnh/text), video lấy thời lượng thật, tổng thời lượng, ghi đè rồi xóa về metadata', async () => {

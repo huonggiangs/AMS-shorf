@@ -83,3 +83,50 @@ Máy chủ tự suy ra `customer_id` (đối tác) và `campaign_id` từ `media
 ## 8. Triển khai
 
 Migration `0030_item_impressions` trước, rồi gateway, api, web-admin. Gateway cũ bỏ qua `zones[].playlist`; API cũ không nhận `playlist`.
+
+## 9. Nhóm vùng (`type:"group"`)
+
+Một **phiên phát** (một chương trình trên màn thang máy) có thể ghép nhiều nội dung: video, ảnh, văn bản, chữ chạy, QR... mỗi thành phần có vị trí riêng và danh sách phát riêng. Cách làm: **nhóm** là một khung chứa; các vùng con trỏ tới nhóm bằng `parent_id`. Bố cục phẳng cũ **giữ nguyên, hợp lệ, không đổi**.
+
+### 9.1 Dữ liệu lưu (`broadcast_program_layouts.zones`, mẫu bố cục)
+
+Nhóm (khung chứa, không có nội dung riêng, x/y/w/h là **% màn hình**), vùng con (x/y/w/h là **% của nhóm**, 0..100):
+
+```json
+{ "id":"g1", "type":"group", "name":"Danh sách phát 4", "x":10, "y":10, "w":50, "h":50, "z":3, "transition":"none" }
+{ "id":"v1", "type":"video", "parent_id":"g1", "x":0, "y":0,  "w":100, "h":49, "z":0, "playlist":[ ... ], "loop":true }
+{ "id":"t1", "type":"text",  "parent_id":"g1", "x":0, "y":47, "w":100, "h":12, "z":1, "text":"Giá sốc", "bg_color":"#111827", "text_color":"#FFFFFF" }
+{ "id":"i1", "type":"image", "parent_id":"g1", "x":0, "y":57, "w":100, "h":43, "z":2, "playlist":[ ... ] }
+```
+
+Vùng con có mọi loại vùng thường (`video`, `image`, `text`, `marquee`, `clock`, `weather`, `qr`, `playlist` cũ), và mỗi vùng video/ảnh vẫn có danh sách phát riêng (mục 1-5). Mảng `zones` phẳng; web-admin luôn ghi **vùng con ngay sau nhóm của nó**, máy chủ nhận mọi thứ tự và giữ nguyên như tác giả gửi (thứ tự các con trong nhóm = thứ tự trong mảng; `z` của con là thứ tự xếp lớp trong nhóm).
+
+### 9.2 Quy tắc kiểm tra (API, 422 nếu vi phạm)
+
+- `parent_id` phải là id một vùng **có thật**, `type:"group"`; **một cấp**: nhóm không có `parent_id` (không nhóm trong nhóm, không tự trỏ chính mình, nên không có vòng).
+- Tối đa **50 vùng con/nhóm**, **100 vùng tổng** (kể cả nhóm), **8 vùng ngoài nhóm** (nhóm tính là một vùng; giữ giới hạn cũ của bố cục phẳng). `id` vùng duy nhất toàn bố cục.
+- Nhóm lưu gọn: chỉ `id, name, type, x, y, w, h, z, transition (+ parent_id không được có)`; mọi trường nội dung bị bỏ. Hộp con phải nằm trong 0..100% (cùng quy tắc `x+w<=100`).
+- Mã dùng chung: `packages/shared/src/zones.ts` (`zoneTreeIssue`, `flattenZones`, `absBox`).
+
+### 9.3 Manifest: làm phẳng cho app cũ
+
+`schedule[].layout.zones[]` **không có vùng `group`**, không có `parent_id`. Mỗi vùng con thành vùng thường với tọa độ **tuyệt đối**:
+
+```
+x_abs = group.x + x_con * group.w / 100        w_abs = w_con * group.w / 100
+y_abs = group.y + y_con * group.h / 100        h_abs = h_con * group.h / 100     (kẹp 0..100, x+w<=100, y+h<=100)
+```
+
+kèm `group_id` (thông tin). Thứ tự xuất: theo thứ tự mảng cấp ngoài, các vùng con **ngay tại vị trí nhóm** (theo thứ tự mảng); `z` = `min(20, thứ tự xuất)` nên nhóm trước, con sau; vùng phẳng cũ trong bố cục có nhóm cũng được đánh lại `z` theo thứ tự (bố cục không có nhóm: giữ nguyên hoàn toàn). App vẽ theo `z` tăng dần, **ổn định** khi trùng 20.
+
+```json
+{ "id":"v1", "type":"video", "group_id":"g1", "x":10, "y":10, "w":50, "h":24.5, "z":1, "playlist":[...], "loop":true, "creative_ids":["cr1"] }
+```
+
+Vì vậy Mindo TV / D Play / Signage Player chạy không cần đổi. Item của vùng con vào `schedule[].creative_ids`/`creatives[]`/`item_zones[media_id] = zone_id` như vùng thường (id vùng con). `item_impression.zone_id` = id vùng con (duy nhất).
+
+### 9.4 Web-admin (bước 02)
+
+Danh sách lớp là **cây**: nhóm (khung chọn xanh khi đang chọn) với các lớp con thụt vào, đường dọc + khuỷu nối; mỗi dòng có mắt, lên, xuống, xóa (lên khóa ở anh em đầu, xuống khóa ở anh em cuối; đổi chỗ nhóm đem theo các con). Nút **+ Danh sách phát** tạo nhóm (mặc định 10,10 · 50x50); khi nhóm (hoặc một con) đang chọn, **+ Video / + Ảnh / + Văn bản / + Chữ chạy...** thêm vào nhóm, tự xếp dọc nối đuôi các con. Thuộc tính vùng có **Đưa vào nhóm** (đổi qua lại, giữ vị trí nhìn thấy; chọn "Không" = ra ngoài) và **Gỡ nhóm** (giữ các con, tọa độ tuyệt đối). Xóa nhóm hỏi xác nhận và xóa luôn các con. Trên khung: nhóm là khung nét đứt; con kéo/đổi cỡ bị kẹp trong nhóm; kéo nhóm thì con đi theo. Xem trước phát toàn bộ trong khung nhóm.
+
+Hạn chế đã biết: không lồng nhóm; tên mặc định đánh số theo vị trí (vùng ngoài trong vùng ngoài, vùng con trong nhóm); trang "Mẫu bố cục" (ZoneEditor) chưa có nút tạo nhóm nhưng hiển thị và lưu được mẫu có nhóm.

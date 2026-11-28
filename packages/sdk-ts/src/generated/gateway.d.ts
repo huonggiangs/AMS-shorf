@@ -124,7 +124,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Gửi nhật ký thiết bị (Signage Player)
+         * Gửi nhật ký thiết bị (D Play)
          * @description Thân tối đa 8 KB, tối đa 100 dòng. Giới hạn tần suất theo device_id (mặc định 60 lần/giờ, 5000 dòng/ngày; 429 + `Retry-After`). `ts` quá cũ bị kẹp về mốc 7 ngày, tương lai kẹp +5 phút. Lưu 7 ngày; quản trị xem ở ngăn chi tiết thiết bị.
          */
         post: operations["gatewayPostLogs"];
@@ -524,7 +524,7 @@ export interface components {
             commands: ({
                 /** @description id dong trong bang device_commands */
                 id: string;
-                /** @description refresh_manifest, reboot, set_monitor; Signage Player: reset_pin (args rong), set_volume {percent 0-100}, set_orientation {orientation landscape|portrait}, message {text <= 200, duration_s? 3-120}; TV: lock, unlock, message {text, seconds}... Type la: bo qua nhung VAN ack. */
+                /** @description refresh_manifest, reboot, set_monitor; D Play: reset_pin (args rong), set_volume {percent 0-100}, set_orientation {orientation landscape|portrait}, message {text <= 200, duration_s? 3-120}; TV: lock, unlock, message {text, seconds}... Type la: bo qua nhung VAN ack. */
                 type: string;
                 args?: {
                     [key: string]: unknown;

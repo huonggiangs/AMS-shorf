@@ -392,3 +392,83 @@ describe('vung type=playlist (web-admin)', () => {
     expect(mz.creative_ids).toEqual([v]);
   });
 });
+
+describe('Nhom vung (zone group)', () => {
+  const grp = (extra: Record<string, unknown> = {}) => ({ id: 'g1', type: 'group', name: 'Danh sách phát 1', x: 10, y: 10, w: 50, h: 50, ...extra });
+  const kid = (id: string, type: string, box: [number, number, number, number], extra: Record<string, unknown> = {}) => ({ id, type, x: box[0], y: box[1], w: box[2], h: box[3], parent_id: 'g1', ...extra });
+  const lay = (zones: unknown[]) => ({ orientation: 'portrait', zones });
+  const msg = (r: { body: any }): string => JSON.stringify(r.body);
+
+  it('luu nhom + vung con (video/van ban/anh) nguyen nhu tac gia; nhom khong mang noi dung rieng', async () => {
+    const v = await media({ kind: 'video' });
+    const i = await media({ kind: 'image' });
+    const r = await prog('Nhom 1', lay([
+      grp({ text: 'bo', playlist: [item({ type: 'text', text_content: 'x' })] }),
+      kid('v1', 'video', [0, 0, 100, 49], { playlist: [item({ type: 'video', media_id: v })] }),
+      kid('t1', 'text', [0, 47, 100, 12], { text: 'Xin chao', bg_color: '#111827' }),
+      kid('i1', 'image', [0, 57, 100, 43], { playlist: [item({ type: 'image', media_id: i, duration: 12 })] }),
+    ]));
+    expect(r.status, msg(r)).toBe(201);
+    const zs = r.body.layout.zones;
+    expect(zs.map((x: any) => x.id)).toEqual(['g1', 'v1', 't1', 'i1']);
+    expect(zs[0]).toEqual({ id: 'g1', name: 'Danh sách phát 1', type: 'group', x: 10, y: 10, w: 50, h: 50, z: 0, transition: 'none' });
+    expect(zs[1]).toMatchObject({ parent_id: 'g1', x: 0, y: 0, w: 100, h: 49 }); // toa do con giu theo % cua nhom
+    expect(zs[1].playlist).toHaveLength(1);
+    expect(zs[3].playlist[0]).toMatchObject({ media_id: i, duration: 12 });
+    expect(r.body.items.map((x: any) => x.creative_id).sort()).toEqual([v, i].sort());
+    expect(r.body.items.find((x: any) => x.creative_id === v).zone_id).toBe('v1');
+    // doc lai
+    const g = await content.json('GET', `/admin/v1/broadcast/${r.body.id}`);
+    expect(g.body.layout.zones.find((x: any) => x.id === 't1')).toMatchObject({ parent_id: 'g1', text: 'Xin chao' });
+  });
+
+  it('tu choi: cha khong ton tai, cha khong phai nhom, nhom long nhau, tu tro, >50 con/nhom, >100 vung, >8 vung ngoai', async () => {
+    const t = (id: string, extra: Record<string, unknown> = {}) => ({ id, type: 'text', x: 0, y: 0, w: 10, h: 10, text: 'a', ...extra });
+    const st = async (zones: unknown[]): Promise<[number, string]> => { const r = await prog('Sai', lay(zones)); return [r.status, msg(r)]; };
+    expect((await st([t('a', { parent_id: 'khong' })]))[0]).toBe(422);
+    const notGroup = await st([t('a'), t('b', { parent_id: 'a' })]);
+    expect(notGroup[0]).toBe(422);
+    expect(notGroup[1]).toMatch(/không phải là nhóm/);
+    const nested = await st([grp(), grp({ id: 'g2', parent_id: 'g1' }), t('c', { parent_id: 'g2' })]);
+    expect(nested[0]).toBe(422);
+    expect(nested[1]).toMatch(/một cấp/);
+    expect((await st([t('a', { parent_id: 'a' })]))[0]).toBe(422);
+    const kids = (n: number) => Array.from({ length: n }, (_, k) => t(`k${k}`, { parent_id: 'g1' }));
+    expect((await st([grp(), ...kids(50)]))[0]).toBe(201);
+    const over = await st([grp(), ...kids(51)]);
+    expect(over[0]).toBe(422);
+    expect(over[1]).toMatch(/tối đa 50/);
+    const total = await st([grp(), grp({ id: 'g2' }), ...Array.from({ length: 99 }, (_, k) => t(`m${k}`, { parent_id: k < 50 ? 'g1' : 'g2' }))]);
+    expect(total[0]).toBe(422);
+    expect(total[1]).toMatch(/Tối đa 100/);
+    expect((await st(Array.from({ length: 9 }, (_, k) => t(`o${k}`))))[0]).toBe(422); // gioi han cu 8 vung ngoai
+    expect((await st([grp({ w: 100, x: 10 })]))[0]).toBe(422); // nhom vuot khung
+  });
+
+  it('manifest: lam phang - bo nhom, vung con co toa do TUYET DOI, co group_id, giu thu tu/lop; vung ngoai nhom giu nguyen', async () => {
+    const v = await media({ kind: 'video' });
+    const r = await prog('Nhom manifest', lay([
+      { id: 'bar', type: 'marquee', x: 0, y: 90, w: 100, h: 10, text: 'Thanh', z: 5 },
+      grp({ x: 10, y: 10, w: 50, h: 50 }),
+      kid('v1', 'video', [0, 0, 100, 50], { playlist: [item({ type: 'video', media_id: v })] }),
+      kid('t1', 'text', [0, 50, 100, 20], { text: 'Gia', bg_color: '#111827' }),
+      kid('q1', 'qr', [50, 70, 50, 30], { qr: { mode: 'url', value: 'https://anio.vn' }, url: 'https://anio.vn' }),
+    ]));
+    expect(r.status, msg(r)).toBe(201);
+    expect((await content.json('POST', `/admin/v1/broadcast/${r.body.id}/publish`, {})).status).toBe(200);
+    const dev = await new Dev().init('HN');
+    const slot = (await dev.manifest()).schedule.find((x: any) => x.slot_id === `bp_${r.body.id}`);
+    const zs = slot.layout.zones;
+    expect(zs.map((z: any) => z.id)).toEqual(['bar', 'v1', 't1', 'q1']); // khong co 'g1'
+    expect(zs.some((z: any) => z.type === 'group' || 'parent_id' in z)).toBe(false);
+    expect(zs[0]).toMatchObject({ id: 'bar', x: 0, y: 90, w: 100, h: 10 });
+    expect(zs[0].group_id).toBeUndefined();
+    expect(zs[1]).toMatchObject({ id: 'v1', group_id: 'g1', x: 10, y: 10, w: 50, h: 25, z: 1 });
+    expect(zs[1].playlist).toHaveLength(1);
+    expect(zs[1].playlist[0]).toMatchObject({ type: 'video', media_id: v });
+    expect(zs[1].creative_ids).toEqual([v]);
+    expect(zs[2]).toMatchObject({ id: 't1', group_id: 'g1', x: 10, y: 35, w: 50, h: 10, z: 2, text: 'Gia' });
+    expect(zs[3]).toMatchObject({ id: 'q1', group_id: 'g1', x: 35, y: 45, w: 25, h: 15, qr_kind: 'text' });
+    expect(slot.creative_ids).toEqual([v]);
+  });
+});

@@ -2,7 +2,7 @@ import { useRef, useState, type PointerEvent } from 'react';
 import { Field } from './ui';
 import { RichEditor } from './RichText';
 import { QrEditor, WeatherEditor } from './ZoneExtras';
-import { ASPECT, MAX_ZONES, TRANSITIONS, ZONE_LABEL, ZONE_TYPES, clampZone, isMediaZone, newZone, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
+import { ASPECT, MAX_ZONES, TRANSITIONS, ZONE_LABEL, FLAT_ZONE_TYPES, clampZone, isMediaZone, newZone, zoneName, type Orientation, type Zone, type ZoneType } from '../lib/layout';
 
 const COLORS: Record<string, string> = { video: '#2563EB', image: '#059669', marquee: '#DC2626', text: '#475569', clock: '#7C3AED', weather: '#0891B2', qr: '#B45309' };
 type Drag = { id: string; mode: 'move' | 'resize'; sx: number; sy: number; orig: Zone };
@@ -68,7 +68,7 @@ export function ZoneEditor({ orientation, zones, onChange, selected, onSelect }:
           ))}
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-          {ZONE_TYPES.map((t) => <button key={t} type="button" className="btn sm" disabled={zones.length >= MAX_ZONES} onClick={() => add(t)}>+ {ZONE_LABEL[t]}</button>)}
+          {FLAT_ZONE_TYPES.map((t) => <button key={t} type="button" className="btn sm" disabled={zones.length >= MAX_ZONES} onClick={() => add(t)}>+ {ZONE_LABEL[t]}</button>)}
         </div>
         <div style={{ color: 'var(--mut)', fontSize: 12, marginTop: 6 }}>{zones.length}/{MAX_ZONES} vùng. Kéo vùng để di chuyển, kéo góc vàng để đổi kích thước.</div>
       </div>
@@ -77,7 +77,7 @@ export function ZoneEditor({ orientation, zones, onChange, selected, onSelect }:
           <div role="group" aria-label="Thuộc tính vùng">
             <h3 style={{ margin: '0 0 6px', fontSize: 15 }}>Vùng: {zoneName(sel)}</h3>
             <Field label="Tên vùng"><input maxLength={60} value={sel.name ?? ''} onChange={(e) => onChange(zones.map((z) => (z.id === sel.id ? { ...z, name: e.target.value } : z)))} /></Field>
-            <Field label="Loại vùng"><select value={sel.type} onChange={(e) => set(sel.id, { type: e.target.value as ZoneType })}>{ZONE_TYPES.map((t) => <option key={t} value={t}>{ZONE_LABEL[t]}</option>)}</select></Field>
+            <Field label="Loại vùng"><select value={sel.type} onChange={(e) => set(sel.id, { type: e.target.value as ZoneType })}>{FLAT_ZONE_TYPES.map((t) => <option key={t} value={t}>{ZONE_LABEL[t]}</option>)}</select></Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>{num('x')}{num('y')}{num('w')}{num('h')}{num('z')}</div>
             {isMediaZone(sel) ? <Field label="Chuyển cảnh"><select value={sel.transition} onChange={(e) => set(sel.id, { transition: e.target.value })}>{TRANSITIONS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></Field> : null}
             {sel.type === 'marquee' ? (

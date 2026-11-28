@@ -1,10 +1,12 @@
 // Bo cuc da vung (migration 0021): kiem tra zod dung chung cho mau bo cuc va chuong trinh phat song. Toa do tinh theo % khung (0..100).
 import { z } from 'zod';
-import { legacyMirror, playlistSchema, type PlaylistItem, richHtmlToPlain, sanitizeRich, RICH_LIMITS } from '@ams/shared';
+import { legacyMirror, playlistSchema, type PlaylistItem, richHtmlToPlain, sanitizeRich, RICH_LIMITS, zoneTreeIssue, MAX_TOP_ZONES, MAX_ZONES_TOTAL } from '@ams/shared';
 
-export const ZONE_TYPES = ['video', 'image', 'playlist', 'marquee', 'text', 'clock', 'weather', 'qr'] as const;
+export const ZONE_TYPES = ['video', 'image', 'playlist', 'marquee', 'text', 'clock', 'weather', 'qr', 'group'] as const;
 export const MEDIA_ZONE_TYPES = ['video', 'image', 'playlist'] as const;
-export const MAX_ZONES = 8;
+/** vung cap ngoai (nhom tinh la 1); vung trong nhom: <= 50/nhom, tong <= 100 (xem docs/PLAYLIST.md "Nhom vung") */
+export const MAX_ZONES = MAX_TOP_ZONES;
+export { MAX_ZONES_TOTAL };
 
 const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Màu dạng #RRGGBB');
 const pct = z.number().min(0).max(100);
@@ -40,6 +42,8 @@ export const zoneSchema = z
     id: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/, 'Mã vùng chỉ gồm chữ, số, - và _ (tối đa 32 ký tự)'),
     name: z.string().trim().max(60).optional(),
     type: z.enum(ZONE_TYPES),
+    /** vung con cua mot nhom (`type:'group'`): id nhom. Khi co, x/y/w/h la % cua NHOM (khong phai man hinh). Chi mot cap. */
+    parent_id: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/, 'parent_id không hợp lệ').optional(),
     x: pct,
     y: pct,
     w: z.number().min(1).max(100),
@@ -70,6 +74,7 @@ export const zoneSchema = z
   })
   .refine((v) => v.x + v.w <= 100.01 && v.y + v.h <= 100.01, { message: 'Vùng vượt ra ngoài khung (x+w và y+h tối đa 100%)' })
   .transform((v, ctx) => {
+    if (v.type === 'group') { const { id, name, type, x, y, w, h, z: zi, transition, parent_id } = v; return { id, ...(name ? { name } : {}), type, x, y, w, h, z: zi, transition, ...(parent_id ? { parent_id } : {}) }; } // nhom: chi la khung chua, khong co noi dung rieng
     if (v.type !== 'text' && v.type !== 'marquee') {
       const { rich: _r, ...rest } = v;
       if (v.type !== 'video' && v.type !== 'image' && v.type !== 'playlist') { const { durations: _d, playlist: _p, loop: _l, ...r2 } = rest; return r2; }
@@ -91,8 +96,11 @@ export const zoneSchema = z
 
 export const zonesSchema = z
   .array(zoneSchema)
-  .max(MAX_ZONES, `Tối đa ${MAX_ZONES} vùng`)
-  .refine((a) => new Set(a.map((x) => x.id)).size === a.length, { message: 'Mã vùng bị trùng' });
+  .refine((a) => new Set(a.map((x) => x.id)).size === a.length, { message: 'Mã vùng bị trùng' })
+  .superRefine((a, ctx) => {
+    const issue = zoneTreeIssue(a);
+    if (issue) ctx.addIssue({ code: 'custom', message: issue.message });
+  });
 
 export const orientationSchema = z.enum(['landscape', 'portrait']);
 export type Zone = z.infer<typeof zoneSchema> & { playlist?: PlaylistItem[]; loop?: boolean; durations?: Record<string, number>; creative_ids?: string[]; playlist_total_s?: number };

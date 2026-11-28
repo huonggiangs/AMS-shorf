@@ -4,6 +4,7 @@ import { qrImageSrc, type QrConfig } from '../lib/qr';
 import { fetchWeather, getGps, resolveCoords, weatherInfo, type WeatherNow } from '../lib/weather';
 import { RichView } from './RichText';
 import { PlaylistView, type ViewItem } from './PlaylistView';
+import { childrenOf, isGroup } from '../lib/groups';
 
 export interface PreviewItem {
   id: string;
@@ -153,19 +154,24 @@ export function LivePreview({ orientation: o0, zones, items, header, footer, max
     }
     return m;
   }, [items, zones, firstMedia]);
-  const sorted = [...zones].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+  const ids = new Set(zones.map((z) => z.id));
+  const sorted = zones.filter((z) => !z.parent_id || !ids.has(z.parent_id)).sort((a, b) => (a.z ?? 0) - (b.z ?? 0)); // vung ngoai; vung con ve ben trong nhom
   const aspect = ASPECT[orientation];
   const width = orientation === 'portrait' ? `min(100%, ${Math.round((maxHeight * 9) / 16)}px)` : `min(100%, ${Math.round((maxHeight * 16) / 9)}px)`;
+  /** Vung (de quy 1 cap): nhom = khung trong suot chua cac vung con, x/y/w/h cua vung con la % cua nhom. */
+  const renderZone = (z: Zone): React.ReactElement => (
+    <div key={z.id} className={`lp-zone${isGroup(z) ? ' lp-group' : ''}`} data-zone={z.id} data-parent={z.parent_id ?? undefined} style={{ left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%`, zIndex: z.z ?? 0 }}>
+      {isGroup(z)
+        ? childrenOf(zones, z.id).sort((a, b) => (a.z ?? 0) - (b.z ?? 0)).map((c) => renderZone(c))
+        : <ZoneView z={z} items={Array.isArray(z.playlist) ? items : byZone.get(z.id) ?? []} playing={playing} runKey={runKey} ctl={ctl} primary={z.id === primaryId} />}
+    </div>
+  );
   return (
     <div data-testid="live-preview">
       <style>{CSS}</style>
       <div className={`lp-frame${playing ? '' : ' lp-paused'}`} style={{ aspectRatio: aspect, width }} role="img" aria-label={`Xem trước ${orientation === 'portrait' ? '9:16' : '16:9'}`}>
         {header ? <div className="lp-bar" style={{ top: 0 }}>{header}</div> : null}
-        {sorted.map((z) => (
-          <div key={z.id} className="lp-zone" data-zone={z.id} style={{ left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%`, zIndex: z.z ?? 0 }}>
-            <ZoneView z={z} items={Array.isArray(z.playlist) ? items : byZone.get(z.id) ?? []} playing={playing} runKey={runKey} ctl={ctl} primary={z.id === primaryId} />
-          </div>
-        ))}
+        {sorted.map((z) => renderZone(z))}
         {footer ? <div className="lp-bar" style={{ bottom: 0 }}>{footer}</div> : null}
       </div>
       {prog ? (

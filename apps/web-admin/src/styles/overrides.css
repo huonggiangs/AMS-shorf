@@ -41,7 +41,7 @@ dialog.dlg.wiz[open]{display:flex;flex-direction:column}
 .wz-step.done{background:#DCFCE7;color:#047857}
 .wz-body{flex:1 1 auto;min-height:0;overflow:auto;padding:18px 24px}
 .wz-foot{display:flex;justify-content:space-between;gap:10px;padding:12px 24px;border-top:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap;align-items:center;background:var(--card)}
-.wz-3{display:grid;grid-template-columns:minmax(180px,240px) minmax(0,1fr) minmax(270px,330px);gap:0;min-height:0;height:100%}
+.wz-3{display:grid;grid-template-columns:minmax(200px,270px) minmax(0,1fr) minmax(270px,330px);gap:0;min-height:0;height:100%}
 .wz-3>*{min-height:0;overflow:auto;padding:14px 16px}
 .wz-3>*+*{border-left:1px solid var(--line)}
 .wz-tool{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
@@ -50,6 +50,16 @@ dialog.dlg.wiz[open]{display:flex;flex-direction:column}
 .wz-layer small{display:block;color:var(--mut);font-family:var(--mono,monospace);font-size:11px}
 .wz-layer .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:13px}
 .wz-layer button{border:0;background:none;cursor:pointer;color:var(--mut);padding:2px 4px}
+/* cay lop thanh phan: nhom -> vung con (duong doc + goc khuyu) */
+.wz-node{margin-bottom:8px}.wz-node>.wz-layer{margin-bottom:0}
+.wz-kids{position:relative;margin:0 0 0 14px;padding:6px 0 0 16px}
+.wz-kid{position:relative;margin-bottom:6px;min-width:0}
+.wz-kid::before{content:'';position:absolute;left:-16px;top:-6px;width:16px;height:calc(50% + 6px);border-left:1.5px solid var(--tree-line,#CBD5E1);border-bottom:1.5px solid var(--tree-line,#CBD5E1);border-bottom-left-radius:8px;pointer-events:none}
+.wz-kid:not(.last)::after{content:'';position:absolute;left:-16px;top:50%;bottom:-6px;border-left:1.5px solid var(--tree-line,#CBD5E1);pointer-events:none}
+.wz-layer.kid{margin-bottom:0;padding:6px 8px}
+.tvn.dark{--tree-line:#2F415F}
+.wz-kids-empty,.wz-note{margin:0 0 8px;font-size:12px;color:var(--mut)}
+.wz-kids-empty{margin:0 0 6px}
 @media(max-width:860px){.wz-3{grid-template-columns:minmax(0,1fr);height:auto}.wz-3>*{overflow:visible}.wz-3>*+*{border-left:0;border-top:1px solid var(--line)}}
 @media(max-width:600px){dialog.dlg [style*="grid-template-columns"]{grid-template-columns:minmax(0,1fr)!important}dialog.dlg input,dialog.dlg select,dialog.dlg textarea{max-width:100%;min-width:0}}
 @media(max-width:859px){dialog.dlg{max-width:96vw}dialog.dlg form{padding:18px}}

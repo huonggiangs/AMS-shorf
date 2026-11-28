@@ -20,3 +20,4 @@ export * from './richtext.js';
 export * from './zone-duration.js';
 export * from './attestation.js';
 export * from './playlist.js';
+export * from './zones.js';

@@ -12417,6 +12417,10 @@ components:
                           - clock
                           - weather
                           - qr
+                          - group
+                      parent_id:
+                        type: string
+                        pattern: ^[A-Za-z0-9_-]{1,32}$
                       x:
                         type: number
                         minimum: 0
@@ -12671,7 +12675,6 @@ components:
                       - w
                       - h
                     additionalProperties: true
-                  maxItems: 8
               required:
                 - zones
               additionalProperties: true
@@ -13641,6 +13644,10 @@ components:
                   - clock
                   - weather
                   - qr
+                  - group
+              parent_id:
+                type: string
+                pattern: ^[A-Za-z0-9_-]{1,32}$
               x:
                 type: number
                 minimum: 0
@@ -13895,7 +13902,6 @@ components:
               - w
               - h
             additionalProperties: true
-          maxItems: 8
       required:
         - name
         - zones
@@ -14881,6 +14887,10 @@ components:
                           - clock
                           - weather
                           - qr
+                          - group
+                      parent_id:
+                        type: string
+                        pattern: ^[A-Za-z0-9_-]{1,32}$
                       x:
                         type: number
                         minimum: 0
@@ -15135,7 +15145,6 @@ components:
                       - w
                       - h
                     additionalProperties: true
-                  maxItems: 8
               required:
                 - zones
               additionalProperties: true
@@ -15654,6 +15663,10 @@ components:
                   - clock
                   - weather
                   - qr
+                  - group
+              parent_id:
+                type: string
+                pattern: ^[A-Za-z0-9_-]{1,32}$
               x:
                 type: number
                 minimum: 0
@@ -15908,7 +15921,6 @@ components:
               - w
               - h
             additionalProperties: true
-          maxItems: 8
       additionalProperties: true
     AdminPutLegalDocumentsByIdRequest:
       type: object

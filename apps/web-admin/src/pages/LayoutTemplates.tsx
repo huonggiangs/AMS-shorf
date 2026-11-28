@@ -9,6 +9,7 @@ import { Btn, EmptyBlock, ErrorBlock, Field, LoadingBlock, Note, PageHead } from
 import { Dialog } from '../components/Dialog';
 import { LivePreview } from '../components/LivePreview';
 import { ZoneEditor } from '../components/ZoneEditor';
+import { flattenZones } from '../lib/groups';
 import { PRESETS, zoneName, layoutError, templateSchema, type LayoutTemplate, type Orientation, type Zone } from '../lib/layout';
 import { useT } from '../i18n';
 
@@ -58,7 +59,7 @@ export default function LayoutTemplates() {
 function MiniLayout({ orientation, zones }: { orientation: Orientation; zones: Zone[] }) {
   return (
     <div style={{ position: 'relative', height: '100%', aspectRatio: orientation === 'portrait' ? '9 / 16' : '16 / 9', maxWidth: '100%', background: '#111827', borderRadius: 4 }}>
-      {zones.map((z) => <div key={z.id} style={{ position: 'absolute', left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%`, background: z.type === 'marquee' ? '#DC2626AA' : z.type === 'video' ? '#2563EBAA' : z.type === 'image' ? '#059669AA' : '#7C3AEDAA', border: '1px solid #fff6', boxSizing: 'border-box' }} />)}
+      {flattenZones(zones).map((z) => <div key={z.id} style={{ position: 'absolute', left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%`, background: z.type === 'marquee' ? '#DC2626AA' : z.type === 'video' ? '#2563EBAA' : z.type === 'image' ? '#059669AA' : '#7C3AEDAA', border: '1px solid #fff6', boxSizing: 'border-box' }} />)}
     </div>
   );
 }

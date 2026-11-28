@@ -7070,7 +7070,8 @@ export interface components {
                     id: string;
                     name?: string;
                     /** @enum {string} */
-                    type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr";
+                    type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr" | "group";
+                    parent_id?: string;
                     x: number;
                     y: number;
                     w: number;
@@ -7512,7 +7513,8 @@ export interface components {
                 id: string;
                 name?: string;
                 /** @enum {string} */
-                type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr";
+                type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr" | "group";
+                parent_id?: string;
                 x: number;
                 y: number;
                 w: number;
@@ -7991,7 +7993,8 @@ export interface components {
                     id: string;
                     name?: string;
                     /** @enum {string} */
-                    type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr";
+                    type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr" | "group";
+                    parent_id?: string;
                     x: number;
                     y: number;
                     w: number;
@@ -8269,7 +8272,8 @@ export interface components {
                 id: string;
                 name?: string;
                 /** @enum {string} */
-                type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr";
+                type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr" | "group";
+                parent_id?: string;
                 x: number;
                 y: number;
                 w: number;

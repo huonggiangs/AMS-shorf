@@ -18745,8 +18745,13 @@
                             "text",
                             "clock",
                             "weather",
-                            "qr"
+                            "qr",
+                            "group"
                           ]
+                        },
+                        "parent_id": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_-]{1,32}$"
                         },
                         "x": {
                           "type": "number",
@@ -19088,8 +19093,7 @@
                         "h"
                       ],
                       "additionalProperties": true
-                    },
-                    "maxItems": 8
+                    }
                   }
                 },
                 "required": [
@@ -20621,8 +20625,13 @@
                     "text",
                     "clock",
                     "weather",
-                    "qr"
+                    "qr",
+                    "group"
                   ]
+                },
+                "parent_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{1,32}$"
                 },
                 "x": {
                   "type": "number",
@@ -20964,8 +20973,7 @@
                 "h"
               ],
               "additionalProperties": true
-            },
-            "maxItems": 8
+            }
           }
         },
         "required": [
@@ -22455,8 +22463,13 @@
                             "text",
                             "clock",
                             "weather",
-                            "qr"
+                            "qr",
+                            "group"
                           ]
+                        },
+                        "parent_id": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_-]{1,32}$"
                         },
                         "x": {
                           "type": "number",
@@ -22798,8 +22811,7 @@
                         "h"
                       ],
                       "additionalProperties": true
-                    },
-                    "maxItems": 8
+                    }
                   }
                 },
                 "required": [
@@ -23629,8 +23641,13 @@
                     "text",
                     "clock",
                     "weather",
-                    "qr"
+                    "qr",
+                    "group"
                   ]
+                },
+                "parent_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{1,32}$"
                 },
                 "x": {
                   "type": "number",
@@ -23972,8 +23989,7 @@
                 "h"
               ],
               "additionalProperties": true
-            },
-            "maxItems": 8
+            }
           }
         },
         "additionalProperties": true

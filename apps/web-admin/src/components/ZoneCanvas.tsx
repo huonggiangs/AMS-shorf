@@ -1,9 +1,10 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { ASPECT, stagePx, clampZone, isMediaZone, zoneName, type Orientation, type Resolution, type Zone } from '../lib/layout';
+import { childrenOf, displayIndex, isGroup, isTop } from '../lib/groups';
 import type { PreviewItem } from './LivePreview';
 import { RichView } from './RichText';
 
-const COLORS: Record<string, string> = { video: '#2563EB', image: '#059669', marquee: '#DC2626', text: '#475569', clock: '#7C3AED', weather: '#0891B2', qr: '#B45309' };
+const COLORS: Record<string, string> = { group: '#64748B', video: '#2563EB', image: '#059669', marquee: '#DC2626', text: '#475569', clock: '#7C3AED', weather: '#0891B2', qr: '#B45309' };
 type Dir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 type Drag = { id: string; mode: 'move' | Dir; sx: number; sy: number; orig: Zone };
 const HANDLES: { d: Dir; st: React.CSSProperties; cur: string }[] = [
@@ -45,7 +46,9 @@ export function ZoneCanvas({ orientation, resolution = 'view', zones, selected, 
   };
   const move = (e: PointerEvent) => {
     if (!drag || !canvas.current) return;
-    const r = canvas.current.getBoundingClientRect();
+    // vung con: toa do tinh theo % cua NHOM nen do delta theo khung cua nhom
+    const el = drag.orig.parent_id ? canvas.current.querySelector<HTMLElement>(`[data-zone="${drag.orig.parent_id}"]`) : canvas.current;
+    const r = (el ?? canvas.current).getBoundingClientRect();
     if (!r.width || !r.height) return;
     // luoi 1%: lam tron theo tung don vi phan tram cua khung
     const dx = Math.round(((e.clientX - drag.sx) / r.width) * 100);
@@ -62,17 +65,52 @@ export function ZoneCanvas({ orientation, resolution = 'view', zones, selected, 
   };
   /** Phim mui ten nhich 1% (Shift 5%); Alt+mui ten doi kich thuoc. */
   const onKey = (e: KeyboardEvent, z: Zone) => {
-    if (e.key === 'Enter' || e.key === ' ') { onSelect(z.id); return; }
+    if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onSelect(z.id); return; }
     const v: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const d = v[e.key];
     if (!d) return;
     e.preventDefault();
+    e.stopPropagation();
     onSelect(z.id);
     const n = e.shiftKey ? 5 : 1;
     set(z.id, e.altKey ? { w: z.w + d[0] * n, h: z.h + d[1] * n } : { x: z.x + d[0] * n, y: z.y + d[1] * n });
   };
   const width = orientation === 'portrait' ? `min(100%, ${Math.round((maxHeight * 9) / 16)}px)` : `min(100%, ${Math.round((maxHeight * 16) / 9)}px)`;
   const [pw, ph] = stagePx(orientation, resolution);
+  const idx = displayIndex(zones);
+  const handles = (z: Zone) => (
+    <div key={`h-${z.id}`} data-handles={z.id} style={{ position: 'absolute', left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%`, zIndex: 40, pointerEvents: 'none' }}>
+      {HANDLES.map((h) => <span key={h.d} aria-hidden data-handle={h.d} onPointerDown={(e) => start(e, z, h.d)} style={{ position: 'absolute', width: 10, height: 10, background: '#2563EB', border: '1px solid #fff', borderRadius: 2, cursor: h.cur, pointerEvents: 'auto', ...h.st }} />)}
+    </div>
+  );
+  /** Mot vung (de quy 1 cap): nhom = khung net dut chua cac vung con (x/y/w/h % cua nhom), keo nhom thi vung con di theo. */
+  const renderZone = (z: Zone): React.ReactElement => {
+    const isSel = z.id === selected;
+    const nm = zoneName(z, idx.get(z.id) ?? 0);
+    const grp = isGroup(z);
+    const kids = grp ? childrenOf(zones, z.id) : [];
+    const first = isMediaZone(z) ? itemsOf(z)[0] : undefined;
+    return (
+      <div
+        key={z.id}
+        data-zone={z.id}
+        data-group={grp ? '1' : undefined}
+        data-parent={z.parent_id ?? undefined}
+        role="button"
+        tabIndex={0}
+        aria-label={`Vùng ${nm}`}
+        aria-pressed={isSel}
+        onPointerDown={(e) => start(e, z, 'move')}
+        onKeyDown={(e) => onKey(e, z)}
+        style={{ position: 'absolute', left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%`, zIndex: z.z, background: grp ? 'rgba(100,116,139,.18)' : first?.url ? '#000' : `${COLORS[z.type]}55`, border: `2px ${grp ? 'dashed' : 'solid'} ${isSel ? '#2563EB' : COLORS[z.type]}`, color: '#fff', fontSize: 11, overflow: grp ? 'visible' : 'hidden', cursor: 'move', boxSizing: 'border-box', opacity: hidden.has(z.id) ? 0.25 : 1 }}
+      >
+        {grp ? null : <Thumb item={first} />}
+        {z.type === 'marquee' || z.type === 'text' ? <div style={{ position: 'absolute', inset: 0, background: z.bg_color ?? '#DC2626', color: z.text_color ?? '#fff', display: 'flex', alignItems: 'center', padding: '0 6px', overflow: 'hidden', whiteSpace: z.rich && z.type === 'text' ? 'normal' : 'nowrap', fontSize: Math.max(9, Math.min(16, (z.font_size ?? 16) * 0.6)) }}>{z.rich ? <RichView html={z.rich} line={z.type === 'marquee'} k={Math.max(9, Math.min(16, (z.font_size ?? 16) * 0.6)) / (z.font_size ?? 16)} /> : z.text ?? ''}</div> : null}
+        <span style={{ position: 'absolute', left: 2, top: 2, background: 'rgba(0,0,0,.6)', padding: '1px 5px', borderRadius: 4, maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 41 }}>{nm}</span>
+        {grp ? <div data-testid={`group-body-${z.id}`} style={{ position: 'absolute', inset: 0 }}>{kids.map((c) => renderZone(c))}{kids.filter((c) => c.id === selected).map((c) => handles(c))}</div> : null}
+      </div>
+    );
+  };
   return (
     <div className="zc-stage">
     <div className="zc-label" aria-label="Kích thước khung">{pw} × {ph} · CHUẨN HIỂN THỊ DOOH</div>
@@ -85,32 +123,8 @@ export function ZoneCanvas({ orientation, resolution = 'view', zones, selected, 
       onPointerDown={() => onSelect(null)}
       style={{ position: 'relative', aspectRatio: ASPECT[orientation], width, background: '#0f172a', borderRadius: 10, touchAction: 'none', userSelect: 'none', margin: '0 auto', backgroundImage: 'linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px)', backgroundSize: '10% 10%', boxShadow: '0 4px 18px rgba(15,23,42,.25)' }}
     >
-      {zones.map((z, i) => {
-        const isSel = z.id === selected;
-        const first = isMediaZone(z) ? itemsOf(z)[0] : undefined;
-        return (
-          <div
-            key={z.id}
-            data-zone={z.id}
-            role="button"
-            tabIndex={0}
-            aria-label={`Vùng ${zoneName(z, i)}`}
-            aria-pressed={isSel}
-            onPointerDown={(e) => start(e, z, 'move')}
-            onKeyDown={(e) => onKey(e, z)}
-            style={{ position: 'absolute', left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%`, zIndex: z.z, background: first?.url ? '#000' : `${COLORS[z.type]}55`, border: `2px solid ${isSel ? '#2563EB' : COLORS[z.type]}`, color: '#fff', fontSize: 11, overflow: 'hidden', cursor: 'move', boxSizing: 'border-box', opacity: hidden.has(z.id) ? 0.25 : 1 }}
-          >
-            <Thumb item={first} />
-            {z.type === 'marquee' || z.type === 'text' ? <div style={{ position: 'absolute', inset: 0, background: z.bg_color ?? '#DC2626', color: z.text_color ?? '#fff', display: 'flex', alignItems: 'center', padding: '0 6px', overflow: 'hidden', whiteSpace: z.rich && z.type === 'text' ? 'normal' : 'nowrap', fontSize: Math.max(9, Math.min(16, (z.font_size ?? 16) * 0.6)) }}>{z.rich ? <RichView html={z.rich} line={z.type === 'marquee'} k={Math.max(9, Math.min(16, (z.font_size ?? 16) * 0.6)) / (z.font_size ?? 16)} /> : z.text ?? ''}</div> : null}
-            <span style={{ position: 'absolute', left: 2, top: 2, background: 'rgba(0,0,0,.6)', padding: '1px 5px', borderRadius: 4, maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{zoneName(z, i)}</span>
-          </div>
-        );
-      })}
-      {zones.filter((z) => z.id === selected).map((z) => (
-        <div key={`h-${z.id}`} style={{ position: 'absolute', left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%`, zIndex: 40, pointerEvents: 'none' }}>
-          {HANDLES.map((h) => <span key={h.d} aria-hidden data-handle={h.d} onPointerDown={(e) => start(e, z, h.d)} style={{ position: 'absolute', width: 10, height: 10, background: '#2563EB', border: '1px solid #fff', borderRadius: 2, cursor: h.cur, pointerEvents: 'auto', ...h.st }} />)}
-        </div>
-      ))}
+      {zones.filter((z) => isTop(z) || !zones.some((g) => g.id === z.parent_id)).map((z) => renderZone(z))}
+      {zones.filter((z) => z.id === selected && (isTop(z) || !zones.some((g) => g.id === z.parent_id))).map((z) => handles(z))}
     </div>
     </div>
   );

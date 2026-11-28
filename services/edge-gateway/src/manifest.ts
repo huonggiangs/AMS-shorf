@@ -1,5 +1,5 @@
 import type { Runtime } from '@ams/runtime';
-import { ANY, MANIFEST_EPOCH_KEY, isHttpsUrl, itemPlayS, legacyMirror, zoneLoop, zonePlaylist, type PlaylistItem, elevatorTierFor, isElevatorResolution, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, safeErr, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
+import { ANY, flattenZones, MANIFEST_EPOCH_KEY, isHttpsUrl, itemPlayS, legacyMirror, zoneLoop, zonePlaylist, type PlaylistItem, elevatorTierFor, isElevatorResolution, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, safeErr, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
 import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestLayout, type ManifestPlaylistItem, type ManifestSlot, type ManifestZone } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 
@@ -130,28 +130,27 @@ function programLayout(layout: { orientation: 'landscape' | 'portrait'; zones: M
   const media = layout.zones.filter((z) => z.type === 'video' || z.type === 'image' || z.type === 'playlist');
   const first = media[0]?.id;
   const known = new Set(media.map((z) => z.id));
-  return {
-    orientation: layout.orientation,
-    zones: layout.zones.map((z) => {
-      if (z.type === 'qr') return qrDevice(z);
-      if (z.type !== 'video' && z.type !== 'image' && z.type !== 'playlist') return z;
-      const legacyIds = ids.filter((id) => (known.has(itemZones[id] ?? '') ? itemZones[id] : first) === z.id);
-      const { playlist: stored, loop: _loop, ...zone } = z;
-      const lookup = (cid: string): { kind: 'video' | 'image'; name?: string } | undefined => {
-        const c = byId.get(cid);
-        return c ? { kind: c.media_type === 'image' ? 'image' : 'video', name: cid } : undefined;
-      };
-      const items = zonePlaylist({ id: z.id, type: z.type, ...(Array.isArray(stored) ? { playlist: stored } : { creative_ids: legacyIds, durations: z.durations }) }, lookup);
-      const playlist = items.flatMap((it) => {
-        const r = resolveItem(it, byId);
-        return r ? [r] : [];
-      });
-      const mirror = legacyMirror(playlist.map((r) => ({ id: r.id, type: r.type, name: r.name, ...(r.media_id ? { media_id: r.media_id } : {}), ...(r.duration ? { duration: r.duration } : {}) })));
-      const creative_ids = Array.isArray(stored) ? mirror.creative_ids : legacyIds;
-      const durations = Array.isArray(stored) ? mirror.durations : z.durations;
-      return { ...zone, creative_ids, ...(durations && Object.keys(durations).length ? { durations } : {}), playlist, loop: zoneLoop({ loop: _loop }) };
-    }),
-  };
+  const mapped = layout.zones.map((z) => {
+    if (z.type === 'qr') return qrDevice(z);
+    if (z.type !== 'video' && z.type !== 'image' && z.type !== 'playlist') return z;
+    const legacyIds = ids.filter((id) => (known.has(itemZones[id] ?? '') ? itemZones[id] : first) === z.id);
+    const { playlist: stored, loop: _loop, ...zone } = z;
+    const lookup = (cid: string): { kind: 'video' | 'image'; name?: string } | undefined => {
+      const c = byId.get(cid);
+      return c ? { kind: c.media_type === 'image' ? 'image' : 'video', name: cid } : undefined;
+    };
+    const items = zonePlaylist({ id: z.id, type: z.type, ...(Array.isArray(stored) ? { playlist: stored } : { creative_ids: legacyIds, durations: z.durations }) }, lookup);
+    const playlist = items.flatMap((it) => {
+      const r = resolveItem(it, byId);
+      return r ? [r] : [];
+    });
+    const mirror = legacyMirror(playlist.map((r) => ({ id: r.id, type: r.type, name: r.name, ...(r.media_id ? { media_id: r.media_id } : {}), ...(r.duration ? { duration: r.duration } : {}) })));
+    const creative_ids = Array.isArray(stored) ? mirror.creative_ids : legacyIds;
+    const durations = Array.isArray(stored) ? mirror.durations : z.durations;
+    return { ...zone, creative_ids, ...(durations && Object.keys(durations).length ? { durations } : {}), playlist, loop: zoneLoop({ loop: _loop }) };
+  });
+  // nhom vung: vung con (toa do % cua nhom) -> toa do tuyet doi, bo vung `group` => app cu khong can doi (docs/PLAYLIST.md "Nhom vung")
+  return { orientation: layout.orientation, zones: flattenZones(mapped) as ManifestZone[] };
 }
 
 /** Chuong trinh co it nhat mot muc phat duoc (van ban / link ngoai / media da vao manifest) du khong co tep media nao: van dua vao lich. */

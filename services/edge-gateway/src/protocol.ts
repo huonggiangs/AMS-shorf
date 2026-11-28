@@ -225,7 +225,11 @@ export interface ManifestSlot {
 }
 export interface ManifestZone {
   id: string;
-  type: 'video' | 'image' | 'playlist' | 'marquee' | 'text' | 'clock' | 'weather' | 'qr';
+  type: 'video' | 'image' | 'playlist' | 'marquee' | 'text' | 'clock' | 'weather' | 'qr' | 'group';
+  /** CHI trong du lieu luu (vung con cua nhom, toa do % cua nhom). Manifest KHONG phat `group`/`parent_id`: da lam phang (xem `group_id`). */
+  parent_id?: string;
+  /** CHI manifest: vung nay thuoc nhom (thong tin); x/y/w/h da la toa do TUYET DOI (% man hinh) */
+  group_id?: string;
   x: number;
   y: number;
   w: number;
