@@ -6,7 +6,7 @@ import { carryItems } from '../components/BroadcastWizard';
 const vz = (extra: Partial<Zone> = {}): Zone => ({ id: 'z1', type: 'video', x: 0, y: 0, w: 100, h: 100, z: 0, transition: 'fade', ...extra });
 
 describe('playlist: parse vùng cũ -> playlist', () => {
-  it('creative_ids + durations -> playlist, video để trống = theo metadata, ảnh cũ mặc định 5s', () => {
+  it('creative_ids + durations -> playlist, video để trống = theo metadata, ảnh cũ giữ 5s', () => {
     const pl = zonePlaylist({ type: 'video', creative_ids: ['a', 'b', 'c'], durations: { a: 12 } }, { kindOf: (id) => (id === 'c' ? 'image' : 'video'), nameOf: (id) => `N-${id}` });
     expect(pl.map((i) => [i.media_id, i.type, i.duration, i.name])).toEqual([['a', 'video', 12, 'N-a'], ['b', 'video', undefined, 'N-b'], ['c', 'image', 5, 'N-c']]);
     expect(new Set(pl.map((i) => i.id)).size).toBe(3);

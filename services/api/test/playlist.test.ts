@@ -60,6 +60,7 @@ async function media(o: { kind?: 'video' | 'image'; review?: string } = {}): Pro
      VALUES (?, NULL, ?, ?, 'elevator', 1080, 1920, 'portrait', ?, 'upload', ?, ?, ?, ?, 'clean', ?, 'ready', ?)`,
     [id, customerId, `kho-${id}`, kind, key, kind === 'video' ? 'video/mp4' : 'image/jpeg', bytes.length, kind === 'video' ? 15 : null, o.review ?? 'approved', NOW],
   );
+  await rt.db.run("INSERT INTO creative_attestations (id, creative_id, content_version, version, kid_safe, signed_by, signed_by_name, signed_at, source) VALUES (?,?,1,'legal-v1',1,'test','Người ký thử',?,'approve')", [rt.id(), id, NOW]);
   return id;
 }
 

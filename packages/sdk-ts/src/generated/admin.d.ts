@@ -4544,8 +4544,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-<<<<<<< HEAD
-=======
     "/admin/v1/reports/views/items": {
         parameters: {
             query?: never;
@@ -4634,7 +4632,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
->>>>>>> pl-be
     "/admin/v1/reports/views/report.html": {
         parameters: {
             query?: never;
@@ -6712,8 +6709,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-<<<<<<< HEAD
-=======
     "/portal/v1/reports/views/items": {
         parameters: {
             query?: never;
@@ -6802,7 +6797,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
->>>>>>> pl-be
     "/portal/v1/reports/views/report.html": {
         parameters: {
             query?: never;
@@ -15440,8 +15434,6 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
-<<<<<<< HEAD
-=======
     adminGetReportsViewsItems: {
         parameters: {
             query?: never;
@@ -15530,7 +15522,6 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
->>>>>>> pl-be
     "adminGetReportsViewsReport.html": {
         parameters: {
             query?: never;
@@ -18121,8 +18112,6 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
-<<<<<<< HEAD
-=======
     portalGetReportsViewsItems: {
         parameters: {
             query?: never;
@@ -18211,7 +18200,6 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
->>>>>>> pl-be
     "portalGetReportsViewsReport.html": {
         parameters: {
             query?: never;

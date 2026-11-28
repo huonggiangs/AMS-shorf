@@ -116,4 +116,4 @@ export const stagePx = (o: Orientation, r: Resolution): [number, number] => {
   const [w, h] = r === '4k' ? [3840, 2160] : r === 'fhd' ? [1920, 1080] : [960, 540];
   return o === 'portrait' ? [h, w] : [w, h];
 };
-export const IMAGE_DEFAULT_S = 5;
+export const IMAGE_DEFAULT_S = 8;

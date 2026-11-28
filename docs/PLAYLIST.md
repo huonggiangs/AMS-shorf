@@ -70,7 +70,7 @@ Luật phát:
 
 Batching: **app xếp hàng cục bộ (bền qua khởi động lại), gửi mỗi 5 phút hoặc khi đủ 50 log**, thử lại khi mất mạng/5xx với backoff (như DEVICE-PROTOCOL mục 10). Idempotent: gửi lại cùng `log_id` an toàn (`item_impressions.duplicates`). 202 = bỏ khỏi hàng đợi mọi log (kể cả `rejected`: lý do là vĩnh viễn: `malformed`, `ts_out_of_range` (quá 48 giờ/tương lai >5 phút), `unknown_program`, `unknown_media`). Phản hồi: `{accepted, valid, flagged, rejected[], item_impressions:{accepted, stored, duplicates, rejected}}`.
 
-Máy chủ tự suy ra `customer_id` (đối tác) và `campaign_id` từ `media_id` -> `creatives` (không tin app). Chương trình phát nội bộ không có chiến dịch; "đối tác" = chủ tệp media (`creatives.customer_id`). Mục text/link ngoài không có đối tác (báo cáo nhóm "Chưa rõ đối tác"). Bảng `ev_item_impression` (migration `0029_item_impressions`), PK `log_id`, chỉ mục `(media_id,played_at)`, `(program_id,played_at)`, `(device_id,played_at)`, `(customer_id,played_at)`.
+Máy chủ tự suy ra `customer_id` (đối tác) và `campaign_id` từ `media_id` -> `creatives` (không tin app). Chương trình phát nội bộ không có chiến dịch; "đối tác" = chủ tệp media (`creatives.customer_id`). Mục text/link ngoài không có đối tác (báo cáo nhóm "Chưa rõ đối tác"). Bảng `ev_item_impression` (migration `0030_item_impressions`), PK `log_id`, chỉ mục `(media_id,played_at)`, `(program_id,played_at)`, `(device_id,played_at)`, `(customer_id,played_at)`.
 
 ## 6. Quyết định: quan hệ với tiền và proof_of_play
 
@@ -82,4 +82,4 @@ Máy chủ tự suy ra `customer_id` (đối tác) và `campaign_id` từ `media
 
 ## 8. Triển khai
 
-Migration `0029_item_impressions` trước, rồi gateway, api, web-admin. Gateway cũ bỏ qua `zones[].playlist`; API cũ không nhận `playlist`.
+Migration `0030_item_impressions` trước, rồi gateway, api, web-admin. Gateway cũ bỏ qua `zones[].playlist`; API cũ không nhận `playlist`.
