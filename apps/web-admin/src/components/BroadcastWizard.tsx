@@ -373,7 +373,7 @@ export function BroadcastWizard({ program, onClose, onSaved }: Props) {
           </>
         )}
       </div>
-      <div>
+      <div className="wz-rightcol">
         <h3 className="wz-sec">Thêm thành phần</h3>
         <div className="wz-add">
           {TOOLS.map((t) => <Btn key={t} disabled={!canAdd(zones, t, selected)} onClick={() => addZone(t)}>+ {ZONE_LABEL[t]}</Btn>)}

@@ -105,3 +105,9 @@ dialog.dlg.wiz[open]{display:flex;flex-direction:column}
 .wz-xywh > * { min-width: 0; }
 .wz-xywh input { width: 100%; min-width: 0; box-sizing: border-box; padding-left: 8px; padding-right: 4px; }
 @media (max-width: 1100px) { .wz-xywh { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+
+/* Cột phải bước 2: không bao giờ tràn ngang (ô chọn tệp, thuộc tính, danh sách phát) */
+.wz-rightcol, .wz-rightcol * { min-width: 0; }
+.wz-rightcol { max-width: 100%; overflow-x: hidden; }
+.wz-rightcol select, .wz-rightcol input:not([type="checkbox"]), .wz-rightcol textarea { max-width: 100%; box-sizing: border-box; text-overflow: ellipsis; }
+.wz-pl-edit select, .wz-pl-edit input:not([type="checkbox"]) { width: 100%; }
