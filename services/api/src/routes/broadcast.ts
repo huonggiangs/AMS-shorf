@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { CommandError, enqueueCommand } from '@ams/edge-gateway';
 import { audit as auditCtx } from '../lib/audit-ctx.js';
 import { dbTarget, fitsTarget } from '../lib/creative.js';
-import { SIGNAGE_LIMITS, validateDisplayText, type FieldError } from '@ams/shared';
+import { SIGNAGE_LIMITS, legacyMirror, playlistMediaIds, playlistTotalS, validateDisplayText, zoneLoop, zonePlaylist, type FieldError, type PlaylistItem } from '@ams/shared';
 import { conflict, notFound, tooMany, unprocessable } from '../lib/errors.js';
 import { eq, getRt, jsonParse, num, parseBody, placeholders, runList } from '../lib/http.js';
 import type { Ctx, ListSpec } from '../lib/http.js';
@@ -144,7 +144,31 @@ async function presentFull(c: Ctx, id: string) {
   const zrows = await rt.db.query<{ creative_id: string; zone_id: string }>('SELECT creative_id, zone_id FROM broadcast_item_zones WHERE program_id = ?', [id]);
   const zoneOf = new Map(zrows.map((z) => [z.creative_id, z.zone_id]));
   const devices = await loadDevices(c, id);
-  return { ...present(p), layout: await loadLayout(c, id), devices, device_ids: devices.map((d) => d.id), items: items.map((i) => ({ ...presentItem(i), zone_id: zoneOf.get(i.creative_id) ?? null })) };
+  const layout = await loadLayout(c, id);
+  return { ...present(p), layout: layout ? { ...layout, zones: presentZones(layout.zones, items, zoneOf) } : null, devices, device_ids: devices.map((d) => d.id), items: items.map((i) => ({ ...presentItem(i), zone_id: zoneOf.get(i.creative_id) ?? null })) };
+}
+
+/**
+ * Doc lai cac vung media: vung co `playlist` giu nguyen; vung cu (creative_ids + durations) duoc doc thanh `playlist` (id on dinh uuid v5).
+ * Luon tra them `loop`, `creative_ids` + `durations` (ban sao cho app cu) va `playlist_total_s` (tong giay mot luot, video theo thoi luong that cua tep).
+ */
+function presentZones(zones: Zone[], items: ItemRow[], zoneOf: Map<string, string>): Zone[] {
+  const media = zones.filter((z) => (MEDIA_ZONE_TYPES as readonly string[]).includes(z.type));
+  const first = media[0]?.id;
+  const known = new Set(media.map((z) => z.id));
+  const byId = new Map(items.map((i) => [i.creative_id, i]));
+  const lookup = (id: string) => {
+    const i = byId.get(id);
+    return i ? { kind: (i.kind === 'video' ? 'video' : 'image') as 'video' | 'image', name: i.name, duration_s: i.duration_s === null ? null : num(i.duration_s) } : null;
+  };
+  const vd = Object.fromEntries(items.flatMap((i) => (i.duration_s === null ? [] : [[i.creative_id, num(i.duration_s)] as const])));
+  return zones.map((z) => {
+    if (!media.includes(z)) return z;
+    const legacyIds = items.map((i) => i.creative_id).filter((cid) => (known.has(zoneOf.get(cid) ?? '') ? zoneOf.get(cid) : first) === z.id);
+    const playlist = zonePlaylist({ id: z.id, type: z.type, playlist: z.playlist, creative_ids: legacyIds, durations: z.durations }, lookup);
+    const mirror = legacyMirror(playlist);
+    return { ...z, playlist, loop: zoneLoop(z), creative_ids: mirror.creative_ids, durations: mirror.durations, playlist_total_s: playlistTotalS(playlist, vd) } as Zone;
+  });
 }
 
 const ONLINE_MS = 20 * 60_000;
@@ -268,6 +292,59 @@ async function checkItems(c: Ctx, target: string, ids: string[]): Promise<void> 
     } else if (w && h) {
       const fit = fitsTarget(target as 'tv' | 'elevator', w, h);
       if (!fit.ok) throw unprocessable(`Tệp "${r.name ?? id}": ${fit.message}`, 'creative_size_mismatch');
+    }
+  }
+}
+
+/** Cac media zone co playlist (vung `video`/`image` co mang `playlist`; mang rong van la "vung dung playlist"). */
+const playlistZones = (layout: Layout | null): Zone[] => (layout?.zones ?? []).filter((z) => (MEDIA_ZONE_TYPES as readonly string[]).includes(z.type) && Array.isArray(z.playlist));
+const hasPlaylistContent = (layout: Layout | null): boolean => playlistZones(layout).some((z) => (z.playlist?.length ?? 0) > 0);
+
+/**
+ * Hop nhat danh sach tep cua chuong trinh voi media_id trong playlist: tep trong kho (broadcast_program_items) = tep cua cac vung CU + moi media_id cua cac playlist.
+ * `explicit` (creative_ids client gui) thang; khong gui thi giu tep dang co KHONG thuoc vung playlist (vung chuyen sang playlist thi tep do do playlist quan ly).
+ * item_zones: moi media_id cua playlist gan vao vung playlist dau tien chua no (de manifest/app cu van tim thay).
+ */
+function planPlaylist(layout: Layout | null, explicit: string[] | undefined, existing: string[], existingZones: Record<string, string>, bodyZones: Record<string, string> | undefined): { ids: string[]; itemZones: Record<string, string> } {
+  const pz = playlistZones(layout);
+  const itemZones: Record<string, string> = { ...(bodyZones ?? existingZones) };
+  if (pz.length === 0) return { ids: explicit ?? existing, itemZones };
+  const mediaZoneIds = new Set((layout?.zones ?? []).filter((z) => (MEDIA_ZONE_TYPES as readonly string[]).includes(z.type)).map((z) => z.id));
+  const media = (layout?.zones ?? []).filter((z) => (MEDIA_ZONE_TYPES as readonly string[]).includes(z.type));
+  const first = media[0]?.id;
+  const known = new Set(media.map((z) => z.id));
+  const pzIds = new Set(pz.map((z) => z.id));
+  const ownerOf = (cid: string): string | undefined => (known.has(itemZones[cid] ?? '') ? itemZones[cid] : first);
+  const base = explicit ?? existing.filter((cid) => !pzIds.has(ownerOf(cid) ?? ''));
+  const ids = [...base];
+  for (const z of pz) {
+    for (const mid of playlistMediaIds(z.playlist as PlaylistItem[])) {
+      if (!ids.includes(mid)) ids.push(mid);
+      if (!pzIds.has(itemZones[mid] ?? '') || !known.has(itemZones[mid] ?? '')) itemZones[mid] = z.id;
+    }
+  }
+  if (!bodyZones) for (const [cid, zid] of Object.entries(itemZones)) if (!ids.includes(cid) || !mediaZoneIds.has(zid)) delete itemZones[cid]; // gan vung cu da het hieu luc (bo cuc doi)
+  return { ids, itemZones };
+}
+
+/** Muc video/anh phai trung loai voi tep (khi biet ro). Muc `url` ngoai khong co tep de doi chieu. */
+async function checkPlaylistKinds(c: Ctx, layout: Layout | null): Promise<void> {
+  const mids = [...new Set(playlistZones(layout).flatMap((z) => playlistMediaIds(z.playlist as PlaylistItem[])))];
+  if (mids.length === 0) return;
+  const rows = new Map<string, { id: string; name: string | null; kind: string | null; mime: string | null }>();
+  for (const part of chunkForIn(mids)) {
+    for (const r of await getRt(c).db.query<{ id: string; name: string | null; kind: string | null; mime: string | null }>(`SELECT id, name, kind, mime FROM creatives WHERE id IN (${placeholders(part.length)})`, part)) rows.set(r.id, r);
+  }
+  for (const z of playlistZones(layout)) {
+    for (const it of z.playlist as PlaylistItem[]) {
+      if (!it.media_id) continue;
+      const r = rows.get(it.media_id);
+      if (!r) throw unprocessable(`Mục "${it.name}" trỏ tới tệp không còn trong kho media.`, 'media_not_found', { zone_id: z.id, item_id: it.id });
+      const isImg = r.kind === 'image' || (r.mime ?? '').startsWith('image/');
+      const isVid = r.kind === 'video' || (r.mime ?? '').startsWith('video/');
+      if ((it.type === 'video' && isImg && !isVid) || (it.type === 'image' && isVid && !isImg)) {
+        throw unprocessable(`Mục "${it.name}" khai báo là ${it.type === 'video' ? 'video' : 'ảnh'} nhưng tệp "${r.name ?? r.id}" là ${it.type === 'video' ? 'ảnh' : 'video'}.`, 'playlist_type_mismatch', { zone_id: z.id, item_id: it.id });
+      }
     }
   }
 }
@@ -438,8 +515,10 @@ export function broadcastRoutes(): Hono<AppEnv> {
     if (b.start_date && b.end_date && b.end_date < b.start_date) throw unprocessable('Ngày kết thúc phải sau ngày bắt đầu.', 'bad_dates');
     const target = dbTarget(b.target_type);
     const text = checkText(target, b, { header: null, footer: null });
-    await checkItems(c, target, b.creative_ids);
-    checkItemZones(b.layout ?? null, b.item_zones, b.creative_ids);
+    const plan = planPlaylist(b.layout ?? null, b.creative_ids, [], {}, b.item_zones);
+    await checkItems(c, target, plan.ids);
+    await checkPlaylistKinds(c, b.layout ?? null);
+    checkItemZones(b.layout ?? null, plan.itemZones, plan.ids);
     await checkDevices(c, target, b.device_ids ?? []);
     const id = rt.id();
     const now = rt.clock.now().toISOString();
@@ -449,10 +528,10 @@ export function broadcastRoutes(): Hono<AppEnv> {
          VALUES (?,?,?,?,?,?,?,?,?,?,?,'draft',1,?,?,?)`,
         [id, b.name, target, JSON.stringify(b.regions), b.start_date ?? null, b.end_date ?? null, b.start_min, b.end_min, b.priority, text.header, text.footer, u.id, now, now],
       );
-      for (const [i, cid] of b.creative_ids.entries()) await db.run('INSERT INTO broadcast_program_items (program_id, creative_id, position) VALUES (?,?,?)', [id, cid, i]);
-      if (b.layout) await saveLayout(db, id, b.layout, true, b.item_zones ?? {}, b.creative_ids, now);
+      for (const [i, cid] of plan.ids.entries()) await db.run('INSERT INTO broadcast_program_items (program_id, creative_id, position) VALUES (?,?,?)', [id, cid, i]);
+      if (b.layout) await saveLayout(db, id, b.layout, true, plan.itemZones, plan.ids, now);
       if (b.device_ids?.length) await saveDevices(db, id, b.device_ids);
-      await auditCtx(c, db, { action: 'broadcast.create', objectType: 'broadcast_program', objectId: id, diff: { name: b.name, target_type: target, items: b.creative_ids.length } });
+      await auditCtx(c, db, { action: 'broadcast.create', objectType: 'broadcast_program', objectId: id, diff: { name: b.name, target_type: target, items: plan.ids.length, playlist_zones: playlistZones(b.layout ?? null).length } });
     });
     return c.json(await presentFull(c, id), 201);
   });
@@ -469,12 +548,16 @@ export function broadcastRoutes(): Hono<AppEnv> {
     const ed = b.end_date === undefined ? p.end_date : b.end_date;
     if (sd && ed && ed < sd) throw unprocessable('Ngày kết thúc phải sau ngày bắt đầu.', 'bad_dates');
     const text = checkText(target, b, { header: p.header, footer: p.footer });
-    const ids = b.creative_ids ?? (await rt.db.query<{ creative_id: string }>('SELECT creative_id FROM broadcast_program_items WHERE program_id = ? ORDER BY position', [p.id])).map((x) => x.creative_id);
-    await checkItems(c, target, ids);
+    const existingIds = (await rt.db.query<{ creative_id: string }>('SELECT creative_id FROM broadcast_program_items WHERE program_id = ? ORDER BY position', [p.id])).map((x) => x.creative_id);
     const effLayout = (b.layout === undefined ? await loadLayout(c, p.id) : b.layout) as Layout | null;
     const existingZones = b.layout === null ? {} : Object.fromEntries((await rt.db.query<{ creative_id: string; zone_id: string }>('SELECT creative_id, zone_id FROM broadcast_item_zones WHERE program_id = ?', [p.id])).map((z) => [z.creative_id, z.zone_id]));
-    const effItemZones: Record<string, string> = b.item_zones ?? existingZones;
-    if (b.item_zones) checkItemZones(effLayout, b.item_zones, ids);
+    const plan = planPlaylist(effLayout, b.creative_ids, existingIds, existingZones, b.item_zones);
+    const ids = plan.ids;
+    const idsChanged = b.creative_ids !== undefined || ids.join('\u0000') !== existingIds.join('\u0000');
+    await checkItems(c, target, ids);
+    if (b.layout !== undefined) await checkPlaylistKinds(c, effLayout);
+    const effItemZones: Record<string, string> = plan.itemZones;
+    if (b.item_zones || playlistZones(effLayout).length) checkItemZones(effLayout, effItemZones, ids);
     if (b.device_ids !== undefined) await checkDevices(c, target, b.device_ids);
     const oldDevs = b.device_ids !== undefined ? (await rt.db.query<{ device_id: string }>('SELECT device_id FROM broadcast_program_devices WHERE program_id = ?', [p.id])).map((x) => x.device_id) : [];
     const now = rt.clock.now().toISOString();
@@ -484,11 +567,11 @@ export function broadcastRoutes(): Hono<AppEnv> {
         'UPDATE broadcast_programs SET name = ?, target_type = ?, regions = ?, start_date = ?, end_date = ?, start_min = ?, end_min = ?, priority = ?, header = ?, footer = ?, version = version + 1, updated_at = ? WHERE id = ?',
         [b.name ?? p.name, target, JSON.stringify(b.regions ?? jsonParse<string[]>(p.regions, [])), sd ?? null, ed ?? null, start, end, b.priority ?? p.priority, text.header, text.footer, now, p.id],
       );
-      if (b.creative_ids) {
+      if (idsChanged) {
         await db.run('DELETE FROM broadcast_program_items WHERE program_id = ?', [p.id]);
         for (const [i, cid] of ids.entries()) await db.run('INSERT INTO broadcast_program_items (program_id, creative_id, position) VALUES (?,?,?)', [p.id, cid, i]);
       }
-      if (b.layout !== undefined || b.item_zones !== undefined || b.creative_ids) await saveLayout(db, p.id, effLayout, b.layout !== undefined, effItemZones, ids, now);
+      if (b.layout !== undefined || b.item_zones !== undefined || idsChanged) await saveLayout(db, p.id, effLayout, b.layout !== undefined, effItemZones, ids, now);
       if (b.device_ids !== undefined) await saveDevices(db, p.id, b.device_ids);
       await auditCtx(c, db, { action: 'broadcast.update', objectType: 'broadcast_program', objectId: p.id, diff: { name: b.name ?? p.name, items: ids.length, live } });
     });
@@ -501,7 +584,7 @@ export function broadcastRoutes(): Hono<AppEnv> {
     const rt = getRt(c);
     const p = await loadProgram(c, c.req.param('id'));
     const items = await rt.db.query<ItemRow>(ITEM_SQL, [p.id]);
-    if (items.length === 0) throw unprocessable('Chương trình chưa có tệp nào để phát.', 'no_items');
+    if (items.length === 0 && !hasPlaylistContent((await loadLayout(c, p.id)) as Layout | null)) throw unprocessable('Chương trình chưa có tệp nào để phát.', 'no_items');
     const bad = items.find((i) => !presentItem(i).ready);
     if (bad) throw unprocessable(`Tệp "${bad.name ?? bad.creative_id}" chưa được duyệt hoặc chưa sẵn sàng. Duyệt tệp trong trang Nội dung & Media trước khi xuất bản.`, 'media_not_ready', { creative_id: bad.creative_id });
     const inCamp = items.find((i) => i.campaign_id !== null);

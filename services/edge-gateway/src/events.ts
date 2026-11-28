@@ -41,6 +41,8 @@ export interface EventExtras {
   aliases: Record<string, number>;
   /** proof_of_play da luu nhung khong tinh la luot xem (ly do -> so lan), vd short_play, pending_trust */
   flags: Record<string, number>;
+  /** item_impression (danh sach phat): 'stored' | 'duplicate' | 'rej:<ly do>' -> so lan; ghi vao device_event_stats duoi 'item:<khoa>' */
+  items?: Record<string, number>;
 }
 
 export interface EventResult {

@@ -1,5 +1,6 @@
 // Hop dong giao thuc thiet bi <-> gateway. Dung chung cho gateway, sim va (qua docs/DEVICE-PROTOCOL.md) app TV.
 import { z } from 'zod';
+import { itemImpressionSchema } from '@ams/shared';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -16,6 +17,8 @@ export const MAX_CLOCK_SKEW_S = 300;
 export const NONCE_TTL_S = 2 * MAX_CLOCK_SKEW_S;
 export const MAX_EVENTS_PER_BATCH = 50;
 export const MAX_BODY_BYTES = 16 * 1024; // events toi da 50 x ~250B
+/** Than POST /v1/events: 50 su kien x toi da ~600B (item_impression dai hon impression). */
+export const MAX_EVENTS_BODY_BYTES = 32 * 1024;
 export const MAX_HEARTBEAT_BODY_BYTES = 2048; // muc tieu <512B (PLAN), tran cung 2 KB
 export const JITTER = 0.2;
 export { PRESENCE_TTL_S } from './heartbeat-ttl.js'; // dan xuat tu chu ky heartbeat toi da (khong con 6 phut)
@@ -166,7 +169,7 @@ export const proofOfPlayEvent = z.object({
   duration_ms: z.number().int().min(0).max(3_600_000),
 });
 export const eventsBody = z.object({
-  events: z.array(z.discriminatedUnion('type', [impressionEvent.extend({ type: z.literal('impression') }), proofOfPlayEvent])).min(1).max(MAX_EVENTS_PER_BATCH),
+  events: z.array(z.discriminatedUnion('type', [impressionEvent.extend({ type: z.literal('impression') }), proofOfPlayEvent, itemImpressionSchema])).min(1).max(MAX_EVENTS_PER_BATCH),
 });
 export type ImpressionEvent = z.infer<typeof impressionEvent>;
 export type EventsBody = z.infer<typeof eventsBody>;
@@ -222,7 +225,7 @@ export interface ManifestSlot {
 }
 export interface ManifestZone {
   id: string;
-  type: 'video' | 'image' | 'marquee' | 'text' | 'clock' | 'weather' | 'qr';
+  type: 'video' | 'image' | 'playlist' | 'marquee' | 'text' | 'clock' | 'weather' | 'qr';
   x: number;
   y: number;
   w: number;
@@ -249,8 +252,40 @@ export interface ManifestZone {
   /** vung weather: thiet bi tu lay Open-Meteo theo toa do (gps = dung vi tri thiet bi neu co, khong thi lat/lon) */
   weather?: { mode: 'gps' | 'fixed'; lat?: number; lon?: number; label?: string };
   creative_ids?: string[];
-  /** vung video/anh: giay hien thi theo ma tu lieu (1..3600); anh thieu = 5 s, video thieu = phat het */
+  /** vung video/anh: giay hien thi theo ma tu lieu (1..3600); anh thieu = 8 s, video thieu = phat het. Ban sao cho app cu; app moi dung `playlist`. */
   durations?: Record<string, number>;
+  /** CHI vung video/image: danh sach phat tuan tu (v1, docs/PLAYLIST.md). Vung cu (creative_ids + durations) duoc may chu doc thanh playlist (id uuid v5 on dinh). Muc co media khong con trong manifest bi loai. */
+  playlist?: ManifestPlaylistItem[];
+  /** CHI vung video/image: het danh sach thi phat lai tu dau (mac dinh true) */
+  loop?: boolean;
+}
+/** Mot muc cua `zones[].playlist` trong manifest, da gan thong tin giao nhan tu `creatives[]`. */
+export interface ManifestPlaylistItem {
+  id: string;
+  type: 'video' | 'image' | 'text';
+  name: string;
+  /** video/anh trong kho media: id trong `creatives[]` (cung `url`/`sha256`/`delivery`... sao chep tu creative do) */
+  media_id?: string;
+  /** media: URL tai (tep AMS) / URL stream (delivery 'stream') / URL https ngoai (delivery 'external') */
+  url?: string;
+  sha256?: string;
+  /** vang mat = tep AMS (tai ve + kiem sha256); 'stream' = link da duyet phat truc tiep; 'external' = link https ngoai (khong sha256, khong duoc quet) */
+  delivery?: 'stream' | 'external';
+  /** delivery 'stream': mp4 | webm | hls | dash */
+  kind?: 'mp4' | 'webm' | 'hls' | 'dash';
+  size_bytes?: number | null;
+  /** thoi luong that cua video (ms) neu biet */
+  duration_ms?: number;
+  px_w?: number | null;
+  px_h?: number | null;
+  /** muc van ban: van ban thuan, tuy chon `rich` (HTML da lam sach) va `style` */
+  text_content?: string;
+  rich?: string;
+  style?: Record<string, unknown>;
+  /** giay do nguoi dung dat (1..3600), thieu = mac dinh */
+  duration?: number;
+  /** giay hien thi da giai: anh/van ban = duration ?? 8; video = duration neu co (cat o do), neu khong thi null = phat het tep */
+  play_s: number | null;
 }
 export interface ManifestLayout {
   orientation: 'landscape' | 'portrait';

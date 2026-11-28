@@ -62,3 +62,7 @@ Nhịp tim ghi tối đa mỗi 10 phút nên "online" có độ trễ. Số nh�
 ## 5. Triển khai
 
 Thứ tự: migration `0028_report_views` (cột `ev_proof_of_play.device_id/campaign_id`, bảng `device_event_stats`) -> gateway -> api -> web-admin. Gateway mới ghi cột mới nên **phải chạy migration trước**. Dòng proof_of_play cũ (chưa có `device_id`) vẫn được tính nhờ suy ra qua `screens`/`creatives`.
+
+## 6. Báo cáo theo mục phát (item_impression, migration 0029)
+
+Bảng `ev_item_impression` (khử trùng `log_id`) nhận lượt hiển thị từng mục của danh sách phát. API: `GET /admin/v1/reports/views/items` và `/portal/v1/reports/views/items` (+ `/export.csv`, `/report.html`, `/report.pdf`), `group_by=media|partner|program|zone|device|day`, lọc `from,to,customer_id,program_id,media_id,zone_id,device_id,item_type`. Khách chỉ thấy dữ liệu của mình (lọc trong SQL; id của người khác: 404; không có nhóm thiết bị). **Chỉ báo cáo, không tính tiền**; quan hệ với proof_of_play/impression ở `docs/PLAYLIST.md` mục 6. Chẩn đoán đồng bộ có thêm `item_stored_24h`, `item_duplicates_24h`, `item_in_db_24h`, `item_rejected_by_reason`.

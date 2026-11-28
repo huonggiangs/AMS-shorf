@@ -33,6 +33,11 @@ export interface DeviceDiag {
   valid_24h: number;
   rejected_24h: number;
   stored_24h: number;
+  /** item_impression (danh sach phat, chi bao cao): so da ghi moi / da co (gui lai) / da ghi vao bang trong 24 gio / ly do tu choi */
+  item_stored_24h: number;
+  item_duplicates_24h: number;
+  item_in_db_24h: number;
+  item_rejected_by_reason: Record<string, number>;
   rejected_by_reason: Record<string, number>;
   flagged_by_reason: Record<string, number>;
   aliases: Record<string, number>;
@@ -63,6 +68,8 @@ export async function syncDiagnostics(c: Ctx): Promise<{ generated_at: string; w
   const impStored = await rt.db.query<{ device_id: string; n: number }>('SELECT device_id, COUNT(*) AS n FROM ev_ad_impression WHERE ts >= ? AND device_id IS NOT NULL GROUP BY device_id', [tsFrom]);
   const popStored = await rt.db.query<{ device_id: string; n: number }>('SELECT device_id, COUNT(*) AS n FROM ev_proof_of_play WHERE ts >= ? AND device_id IS NOT NULL GROUP BY device_id', [tsFrom]);
 
+  const itemStored = await rt.db.query<{ device_id: string; n: number }>('SELECT device_id, COUNT(*) AS n FROM ev_item_impression WHERE received_at >= ? GROUP BY device_id', [tsFrom]).catch(() => []); // bang moi (0029): chua migrate thi bo qua
+  const itemBy = new Map(itemStored.map((r) => [r.device_id, num(r.n)]));
   const byDev = new Map<string, { reason: string; n: number }[]>();
   for (const s of stats) (byDev.get(s.device_id) ?? byDev.set(s.device_id, []).get(s.device_id)!).push({ reason: s.reason, n: num(s.n) });
   const lastBy = new Map(lastEv.map((r) => [r.device_id, r.last_at]));
@@ -79,12 +86,15 @@ export async function syncDiagnostics(c: Ctx): Promise<{ generated_at: string; w
     const received = accepted + rejected;
     const valid = get('valid');
     const stored = storedBy.get(d.id) ?? 0;
+    const itemSub = sub('item:');
+    const itemRejected = Object.fromEntries(Object.entries(itemSub).filter(([k]) => k.startsWith('rej:')).map(([k, n]) => [k.slice(4), n]));
+    const itemEvents = (itemSub['stored'] ?? 0) + (itemSub['duplicate'] ?? 0) + Object.values(itemRejected).reduce((a, b) => a + b, 0);
     const online = !!d.last_seen_at && nowMs - Date.parse(d.last_seen_at) <= ONLINE_MS;
     let code: DiagCode = 'ok';
     if (Number(d.blocked) === 1) code = 'blocked';
     else if (!online) code = 'offline';
     else if (Number(d.trust_level) < 1 && d.kind !== 'tv') code = 'pending_trust';
-    else if (received === 0) code = 'no_events';
+    else if (received === 0 && itemEvents === 0) code = 'no_events';
     else if (accepted === 0 && rejected > 0) code = 'all_rejected';
     else if (accepted > stored + Math.max(2, Math.floor(accepted * 0.1))) code = 'ingest_lag';
     else if (accepted > 0 && valid === 0) code = 'not_counted';
@@ -103,6 +113,10 @@ export async function syncDiagnostics(c: Ctx): Promise<{ generated_at: string; w
       valid_24h: valid,
       rejected_24h: rejected,
       stored_24h: stored,
+      item_stored_24h: itemSub['stored'] ?? 0,
+      item_duplicates_24h: itemSub['duplicate'] ?? 0,
+      item_in_db_24h: itemBy.get(d.id) ?? 0,
+      item_rejected_by_reason: itemRejected,
       rejected_by_reason: rejectedBy,
       flagged_by_reason: sub('flag:'),
       aliases: sub('alias:'),

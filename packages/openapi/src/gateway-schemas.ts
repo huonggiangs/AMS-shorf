@@ -89,9 +89,28 @@ export const manifestCreative = z.object({
   attested_at: z.string().describe('ISO 8601 UTC thoi diem ky'),
   fit: z.enum(['fit', 'cover']).optional().describe('CHI thang may/LED: cach hien trong khung (mac dinh fit = vua khung, giu ti le, co vien den neu lech; cover = phu kin, co the cat mep)'),
 });
+const manifestPlaylistItem = z.object({
+  id: z.string().describe('UUID; muc suy ra tu vung cu co id on dinh (uuid v5 cua zone_id:creative_id)'),
+  type: z.enum(['video', 'image', 'text']),
+  name: z.string(),
+  media_id: z.string().optional().describe('video/anh trong kho: id trong creatives[]'),
+  url: z.string().optional(),
+  sha256: z.string().optional().describe('chi tep AMS; thiet bi PHAI kiem tra truoc khi phat'),
+  delivery: z.enum(['stream', 'external']).optional().describe("vang mat = tep AMS; 'stream' = link da duyet; 'external' = link https ngoai (khong sha256)"),
+  kind: z.enum(['mp4', 'webm', 'hls', 'dash']).optional(),
+  size_bytes: z.number().nullable().optional(),
+  duration_ms: z.number().int().optional().describe('thoi luong that cua video neu biet'),
+  px_w: z.number().nullable().optional(),
+  px_h: z.number().nullable().optional(),
+  text_content: z.string().optional().describe('muc text: van ban thuan'),
+  rich: z.string().optional().describe('muc text: HTML da lam sach (p, b, i, u, s, span, br)'),
+  style: z.record(z.unknown()).optional().describe('muc text: {color, background, font_size, align, valign, font_family, bold, italic, underline}'),
+  duration: z.number().int().min(1).max(3600).optional().describe('giay do nguoi dung dat'),
+  play_s: z.number().nullable().describe('giay hien thi da giai: anh/text = duration ?? 8; video = duration (cat) hoac null = phat het tep'),
+});
 const manifestZone = z.object({
   id: z.string(),
-  type: z.enum(['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr']),
+  type: z.enum(['video', 'image', 'playlist', 'marquee', 'text', 'clock', 'weather', 'qr']),
   x: z.number().describe('% khung, 0..100'),
   y: z.number(),
   w: z.number(),
@@ -110,8 +129,10 @@ const manifestZone = z.object({
   qr_kind: z.enum(['text', 'image_url', 'data_url']).optional().describe('CHI vung qr: text = ve QR tu url; image_url = tai anh tu url (VietQR); data_url = anh nhung'),
   qr: z.record(z.unknown()).optional().describe('CHI vung qr: cau hinh goc (mode image|url|vietqr)'),
   weather: z.object({ mode: z.enum(['gps', 'fixed']), lat: z.number().optional(), lon: z.number().optional(), label: z.string().optional() }).optional().describe('CHI vung weather: thiet bi tu lay Open-Meteo (api.open-meteo.com) theo lat/lon'),
-  durations: z.record(z.number().int().min(1).max(3600)).optional().describe('CHI vung video/image: giay hien thi theo creative_id; anh thieu = 5 s, video thieu = phat het'),
+  durations: z.record(z.number().int().min(1).max(3600)).optional().describe('CHI vung video/image: giay hien thi theo creative_id; anh thieu = 8 s, video thieu = phat het (ban sao cho app cu; app moi dung playlist)'),
   creative_ids: z.array(z.string()).optional().describe('CHI vung video/image: tep phat o vung nay, theo thu tu'),
+  playlist: z.array(manifestPlaylistItem).optional().describe('CHI vung video/image: danh sach phat tuan tu (docs/PLAYLIST.md); thieu = app cu dung creative_ids + durations'),
+  loop: z.boolean().optional().describe('CHI vung video/image: het danh sach thi phat lai tu dau (mac dinh true)'),
 });
 export const manifestSlot = z.object({
   slot_id: z.string(),

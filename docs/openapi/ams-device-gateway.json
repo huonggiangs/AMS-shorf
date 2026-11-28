@@ -2175,6 +2175,59 @@
                     "duration_ms"
                   ],
                   "additionalProperties": true
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "item_impression"
+                    },
+                    "log_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    },
+                    "program_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "zone_id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,32}$"
+                    },
+                    "item_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    },
+                    "media_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "item_type": {
+                      "type": "string",
+                      "enum": [
+                        "video",
+                        "image",
+                        "text"
+                      ]
+                    },
+                    "played_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "log_id",
+                    "program_id",
+                    "zone_id",
+                    "item_id",
+                    "item_type",
+                    "played_at"
+                  ],
+                  "additionalProperties": true
                 }
               ]
             },
@@ -2994,6 +3047,7 @@
                             "enum": [
                               "video",
                               "image",
+                              "playlist",
                               "marquee",
                               "text",
                               "clock",
@@ -3121,7 +3175,7 @@
                               "minimum": 1,
                               "maximum": 3600
                             },
-                            "description": "CHI vung video/image: giay hien thi theo creative_id; anh thieu = 5 s, video thieu = phat het"
+                            "description": "CHI vung video/image: giay hien thi theo creative_id; anh thieu = 8 s, video thieu = phat het (ban sao cho app cu; app moi dung playlist)"
                           },
                           "creative_ids": {
                             "type": "array",
@@ -3129,6 +3183,117 @@
                               "type": "string"
                             },
                             "description": "CHI vung video/image: tep phat o vung nay, theo thu tu"
+                          },
+                          "playlist": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "description": "UUID; muc suy ra tu vung cu co id on dinh (uuid v5 cua zone_id:creative_id)"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "video",
+                                    "image",
+                                    "text"
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "media_id": {
+                                  "type": "string",
+                                  "description": "video/anh trong kho: id trong creatives[]"
+                                },
+                                "url": {
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "description": "chi tep AMS; thiet bi PHAI kiem tra truoc khi phat"
+                                },
+                                "delivery": {
+                                  "type": "string",
+                                  "enum": [
+                                    "stream",
+                                    "external"
+                                  ],
+                                  "description": "vang mat = tep AMS; 'stream' = link da duyet; 'external' = link https ngoai (khong sha256)"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "mp4",
+                                    "webm",
+                                    "hls",
+                                    "dash"
+                                  ]
+                                },
+                                "size_bytes": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "duration_ms": {
+                                  "type": "integer",
+                                  "description": "thoi luong that cua video neu biet"
+                                },
+                                "px_w": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "px_h": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "text_content": {
+                                  "type": "string",
+                                  "description": "muc text: van ban thuan"
+                                },
+                                "rich": {
+                                  "type": "string",
+                                  "description": "muc text: HTML da lam sach (p, b, i, u, s, span, br)"
+                                },
+                                "style": {
+                                  "type": "object",
+                                  "additionalProperties": {},
+                                  "description": "muc text: {color, background, font_size, align, valign, font_family, bold, italic, underline}"
+                                },
+                                "duration": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 3600,
+                                  "description": "giay do nguoi dung dat"
+                                },
+                                "play_s": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ],
+                                  "description": "giay hien thi da giai: anh/text = duration ?? 8; video = duration (cat) hoac null = phat het tep"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "name",
+                                "play_s"
+                              ],
+                              "additionalProperties": true
+                            },
+                            "description": "CHI vung video/image: danh sach phat tuan tu (docs/PLAYLIST.md); thieu = app cu dung creative_ids + durations"
+                          },
+                          "loop": {
+                            "type": "boolean",
+                            "description": "CHI vung video/image: het danh sach thi phat lai tu dau (mac dinh true)"
                           }
                         },
                         "required": [
@@ -3503,6 +3668,7 @@
                             "enum": [
                               "video",
                               "image",
+                              "playlist",
                               "marquee",
                               "text",
                               "clock",
@@ -3630,7 +3796,7 @@
                               "minimum": 1,
                               "maximum": 3600
                             },
-                            "description": "CHI vung video/image: giay hien thi theo creative_id; anh thieu = 5 s, video thieu = phat het"
+                            "description": "CHI vung video/image: giay hien thi theo creative_id; anh thieu = 8 s, video thieu = phat het (ban sao cho app cu; app moi dung playlist)"
                           },
                           "creative_ids": {
                             "type": "array",
@@ -3638,6 +3804,117 @@
                               "type": "string"
                             },
                             "description": "CHI vung video/image: tep phat o vung nay, theo thu tu"
+                          },
+                          "playlist": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "description": "UUID; muc suy ra tu vung cu co id on dinh (uuid v5 cua zone_id:creative_id)"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "video",
+                                    "image",
+                                    "text"
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "media_id": {
+                                  "type": "string",
+                                  "description": "video/anh trong kho: id trong creatives[]"
+                                },
+                                "url": {
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "description": "chi tep AMS; thiet bi PHAI kiem tra truoc khi phat"
+                                },
+                                "delivery": {
+                                  "type": "string",
+                                  "enum": [
+                                    "stream",
+                                    "external"
+                                  ],
+                                  "description": "vang mat = tep AMS; 'stream' = link da duyet; 'external' = link https ngoai (khong sha256)"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "mp4",
+                                    "webm",
+                                    "hls",
+                                    "dash"
+                                  ]
+                                },
+                                "size_bytes": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "duration_ms": {
+                                  "type": "integer",
+                                  "description": "thoi luong that cua video neu biet"
+                                },
+                                "px_w": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "px_h": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "text_content": {
+                                  "type": "string",
+                                  "description": "muc text: van ban thuan"
+                                },
+                                "rich": {
+                                  "type": "string",
+                                  "description": "muc text: HTML da lam sach (p, b, i, u, s, span, br)"
+                                },
+                                "style": {
+                                  "type": "object",
+                                  "additionalProperties": {},
+                                  "description": "muc text: {color, background, font_size, align, valign, font_family, bold, italic, underline}"
+                                },
+                                "duration": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 3600,
+                                  "description": "giay do nguoi dung dat"
+                                },
+                                "play_s": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ],
+                                  "description": "giay hien thi da giai: anh/text = duration ?? 8; video = duration (cat) hoac null = phat het tep"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "name",
+                                "play_s"
+                              ],
+                              "additionalProperties": true
+                            },
+                            "description": "CHI vung video/image: danh sach phat tuan tu (docs/PLAYLIST.md); thieu = app cu dung creative_ids + durations"
+                          },
+                          "loop": {
+                            "type": "boolean",
+                            "description": "CHI vung video/image: het danh sach thi phat lai tu dau (mac dinh true)"
                           }
                         },
                         "required": [

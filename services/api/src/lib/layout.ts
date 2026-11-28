@@ -1,9 +1,9 @@
 // Bo cuc da vung (migration 0021): kiem tra zod dung chung cho mau bo cuc va chuong trinh phat song. Toa do tinh theo % khung (0..100).
 import { z } from 'zod';
-import { richHtmlToPlain, sanitizeRich, RICH_LIMITS } from '@ams/shared';
+import { legacyMirror, playlistSchema, type PlaylistItem, richHtmlToPlain, sanitizeRich, RICH_LIMITS } from '@ams/shared';
 
-export const ZONE_TYPES = ['video', 'image', 'marquee', 'text', 'clock', 'weather', 'qr'] as const;
-export const MEDIA_ZONE_TYPES = ['video', 'image'] as const;
+export const ZONE_TYPES = ['video', 'image', 'playlist', 'marquee', 'text', 'clock', 'weather', 'qr'] as const;
+export const MEDIA_ZONE_TYPES = ['video', 'image', 'playlist'] as const;
 export const MAX_ZONES = 8;
 
 const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Màu dạng #RRGGBB');
@@ -62,16 +62,22 @@ export const zoneSchema = z
     qr: qrSchema.optional(),
     weather: weatherSchema.optional(),
     /** vung video/anh: thoi gian hien thi (giay, 1..3600) theo ma tu lieu. Anh thieu = 5 s; video thieu = phat het. */
-    durations: z.record(z.string().min(1).max(64), z.number().int().min(1).max(3600)).refine((r) => Object.keys(r).length <= 100, 'Tối đa 100 tệp').optional(),
+    durations: z.record(z.string().min(1).max(64), z.number().int().min(1).max(3600)).refine((r) => Object.keys(r).length <= 100, 'Tối đa 100 tệp').nullish(),
+    /** vung video/anh: danh sach phat tuan tu nhieu muc video/anh/van ban (docs/PLAYLIST.md). Co `playlist` thi `durations` cu duoc may chu tu suy ra tu do. */
+    playlist: playlistSchema.optional(),
+    /** lap lai danh sach khi het (mac dinh true) */
+    loop: z.boolean().optional(),
   })
   .refine((v) => v.x + v.w <= 100.01 && v.y + v.h <= 100.01, { message: 'Vùng vượt ra ngoài khung (x+w và y+h tối đa 100%)' })
   .transform((v, ctx) => {
     if (v.type !== 'text' && v.type !== 'marquee') {
       const { rich: _r, ...rest } = v;
-      if (v.type !== 'video' && v.type !== 'image') { const { durations: _d, ...r2 } = rest; return r2; }
+      if (v.type !== 'video' && v.type !== 'image' && v.type !== 'playlist') { const { durations: _d, playlist: _p, loop: _l, ...r2 } = rest; return r2; }
+      if (rest.durations === null) delete (rest as { durations?: unknown }).durations;
+      if (rest.playlist) return { ...rest, durations: legacyMirror(rest.playlist).durations }; // nguon su that = playlist; durations chi la ban sao cho app cu
       return rest;
     }
-    if (v.durations) { const { durations: _d, ...r3 } = v; v = r3 as typeof v; }
+    if (v.durations || v.playlist || v.loop !== undefined) { const { durations: _d, playlist: _p, loop: _l, ...r3 } = v; v = r3 as typeof v; }
     if (v.rich !== undefined) {
       const clean = sanitizeRich(v.rich, { singleLine: v.type === 'marquee' });
       const { rich: _r, ...rest } = v;
@@ -89,11 +95,11 @@ export const zonesSchema = z
   .refine((a) => new Set(a.map((x) => x.id)).size === a.length, { message: 'Mã vùng bị trùng' });
 
 export const orientationSchema = z.enum(['landscape', 'portrait']);
-export type Zone = z.infer<typeof zoneSchema>;
+export type Zone = z.infer<typeof zoneSchema> & { playlist?: PlaylistItem[]; loop?: boolean; durations?: Record<string, number>; creative_ids?: string[]; playlist_total_s?: number };
 
 export const layoutSchema = z.object({
   template_id: z.string().max(64).nullable().optional(),
   orientation: orientationSchema.default('landscape'),
   zones: zonesSchema,
 });
-export type Layout = z.infer<typeof layoutSchema>;
+export type Layout = Omit<z.infer<typeof layoutSchema>, 'zones'> & { zones: Zone[] };

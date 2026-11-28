@@ -440,6 +440,20 @@ export interface components {
                 duration_ms: number;
             } & {
                 [key: string]: unknown;
+            }) | ({
+                /** @constant */
+                type: "item_impression";
+                log_id: string;
+                program_id: string;
+                zone_id: string;
+                item_id: string;
+                media_id?: string;
+                /** @enum {string} */
+                item_type: "video" | "image" | "text";
+                /** Format: date-time */
+                played_at: string;
+            } & {
+                [key: string]: unknown;
             }))[];
         } & {
             [key: string]: unknown;
@@ -711,7 +725,7 @@ export interface components {
                     zones: ({
                         id: string;
                         /** @enum {string} */
-                        type: "video" | "image" | "marquee" | "text" | "clock" | "weather" | "qr";
+                        type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr";
                         /** @description % khung, 0..100 */
                         x: number;
                         y: number;
@@ -761,12 +775,53 @@ export interface components {
                         } & {
                             [key: string]: unknown;
                         };
-                        /** @description CHI vung video/image: giay hien thi theo creative_id; anh thieu = 5 s, video thieu = phat het */
+                        /** @description CHI vung video/image: giay hien thi theo creative_id; anh thieu = 8 s, video thieu = phat het (ban sao cho app cu; app moi dung playlist) */
                         durations?: {
                             [key: string]: number;
                         };
                         /** @description CHI vung video/image: tep phat o vung nay, theo thu tu */
                         creative_ids?: string[];
+                        /** @description CHI vung video/image: danh sach phat tuan tu (docs/PLAYLIST.md); thieu = app cu dung creative_ids + durations */
+                        playlist?: ({
+                            /** @description UUID; muc suy ra tu vung cu co id on dinh (uuid v5 cua zone_id:creative_id) */
+                            id: string;
+                            /** @enum {string} */
+                            type: "video" | "image" | "text";
+                            name: string;
+                            /** @description video/anh trong kho: id trong creatives[] */
+                            media_id?: string;
+                            url?: string;
+                            /** @description chi tep AMS; thiet bi PHAI kiem tra truoc khi phat */
+                            sha256?: string;
+                            /**
+                             * @description vang mat = tep AMS; 'stream' = link da duyet; 'external' = link https ngoai (khong sha256)
+                             * @enum {string}
+                             */
+                            delivery?: "stream" | "external";
+                            /** @enum {string} */
+                            kind?: "mp4" | "webm" | "hls" | "dash";
+                            size_bytes?: number | null;
+                            /** @description thoi luong that cua video neu biet */
+                            duration_ms?: number;
+                            px_w?: number | null;
+                            px_h?: number | null;
+                            /** @description muc text: van ban thuan */
+                            text_content?: string;
+                            /** @description muc text: HTML da lam sach (p, b, i, u, s, span, br) */
+                            rich?: string;
+                            /** @description muc text: {color, background, font_size, align, valign, font_family, bold, italic, underline} */
+                            style?: {
+                                [key: string]: unknown;
+                            };
+                            /** @description giay do nguoi dung dat */
+                            duration?: number;
+                            /** @description giay hien thi da giai: anh/text = duration ?? 8; video = duration (cat) hoac null = phat het tep */
+                            play_s: number | null;
+                        } & {
+                            [key: string]: unknown;
+                        })[];
+                        /** @description CHI vung video/image: het danh sach thi phat lai tu dau (mac dinh true) */
+                        loop?: boolean;
                     } & {
                         [key: string]: unknown;
                     })[];
@@ -894,7 +949,7 @@ export interface components {
                     zones: ({
                         id: string;
                         /** @enum {string} */
-                        type: "video" | "image" | "marquee" | "text" | "clock" | "weather" | "qr";
+                        type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr";
                         /** @description % khung, 0..100 */
                         x: number;
                         y: number;
@@ -944,12 +999,53 @@ export interface components {
                         } & {
                             [key: string]: unknown;
                         };
-                        /** @description CHI vung video/image: giay hien thi theo creative_id; anh thieu = 5 s, video thieu = phat het */
+                        /** @description CHI vung video/image: giay hien thi theo creative_id; anh thieu = 8 s, video thieu = phat het (ban sao cho app cu; app moi dung playlist) */
                         durations?: {
                             [key: string]: number;
                         };
                         /** @description CHI vung video/image: tep phat o vung nay, theo thu tu */
                         creative_ids?: string[];
+                        /** @description CHI vung video/image: danh sach phat tuan tu (docs/PLAYLIST.md); thieu = app cu dung creative_ids + durations */
+                        playlist?: ({
+                            /** @description UUID; muc suy ra tu vung cu co id on dinh (uuid v5 cua zone_id:creative_id) */
+                            id: string;
+                            /** @enum {string} */
+                            type: "video" | "image" | "text";
+                            name: string;
+                            /** @description video/anh trong kho: id trong creatives[] */
+                            media_id?: string;
+                            url?: string;
+                            /** @description chi tep AMS; thiet bi PHAI kiem tra truoc khi phat */
+                            sha256?: string;
+                            /**
+                             * @description vang mat = tep AMS; 'stream' = link da duyet; 'external' = link https ngoai (khong sha256)
+                             * @enum {string}
+                             */
+                            delivery?: "stream" | "external";
+                            /** @enum {string} */
+                            kind?: "mp4" | "webm" | "hls" | "dash";
+                            size_bytes?: number | null;
+                            /** @description thoi luong that cua video neu biet */
+                            duration_ms?: number;
+                            px_w?: number | null;
+                            px_h?: number | null;
+                            /** @description muc text: van ban thuan */
+                            text_content?: string;
+                            /** @description muc text: HTML da lam sach (p, b, i, u, s, span, br) */
+                            rich?: string;
+                            /** @description muc text: {color, background, font_size, align, valign, font_family, bold, italic, underline} */
+                            style?: {
+                                [key: string]: unknown;
+                            };
+                            /** @description giay do nguoi dung dat */
+                            duration?: number;
+                            /** @description giay hien thi da giai: anh/text = duration ?? 8; video = duration (cat) hoac null = phat het tep */
+                            play_s: number | null;
+                        } & {
+                            [key: string]: unknown;
+                        })[];
+                        /** @description CHI vung video/image: het danh sach thi phat lai tu dau (mac dinh true) */
+                        loop?: boolean;
                     } & {
                         [key: string]: unknown;
                     })[];

@@ -6,6 +6,7 @@ import { KvNonceStore, authenticateDevice, readEnvelope, verifyEnvelope, type Au
 import { DeviceDirectory, type DeviceRec } from './devices.js';
 import { DEFAULT_POLICY, INGEST_TOPIC, processEvents, type EventPolicy } from './events.js';
 import { extractEvents } from './events-compat.js';
+import { isItemImpressionRaw, processItemImpressions } from './item-events.js';
 import { recordEventStats, sweepEventStats } from './event-stats.js';
 import { CtlCache, DEFAULT_INTERVALS, RpsLoad, computeInterval, retryAfter, type IntervalCfg, type LoadFn } from './load.js';
 import { ManifestService, groupOfDevice, groupString, parseGroup } from './manifest.js';
@@ -13,7 +14,7 @@ import { issuePairingCode } from './pairing.js';
 import { ttlForConfig } from './heartbeat-ttl.js';
 import { KvPresence, type Presence } from './presence.js';
 import { ackCommands, hasCommandFlag, type Delivered, sweepCommands, takeDeliverable } from './commands.js';
-import { MAX_ACK_BODY_BYTES, MAX_BODY_BYTES, MAX_HEARTBEAT_BODY_BYTES, MAX_LOGS_BODY_BYTES, PAIR_CODE_TTL_S, PROTOCOL_VERSION, commandAckBody, heartbeatBody, logsBody, registerBody } from './protocol.js';
+import { MAX_ACK_BODY_BYTES, MAX_EVENTS_BODY_BYTES, MAX_HEARTBEAT_BODY_BYTES, MAX_LOGS_BODY_BYTES, PAIR_CODE_TTL_S, PROTOCOL_VERSION, commandAckBody, heartbeatBody, logsBody, registerBody } from './protocol.js';
 import { sweepDeviceLogs } from './logs.js';
 import { HttpProblem, clientIp, defaultRng, defer, envInt, nowSec, problem, type Rng } from './util.js';
 import { redeemPairingCode } from './pairing.js';
@@ -682,13 +683,15 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
   // ------------------------------------------------------------------ events
   app.post('/v1/events', async (c) => {
     await shedCheck('events');
-    const body = await readBody(c, MAX_BODY_BYTES);
+    const body = await readBody(c, MAX_EVENTS_BODY_BYTES);
     const dev = await authenticateDevice(c, deps, body);
     await rateLimit(`ev:${dev.id}`, evLimit, 60, 'lo su kien theo thiet bi');
     const parsed = parseJson<unknown>(body);
-    const { events: evs, alias: bodyAlias } = extractEvents(parsed);
-    if (!evs || evs.length < 1) throw new HttpProblem('validation_failed', 'Can mang events (1..50 su kien).');
-    if (evs.length > 50) throw new HttpProblem('validation_failed', 'Toi da 50 su kien moi lo.', { max: 50, got: evs.length });
+    const { events: allEvs, alias: bodyAlias } = extractEvents(parsed);
+    const evs = allEvs?.filter((e) => !isItemImpressionRaw(e)) ?? [];
+    const itemEvs = allEvs?.filter((e) => isItemImpressionRaw(e)) ?? [];
+    if (!allEvs || allEvs.length < 1) throw new HttpProblem('validation_failed', 'Can mang events (1..50 su kien).');
+    if (allEvs.length > 50) throw new HttpProblem('validation_failed', 'Toi da 50 su kien moi lo.', { max: 50, got: allEvs.length });
     const view = await manifests.get(await manifests.groupFor(dev));
     const campIds = evs.flatMap((e) => {
       const o = e as { campaign_id?: unknown; campaignId?: unknown } | null;
@@ -698,13 +701,32 @@ export function createGateway(rt: Runtime, opts: GatewayOptions = {}): Gateway {
     const rewardModels = await rewardCfg.get(campIds);
     const { result, msg, extras } = await processEvents(rt, dev, evs, view, policy, rewardModels);
     if (bodyAlias) extras.aliases[bodyAlias] = 1;
+    // item_impression: chi bao cao (khong tinh tien). Loi DB noi len (5xx) de app gui lai nguyen lo — khu trung theo log_id nen an toan.
+    const item = await processItemImpressions(rt, dev, itemEvs, policy);
+    if (itemEvs.length > 0) {
+      extras.items = { ...(item.stored ? { stored: item.stored } : {}), ...(item.duplicates ? { duplicate: item.duplicates } : {}) };
+      for (const r of item.rejected) extras.items[`rej:${r.reason}`] = (extras.items[`rej:${r.reason}`] ?? 0) + 1;
+    }
     // thong ke theo thiet bi cho "Chan doan dong bo" (loi thong ke KHONG duoc lam hong viec nhan su kien)
     await recordEventStats(rt, dev.id, result, extras).catch(() => undefined);
     if (msg) {
       await postViewRewards({ rt, policy: viewerPolicy }, dev, msg.impressions); // so cai truoc, hang doi sau: gui lai se khu trung theo event_id
       await rt.queue.send(INGEST_TOPIC, msg);
     }
-    return c.json(result, 202);
+    if (itemEvs.length === 0) return c.json(result, 202);
+    // item_impression: stored + duplicates deu la "da nhan" (app xoa khoi hang doi); rejected la vinh vien (khong gui lai)
+    const itemAccepted = item.stored + item.duplicates;
+    return c.json(
+      {
+        ...result,
+        accepted: result.accepted + itemAccepted,
+        valid: result.valid + (dev.trust >= 1 ? itemAccepted : 0),
+        flagged: result.flagged + (dev.trust >= 1 ? 0 : itemAccepted),
+        rejected: [...result.rejected, ...item.rejected],
+        item_impressions: { accepted: itemAccepted, stored: item.stored, duplicates: item.duplicates, rejected: item.rejected.length },
+      },
+      202,
+    );
   });
 
   // ---- phia nguoi xem (WP-18): /v1/viewer/*, /v1/wallet, /v1/withdraw, /v1/interactions, /v1/tax-authorization

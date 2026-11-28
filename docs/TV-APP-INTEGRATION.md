@@ -112,7 +112,11 @@ Manifest có thể chứa creative `delivery: "stream"` (`url`, `kind` mp4/webm/
 
 ### 3e. Thời lượng tư liệu trong vùng (`zones[].durations`)
 
-Mỗi vùng `video`/`image` của `layout` có thể có `durations: {creative_id: giây}` (1..3600). App TV: ảnh hiển thị `durations[id]` giây rồi sang tệp kế (thiếu trường hoặc thiếu khóa → dùng mặc định cũ, khuyến nghị 5 giây); video phát hết tệp, còn nếu có `durations[id]` thì cắt ở số giây đó (đặt hẹn giờ chuyển tệp). Tệp dán link (`delivery: stream`) áp dụng giống video/ảnh theo `kind`. Vùng chỉ có một ảnh thì giữ nguyên, không xoay vòng.
+Mỗi vùng `video`/`image` của `layout` có thể có `durations: {creative_id: giây}` (1..3600). App TV: ảnh hiển thị `durations[id]` giây rồi sang tệp kế (thiếu trường hoặc thiếu khóa → mặc định **8 giây**, trước đây 5 giây); video phát hết tệp, còn nếu có `durations[id]` thì cắt ở số giây đó (đặt hẹn giờ chuyển tệp). Tệp dán link (`delivery: stream`) áp dụng giống video/ảnh theo `kind`. Vùng chỉ có một ảnh thì giữ nguyên, không xoay vòng.
+
+### 3f. Vùng danh sách phát (`zones[].playlist`, `loop`)
+
+Vùng video/ảnh/`playlist` mang `playlist` (video, ảnh, văn bản phát tuần tự). App mới dùng **chỉ** `playlist` (vùng cũ đã được máy chủ đọc thành playlist; `creative_ids`/`durations` vẫn còn cho app cũ). Luật phát, ví dụ JSON, lô `item_impression` (hàng đợi cục bộ, gửi mỗi 5 phút hoặc 50 log, thử lại idempotent): xem **`docs/PLAYLIST.md`**. Mặc định ảnh/văn bản 8 giây; video theo thời lượng thật của tệp.
 
 ### 3d. Văn bản định dạng trong bố cục đa vùng (`zones[].rich`)
 

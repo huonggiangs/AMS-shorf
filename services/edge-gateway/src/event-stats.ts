@@ -16,6 +16,7 @@ export async function recordEventStats(rt: Runtime, deviceId: string, result: Ev
   for (const r of result.rejected) add(`rej:${r.reason}`, 1);
   for (const [k, n] of Object.entries(extras.flags)) add(`flag:${k}`, n);
   for (const [k, n] of Object.entries(extras.aliases)) add(`alias:${k}`, n);
+  for (const [k, n] of Object.entries(extras.items ?? {})) add(`item:${k}`, n);
   if (rows.size === 0) return;
   await rt.db.batch(
     [...rows].map(([reason, n]) => ({

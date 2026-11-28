@@ -477,7 +477,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:323
+      x-ams-source: services/api/src/routes/broadcast.ts:400
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -506,7 +506,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:433
+      x-ams-source: services/api/src/routes/broadcast.ts:510
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -779,7 +779,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:402
+      x-ams-source: services/api/src/routes/broadcast.ts:479
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -809,7 +809,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:330
+      x-ams-source: services/api/src/routes/broadcast.ts:407
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -838,7 +838,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:337
+      x-ams-source: services/api/src/routes/broadcast.ts:414
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -880,7 +880,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:364
+      x-ams-source: services/api/src/routes/broadcast.ts:441
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -915,7 +915,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: delete
-      x-ams-source: services/api/src/routes/broadcast.ts:533
+      x-ams-source: services/api/src/routes/broadcast.ts:616
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -950,7 +950,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:431
+      x-ams-source: services/api/src/routes/broadcast.ts:508
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -984,7 +984,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:460
+      x-ams-source: services/api/src/routes/broadcast.ts:539
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1026,7 +1026,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:416
+      x-ams-source: services/api/src/routes/broadcast.ts:493
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1061,7 +1061,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:500
+      x-ams-source: services/api/src/routes/broadcast.ts:583
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1097,7 +1097,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: write
-      x-ams-source: services/api/src/routes/broadcast.ts:519
+      x-ams-source: services/api/src/routes/broadcast.ts:602
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1133,7 +1133,7 @@ paths:
       x-ams-permission:
         module: schedule
         action: view
-      x-ams-source: services/api/src/routes/broadcast.ts:376
+      x-ams-source: services/api/src/routes/broadcast.ts:453
       description: |-
         Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1168,7 +1168,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:294
+      x-ams-source: services/api/src/routes/campaigns.ts:293
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1195,7 +1195,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:317
+      x-ams-source: services/api/src/routes/campaigns.ts:316
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1235,7 +1235,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: delete
-      x-ams-source: services/api/src/routes/campaigns.ts:597
+      x-ams-source: services/api/src/routes/campaigns.ts:592
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1270,7 +1270,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:300
+      x-ams-source: services/api/src/routes/campaigns.ts:299
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1302,7 +1302,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:345
+      x-ams-source: services/api/src/routes/campaigns.ts:344
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1342,17 +1342,11 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:473
+      x-ams-source: services/api/src/routes/campaigns.ts:472
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
         Chỉ tài khoản nội bộ.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminPostCampaignsByIdApproveRequest"
       responses:
         "200":
           description: Thành công
@@ -1382,7 +1376,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:580
+      x-ams-source: services/api/src/routes/campaigns.ts:575
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1418,7 +1412,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:429
+      x-ams-source: services/api/src/routes/campaigns.ts:428
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1454,7 +1448,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:306
+      x-ams-source: services/api/src/routes/campaigns.ts:305
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1487,7 +1481,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:556
+      x-ams-source: services/api/src/routes/campaigns.ts:551
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1529,7 +1523,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:442
+      x-ams-source: services/api/src/routes/campaigns.ts:441
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1565,7 +1559,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: approve
-      x-ams-source: services/api/src/routes/campaigns.ts:381
+      x-ams-source: services/api/src/routes/campaigns.ts:380
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -1607,7 +1601,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:395
+      x-ams-source: services/api/src/routes/campaigns.ts:394
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6058,7 +6052,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:593
+      x-ams-source: services/api/src/routes/media.ts:571
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6076,43 +6070,6 @@ paths:
           $ref: "#/components/responses/Error"
       security:
         - cookieAuth: []
-  /admin/v1/media/attest-bulk:
-    post:
-      operationId: adminPostMediaAttestBulk
-      tags:
-        - media
-      summary: POST /admin/v1/media/attest-bulk
-      parameters: []
-      x-ams-permission:
-        module: media
-        action: approve
-      x-ams-source: services/api/src/routes/media.ts:1065
-      description: |-
-        Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
-
-        Chỉ tài khoản nội bộ.
-
-        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminPostMediaAttestBulkRequest"
-      responses:
-        "200":
-          description: Thành công
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GenericObject"
-        4XX:
-          $ref: "#/components/responses/Error"
-        5XX:
-          $ref: "#/components/responses/Error"
-      security:
-        - cookieAuth: []
-          csrfToken: []
   /admin/v1/media/bulk-delete:
     post:
       operationId: adminPostMediaBulkDelete
@@ -6123,7 +6080,7 @@ paths:
       x-ams-permission:
         module: media
         action: delete
-      x-ams-source: services/api/src/routes/media.ts:1111
+      x-ams-source: services/api/src/routes/media.ts:1008
       description: |-
         Quyền cần có: mô-đun `media`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6158,7 +6115,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:754
+      x-ams-source: services/api/src/routes/media.ts:730
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6195,7 +6152,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:825
+      x-ams-source: services/api/src/routes/media.ts:799
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6260,7 +6217,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:611
+      x-ams-source: services/api/src/routes/media.ts:589
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6300,7 +6257,7 @@ paths:
       x-ams-permission:
         module: media
         action: delete
-      x-ams-source: services/api/src/routes/media.ts:1188
+      x-ams-source: services/api/src/routes/media.ts:1085
       description: |-
         Quyền cần có: mô-đun `media`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6335,7 +6292,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:600
+      x-ams-source: services/api/src/routes/media.ts:578
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6407,7 +6364,7 @@ paths:
       x-ams-permission:
         module: media
         action: approve
-      x-ams-source: services/api/src/routes/media.ts:974
+      x-ams-source: services/api/src/routes/media.ts:948
       description: |-
         Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6434,83 +6391,6 @@ paths:
       security:
         - cookieAuth: []
           csrfToken: []
-  /admin/v1/media/{id}/attest:
-    post:
-      operationId: adminPostMediaByIdAttest
-      tags:
-        - media
-      summary: POST /admin/v1/media/{id}/attest
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      x-ams-permission:
-        module: media
-        action: approve
-      x-ams-source: services/api/src/routes/media.ts:1039
-      description: |-
-        Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
-
-        Chỉ tài khoản nội bộ.
-
-        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminPostMediaByIdAttestRequest"
-      responses:
-        "200":
-          description: Thành công
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GenericObject"
-        4XX:
-          $ref: "#/components/responses/Error"
-        5XX:
-          $ref: "#/components/responses/Error"
-      security:
-        - cookieAuth: []
-          csrfToken: []
-  /admin/v1/media/{id}/attestations:
-    get:
-      operationId: adminGetMediaByIdAttestations
-      tags:
-        - media
-      summary: GET /admin/v1/media/{id}/attestations
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      x-ams-permission:
-        module: media
-        action: view
-      x-ams-source: services/api/src/routes/media.ts:1049
-      description: |-
-        Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
-
-        Chỉ tài khoản nội bộ.
-
-        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
-      responses:
-        "200":
-          description: Thành công
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GenericObject"
-        4XX:
-          $ref: "#/components/responses/Error"
-        5XX:
-          $ref: "#/components/responses/Error"
-      security:
-        - cookieAuth: []
   /admin/v1/media/{id}/confirm:
     post:
       operationId: adminPostMediaByIdConfirm
@@ -6526,7 +6406,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:732
+      x-ams-source: services/api/src/routes/media.ts:708
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6568,7 +6448,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:684
+      x-ams-source: services/api/src/routes/media.ts:660
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6604,7 +6484,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:799
+      x-ams-source: services/api/src/routes/media.ts:773
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6754,7 +6634,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:943
+      x-ams-source: services/api/src/routes/media.ts:917
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6837,7 +6717,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:885
+      x-ams-source: services/api/src/routes/media.ts:859
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6908,7 +6788,7 @@ paths:
       x-ams-permission:
         module: media
         action: approve
-      x-ams-source: services/api/src/routes/media.ts:1091
+      x-ams-source: services/api/src/routes/media.ts:989
       description: |-
         Quyền cần có: mô-đun `media`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -6992,7 +6872,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:933
+      x-ams-source: services/api/src/routes/media.ts:907
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -7026,7 +6906,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:908
+      x-ams-source: services/api/src/routes/media.ts:882
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -8297,6 +8177,102 @@ paths:
       tags:
         - reports
       summary: GET /admin/v1/reports/views/export.csv
+      parameters: []
+      description: |-
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/reports/views/items:
+    get:
+      operationId: adminGetReportsViewsItems
+      tags:
+        - reports
+      summary: GET /admin/v1/reports/views/items
+      parameters: []
+      description: |-
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/reports/views/items/export.csv:
+    get:
+      operationId: adminGetReportsViewsItemsExport.csv
+      tags:
+        - reports
+      summary: GET /admin/v1/reports/views/items/export.csv
+      parameters: []
+      description: |-
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/reports/views/items/report.html:
+    get:
+      operationId: adminGetReportsViewsItemsReport.html
+      tags:
+        - reports
+      summary: GET /admin/v1/reports/views/items/report.html
+      parameters: []
+      description: |-
+        Chỉ tài khoản nội bộ.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /admin/v1/reports/views/items/report.pdf:
+    get:
+      operationId: adminGetReportsViewsItemsReport.pdf
+      tags:
+        - reports
+      summary: GET /admin/v1/reports/views/items/report.pdf
       parameters: []
       description: |-
         Chỉ tài khoản nội bộ.
@@ -10153,7 +10129,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:294
+      x-ams-source: services/api/src/routes/campaigns.ts:293
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10180,7 +10156,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:317
+      x-ams-source: services/api/src/routes/campaigns.ts:316
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10220,7 +10196,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:300
+      x-ams-source: services/api/src/routes/campaigns.ts:299
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10252,7 +10228,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:345
+      x-ams-source: services/api/src/routes/campaigns.ts:344
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10292,7 +10268,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:429
+      x-ams-source: services/api/src/routes/campaigns.ts:428
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10328,7 +10304,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: view
-      x-ams-source: services/api/src/routes/campaigns.ts:306
+      x-ams-source: services/api/src/routes/campaigns.ts:305
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10361,7 +10337,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:442
+      x-ams-source: services/api/src/routes/campaigns.ts:441
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10397,7 +10373,7 @@ paths:
       x-ams-permission:
         module: campaigns
         action: write
-      x-ams-source: services/api/src/routes/campaigns.ts:395
+      x-ams-source: services/api/src/routes/campaigns.ts:394
       description: |-
         Quyền cần có: mô-đun `campaigns`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10968,7 +10944,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:593
+      x-ams-source: services/api/src/routes/media.ts:571
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -10996,7 +10972,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:754
+      x-ams-source: services/api/src/routes/media.ts:730
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11033,7 +11009,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:825
+      x-ams-source: services/api/src/routes/media.ts:799
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11068,7 +11044,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:611
+      x-ams-source: services/api/src/routes/media.ts:589
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11108,7 +11084,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:600
+      x-ams-source: services/api/src/routes/media.ts:578
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11180,7 +11156,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:732
+      x-ams-source: services/api/src/routes/media.ts:708
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11222,7 +11198,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:684
+      x-ams-source: services/api/src/routes/media.ts:660
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11258,7 +11234,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:799
+      x-ams-source: services/api/src/routes/media.ts:773
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11408,7 +11384,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:943
+      x-ams-source: services/api/src/routes/media.ts:917
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11491,7 +11467,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:885
+      x-ams-source: services/api/src/routes/media.ts:859
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11562,7 +11538,7 @@ paths:
       x-ams-permission:
         module: media
         action: view
-      x-ams-source: services/api/src/routes/media.ts:933
+      x-ams-source: services/api/src/routes/media.ts:907
       description: |-
         Quyền cần có: mô-đun `media`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11596,7 +11572,7 @@ paths:
       x-ams-permission:
         module: media
         action: write
-      x-ams-source: services/api/src/routes/media.ts:908
+      x-ams-source: services/api/src/routes/media.ts:882
       description: |-
         Quyền cần có: mô-đun `media`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).
 
@@ -11675,6 +11651,102 @@ paths:
       tags:
         - reports
       summary: GET /portal/v1/reports/views/export.csv
+      parameters: []
+      description: |-
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/reports/views/items:
+    get:
+      operationId: portalGetReportsViewsItems
+      tags:
+        - reports
+      summary: GET /portal/v1/reports/views/items
+      parameters: []
+      description: |-
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/reports/views/items/export.csv:
+    get:
+      operationId: portalGetReportsViewsItemsExport.csv
+      tags:
+        - reports
+      summary: GET /portal/v1/reports/views/items/export.csv
+      parameters: []
+      description: |-
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/reports/views/items/report.html:
+    get:
+      operationId: portalGetReportsViewsItemsReport.html
+      tags:
+        - reports
+      summary: GET /portal/v1/reports/views/items/report.html
+      parameters: []
+      description: |-
+        Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+
+        Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+      responses:
+        "200":
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericObject"
+        4XX:
+          $ref: "#/components/responses/Error"
+        5XX:
+          $ref: "#/components/responses/Error"
+      security:
+        - cookieAuth: []
+  /portal/v1/reports/views/items/report.pdf:
+    get:
+      operationId: portalGetReportsViewsItemsReport.pdf
+      tags:
+        - reports
+      summary: GET /portal/v1/reports/views/items/report.pdf
       parameters: []
       description: |-
         Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
@@ -12219,6 +12291,7 @@ components:
                         enum:
                           - video
                           - image
+                          - playlist
                           - marquee
                           - text
                           - clock
@@ -12362,14 +12435,114 @@ components:
                           - mode
                         additionalProperties: true
                       durations:
-                        type: object
-                        additionalProperties:
-                          type: integer
-                          minimum: 1
-                          maximum: 3600
-                        propertyNames:
-                          minLength: 1
-                          maxLength: 64
+                        anyOf:
+                          - type: object
+                            additionalProperties:
+                              type: integer
+                              minimum: 1
+                              maximum: 3600
+                            propertyNames:
+                              minLength: 1
+                              maxLength: 64
+                          - type: "null"
+                      playlist:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+                            type:
+                              type: string
+                              enum:
+                                - video
+                                - image
+                                - text
+                            name:
+                              type: string
+                              minLength: 1
+                              maxLength: 120
+                            media_id:
+                              type: string
+                              minLength: 1
+                              maxLength: 64
+                            url:
+                              type: string
+                              maxLength: 500
+                            text_content:
+                              type: string
+                              maxLength: 2000
+                            rich:
+                              type: string
+                              maxLength: 20000
+                            style:
+                              type: object
+                              properties:
+                                color:
+                                  type: string
+                                  maxLength: 40
+                                background:
+                                  type: string
+                                  maxLength: 40
+                                bg_color:
+                                  type: string
+                                  maxLength: 40
+                                text_color:
+                                  type: string
+                                  maxLength: 40
+                                rich:
+                                  type: string
+                                  maxLength: 20000
+                                font_size:
+                                  type: integer
+                                  minimum: 8
+                                  maximum: 200
+                                align:
+                                  type: string
+                                  enum:
+                                    - left
+                                    - center
+                                    - right
+                                    - justify
+                                valign:
+                                  type: string
+                                  enum:
+                                    - top
+                                    - middle
+                                    - bottom
+                                font_family:
+                                  type: string
+                                  enum:
+                                    - Roboto
+                                    - Arial
+                                    - Verdana
+                                    - Tahoma
+                                    - Georgia
+                                    - Times New Roman
+                                    - Courier New
+                                    - sans-serif
+                                    - serif
+                                    - monospace
+                                bold:
+                                  type: boolean
+                                italic:
+                                  type: boolean
+                                underline:
+                                  type: boolean
+                              additionalProperties: true
+                            duration:
+                              type: number
+                              minimum: 1
+                              maximum: 3600
+                          required:
+                            - id
+                            - type
+                            - name
+                          additionalProperties: true
+                        maxItems: 50
+                      loop:
+                        type: boolean
                     required:
                       - id
                       - type
@@ -12402,26 +12575,6 @@ components:
       required:
         - name
         - target_type
-      additionalProperties: true
-    AdminPostCampaignsByIdApproveRequest:
-      type: object
-      properties:
-        attest:
-          type: object
-          properties:
-            accepted:
-              type: boolean
-              const: true
-            version:
-              type: string
-              minLength: 1
-              maxLength: 32
-            kid_safe:
-              type: boolean
-          required:
-            - accepted
-            - version
-          additionalProperties: true
       additionalProperties: true
     AdminPostCampaignsByIdRejectRequest:
       type: object
@@ -13342,6 +13495,7 @@ components:
                 enum:
                   - video
                   - image
+                  - playlist
                   - marquee
                   - text
                   - clock
@@ -13485,14 +13639,114 @@ components:
                   - mode
                 additionalProperties: true
               durations:
-                type: object
-                additionalProperties:
-                  type: integer
-                  minimum: 1
-                  maximum: 3600
-                propertyNames:
-                  minLength: 1
-                  maxLength: 64
+                anyOf:
+                  - type: object
+                    additionalProperties:
+                      type: integer
+                      minimum: 1
+                      maximum: 3600
+                    propertyNames:
+                      minLength: 1
+                      maxLength: 64
+                  - type: "null"
+              playlist:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+                    type:
+                      type: string
+                      enum:
+                        - video
+                        - image
+                        - text
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 120
+                    media_id:
+                      type: string
+                      minLength: 1
+                      maxLength: 64
+                    url:
+                      type: string
+                      maxLength: 500
+                    text_content:
+                      type: string
+                      maxLength: 2000
+                    rich:
+                      type: string
+                      maxLength: 20000
+                    style:
+                      type: object
+                      properties:
+                        color:
+                          type: string
+                          maxLength: 40
+                        background:
+                          type: string
+                          maxLength: 40
+                        bg_color:
+                          type: string
+                          maxLength: 40
+                        text_color:
+                          type: string
+                          maxLength: 40
+                        rich:
+                          type: string
+                          maxLength: 20000
+                        font_size:
+                          type: integer
+                          minimum: 8
+                          maximum: 200
+                        align:
+                          type: string
+                          enum:
+                            - left
+                            - center
+                            - right
+                            - justify
+                        valign:
+                          type: string
+                          enum:
+                            - top
+                            - middle
+                            - bottom
+                        font_family:
+                          type: string
+                          enum:
+                            - Roboto
+                            - Arial
+                            - Verdana
+                            - Tahoma
+                            - Georgia
+                            - Times New Roman
+                            - Courier New
+                            - sans-serif
+                            - serif
+                            - monospace
+                        bold:
+                          type: boolean
+                        italic:
+                          type: boolean
+                        underline:
+                          type: boolean
+                      additionalProperties: true
+                    duration:
+                      type: number
+                      minimum: 1
+                      maximum: 3600
+                  required:
+                    - id
+                    - type
+                    - name
+                  additionalProperties: true
+                maxItems: 50
+              loop:
+                type: boolean
             required:
               - id
               - type
@@ -13623,41 +13877,6 @@ components:
       required:
         - name
       additionalProperties: false
-    AdminPostMediaAttestBulkRequest:
-      type: object
-      properties:
-        ids:
-          type: array
-          items:
-            type: string
-            minLength: 1
-            maxLength: 64
-          minItems: 1
-          maxItems: 200
-        attest:
-          type: object
-          properties:
-            accepted:
-              type: boolean
-              const: true
-            version:
-              type: string
-              minLength: 1
-              maxLength: 32
-            kid_safe:
-              type: boolean
-          required:
-            - accepted
-            - version
-          additionalProperties: true
-        confirm:
-          type: boolean
-          const: true
-      required:
-        - ids
-        - attest
-        - confirm
-      additionalProperties: true
     AdminPostMediaBulkDeleteRequest:
       type: object
       properties:
@@ -13684,47 +13903,6 @@ components:
           maxLength: 500
         confirm_full_view:
           type: boolean
-        attest:
-          type: object
-          properties:
-            accepted:
-              type: boolean
-              const: true
-            version:
-              type: string
-              minLength: 1
-              maxLength: 32
-            kid_safe:
-              type: boolean
-          required:
-            - accepted
-            - version
-          additionalProperties: true
-      additionalProperties: true
-    AdminPostMediaByIdAttestRequest:
-      type: object
-      properties:
-        attest:
-          type: object
-          properties:
-            accepted:
-              type: boolean
-              const: true
-            version:
-              type: string
-              minLength: 1
-              maxLength: 32
-            kid_safe:
-              type: boolean
-          required:
-            - accepted
-            - version
-          additionalProperties: true
-        content_version:
-          type: integer
-          minimum: 1
-      required:
-        - attest
       additionalProperties: true
     AdminPostMediaByIdConfirmRequest:
       type: object
@@ -13831,22 +14009,6 @@ components:
                 - not: {}
                 - {}
             - type: "null"
-        attest:
-          type: object
-          properties:
-            accepted:
-              type: boolean
-              const: true
-            version:
-              type: string
-              minLength: 1
-              maxLength: 32
-            kid_safe:
-              type: boolean
-          required:
-            - accepted
-            - version
-          additionalProperties: true
       required:
         - source
         - url
@@ -13954,22 +14116,6 @@ components:
                 - not: {}
                 - {}
             - type: "null"
-        attest:
-          type: object
-          properties:
-            accepted:
-              type: boolean
-              const: true
-            version:
-              type: string
-              minLength: 1
-              maxLength: 32
-            kid_safe:
-              type: boolean
-          required:
-            - accepted
-            - version
-          additionalProperties: true
       required:
         - name
         - content_type
@@ -14481,6 +14627,7 @@ components:
                         enum:
                           - video
                           - image
+                          - playlist
                           - marquee
                           - text
                           - clock
@@ -14624,14 +14771,114 @@ components:
                           - mode
                         additionalProperties: true
                       durations:
-                        type: object
-                        additionalProperties:
-                          type: integer
-                          minimum: 1
-                          maximum: 3600
-                        propertyNames:
-                          minLength: 1
-                          maxLength: 64
+                        anyOf:
+                          - type: object
+                            additionalProperties:
+                              type: integer
+                              minimum: 1
+                              maximum: 3600
+                            propertyNames:
+                              minLength: 1
+                              maxLength: 64
+                          - type: "null"
+                      playlist:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+                            type:
+                              type: string
+                              enum:
+                                - video
+                                - image
+                                - text
+                            name:
+                              type: string
+                              minLength: 1
+                              maxLength: 120
+                            media_id:
+                              type: string
+                              minLength: 1
+                              maxLength: 64
+                            url:
+                              type: string
+                              maxLength: 500
+                            text_content:
+                              type: string
+                              maxLength: 2000
+                            rich:
+                              type: string
+                              maxLength: 20000
+                            style:
+                              type: object
+                              properties:
+                                color:
+                                  type: string
+                                  maxLength: 40
+                                background:
+                                  type: string
+                                  maxLength: 40
+                                bg_color:
+                                  type: string
+                                  maxLength: 40
+                                text_color:
+                                  type: string
+                                  maxLength: 40
+                                rich:
+                                  type: string
+                                  maxLength: 20000
+                                font_size:
+                                  type: integer
+                                  minimum: 8
+                                  maximum: 200
+                                align:
+                                  type: string
+                                  enum:
+                                    - left
+                                    - center
+                                    - right
+                                    - justify
+                                valign:
+                                  type: string
+                                  enum:
+                                    - top
+                                    - middle
+                                    - bottom
+                                font_family:
+                                  type: string
+                                  enum:
+                                    - Roboto
+                                    - Arial
+                                    - Verdana
+                                    - Tahoma
+                                    - Georgia
+                                    - Times New Roman
+                                    - Courier New
+                                    - sans-serif
+                                    - serif
+                                    - monospace
+                                bold:
+                                  type: boolean
+                                italic:
+                                  type: boolean
+                                underline:
+                                  type: boolean
+                              additionalProperties: true
+                            duration:
+                              type: number
+                              minimum: 1
+                              maximum: 3600
+                          required:
+                            - id
+                            - type
+                            - name
+                          additionalProperties: true
+                        maxItems: 50
+                      loop:
+                        type: boolean
                     required:
                       - id
                       - type
@@ -15153,6 +15400,7 @@ components:
                 enum:
                   - video
                   - image
+                  - playlist
                   - marquee
                   - text
                   - clock
@@ -15296,14 +15544,114 @@ components:
                   - mode
                 additionalProperties: true
               durations:
-                type: object
-                additionalProperties:
-                  type: integer
-                  minimum: 1
-                  maximum: 3600
-                propertyNames:
-                  minLength: 1
-                  maxLength: 64
+                anyOf:
+                  - type: object
+                    additionalProperties:
+                      type: integer
+                      minimum: 1
+                      maximum: 3600
+                    propertyNames:
+                      minLength: 1
+                      maxLength: 64
+                  - type: "null"
+              playlist:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+                    type:
+                      type: string
+                      enum:
+                        - video
+                        - image
+                        - text
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 120
+                    media_id:
+                      type: string
+                      minLength: 1
+                      maxLength: 64
+                    url:
+                      type: string
+                      maxLength: 500
+                    text_content:
+                      type: string
+                      maxLength: 2000
+                    rich:
+                      type: string
+                      maxLength: 20000
+                    style:
+                      type: object
+                      properties:
+                        color:
+                          type: string
+                          maxLength: 40
+                        background:
+                          type: string
+                          maxLength: 40
+                        bg_color:
+                          type: string
+                          maxLength: 40
+                        text_color:
+                          type: string
+                          maxLength: 40
+                        rich:
+                          type: string
+                          maxLength: 20000
+                        font_size:
+                          type: integer
+                          minimum: 8
+                          maximum: 200
+                        align:
+                          type: string
+                          enum:
+                            - left
+                            - center
+                            - right
+                            - justify
+                        valign:
+                          type: string
+                          enum:
+                            - top
+                            - middle
+                            - bottom
+                        font_family:
+                          type: string
+                          enum:
+                            - Roboto
+                            - Arial
+                            - Verdana
+                            - Tahoma
+                            - Georgia
+                            - Times New Roman
+                            - Courier New
+                            - sans-serif
+                            - serif
+                            - monospace
+                        bold:
+                          type: boolean
+                        italic:
+                          type: boolean
+                        underline:
+                          type: boolean
+                      additionalProperties: true
+                    duration:
+                      type: number
+                      minimum: 1
+                      maximum: 3600
+                  required:
+                    - id
+                    - type
+                    - name
+                  additionalProperties: true
+                maxItems: 50
+              loop:
+                type: boolean
             required:
               - id
               - type
@@ -16746,35 +17094,6 @@ components:
                 - declared_duration_s
               additionalProperties: true
             - type: "null"
-        attestation:
-          anyOf:
-            - type: object
-              properties:
-                status:
-                  type: string
-                version:
-                  type:
-                    - string
-                    - "null"
-                kid_safe:
-                  type: boolean
-                  default: false
-                signed_by_name:
-                  type:
-                    - string
-                    - "null"
-                signed_at:
-                  type:
-                    - string
-                    - "null"
-                source:
-                  type:
-                    - string
-                    - "null"
-              required:
-                - status
-              additionalProperties: true
-            - type: "null"
       required:
         - id
         - name
@@ -17359,22 +17678,6 @@ components:
                 - not: {}
                 - {}
             - type: "null"
-        attest:
-          type: object
-          properties:
-            accepted:
-              type: boolean
-              const: true
-            version:
-              type: string
-              minLength: 1
-              maxLength: 32
-            kid_safe:
-              type: boolean
-          required:
-            - accepted
-            - version
-          additionalProperties: true
       required:
         - source
         - url
@@ -17482,22 +17785,6 @@ components:
                 - not: {}
                 - {}
             - type: "null"
-        attest:
-          type: object
-          properties:
-            accepted:
-              type: boolean
-              const: true
-            version:
-              type: string
-              minLength: 1
-              maxLength: 32
-            kid_safe:
-              type: boolean
-          required:
-            - accepted
-            - version
-          additionalProperties: true
       required:
         - name
         - content_type

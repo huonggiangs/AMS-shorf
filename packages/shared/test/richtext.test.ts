@@ -56,12 +56,12 @@ describe('richtext sanitizer', () => {
 
 import { itemDurationS } from '../src/zone-duration.js';
 describe('itemDurationS', () => {
-  it('anh mac dinh 5 s, video thieu = phat het, kep 1..3600', () => {
-    expect(itemDurationS(undefined, 'a', 'image')).toBe(5);
+  it('anh mac dinh 8 s, video thieu = phat het, kep 1..3600', () => {
+    expect(itemDurationS(undefined, 'a', 'image')).toBe(8);
     expect(itemDurationS({}, 'a', 'video')).toBeNull();
     expect(itemDurationS({ a: 12 }, 'a', 'image')).toBe(12);
     expect(itemDurationS({ a: 30 }, 'a', 'video')).toBe(30);
     expect(itemDurationS({ a: 99999 }, 'a', 'image')).toBe(3600);
-    expect(itemDurationS({ a: 'x' }, 'a', 'image')).toBe(5);
+    expect(itemDurationS({ a: 'x' }, 'a', 'image')).toBe(8);
   });
 });
