@@ -1,6 +1,6 @@
 import type { Runtime } from '@ams/runtime';
-import { ANY, MANIFEST_EPOCH_KEY, elevatorTierFor, isElevatorResolution, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, safeErr, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
-import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestLayout, type ManifestSlot, type ManifestZone } from './protocol.js';
+import { ANY, MANIFEST_EPOCH_KEY, isHttpsUrl, itemPlayS, legacyMirror, zoneLoop, zonePlaylist, type PlaylistItem, elevatorTierFor, isElevatorResolution, SIGNAGE_CONFIG_KEY, SIGNAGE_DEFAULT, isAdFormat, isSignageKind, parseOverlay, parseSignageConfig, safeErr, pickSnapshotPrice, sha256Hex, type PriceSource, type PricingDaypart, type SignageKindConfig } from '@ams/shared';
+import { MANIFEST_TZ, PROTOCOL_VERSION, type Manifest, type ManifestCreative, type ManifestDelta, type ManifestLayout, type ManifestPlaylistItem, type ManifestSlot, type ManifestZone } from './protocol.js';
 import type { DeviceRec } from './devices.js';
 
 export interface GroupKey {
@@ -89,20 +89,67 @@ function qrDevice(z: ManifestZone): ManifestZone {
   return { ...z, qr_kind: 'text', url: qr.value ?? z.url ?? '' };
 }
 
-/** Gan tep (da loc hop le, giu thu tu) vao vung media; tep chua gan vung roi vao vung media dau tien. */
-function programLayout(layout: { orientation: 'landscape' | 'portrait'; zones: ManifestZone[] }, itemZones: Record<string, string>, ids: string[]): ManifestLayout {
-  const media = layout.zones.filter((z) => z.type === 'video' || z.type === 'image');
+/** Muc danh sach phat -> muc manifest: media gan thong tin giao nhan tu `creatives[]`; muc media khong con trong manifest (chua duyet/khong khop man) => null (bi loai). */
+function resolveItem(it: PlaylistItem, byId: Map<string, ManifestCreative>): ManifestPlaylistItem | null {
+  const dur = it.duration;
+  const base = { id: it.id, type: it.type, name: it.name, ...(dur ? { duration: dur } : {}), play_s: itemPlayS(it) };
+  if (it.type === 'text') return { ...base, text_content: it.text_content ?? '', ...(it.rich ? { rich: it.rich } : {}), ...(it.style ? { style: it.style as Record<string, unknown> } : {}) };
+  if (it.media_id) {
+    const c = byId.get(it.media_id);
+    if (!c) return null;
+    const type: 'video' | 'image' = c.media_type === 'image' ? 'image' : 'video'; // loai that cua tep thang loai khai bao
+    const natural = c.duration_ms ?? (c.duration_s ? c.duration_s * 1000 : undefined);
+    return {
+      ...base,
+      type,
+      play_s: itemPlayS({ type, ...(dur ? { duration: dur } : {}) }),
+      media_id: c.id,
+      url: c.url,
+      ...(c.sha256 ? { sha256: c.sha256 } : {}),
+      ...(c.delivery ? { delivery: c.delivery } : {}),
+      ...(c.delivery && c.kind ? { kind: c.kind } : {}),
+      size_bytes: c.size_bytes,
+      ...(natural ? { duration_ms: Math.round(natural) } : {}),
+      px_w: c.px_w,
+      px_h: c.px_h,
+    };
+  }
+  if (it.url && isHttpsUrl(it.url)) return { ...base, url: it.url, delivery: 'external' };
+  return null;
+}
+
+/** Gan tep (da loc hop le, giu thu tu) vao vung media; tep chua gan vung roi vao vung media dau tien. Moi vung media them `playlist` + `loop` (vung cu duoc doc thanh playlist) va giu creative_ids/durations cho app cu. */
+function programLayout(layout: { orientation: 'landscape' | 'portrait'; zones: ManifestZone[] }, itemZones: Record<string, string>, ids: string[], byId: Map<string, ManifestCreative>): ManifestLayout {
+  const media = layout.zones.filter((z) => z.type === 'video' || z.type === 'image' || z.type === 'playlist');
   const first = media[0]?.id;
   const known = new Set(media.map((z) => z.id));
   return {
     orientation: layout.orientation,
     zones: layout.zones.map((z) => {
       if (z.type === 'qr') return qrDevice(z);
-      if (z.type !== 'video' && z.type !== 'image') return z;
-      const creative_ids = ids.filter((id) => (known.has(itemZones[id] ?? '') ? itemZones[id] : first) === z.id);
-      return { ...z, creative_ids };
+      if (z.type !== 'video' && z.type !== 'image' && z.type !== 'playlist') return z;
+      const legacyIds = ids.filter((id) => (known.has(itemZones[id] ?? '') ? itemZones[id] : first) === z.id);
+      const { playlist: stored, loop: _loop, ...zone } = z;
+      const lookup = (cid: string): { kind: 'video' | 'image'; name?: string } | undefined => {
+        const c = byId.get(cid);
+        return c ? { kind: c.media_type === 'image' ? 'image' : 'video', name: cid } : undefined;
+      };
+      const items = zonePlaylist({ id: z.id, type: z.type, ...(Array.isArray(stored) ? { playlist: stored } : { creative_ids: legacyIds, durations: z.durations }) }, lookup);
+      const playlist = items.flatMap((it) => {
+        const r = resolveItem(it, byId);
+        return r ? [r] : [];
+      });
+      const mirror = legacyMirror(playlist.map((r) => ({ id: r.id, type: r.type, name: r.name, ...(r.media_id ? { media_id: r.media_id } : {}), ...(r.duration ? { duration: r.duration } : {}) })));
+      const creative_ids = Array.isArray(stored) ? mirror.creative_ids : legacyIds;
+      const durations = Array.isArray(stored) ? mirror.durations : z.durations;
+      return { ...zone, creative_ids, ...(durations && Object.keys(durations).length ? { durations } : {}), playlist, loop: zoneLoop({ loop: _loop }) };
     }),
   };
+}
+
+/** Chuong trinh co it nhat mot muc phat duoc (van ban / link ngoai / media da vao manifest) du khong co tep media nao: van dua vao lich. */
+function hasPlayableItem(layout: { zones: ManifestZone[] } | null, byId: Map<string, ManifestCreative>): boolean {
+  return !!layout && layout.zones.some((z) => (z.type === 'video' || z.type === 'image' || z.type === 'playlist') && Array.isArray(z.playlist) && (z.playlist as PlaylistItem[]).some((it) => resolveItem(it, byId) !== null));
 }
 
 interface LiveProgram {
@@ -508,6 +555,7 @@ export class ManifestService {
     creatives.sort((a, b) => (a.id < b.id ? -1 : 1));
     const byCampaign = new Map<string, string[]>();
     for (const c of creatives) byCampaign.set(c.campaign_id, [...(byCampaign.get(c.campaign_id) ?? []), c.id]);
+    const creativeById = new Map(creatives.map((c) => [c.id, c]));
     const schedule: ManifestSlot[] = [];
     for (const s of liveSlots) {
       const ids = byCampaign.get(s.campaign_id);
@@ -527,7 +575,7 @@ export class ManifestService {
     }
     for (const p of programs) {
       const ids = p.items.filter((id) => seenCreative.has(id));
-      if (ids.length === 0) continue; // chuong trinh chua co tep hop le cho nhom nay
+      if (ids.length === 0 && !hasPlayableItem(p.layout, creativeById)) continue; // chuong trinh chua co tep hop le cho nhom nay
       schedule.push({
         slot_id: `bp_${p.id}`,
         campaign_id: `bp_${p.id}`,
@@ -539,7 +587,7 @@ export class ManifestService {
         reward_points: 0,
         ...(signage && p.header !== null ? { header: p.header } : {}),
         ...(signage && p.footer !== null ? { footer: p.footer } : {}),
-        ...(p.layout ? { layout: programLayout(p.layout, p.itemZones, ids) } : {}),
+        ...(p.layout ? { layout: programLayout(p.layout, p.itemZones, ids, creativeById) } : {}),
       });
     }
     schedule.sort((a, b) => (a.slot_id < b.slot_id ? -1 : 1));

@@ -26,6 +26,7 @@ import { deviceRoutes } from './routes/devices.js';
 import { deviceGroupRoutes, locationRoutes } from './routes/device-groups.js';
 import { historyRoutes, portalHistoryRoutes } from './routes/history.js';
 import { portalViewReportRoutes, viewReportRoutes } from './routes/views-report.js';
+import { itemsReportRoutes, portalItemsReportRoutes } from './routes/items-report.js';
 import { invoiceRoutes, payoutRoutes, portalInvoiceRoutes } from './routes/invoices.js';
 import { mediaRoutes } from './routes/media.js';
 import { opsRoutes, publicOpsRoutes } from './routes/ops.js';
@@ -132,6 +133,7 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
   admin.route('/pricing', quoteRoutes(false));
   // w2-notconnected: man hinh truoc day NotConnected
   admin.route('/history', historyRoutes());
+  admin.route('/reports/views/items', itemsReportRoutes());
   admin.route('/reports/views', viewReportRoutes());
   admin.route('/tv-experience', tvExperienceRoutes());
   admin.route('/invoices', invoiceRoutes());
@@ -143,6 +145,7 @@ export function createApp(rt: Runtime, opts: AppOptions = {}): Hono<AppEnv> {
   admin.route('/compliance', adminComplianceRoutes());
   app.route('/admin/v1', admin);
   app.route('/portal/v1/history', portalHistoryRoutes());
+  app.route('/portal/v1/reports/views/items', portalItemsReportRoutes());
   app.route('/portal/v1/reports/views', portalViewReportRoutes());
   app.route('/portal/v1/invoices', portalInvoiceRoutes());
   app.route('/portal/v1/einvoices', portalEinvoiceRoutes());

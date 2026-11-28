@@ -210,7 +210,7 @@ export async function buildReport(c: Ctx, external: boolean): Promise<ReportData
   };
 }
 
-const csvCell = (v: unknown): string => {
+export const csvCell = (v: unknown): string => {
   let s = v === null || v === undefined ? '' : String(v);
   if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`; // chong CSV injection khi mo bang Excel
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -259,13 +259,18 @@ async function detailCsv(c: Ctx, external: boolean): Promise<string> {
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
 
-const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
-const fmtN = (n: number): string => n.toLocaleString('vi-VN');
+export const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
+export const fmtN = (n: number): string => n.toLocaleString('vi-VN');
 export const fmtDur = (s: number): string => {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   return h > 0 ? `${h} giờ ${m} phút` : m > 0 ? `${m} phút ${s % 60} giây` : `${s} giây`;
 };
+
+const REPORT_CSS = `body{font:14px/1.5 "Be Vietnam Pro",system-ui,sans-serif;color:#14141a;max-width:900px;margin:24px auto;padding:0 16px;position:relative}
+h1{font-size:22px;margin:0}h2{font-size:15px;margin:24px 0 6px}.sub{color:#666}.kpis{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.kpi{flex:1;min-width:150px;border:1px solid #d9dde3;border-radius:8px;padding:10px 14px}.kpi b{display:block;font-size:22px}
+table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #e5e8ec;padding:5px 8px;text-align:left}th{background:#f3f5f8}.n{text-align:right}.wm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:140px;font-weight:800;color:rgba(26,64,115,.07);transform:rotate(-40deg);pointer-events:none;z-index:-1}
+.foot{margin-top:24px;color:#666;font-size:12px}@media print{body{margin:0}}`;
 
 export function renderViewsHtml(d: ReportData, external: boolean): string {
   const tbl = (title: string, head: string[], rows: (string | number)[][]): string =>
@@ -276,10 +281,7 @@ export function renderViewsHtml(d: ReportData, external: boolean): string {
           .join('')}</tbody></table>`;
   const who = d.scope.customer ? `Khách hàng: <b>${esc(d.scope.customer.name)}</b> · ` : '';
   return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Báo cáo lượt xem quảng cáo</title>
-<style>body{font:14px/1.5 "Be Vietnam Pro",system-ui,sans-serif;color:#14141a;max-width:900px;margin:24px auto;padding:0 16px;position:relative}
-h1{font-size:22px;margin:0}h2{font-size:15px;margin:24px 0 6px}.sub{color:#666}.kpis{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.kpi{flex:1;min-width:150px;border:1px solid #d9dde3;border-radius:8px;padding:10px 14px}.kpi b{display:block;font-size:22px}
-table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #e5e8ec;padding:5px 8px;text-align:left}th{background:#f3f5f8}.n{text-align:right}.wm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:140px;font-weight:800;color:rgba(26,64,115,.07);transform:rotate(-40deg);pointer-events:none;z-index:-1}
-.foot{margin-top:24px;color:#666;font-size:12px}@media print{body{margin:0}}</style></head><body><div class="wm">ANIO</div>
+<style>${REPORT_CSS}</style></head><body><div class="wm">ANIO</div>
 <h1>Báo cáo lượt xem quảng cáo</h1><div class="sub">${who}Từ ${esc(d.range.from)} đến ${esc(d.range.to)} (giờ Việt Nam) · Xuất lúc ${esc(d.generated_at.slice(0, 16).replace('T', ' '))} UTC</div>
 <div class="kpis"><div class="kpi">Tổng lượt xem<b>${fmtN(d.totals.views)}</b></div><div class="kpi">Tổng thời lượng phát<b>${esc(fmtDur(d.totals.watched_s))}</b></div><div class="kpi">Chiến dịch<b>${fmtN(d.totals.campaigns)}</b></div><div class="kpi">${external ? 'Địa điểm' : 'Thiết bị'}<b>${fmtN(external ? d.totals.locations : d.totals.devices)}</b></div></div>
 ${tbl('Theo ngày', ['Ngày', 'Lượt xem', 'Thời lượng (giây)'], d.by_day.map((x) => [x.day, x.views, x.watched_s]))}
@@ -317,3 +319,19 @@ function build(external: boolean): Hono<AppEnv> {
 
 export const viewReportRoutes = (): Hono<AppEnv> => build(false);
 export const portalViewReportRoutes = (): Hono<AppEnv> => build(true);
+
+/** Trang HTML bao cao chung (cung khung/CSS voi bao cao luot xem): KPI + cac bang (cot cuoi la so). Dung cho bao cao theo muc phat. */
+export function renderTableHtml(o: { title: string; sub: string; kpis: [string, string][]; tables: { title: string; head: string[]; rows: (string | number)[][] }[]; note: string }): string {
+  const tbl = (t: (typeof o.tables)[number]): string =>
+    t.rows.length === 0
+      ? ''
+      : `<h2>${esc(t.title)}</h2><table><thead><tr>${t.head.map((h, i) => `<th${i >= t.head.length - 2 && i > 0 ? ' class="n"' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${t.rows
+          .map((r) => `<tr>${r.map((x, i) => `<td${i >= r.length - 2 && i > 0 ? ' class="n"' : ''}>${esc(typeof x === 'number' ? fmtN(x) : x)}</td>`).join('')}</tr>`)
+          .join('')}</tbody></table>`;
+  return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(o.title)}</title>
+<style>${REPORT_CSS}</style></head><body><div class="wm">ANIO</div>
+<h1>${esc(o.title)}</h1><div class="sub">${o.sub}</div>
+<div class="kpis">${o.kpis.map(([k, v]) => `<div class="kpi">${esc(k)}<b>${esc(v)}</b></div>`).join('')}</div>
+${o.tables.map(tbl).join('\n')}
+<p class="foot">${esc(o.note)}</p></body></html>`;
+}

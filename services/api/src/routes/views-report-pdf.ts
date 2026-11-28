@@ -5,6 +5,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { BE_VIETNAM_PRO_BOLD_B64, BE_VIETNAM_PRO_REGULAR_B64 } from '../contracts-doc/fonts.gen.js';
 import { WATERMARK_ANGLE, WATERMARK_OPACITY, rotatedOrigin } from '../contracts-doc/pdf.js';
 import type { ReportData } from './views-report.js';
+import type { ItemsReport } from './items-report.js';
 
 const W = 595.28;
 const H = 841.89;
@@ -137,6 +138,108 @@ export async function renderViewsPdf(d: ReportData, o: { external: boolean; logo
   const lines: string[] = [];
   let cur = '';
   for (const w of note.split(' ')) {
+    if (reg.widthOfTextAtSize(`${cur} ${w}`, 8.5) > CW) (lines.push(cur), (cur = w));
+    else cur = cur ? `${cur} ${w}` : w;
+  }
+  if (cur) lines.push(cur);
+  for (const l of lines) {
+    text(l, ML, 8.5, reg, GREY);
+    y -= 12;
+  }
+  const pages = doc.getPages();
+  pages.forEach((p, i) => p.drawText(`Trang ${i + 1}/${pages.length}`, { x: W - MR - 50, y: 28, size: 8, font: reg, color: GREY }));
+  return doc.save();
+}
+
+/** PDF bao cao luot hien thi theo muc phat (A4, cung font/logo mo cheo): KPI + theo ngay + nhom da chon. */
+export async function renderItemsPdf(d: ItemsReport, o: { external: boolean; groupTitle: string; logo: { bytes: Uint8Array; type: 'png' | 'jpg' } | null }): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  doc.registerFontkit(fontkit);
+  const reg = await doc.embedFont(b64(BE_VIETNAM_PRO_REGULAR_B64), { subset: true });
+  const bold = await doc.embedFont(b64(BE_VIETNAM_PRO_BOLD_B64), { subset: true });
+  let logo: PDFImage | null = null;
+  if (o.logo) logo = o.logo.type === 'png' ? await doc.embedPng(o.logo.bytes).catch(() => null) : await doc.embedJpg(o.logo.bytes).catch(() => null);
+  doc.setTitle('Báo cáo lượt hiển thị theo mục phát');
+  doc.setProducer('AMS');
+  doc.setCreationDate(new Date(d.generated_at));
+  let page!: PDFPage;
+  let y = 0;
+  const newPage = (): void => {
+    page = doc.addPage([W, H]);
+    if (logo) {
+      const s = Math.min((W * 0.66) / logo.width, (H * 0.4) / logo.height);
+      const w = logo.width * s;
+      const h = logo.height * s;
+      const org = rotatedOrigin(W / 2, H / 2, w, h, WATERMARK_ANGLE);
+      page.drawImage(logo, { x: org.x, y: org.y, width: w, height: h, rotate: degrees(WATERMARK_ANGLE), opacity: WATERMARK_OPACITY });
+    } else {
+      const size = (W * 0.62) / bold.widthOfTextAtSize('ANIO', 1);
+      const org = rotatedOrigin(W / 2, H / 2, bold.widthOfTextAtSize('ANIO', size), bold.heightAtSize(size, { descender: false }), WATERMARK_ANGLE);
+      page.drawText('ANIO', { x: org.x, y: org.y, size, font: bold, color: rgb(0.1, 0.25, 0.45), rotate: degrees(WATERMARK_ANGLE), opacity: WATERMARK_OPACITY });
+    }
+    y = H - 56;
+  };
+  const fit = (t: string, f: PDFFont, size: number, max: number): string => {
+    if (f.widthOfTextAtSize(t, size) <= max) return t;
+    let s = t;
+    while (s.length > 1 && f.widthOfTextAtSize(s + '…', size) > max) s = s.slice(0, -1);
+    return s + '…';
+  };
+  const ensure = (h: number): void => {
+    if (y - h < 56) newPage();
+  };
+  const text = (t: string, x: number, size: number, f: PDFFont = reg, color = INK): void => void page.drawText(t, { x, y, size, font: f, color });
+  newPage();
+  text('BÁO CÁO LƯỢT HIỂN THỊ THEO MỤC PHÁT', ML, 16, bold);
+  y -= 20;
+  const who = d.scope.customer ? `Khách hàng: ${d.scope.customer.name}   ·   ` : '';
+  text(fit(`${who}Từ ${d.range.from} đến ${d.range.to} (giờ Việt Nam)`, reg, 10, CW), ML, 10, reg, GREY);
+  y -= 14;
+  text(`Xuất lúc ${d.generated_at.slice(0, 16).replace('T', ' ')} UTC`, ML, 9, reg, GREY);
+  y -= 26;
+  const kpis: [string, string][] = [
+    ['Tổng lượt hiển thị', fmtN(d.totals.impressions)],
+    ['Tệp media', fmtN(d.totals.media)],
+    ['Chương trình', fmtN(d.totals.programs)],
+    [o.external ? 'Vùng' : 'Thiết bị', fmtN(o.external ? d.totals.zones : d.totals.devices ?? 0)],
+  ];
+  const kw = (CW - 3 * 8) / 4;
+  kpis.forEach(([label, val], i) => {
+    const x = ML + i * (kw + 8);
+    page.drawRectangle({ x, y: y - 38, width: kw, height: 46, borderColor: LINE, borderWidth: 0.8, color: rgb(1, 1, 1), opacity: 0.85 });
+    page.drawText(label, { x: x + 8, y: y - 6, size: 8, font: reg, color: GREY });
+    page.drawText(fit(val, bold, 13, kw - 14), { x: x + 8, y: y - 26, size: 13, font: bold, color: INK });
+  });
+  y -= 62;
+  const table = (title: string, head: string[], widths: number[], rows: string[][]): void => {
+    if (!rows.length) return;
+    ensure(60);
+    text(title, ML, 11.5, bold);
+    y -= 8;
+    const row = (cells: string[], f: PDFFont, bg?: ReturnType<typeof rgb>): void => {
+      ensure(18);
+      if (bg) page.drawRectangle({ x: ML, y: y - 14, width: CW, height: 17, color: bg });
+      let x = ML;
+      cells.forEach((cell, i) => {
+        const w = widths[i]! * CW;
+        const t = fit(cell, f, 9, w - 8);
+        page.drawText(t, { x: i >= cells.length - 2 ? x + w - 4 - f.widthOfTextAtSize(t, 9) : x + 4, y: y - 10, size: 9, font: f, color: INK });
+        x += w;
+      });
+      page.drawLine({ start: { x: ML, y: y - 15 }, end: { x: ML + CW, y: y - 15 }, thickness: 0.4, color: LINE });
+      y -= 17;
+    };
+    row(head, bold, HEADBG);
+    for (const r of rows) row(r, reg);
+    y -= 14;
+  };
+  const days = d.by_day.length > 45 ? d.by_day.filter((x) => x.impressions > 0) : d.by_day;
+  if (d.group_by !== 'day') table('Theo ngày', ['Ngày', 'Lượt hiển thị'], [0.7, 0.3], days.map((x) => [x.day, fmtN(x.impressions)]));
+  table(o.groupTitle, ['Tên', 'Tỷ lệ %', 'Lượt hiển thị'], [0.6, 0.16, 0.24], d.rows.map((x) => [x.label, String(x.share), fmtN(x.impressions)]));
+  ensure(30);
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of d.note.split(' ')) {
     if (reg.widthOfTextAtSize(`${cur} ${w}`, 8.5) > CW) (lines.push(cur), (cur = w));
     else cur = cur ? `${cur} ${w}` : w;
   }

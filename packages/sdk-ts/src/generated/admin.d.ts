@@ -2690,6 +2690,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/history/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/history/diagnostics
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetHistoryDiagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/history/proof-of-play": {
         parameters: {
             query?: never;
@@ -4400,6 +4422,182 @@ export interface paths {
          *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
          */
         post: operations["adminPostRefundRequestsByIdReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/reports/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/reports/views
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetReportsViews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/reports/views/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/reports/views/export.csv
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetReportsViewsExport.csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/reports/views/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/reports/views/items
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetReportsViewsItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/reports/views/items/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/reports/views/items/export.csv
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetReportsViewsItemsExport.csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/reports/views/items/report.html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/reports/views/items/report.html
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetReportsViewsItemsReport.html"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/reports/views/items/report.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/reports/views/items/report.pdf
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetReportsViewsItemsReport.pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/reports/views/report.html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/reports/views/report.html
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetReportsViewsReport.html"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/reports/views/report.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /admin/v1/reports/views/report.pdf
+         * @description Chỉ tài khoản nội bộ.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["adminGetReportsViewsReport.pdf"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6395,6 +6593,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/v1/reports/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/reports/views
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetReportsViews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/reports/views/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/reports/views/export.csv
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetReportsViewsExport.csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/reports/views/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/reports/views/items
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetReportsViewsItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/reports/views/items/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/reports/views/items/export.csv
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetReportsViewsItemsExport.csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/reports/views/items/report.html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/reports/views/items/report.html
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetReportsViewsItemsReport.html"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/reports/views/items/report.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/reports/views/items/report.pdf
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetReportsViewsItemsReport.pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/reports/views/report.html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/reports/views/report.html
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetReportsViewsReport.html"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/v1/reports/views/report.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /portal/v1/reports/views/report.pdf
+         * @description Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.
+         *
+         *     Hình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.
+         */
+        get: operations["portalGetReportsViewsReport.pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/v1/topups": {
         parameters: {
             query?: never;
@@ -6624,7 +6998,7 @@ export interface components {
                     id: string;
                     name?: string;
                     /** @enum {string} */
-                    type: "video" | "image" | "marquee" | "text" | "clock" | "weather" | "qr";
+                    type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr";
                     x: number;
                     y: number;
                     w: number;
@@ -6681,7 +7055,40 @@ export interface components {
                     };
                     durations?: {
                         [key: string]: number;
-                    };
+                    } | null;
+                    playlist?: ({
+                        id: string;
+                        /** @enum {string} */
+                        type: "video" | "image" | "text";
+                        name: string;
+                        media_id?: string;
+                        url?: string;
+                        text_content?: string;
+                        rich?: string;
+                        style?: {
+                            color?: string;
+                            background?: string;
+                            bg_color?: string;
+                            text_color?: string;
+                            rich?: string;
+                            font_size?: number;
+                            /** @enum {string} */
+                            align?: "left" | "center" | "right" | "justify";
+                            /** @enum {string} */
+                            valign?: "top" | "middle" | "bottom";
+                            /** @enum {string} */
+                            font_family?: "Roboto" | "Arial" | "Verdana" | "Tahoma" | "Georgia" | "Times New Roman" | "Courier New" | "sans-serif" | "serif" | "monospace";
+                            bold?: boolean;
+                            italic?: boolean;
+                            underline?: boolean;
+                        } & {
+                            [key: string]: unknown;
+                        };
+                        duration?: number;
+                    } & {
+                        [key: string]: unknown;
+                    })[];
+                    loop?: boolean;
                 } & {
                     [key: string]: unknown;
                 })[];
@@ -7021,7 +7428,7 @@ export interface components {
                 id: string;
                 name?: string;
                 /** @enum {string} */
-                type: "video" | "image" | "marquee" | "text" | "clock" | "weather" | "qr";
+                type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr";
                 x: number;
                 y: number;
                 w: number;
@@ -7078,7 +7485,40 @@ export interface components {
                 };
                 durations?: {
                     [key: string]: number;
-                };
+                } | null;
+                playlist?: ({
+                    id: string;
+                    /** @enum {string} */
+                    type: "video" | "image" | "text";
+                    name: string;
+                    media_id?: string;
+                    url?: string;
+                    text_content?: string;
+                    rich?: string;
+                    style?: {
+                        color?: string;
+                        background?: string;
+                        bg_color?: string;
+                        text_color?: string;
+                        rich?: string;
+                        font_size?: number;
+                        /** @enum {string} */
+                        align?: "left" | "center" | "right" | "justify";
+                        /** @enum {string} */
+                        valign?: "top" | "middle" | "bottom";
+                        /** @enum {string} */
+                        font_family?: "Roboto" | "Arial" | "Verdana" | "Tahoma" | "Georgia" | "Times New Roman" | "Courier New" | "sans-serif" | "serif" | "monospace";
+                        bold?: boolean;
+                        italic?: boolean;
+                        underline?: boolean;
+                    } & {
+                        [key: string]: unknown;
+                    };
+                    duration?: number;
+                } & {
+                    [key: string]: unknown;
+                })[];
+                loop?: boolean;
             } & {
                 [key: string]: unknown;
             })[];
@@ -7415,7 +7855,7 @@ export interface components {
                     id: string;
                     name?: string;
                     /** @enum {string} */
-                    type: "video" | "image" | "marquee" | "text" | "clock" | "weather" | "qr";
+                    type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr";
                     x: number;
                     y: number;
                     w: number;
@@ -7472,7 +7912,40 @@ export interface components {
                     };
                     durations?: {
                         [key: string]: number;
-                    };
+                    } | null;
+                    playlist?: ({
+                        id: string;
+                        /** @enum {string} */
+                        type: "video" | "image" | "text";
+                        name: string;
+                        media_id?: string;
+                        url?: string;
+                        text_content?: string;
+                        rich?: string;
+                        style?: {
+                            color?: string;
+                            background?: string;
+                            bg_color?: string;
+                            text_color?: string;
+                            rich?: string;
+                            font_size?: number;
+                            /** @enum {string} */
+                            align?: "left" | "center" | "right" | "justify";
+                            /** @enum {string} */
+                            valign?: "top" | "middle" | "bottom";
+                            /** @enum {string} */
+                            font_family?: "Roboto" | "Arial" | "Verdana" | "Tahoma" | "Georgia" | "Times New Roman" | "Courier New" | "sans-serif" | "serif" | "monospace";
+                            bold?: boolean;
+                            italic?: boolean;
+                            underline?: boolean;
+                        } & {
+                            [key: string]: unknown;
+                        };
+                        duration?: number;
+                    } & {
+                        [key: string]: unknown;
+                    })[];
+                    loop?: boolean;
                 } & {
                     [key: string]: unknown;
                 })[];
@@ -7660,7 +8133,7 @@ export interface components {
                 id: string;
                 name?: string;
                 /** @enum {string} */
-                type: "video" | "image" | "marquee" | "text" | "clock" | "weather" | "qr";
+                type: "video" | "image" | "playlist" | "marquee" | "text" | "clock" | "weather" | "qr";
                 x: number;
                 y: number;
                 w: number;
@@ -7717,7 +8190,40 @@ export interface components {
                 };
                 durations?: {
                     [key: string]: number;
-                };
+                } | null;
+                playlist?: ({
+                    id: string;
+                    /** @enum {string} */
+                    type: "video" | "image" | "text";
+                    name: string;
+                    media_id?: string;
+                    url?: string;
+                    text_content?: string;
+                    rich?: string;
+                    style?: {
+                        color?: string;
+                        background?: string;
+                        bg_color?: string;
+                        text_color?: string;
+                        rich?: string;
+                        font_size?: number;
+                        /** @enum {string} */
+                        align?: "left" | "center" | "right" | "justify";
+                        /** @enum {string} */
+                        valign?: "top" | "middle" | "bottom";
+                        /** @enum {string} */
+                        font_family?: "Roboto" | "Arial" | "Verdana" | "Tahoma" | "Georgia" | "Times New Roman" | "Courier New" | "sans-serif" | "serif" | "monospace";
+                        bold?: boolean;
+                        italic?: boolean;
+                        underline?: boolean;
+                    } & {
+                        [key: string]: unknown;
+                    };
+                    duration?: number;
+                } & {
+                    [key: string]: unknown;
+                })[];
+                loop?: boolean;
             } & {
                 [key: string]: unknown;
             })[];
@@ -12377,6 +12883,28 @@ export interface operations {
             "5XX": components["responses"]["Error"];
         };
     };
+    adminGetHistoryDiagnostics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
     adminGetHistoryProofOfPlay: {
         parameters: {
             query?: {
@@ -14603,6 +15131,182 @@ export interface operations {
                 "application/json": components["schemas"]["AdminPostRefundRequestsByIdRejectRequest"];
             };
         };
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetReportsViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "adminGetReportsViewsExport.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    adminGetReportsViewsItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "adminGetReportsViewsItemsExport.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "adminGetReportsViewsItemsReport.html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "adminGetReportsViewsItemsReport.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "adminGetReportsViewsReport.html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "adminGetReportsViewsReport.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Thành công */
             200: {
@@ -17113,6 +17817,182 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Quote"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalGetReportsViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "portalGetReportsViewsExport.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    portalGetReportsViewsItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "portalGetReportsViewsItemsExport.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "portalGetReportsViewsItemsReport.html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "portalGetReportsViewsItemsReport.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "portalGetReportsViewsReport.html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
+                };
+            };
+            "4XX": components["responses"]["Error"];
+            "5XX": components["responses"]["Error"];
+        };
+    };
+    "portalGetReportsViewsReport.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenericObject"];
                 };
             };
             "4XX": components["responses"]["Error"];

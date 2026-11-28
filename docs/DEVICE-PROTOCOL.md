@@ -293,7 +293,7 @@ Creative do khách/nhân viên **dán link** (không tải lên) có dạng khá
 
 **Bố cục đa vùng (tùy chọn, chỉ lịch nội bộ `bp_*`)**: slot có thể kèm `layout: {orientation: 'landscape'|'portrait', zones:[{id, type, x, y, w, h, z, transition, text?, bg_color?, text_color?, font_size?, scroll_speed?, url?, creative_ids?}]}`. `type` ∈ `video|image|marquee|clock|weather|qr`; `x,y,w,h` là **phần trăm khung** (0..100); `z` = lớp vẽ (lớn hơn vẽ sau); `transition` ∈ `none|fade|slide-left|slide-right|zoom`. Vùng `video`/`image` có `creative_ids` (tệp phát ở vùng đó, theo thứ tự, lặp vô hạn); `creative_ids` của slot vẫn liệt kê **toàn bộ** tệp theo thứ tự nên thiết bị chưa hỗ trợ `layout` cứ phát tuần tự một vùng như trước (thiết bị cũ bỏ qua trường lạ). Vắng `layout` = màn đơn. **Vùng `qr`**: gateway tính sẵn `qr_kind` ∈ `text|image_url|data_url` và `url` (VietQR → URL ảnh `https://img.vietqr.io/image/<BIN>-<STK>-<template>.png?amount&addInfo&accountName`; ảnh tải lên → data URL ≤ 200 KB; còn lại → nội dung để thiết bị tự vẽ mã QR); kèm `qr` gốc để tham chiếu. **Vùng `weather`**: `weather:{mode:'gps'|'fixed', lat, lon, label?}`; thiết bị/trình xem trước lấy dữ liệu từ Open-Meteo (không cần khóa), làm mới mỗi 10 phút; `gps` dùng vị trí thiết bị, `fixed` dùng toạ độ đã cấu hình. Signage Player hiện chưa vẽ vùng đa-zone, QR, thời tiết (chỉ trình xem trước web).
 
-**Thời lượng từng tư liệu (`durations`, tùy chọn)**: vùng `video`/`image` có thể kèm `durations: {<creative_id>: giây}` (số nguyên 1..3600; chỉ chứa tệp thuộc chương trình). Ảnh: hiển thị đúng số giây đó, **thiếu = 5 giây** (mặc định cũ của TV nếu đã khác thì giữ). Video: thiếu = phát hết tệp; có giá trị = phát tối đa số giây đó rồi chuyển tệp kế. Thiết bị cũ bỏ qua trường này.
+**Thời lượng từng tư liệu (`durations`, tùy chọn)**: vùng `video`/`image` có thể kèm `durations: {<creative_id>: giây}` (số nguyên 1..3600; chỉ chứa tệp thuộc chương trình). Ảnh: hiển thị đúng số giây đó, **thiếu = 8 giây** (đổi từ 5 giây khi có danh sách phát; thống nhất toàn hệ thống). Video: thiếu = phát hết tệp; có giá trị = phát tối đa số giây đó rồi chuyển tệp kế. Thiết bị cũ bỏ qua trường này.
 
 **Tùy chọn mới của vùng (tương thích ngược, thiết bị cũ bỏ qua)**: `marquee.scroll_dir` ∈ `left` (mặc định, chạy từ phải sang trái) | `right`; `clock.clock = {hour12?: bool, tz?: IANA, date?: bool}` (giờ 12/24, múi giờ — thiếu = múi giờ thiết bị, hiện ngày). `transition` (đã có) hiển thị trên giao diện là: `none` Mặc định (cắt trực tiếp), `fade` Mờ dần (crossfade), `slide-left`, `slide-right`, `zoom` Phóng to mượt.
 
@@ -302,6 +302,8 @@ Creative do khách/nhân viên **dán link** (không tải lên) có dạng khá
 
 
 Chỉ đưa vào manifest: chiến dịch `active` trong `[start_at, end_at]`, slot khớp loại màn hình và vùng (slot để trống vùng = mọi vùng), creative `review_state=approved`, `state=ready`, không nhiễm mã độc, và **tệp đã xác minh được sha256** ở kho đối tượng. Nhóm chưa có chiến dịch: `creatives` và `schedule` rỗng (hợp lệ).
+
+**Danh sách phát trong vùng (`playlist`, `loop`)**: vùng `video` / `image` / `playlist` có thêm `playlist: [...]` (các mục video/ảnh/văn bản phát tuần tự) và `loop` (mặc định true); vùng cũ (`creative_ids` + `durations`) cũng được máy chủ đọc thành `playlist` (id mục = uuid v5 ổn định) và vẫn giữ `creative_ids`/`durations`. Mỗi mục media mang sẵn `url`, `sha256`, `delivery`, `duration_ms`... lấy từ `creatives[]`; mục có tệp chưa duyệt/không hợp màn bị loại. Đặc tả đầy đủ và luật phát: `docs/PLAYLIST.md`.
 
 ### 7.2 Delta
 
@@ -362,6 +364,10 @@ Phản hồi `202`:
 `{"type":"proof_of_play","event_id":"<uuidv7>","ts":"<ISO>","creative_id":"...","duration_ms":15000}`. Ghi vào `ev_proof_of_play`, khử trùng theo `event_id`; không tính hoa hồng.
 
 **Hợp lệ khi nào:** `creative_id` có trong manifest hiện hành của thiết bị (nếu không: bị từ chối từng cái), `ts` trong 48 giờ quá khứ và tối đa 5 phút tương lai, và thiết bị đã được cấp quyền (`trust_level` >= 1, không bị chặn). Lượt phát của thiết bị CHƯA cấp quyền vẫn được lưu nhưng ở trạng thái `pending_trust` (phản hồi tính vào `flagged`, không bị loại); khi được cấp quyền thì hợp lệ (`valid`) và báo cáo khách hàng chỉ thấy lượt hợp lệ; thu hồi quyền thì quay lại chờ. Trạng thái tính theo quyền hiện tại của thiết bị, không phải lúc gửi. Thang máy/LED không có điểm thưởng người xem.
+
+### 8.2b Sự kiện `item_impression` (danh sách phát, từ app có hỗ trợ playlist)
+
+`{"type":"item_impression","log_id":"<UUID, khóa khử trùng>","program_id":"bp_<id>"|"<id>","zone_id":"main","item_id":"<UUID mục>","media_id":"<creative_id, bỏ qua với mục text/link ngoài>","item_type":"video|image|text","played_at":"<ISO UTC>"}`. **Chỉ để báo cáo**, không tính tiền, không trừ chi tiêu. Trùng `log_id` = đã nhận (không lỗi). Lý do từ chối (vĩnh viễn, đừng gửi lại): `malformed`, `ts_out_of_range`, `unknown_program`, `unknown_media`. Có thể trộn trong cùng lô (tối đa 50 sự kiện; thân tối đa 32 KB). Phản hồi thêm `item_impressions: {accepted, stored, duplicates, rejected}`. Chi tiết: `docs/PLAYLIST.md` mục 5.
 
 ### 8.3 Idempotent và gửi lại
 

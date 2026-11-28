@@ -120,6 +120,9 @@
       "name": "refund-requests"
     },
     {
+      "name": "reports"
+    },
+    {
       "name": "revenue"
     },
     {
@@ -852,7 +855,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:323",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:400",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -889,7 +892,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:433",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:510",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -1397,7 +1400,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:402",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:479",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1436,7 +1439,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:330",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:407",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1473,7 +1476,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:337",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:414",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -1532,7 +1535,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:364",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:441",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1580,7 +1583,7 @@
           "module": "schedule",
           "action": "delete"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:533",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:616",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1627,7 +1630,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:431",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:508",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1673,7 +1676,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:460",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:539",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -1732,7 +1735,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:416",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:493",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1780,7 +1783,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:500",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:583",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1829,7 +1832,7 @@
           "module": "schedule",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:519",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:602",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -1878,7 +1881,7 @@
           "module": "schedule",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/broadcast.ts:376",
+        "x-ams-source": "services/api/src/routes/broadcast.ts:453",
         "description": "Quyền cần có: mô-đun `schedule`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -6288,7 +6291,7 @@
           "module": "devices",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:202",
+        "x-ams-source": "services/api/src/routes/devices.ts:204",
         "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -6327,7 +6330,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:211",
+        "x-ams-source": "services/api/src/routes/devices.ts:213",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -6377,7 +6380,7 @@
           "module": "devices",
           "action": "delete"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:379",
+        "x-ams-source": "services/api/src/routes/devices.ts:381",
         "description": "Quyền cần có: mô-đun `devices`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -6427,7 +6430,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:239",
+        "x-ams-source": "services/api/src/routes/devices.ts:241",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -6486,7 +6489,7 @@
           "module": "devices",
           "action": "delete"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:383",
+        "x-ams-source": "services/api/src/routes/devices.ts:385",
         "description": "Quyền cần có: mô-đun `devices`, hành động `delete` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -6533,7 +6536,7 @@
           "module": "devices",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:413",
+        "x-ams-source": "services/api/src/routes/devices.ts:415",
         "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.",
         "responses": {
           "200": {
@@ -6581,7 +6584,7 @@
           "module": "devices",
           "action": "approve"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:312",
+        "x-ams-source": "services/api/src/routes/devices.ts:314",
         "description": "Quyền cần có: mô-đun `devices`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -6901,7 +6904,7 @@
           "module": "devices",
           "action": "view"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:390",
+        "x-ams-source": "services/api/src/routes/devices.ts:392",
         "description": "Quyền cần có: mô-đun `devices`, hành động `view` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -6949,7 +6952,7 @@
           "module": "devices",
           "action": "write"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:290",
+        "x-ams-source": "services/api/src/routes/devices.ts:292",
         "description": "Quyền cần có: mô-đun `devices`, hành động `write` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "requestBody": {
           "required": true,
@@ -7008,7 +7011,7 @@
           "module": "devices",
           "action": "approve"
         },
-        "x-ams-source": "services/api/src/routes/devices.ts:357",
+        "x-ams-source": "services/api/src/routes/devices.ts:359",
         "description": "Quyền cần có: mô-đun `devices`, hành động `approve` (kiểm ở máy chủ; ma trận mặc định ở packages/config/src/rbac.ts).\n\nChỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -7627,7 +7630,42 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:137",
+        "x-ams-source": "services/api/src/routes/history.ts:138",
+        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/history/diagnostics": {
+      "get": {
+        "operationId": "adminGetHistoryDiagnostics",
+        "tags": [
+          "history"
+        ],
+        "summary": "GET /admin/v1/history/diagnostics",
+        "parameters": [],
+        "x-ams-source": "services/api/src/routes/history.ts:160",
         "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -7706,7 +7744,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:144",
+        "x-ams-source": "services/api/src/routes/history.ts:145",
         "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -7750,7 +7788,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:159",
+        "x-ams-source": "services/api/src/routes/history.ts:162",
         "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -12290,6 +12328,278 @@
         ]
       }
     },
+    "/admin/v1/reports/views": {
+      "get": {
+        "operationId": "adminGetReportsViews",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /admin/v1/reports/views",
+        "parameters": [],
+        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/reports/views/export.csv": {
+      "get": {
+        "operationId": "adminGetReportsViewsExport.csv",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /admin/v1/reports/views/export.csv",
+        "parameters": [],
+        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/reports/views/items": {
+      "get": {
+        "operationId": "adminGetReportsViewsItems",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /admin/v1/reports/views/items",
+        "parameters": [],
+        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/reports/views/items/export.csv": {
+      "get": {
+        "operationId": "adminGetReportsViewsItemsExport.csv",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /admin/v1/reports/views/items/export.csv",
+        "parameters": [],
+        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/reports/views/items/report.html": {
+      "get": {
+        "operationId": "adminGetReportsViewsItemsReport.html",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /admin/v1/reports/views/items/report.html",
+        "parameters": [],
+        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/reports/views/items/report.pdf": {
+      "get": {
+        "operationId": "adminGetReportsViewsItemsReport.pdf",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /admin/v1/reports/views/items/report.pdf",
+        "parameters": [],
+        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/reports/views/report.html": {
+      "get": {
+        "operationId": "adminGetReportsViewsReport.html",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /admin/v1/reports/views/report.html",
+        "parameters": [],
+        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/v1/reports/views/report.pdf": {
+      "get": {
+        "operationId": "adminGetReportsViewsReport.pdf",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /admin/v1/reports/views/report.pdf",
+        "parameters": [],
+        "description": "Chỉ tài khoản nội bộ.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/admin/v1/revenue": {
       "get": {
         "operationId": "adminGetRevenue",
@@ -15564,7 +15874,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:137",
+        "x-ams-source": "services/api/src/routes/history.ts:138",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -15643,7 +15953,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:144",
+        "x-ams-source": "services/api/src/routes/history.ts:145",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -15687,7 +15997,7 @@
             }
           }
         ],
-        "x-ams-source": "services/api/src/routes/history.ts:159",
+        "x-ams-source": "services/api/src/routes/history.ts:162",
         "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
         "responses": {
           "200": {
@@ -17312,6 +17622,278 @@
         ]
       }
     },
+    "/portal/v1/reports/views": {
+      "get": {
+        "operationId": "portalGetReportsViews",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /portal/v1/reports/views",
+        "parameters": [],
+        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/portal/v1/reports/views/export.csv": {
+      "get": {
+        "operationId": "portalGetReportsViewsExport.csv",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /portal/v1/reports/views/export.csv",
+        "parameters": [],
+        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/portal/v1/reports/views/items": {
+      "get": {
+        "operationId": "portalGetReportsViewsItems",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /portal/v1/reports/views/items",
+        "parameters": [],
+        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/portal/v1/reports/views/items/export.csv": {
+      "get": {
+        "operationId": "portalGetReportsViewsItemsExport.csv",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /portal/v1/reports/views/items/export.csv",
+        "parameters": [],
+        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/portal/v1/reports/views/items/report.html": {
+      "get": {
+        "operationId": "portalGetReportsViewsItemsReport.html",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /portal/v1/reports/views/items/report.html",
+        "parameters": [],
+        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/portal/v1/reports/views/items/report.pdf": {
+      "get": {
+        "operationId": "portalGetReportsViewsItemsReport.pdf",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /portal/v1/reports/views/items/report.pdf",
+        "parameters": [],
+        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/portal/v1/reports/views/report.html": {
+      "get": {
+        "operationId": "portalGetReportsViewsReport.html",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /portal/v1/reports/views/report.html",
+        "parameters": [],
+        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/portal/v1/reports/views/report.pdf": {
+      "get": {
+        "operationId": "portalGetReportsViewsReport.pdf",
+        "tags": [
+          "reports"
+        ],
+        "summary": "GET /portal/v1/reports/views/report.pdf",
+        "parameters": [],
+        "description": "Chỉ tài khoản ngoài (customer/partner); dữ liệu luôn bị lọc theo customer_id trong câu SQL.\n\nHình dạng phản hồi chưa có schema zod dùng chung; xem mã nguồn route.",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericObject"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Error"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/portal/v1/topups": {
       "get": {
         "operationId": "portalGetTopups",
@@ -17991,6 +18573,7 @@
                           "enum": [
                             "video",
                             "image",
+                            "playlist",
                             "marquee",
                             "text",
                             "clock",
@@ -18181,16 +18764,152 @@
                           "additionalProperties": true
                         },
                         "durations": {
-                          "type": "object",
-                          "additionalProperties": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 3600
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 3600
+                              },
+                              "propertyNames": {
+                                "minLength": 1,
+                                "maxLength": 64
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "playlist": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "video",
+                                  "image",
+                                  "text"
+                                ]
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120
+                              },
+                              "media_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "url": {
+                                "type": "string",
+                                "maxLength": 500
+                              },
+                              "text_content": {
+                                "type": "string",
+                                "maxLength": 2000
+                              },
+                              "rich": {
+                                "type": "string",
+                                "maxLength": 20000
+                              },
+                              "style": {
+                                "type": "object",
+                                "properties": {
+                                  "color": {
+                                    "type": "string",
+                                    "maxLength": 40
+                                  },
+                                  "background": {
+                                    "type": "string",
+                                    "maxLength": 40
+                                  },
+                                  "bg_color": {
+                                    "type": "string",
+                                    "maxLength": 40
+                                  },
+                                  "text_color": {
+                                    "type": "string",
+                                    "maxLength": 40
+                                  },
+                                  "rich": {
+                                    "type": "string",
+                                    "maxLength": 20000
+                                  },
+                                  "font_size": {
+                                    "type": "integer",
+                                    "minimum": 8,
+                                    "maximum": 200
+                                  },
+                                  "align": {
+                                    "type": "string",
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right",
+                                      "justify"
+                                    ]
+                                  },
+                                  "valign": {
+                                    "type": "string",
+                                    "enum": [
+                                      "top",
+                                      "middle",
+                                      "bottom"
+                                    ]
+                                  },
+                                  "font_family": {
+                                    "type": "string",
+                                    "enum": [
+                                      "Roboto",
+                                      "Arial",
+                                      "Verdana",
+                                      "Tahoma",
+                                      "Georgia",
+                                      "Times New Roman",
+                                      "Courier New",
+                                      "sans-serif",
+                                      "serif",
+                                      "monospace"
+                                    ]
+                                  },
+                                  "bold": {
+                                    "type": "boolean"
+                                  },
+                                  "italic": {
+                                    "type": "boolean"
+                                  },
+                                  "underline": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "additionalProperties": true
+                              },
+                              "duration": {
+                                "type": "number",
+                                "minimum": 1,
+                                "maximum": 3600
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "name"
+                            ],
+                            "additionalProperties": true
                           },
-                          "propertyNames": {
-                            "minLength": 1,
-                            "maxLength": 64
-                          }
+                          "maxItems": 50
+                        },
+                        "loop": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -19702,6 +20421,7 @@
                   "enum": [
                     "video",
                     "image",
+                    "playlist",
                     "marquee",
                     "text",
                     "clock",
@@ -19892,16 +20612,152 @@
                   "additionalProperties": true
                 },
                 "durations": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 3600
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3600
+                      },
+                      "propertyNames": {
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "playlist": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "video",
+                          "image",
+                          "text"
+                        ]
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "media_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      "text_content": {
+                        "type": "string",
+                        "maxLength": 2000
+                      },
+                      "rich": {
+                        "type": "string",
+                        "maxLength": 20000
+                      },
+                      "style": {
+                        "type": "object",
+                        "properties": {
+                          "color": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "background": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "bg_color": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "text_color": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "rich": {
+                            "type": "string",
+                            "maxLength": 20000
+                          },
+                          "font_size": {
+                            "type": "integer",
+                            "minimum": 8,
+                            "maximum": 200
+                          },
+                          "align": {
+                            "type": "string",
+                            "enum": [
+                              "left",
+                              "center",
+                              "right",
+                              "justify"
+                            ]
+                          },
+                          "valign": {
+                            "type": "string",
+                            "enum": [
+                              "top",
+                              "middle",
+                              "bottom"
+                            ]
+                          },
+                          "font_family": {
+                            "type": "string",
+                            "enum": [
+                              "Roboto",
+                              "Arial",
+                              "Verdana",
+                              "Tahoma",
+                              "Georgia",
+                              "Times New Roman",
+                              "Courier New",
+                              "sans-serif",
+                              "serif",
+                              "monospace"
+                            ]
+                          },
+                          "bold": {
+                            "type": "boolean"
+                          },
+                          "italic": {
+                            "type": "boolean"
+                          },
+                          "underline": {
+                            "type": "boolean"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "duration": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": 3600
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "type",
+                      "name"
+                    ],
+                    "additionalProperties": true
                   },
-                  "propertyNames": {
-                    "minLength": 1,
-                    "maxLength": 64
-                  }
+                  "maxItems": 50
+                },
+                "loop": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -21251,6 +22107,7 @@
                           "enum": [
                             "video",
                             "image",
+                            "playlist",
                             "marquee",
                             "text",
                             "clock",
@@ -21441,16 +22298,152 @@
                           "additionalProperties": true
                         },
                         "durations": {
-                          "type": "object",
-                          "additionalProperties": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 3600
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 3600
+                              },
+                              "propertyNames": {
+                                "minLength": 1,
+                                "maxLength": 64
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "playlist": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "video",
+                                  "image",
+                                  "text"
+                                ]
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120
+                              },
+                              "media_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "url": {
+                                "type": "string",
+                                "maxLength": 500
+                              },
+                              "text_content": {
+                                "type": "string",
+                                "maxLength": 2000
+                              },
+                              "rich": {
+                                "type": "string",
+                                "maxLength": 20000
+                              },
+                              "style": {
+                                "type": "object",
+                                "properties": {
+                                  "color": {
+                                    "type": "string",
+                                    "maxLength": 40
+                                  },
+                                  "background": {
+                                    "type": "string",
+                                    "maxLength": 40
+                                  },
+                                  "bg_color": {
+                                    "type": "string",
+                                    "maxLength": 40
+                                  },
+                                  "text_color": {
+                                    "type": "string",
+                                    "maxLength": 40
+                                  },
+                                  "rich": {
+                                    "type": "string",
+                                    "maxLength": 20000
+                                  },
+                                  "font_size": {
+                                    "type": "integer",
+                                    "minimum": 8,
+                                    "maximum": 200
+                                  },
+                                  "align": {
+                                    "type": "string",
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right",
+                                      "justify"
+                                    ]
+                                  },
+                                  "valign": {
+                                    "type": "string",
+                                    "enum": [
+                                      "top",
+                                      "middle",
+                                      "bottom"
+                                    ]
+                                  },
+                                  "font_family": {
+                                    "type": "string",
+                                    "enum": [
+                                      "Roboto",
+                                      "Arial",
+                                      "Verdana",
+                                      "Tahoma",
+                                      "Georgia",
+                                      "Times New Roman",
+                                      "Courier New",
+                                      "sans-serif",
+                                      "serif",
+                                      "monospace"
+                                    ]
+                                  },
+                                  "bold": {
+                                    "type": "boolean"
+                                  },
+                                  "italic": {
+                                    "type": "boolean"
+                                  },
+                                  "underline": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "additionalProperties": true
+                              },
+                              "duration": {
+                                "type": "number",
+                                "minimum": 1,
+                                "maximum": 3600
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "name"
+                            ],
+                            "additionalProperties": true
                           },
-                          "propertyNames": {
-                            "minLength": 1,
-                            "maxLength": 64
-                          }
+                          "maxItems": 50
+                        },
+                        "loop": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -22288,6 +23281,7 @@
                   "enum": [
                     "video",
                     "image",
+                    "playlist",
                     "marquee",
                     "text",
                     "clock",
@@ -22478,16 +23472,152 @@
                   "additionalProperties": true
                 },
                 "durations": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 3600
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3600
+                      },
+                      "propertyNames": {
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "playlist": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "video",
+                          "image",
+                          "text"
+                        ]
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "media_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      "text_content": {
+                        "type": "string",
+                        "maxLength": 2000
+                      },
+                      "rich": {
+                        "type": "string",
+                        "maxLength": 20000
+                      },
+                      "style": {
+                        "type": "object",
+                        "properties": {
+                          "color": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "background": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "bg_color": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "text_color": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "rich": {
+                            "type": "string",
+                            "maxLength": 20000
+                          },
+                          "font_size": {
+                            "type": "integer",
+                            "minimum": 8,
+                            "maximum": 200
+                          },
+                          "align": {
+                            "type": "string",
+                            "enum": [
+                              "left",
+                              "center",
+                              "right",
+                              "justify"
+                            ]
+                          },
+                          "valign": {
+                            "type": "string",
+                            "enum": [
+                              "top",
+                              "middle",
+                              "bottom"
+                            ]
+                          },
+                          "font_family": {
+                            "type": "string",
+                            "enum": [
+                              "Roboto",
+                              "Arial",
+                              "Verdana",
+                              "Tahoma",
+                              "Georgia",
+                              "Times New Roman",
+                              "Courier New",
+                              "sans-serif",
+                              "serif",
+                              "monospace"
+                            ]
+                          },
+                          "bold": {
+                            "type": "boolean"
+                          },
+                          "italic": {
+                            "type": "boolean"
+                          },
+                          "underline": {
+                            "type": "boolean"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "duration": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": 3600
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "type",
+                      "name"
+                    ],
+                    "additionalProperties": true
                   },
-                  "propertyNames": {
-                    "minLength": 1,
-                    "maxLength": 64
-                  }
+                  "maxItems": 50
+                },
+                "loop": {
+                  "type": "boolean"
                 }
               },
               "required": [
